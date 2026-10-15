@@ -7,6 +7,7 @@ use App\Domain\Export\Services\AttendanceExcelBuilder;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
+use App\Models\AttendanceMonthStatus;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\Role;
@@ -372,6 +373,112 @@ class AttendanceExportTest extends TestCase
         $this->assertSame('attendance_xlsx', $event->event_properties['exportType']);
     }
 
+    public function test_excel_with_include_submitted_outputs_daily_rows_and_snapshot_totals_for_a_submitted_month(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        $employee = User::factory()->create(['name' => '提出済み社員']);
+        $this->createMonthWithWorkedDay($employee, AttendanceMonthStatus::SUBMITTED, $this->submittedSnapshot());
+
+        $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06&include_submitted=1');
+
+        $response->assertSuccessful();
+        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringContainsString(
+            rawurlencode('勤怠管理表_提出済み社員_2026年06月.xlsx'),
+            $response->headers->get('Content-Disposition'),
+        );
+
+        $sheet = $this->loadSingleSheetWorkbook($response->getContent());
+        $this->assertSame('2026年6月度 勤怠管理表', $sheet->getCell('A2')->getValue());
+        // 6/15の行(12行目+15日)に実績の始業・終業が出る。
+        $this->assertSame('09:00', $sheet->getCell('C27')->getValue());
+        $this->assertSame('18:00', $sheet->getCell('D27')->getValue());
+        // 集計はスナップショット由来(時間外120分、労働時間合計9600分、所定内=9600-120)。
+        $this->assertEqualsWithDelta(120 / 1440, $sheet->getCell('A10')->getValue(), 0.0001);
+        $this->assertEqualsWithDelta(9480 / 1440, $sheet->getCell('E43')->getValue(), 0.0001);
+        $this->assertEqualsWithDelta(120 / 1440, $sheet->getCell('F43')->getValue(), 0.0001);
+
+        $event = EloquentStoredEvent::query()->where('event_class', 'export.created')->latest('id')->firstOrFail();
+        $this->assertSame('attendance_xlsx', $event->event_properties['exportType']);
+        $this->assertSame('1', $event->event_properties['params']['include_submitted']);
+    }
+
+    public function test_excel_without_include_submitted_leaves_a_submitted_month_as_title_only(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        $employee = User::factory()->create(['name' => '提出済み社員']);
+        $this->createMonthWithWorkedDay($employee, AttendanceMonthStatus::SUBMITTED, $this->submittedSnapshot());
+
+        // 未指定・0・falseのいずれも承認済み・締め済みのみが対象になる(提出済みは対象外)。
+        foreach (['', '&include_submitted=0', '&include_submitted=false'] as $query) {
+            $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06'.$query);
+
+            $response->assertSuccessful();
+            $sheet = $this->loadSingleSheetWorkbook($response->getContent());
+            $this->assertSame('2026年6月度 勤怠管理表', $sheet->getCell('A2')->getValue());
+            $this->assertNull($sheet->getCell('C27')->getValue());
+            $this->assertNull($sheet->getCell('E43')->getValue());
+        }
+    }
+
+    public function test_excel_include_submitted_still_excludes_returned_and_not_submitted_months(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        // 差戻し中の月はスナップショットを持つが対象外。
+        $returnedEmployee = User::factory()->create(['name' => '差戻し社員']);
+        $this->createMonthWithWorkedDay($returnedEmployee, AttendanceMonthStatus::RETURNED, $this->submittedSnapshot());
+
+        // 未提出の月は対象外。
+        $notSubmittedEmployee = User::factory()->create(['name' => '未提出社員']);
+        $this->createMonthWithWorkedDay($notSubmittedEmployee, AttendanceMonthStatus::NOT_SUBMITTED, null);
+
+        foreach ([$returnedEmployee, $notSubmittedEmployee] as $employee) {
+            $response = $this->actingAs($admin)->get(
+                '/api/exports/attendance.xlsx?year_month=2026-06&include_submitted=1&user_id[]='.$employee->id
+            );
+
+            $response->assertSuccessful();
+            $sheet = $this->loadSingleSheetWorkbook($response->getContent());
+            $this->assertSame('2026年6月度 勤怠管理表', $sheet->getCell('A2')->getValue());
+            $this->assertNull($sheet->getCell('C27')->getValue());
+            $this->assertNull($sheet->getCell('E43')->getValue());
+        }
+    }
+
+    public function test_excel_include_submitted_zips_submitted_months_of_multiple_employees(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        foreach (['提出済みA', '提出済みB'] as $name) {
+            $employee = User::factory()->create(['name' => $name]);
+            $this->createMonthWithWorkedDay($employee, AttendanceMonthStatus::SUBMITTED, $this->submittedSnapshot());
+        }
+
+        $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06&include_submitted=true');
+
+        $response->assertSuccessful();
+        $response->assertHeader('Content-Type', 'application/zip');
+
+        $tmpZip = tempnam(sys_get_temp_dir(), 'zip');
+        file_put_contents($tmpZip, $response->getContent());
+
+        $zip = new \ZipArchive;
+        $zip->open($tmpZip);
+        $this->assertSame(2, $zip->numFiles);
+        foreach (['提出済みA', '提出済みB'] as $name) {
+            $this->assertNotFalse($zip->locateName('勤怠管理表_'.$name.'_2026年06月.xlsx'));
+        }
+        $zip->close();
+        unlink($tmpZip);
+    }
+
     public function test_admin_export_excel_returns_zip_of_per_employee_workbooks_for_multiple_employees(): void
     {
         $admin = User::factory()->create();
@@ -617,6 +724,58 @@ class AttendanceExportTest extends TestCase
         $this->actingAs($admin)
             ->get('/api/exports/attendance?year_month=2026-06&format=yayoi')
             ->assertStatus(422);
+    }
+
+    /**
+     * 6/15に実績のある勤怠日と、指定した状態・スナップショットの月次勤怠を作る。
+     *
+     * @param  array<string, int>|null  $snapshot
+     */
+    private function createMonthWithWorkedDay(User $employee, string $status, ?array $snapshot): void
+    {
+        AttendanceDay::query()->create([
+            'user_id' => $employee->id,
+            'work_date' => '2026-06-15',
+            'status' => 'clocked_out',
+            'actual_start_at' => '2026-06-15 09:00:00',
+            'actual_end_at' => '2026-06-15 18:00:00',
+            'work_type' => 'normal',
+            'day_classification' => 'working_day',
+        ]);
+
+        AttendanceMonth::query()->create([
+            'user_id' => $employee->id,
+            'year_month' => '2026-06',
+            'status' => $status,
+            'snapshot_json' => $snapshot,
+        ]);
+    }
+
+    /** @return array<string, int> */
+    private function submittedSnapshot(): array
+    {
+        return [
+            'work_minutes' => 9600,
+            'prescribed_work_minutes' => 9600,
+            'statutory_within_overtime_minutes' => 0,
+            'statutory_excess_overtime_minutes' => 120,
+            'late_night_work_minutes' => 60,
+            'legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 0,
+        ];
+    }
+
+    private function loadSingleSheetWorkbook(string $contents): \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($tmpFile, $contents);
+
+        $spreadsheet = IOFactory::load($tmpFile);
+        unlink($tmpFile);
+
+        $this->assertSame(['勤怠管理表'], $spreadsheet->getSheetNames());
+
+        return $spreadsheet->getSheet(0);
     }
 
     /**
