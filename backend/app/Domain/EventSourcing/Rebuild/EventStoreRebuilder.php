@@ -105,6 +105,11 @@ final class EventStoreRebuilder
      */
     public function rebuild(array $rows, array $attendanceDays = [], array $paidLeaveSchedule = [], ?SeededDataCurrent $seeded = null, array $calendarDayIndex = []): RebuildResult
     {
+        // meta_data に created-at が無い user.* の発生日時(論点19 決定10-11)を、全行の発生日時の上書きとして最初に当てはめる。
+        // 以降の照合・導出イベントの置き場所・写しは、すべて StoredEventRow::occurredAt() の同じ値を使う。
+        $userOccurredAt = new UserEventOccurredAt($seeded?->users ?? []);
+        $rows = $userOccurredAt->apply($rows);
+
         usort($rows, fn (StoredEventRow $a, StoredEventRow $b) => $a->id <=> $b->id);
 
         $unsupported = [];
@@ -463,6 +468,7 @@ final class EventStoreRebuilder
         }
 
         $report = [
+            'user_occurred_at' => $userOccurredAt->report(),
             'holiday_calendar_day_refs' => $holidayRefs->report(),
             'external_tenant_id' => $externalTenantSummary,
             'reconcile' => $reconcileSummary,

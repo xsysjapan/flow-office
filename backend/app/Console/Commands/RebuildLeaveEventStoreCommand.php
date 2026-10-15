@@ -8,6 +8,7 @@ use App\Domain\EventSourcing\Rebuild\ReadModelDiffer;
 use App\Domain\EventSourcing\Rebuild\ReadModelFingerprinter;
 use App\Domain\EventSourcing\Rebuild\ReadModelTableLister;
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter;
+use App\Domain\EventSourcing\Rebuild\UserEventOccurredAt;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;
 
@@ -300,6 +301,14 @@ final class RebuildLeaveEventStoreCommand extends Command
             $this->line("前提の検査: {$tenant['mode']}(checked=設定と一致を検査 / row_only=設定が空のため行の値のみで補完 / no_rows=行が無い / not_checked=照合なし) / 行のテナントID: ".($tenant['tenant'] ?? '-'));
             $filledLines = array_map(fn (string $class, int $n) => "{$class}: {$n} 件", array_keys($tenant['filled']), array_values($tenant['filled']));
             $this->line('補った件数: '.$tenant['filled_total'].' 件'.($filledLines === [] ? '' : ' ('.implode(' / ', $filledLines).')')." / 行が無く補わなかった: {$tenant['no_row']} 件 / 行の tenant が null で補わなかった: {$tenant['null_tenant']} 件 / 既に記録済み: {$tenant['already_complete']} 件");
+        }
+
+        if (isset($report['user_occurred_at'])) {
+            $userTimes = $report['user_occurred_at'];
+            $columnTotal = $userTimes[UserEventOccurredAt::COLUMN_NO_USER_ROW] + $userTimes[UserEventOccurredAt::COLUMN_NO_LOGGED_IN_AT] + $userTimes[UserEventOccurredAt::COLUMN_OTHER_USER_EVENT];
+            $this->info('metaの無いuserイベントの発生日時(論点19 決定10-11)');
+            $this->line("metaの無いuserイベントの発生日時: 行のcreated_at {$userTimes[UserEventOccurredAt::SOURCE_USER_ROW]} 件・loggedInAt {$userTimes[UserEventOccurredAt::SOURCE_LOGGED_IN_AT]} 件・列のまま {$columnTotal} 件"
+                ."(内訳: 利用者の行が無い {$userTimes[UserEventOccurredAt::COLUMN_NO_USER_ROW]} 件・loggedInAtが無い {$userTimes[UserEventOccurredAt::COLUMN_NO_LOGGED_IN_AT]} 件・その他のuser.* {$userTimes[UserEventOccurredAt::COLUMN_OTHER_USER_EVENT]} 件)");
         }
 
         if (isset($report['reconcile'])) {

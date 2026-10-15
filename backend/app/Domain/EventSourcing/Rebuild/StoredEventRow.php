@@ -11,6 +11,7 @@ final readonly class StoredEventRow
     /**
      * @param  array<string, mixed>  $payload  event_properties(キーはイベントの公開プロパティ名のcamelCase)
      * @param  array<string, mixed>  $meta  meta_data
+     * @param  ?string  $occurredAtOverride  発生日時の明示指定(論点19 決定10-11。UserEventOccurredAt が作り直しの最初に入れる)。null なら meta・列の規則
      */
     public function __construct(
         public int $id,
@@ -20,6 +21,7 @@ final readonly class StoredEventRow
         public array $payload,
         public array $meta,
         public string $createdAt,
+        public ?string $occurredAtOverride = null,
     ) {}
 
     /** DB::table('stored_events') の1行(stdClass)から作る。 */
@@ -52,12 +54,22 @@ final readonly class StoredEventRow
      */
     public function occurredAt(): string
     {
-        $meta = $this->metaCreatedAt();
-        if ($meta === null || strtotime($meta) === false) {
+        if ($this->occurredAtOverride !== null) {
+            return $this->occurredAtOverride;
+        }
+        if (! $this->hasUsableMetaCreatedAt()) {
             return $this->createdAt;
         }
 
-        return $meta;
+        return (string) $this->metaCreatedAt();
+    }
+
+    /** meta_data の created-at があり解釈できる(発生日時に meta を使える)。無い・解釈できないときは false。 */
+    public function hasUsableMetaCreatedAt(): bool
+    {
+        $meta = $this->metaCreatedAt();
+
+        return $meta !== null && strtotime($meta) !== false;
     }
 
     public function get(string $key, mixed $default = null): mixed

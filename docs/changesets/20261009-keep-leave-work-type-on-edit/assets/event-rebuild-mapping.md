@@ -177,6 +177,19 @@
     `created-at`が無い・解釈できない(`strtotime`で読めない)ときだけ列の値を使う。列とのずれ(負のずれ・数日後・9時間等)は問わない。
   - 導出イベント(置き場所のanchorの行から作るもの): anchorの行について上と同じ規則で決めた値。導出側で明示的に指定したもの
     (照合による補完で行の`created_at`を使う作成イベント、付与予定の置き換えで行の時刻を使うもの等)は指定値を優先する。
+  - 例外(論点19 決定10-11): `meta_data`に`created-at`が無い`user.*`のイベント(旧版の正規化が2026-08-10にまとめて作った17件。列は
+    正規化の実行時刻で発生日時の根拠にならない)は、次の値を明示指定する(`UserEventOccurredAt`。作り直しの最初に全行へ当てはめ、
+    `StoredEventRow`の発生日時の上書きとして持たせる。以降の照合・導出イベントの置き場所・写しは、すべて`StoredEventRow::occurredAt()`の同じ値を使う。
+    `StoredEventRow::occurredAt()`の規則は他のイベントでは変えない)。
+    - `user.created_from_sso_login`・`user.onboarded_as_admin`・`user.hire_date_set`: その利用者(集約UUID=利用者id)の現在の`users`行の
+      `created_at`。
+    - `user.logged_in`: payloadの`loggedInAt`(書式は`Y-m-d H:i:s`にそろえる)。利用者の行は要らない。
+    - 上記以外の`user.*`(`user.migrated_from_legacy`等)、および行が無い・`created_at`が無い・`loggedInAt`が無い・解釈できないもの:
+      従来どおり列の値(試し実行のレポートに件数を出す)。
+    - 試し実行のレポート(`leave:rebuild-event-store`)は「metaの無いuserイベントの発生日時: 行のcreated_at N件・loggedInAt N件・列のまま N件」
+      と出す(列のままの内訳を併記)。
+    - 上の明示指定は照合(`UserReconciler`の`usage_start_date`の畳み込み)・導出イベントの置き場所(anchor)・写しの全てに同じ値で効く
+      (経路によって時刻が食い違わない)。
 
 ## 7. 実行手順
 
