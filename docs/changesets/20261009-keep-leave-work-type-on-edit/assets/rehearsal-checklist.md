@@ -195,7 +195,7 @@ ORDER BY m.user_id, m.year_month;
 
 ```sql
 SELECT d.user_id,
-       DATE_FORMAT(d.work_date, '%Y-%m')          AS year_month,
+       DATE_FORMAT(d.work_date, '%Y-%m')          AS ym,
        COUNT(d.id)                                AS day_count,
        COUNT(c.id)                                AS calculated_days,
        SUM(c.prescribed_work_minutes)             AS prescribed_work_minutes,
@@ -208,7 +208,7 @@ SELECT d.user_id,
 FROM attendance_days d
 LEFT JOIN attendance_daily_calculations c ON c.attendance_day_id = d.id
 GROUP BY d.user_id, DATE_FORMAT(d.work_date, '%Y-%m')
-ORDER BY d.user_id, year_month;
+ORDER BY d.user_id, ym;  -- year_month は MySQL の予約語のため別名は ym(リハーサル11回目)
 ```
 
 - **要確認**: `attendance_daily_calculations.attendance_day_id` が1日1行か(重複があると合計が増える)。
@@ -1092,7 +1092,7 @@ diff ~/rehearsal-20261009/before/B02.tsv ~/rehearsal-20261009/after/B02.tsv > ~/
 | B12 休暇値・全休 | 休暇値・全休の `clocked_out`・`no_created` がすべて 0 件 | 残った行を個別に確認する(2.4 の規則で扱えていない) |
 | B13 休暇に紐づく申請 | 変わらない(ワークフローのイベントは書き換えない) | 差分があれば 3-4 (6) を確認する |
 | B14 月次の状態 | 変わらない | 差分があれば、締め・提出の操作が行われていないか確認する |
-| B15 イベント件数 | 総数・最大idが変わる(分割・統合・`created`/`deleted` の追加)。休暇・勤怠以外の接頭辞の件数は変わらない。旧接頭辞(`paid_leave`・`special_leave`・`compensatory_leave`の旧種類)は0件になり、新しい接頭辞(`paid_leave_request` 等)ができる | 件数の増減を 3-2・3-4 の出力と照合する |
+| B15 イベント件数 | 総数・最大idが変わる(分割・統合・`created`/`deleted` の追加)。休暇・勤怠以外の接頭辞の件数は、照合による補完(論点19 決定1。`group_type`・`group`・`role`・`role_assignment`・`feature`・`user.field_authority_changed`・`user.*_set`・暦の年・暦の既定など。試し実行の「照合による補完」の表の件数)の分だけ増え、それ以外は変わらない。旧接頭辞(`paid_leave`・`special_leave`・`compensatory_leave`の旧種類)は0件になり、新しい接頭辞(`paid_leave_request` 等)ができる | 件数の増減を 3-2・3-4 の出力と照合する |
 
 ### 6-3. 休暇ビューと申請の照合
 
