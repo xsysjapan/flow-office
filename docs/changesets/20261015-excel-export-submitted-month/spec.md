@@ -173,4 +173,19 @@
   - 前提(提出時のスナップショット・日次ロック・ビルダーの状態非依存・呼び出し元3か所)は覆っていないため作り直しは不要。
 
 ## 実装結果
-未着手
+- backend・docs(implementer委譲、コミット「Excel勤怠管理表の出力でinclude_submittedのとき承認待ちの月も対象にする」):
+  `ExportController.php`(`include_submitted`、`resolveAttendanceMonths`に対象状態を引数で渡す、OpenAPI・docblock)、
+  `AttendanceExportTest.php`(4件追加。15→19件)、`docs/14-usecases-export.md`、`docs/07-usecases-attendance.md`。
+  クエリの`"true"`/`"false"`はLaravelのbooleanルールが受けないため検証前に真偽値へ正規化(フロントエンドは`1`を送る)。
+- frontend(implementer委譲、コミット「承認待ちの月の出力カード…」): `api/exports.ts`(`AttendanceExcelExportFilters`)、
+  `hooks/useAttendance.ts`、`utils/statusLabels.ts`(押せる状態の定数2つ)、`AttendanceReferencePage.tsx`(Excelに
+  `include_submitted: true`、状態でボタン無効化+案内文)、テスト(`AttendanceReferencePage.test.tsx`に6件、`api/exports.test.ts`新規3件)。
+  `AttendanceExportPage.tsx`は一括出力の記述と矛盾しないため変更なし。
+- 検証(委譲元が実行):
+  - `php artisan test tests/Feature/Attendance/AttendanceExportTest.php`: 19件PASS
+  - `php artisan test --filter "Export|Swagger"`: 50件PASS
+  - `npx vitest run --project=unit src/pages/attendance/AttendanceReferencePage src/api`: 4ファイル24件PASS
+  - `npx tsc -b`・`npm run lint`: エラーなし
+  - storybookプロジェクトの`AttendanceReferencePage.stories.tsx > No Employee Selected`が失敗(Routerのdecorator無し)。
+    今回の変更を外した状態でも同じく失敗する既存の不具合で、対象外。
+- 受け入れ条件: 本番の`snapshot_json`がnullの月次の確認(リリース後、ユーザーに依頼)が未了のため、ステータスは実装中のまま。

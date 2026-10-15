@@ -37,7 +37,7 @@ import {
   type GenerateAttendancePatternInput,
   type PreviewAttendancePatternInput,
 } from '../api/attendance'
-import { downloadAttendanceCsv, downloadAttendanceExcel } from '../api/exports'
+import { downloadAttendanceCsv, downloadAttendanceExcel, type AttendanceExcelExportFilters } from '../api/exports'
 import type { AttendanceDailyCalculationAdjustment, AttendanceExportFilters } from '../api/types'
 
 const TODAY_KEY = ['attendance', 'today']
@@ -338,7 +338,6 @@ export function useDownloadAttendanceCsv() {
  */
 export function useDownloadAttendanceExcel() {
   return useMutation({
-    mutationFn: (filters: Pick<AttendanceExportFilters, 'year_month' | 'user_id'>) =>
-      downloadAttendanceExcel(filters),
+    mutationFn: (filters: AttendanceExcelExportFilters) => downloadAttendanceExcel(filters),
   })
 }

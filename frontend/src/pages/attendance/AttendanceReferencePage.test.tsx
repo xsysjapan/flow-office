@@ -6,7 +6,14 @@ import { describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
-import type { AttendanceDay, AttendanceMonth, AttendanceMonthlyCalculationTotals, Paginated, User } from '../../api/types'
+import type {
+  AttendanceDay,
+  AttendanceMonth,
+  AttendanceMonthlyCalculationTotals,
+  AttendanceMonthStatus,
+  Paginated,
+  User,
+} from '../../api/types'
 import { datesInMonth, formatDate, mondayOf } from '../../utils/weekDates'
 import { AttendanceReferencePage } from './AttendanceReferencePage'
 
@@ -291,6 +298,98 @@ describe('AttendanceReferencePage', () => {
         format: 'generic',
       }),
     )
-    expect(excelSpy).toHaveBeenCalledWith({ year_month: [approvedMonth.year_month], user_id: [targetUser.id] })
+    expect(excelSpy).toHaveBeenCalledWith({
+      year_month: [approvedMonth.year_month],
+      user_id: [targetUser.id],
+      include_submitted: true,
+    })
+  })
+
+  describe('output card by monthly status', () => {
+    const notSubmittedHint = '提出後(CSVは承認後)に出力できます。'
+    const csvApprovedHint = 'CSVは承認後に出力できます。'
+
+    function attendanceMonthWithStatus(status: AttendanceMonthStatus): AttendanceMonth {
+      return {
+        id: `month-${status}`,
+        user_id: targetUser.id,
+        year_month: formatDate(new Date()).slice(0, 7),
+        status,
+        submitted_at: null,
+        approved_at: null,
+        returned_at: null,
+        return_comment: null,
+        closed_at: null,
+        snapshot: null,
+        legal_holiday_warnings: [],
+      }
+    }
+
+    function mockMonthStatus(status: AttendanceMonthStatus) {
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+      vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+        days: [],
+        month: attendanceMonthWithStatus(status),
+        flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      })
+    }
+
+    it('enables only Excel output for a submitted month and explains that CSV needs approval', async () => {
+      mockMonthStatus('submitted')
+
+      renderPage()
+      await selectTargetUser()
+
+      expect(await screen.findByRole('button', { name: 'Excel出力' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'CSV出力' })).toBeDisabled()
+      expect(screen.getByText(csvApprovedHint)).toBeInTheDocument()
+      expect(screen.queryByText(notSubmittedHint)).not.toBeInTheDocument()
+    })
+
+    it.each(['approved', 'closed'] as const)('enables both outputs without a hint for a %s month', async (status) => {
+      mockMonthStatus(status)
+
+      renderPage()
+      await selectTargetUser()
+
+      expect(await screen.findByRole('button', { name: 'CSV出力' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Excel出力' })).toBeEnabled()
+      expect(screen.queryByText(csvApprovedHint)).not.toBeInTheDocument()
+      expect(screen.queryByText(notSubmittedHint)).not.toBeInTheDocument()
+    })
+
+    it.each(['returned', 'not_submitted'] as const)(
+      'disables both outputs and explains the requirement for a %s month',
+      async (status) => {
+        mockMonthStatus(status)
+
+        renderPage()
+        await selectTargetUser()
+
+        expect(await screen.findByRole('button', { name: 'CSV出力' })).toBeDisabled()
+        expect(screen.getByRole('button', { name: 'Excel出力' })).toBeDisabled()
+        expect(screen.getByText(notSubmittedHint)).toBeInTheDocument()
+        expect(screen.queryByText(csvApprovedHint)).not.toBeInTheDocument()
+      },
+    )
+
+    it('requests Excel for a submitted month with include_submitted set to true', async () => {
+      mockMonthStatus('submitted')
+      const excelSpy = vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockResolvedValue(undefined)
+
+      renderPage()
+      await selectTargetUser()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Excel出力' }))
+
+      await waitFor(() =>
+        expect(excelSpy).toHaveBeenCalledWith({
+          year_month: [formatDate(new Date()).slice(0, 7)],
+          user_id: [targetUser.id],
+          include_submitted: true,
+        }),
+      )
+    })
   })
 })
