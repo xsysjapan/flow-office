@@ -7,10 +7,10 @@
 (`ExportController::attendanceExcel()` / `App\Domain\Export\Services\AttendanceExcelBuilder`)。
 
 対象月は承認済み・締め済みのみが基本である。ただし月次勤怠の画面(申請詳細・バックオフィスタスク詳細・
-勤怠参照)から社員1名・1か月単位で出力する場合は、クエリ`include_submitted=true`を付け、承認待ち
-(`submitted`)の月も対象に含める(承認者が承認前に勤怠管理表で内容を確認するため)。`include_submitted`
+勤怠参照)から社員1名・1か月単位で出力する場合は、CSV・Excelとも クエリ`include_submitted=true`を付け、承認待ち
+(`submitted`)の月も対象に含める(承認者が承認前に確認できるようにするため。CSVも同じ条件)。`include_submitted`
 未指定・`false`の場合(勤怠出力画面の一括出力を含む)は承認済み・締め済みのみが対象で、差戻し中(`returned`)・
-未提出(`not_submitted`)の月は`include_submitted`の値によらず対象外とする。CSV・外部連携は
+未提出(`not_submitted`)の月は`include_submitted`の値によらず対象外とする。外部連携は
 `include_submitted`を受け付けず、常に承認済み・締め済みのみが対象である。
 
 勤怠管理表はA4縦・1ページに収まり、用紙の水平・垂直方向の中央へ配置する印刷設定とし、上部に対象年月・社員番号・勤務形態・所属部署・
@@ -40,9 +40,9 @@ ZIP自体は、単一社員なら`勤怠管理表_{社員名}_{対象期間}.zip
 
 月次勤怠確認バックオフィスタスクの詳細画面から出力する場合は、タスクの`source_id`に対応する
 社員・対象月を自動指定するため、利用者による対象条件の再入力は不要とする。締め前の承認済み・
-締め済みのどちらからもCSV・Excelを出力できる。承認待ち(提出済み)の月はExcelだけ出力でき
-(`include_submitted=true`)、CSVは承認後に出力できる。差戻し中・未提出の月は出力ボタンが無効になり、
-理由を画面に表示する。
+締め済みのどちらからもCSV・Excelを出力できる。承認待ち(提出済み)の月もCSV・Excelとも出力できる
+(`include_submitted=true`)。差戻し中・未提出の月は出力ボタンが無効になり、理由を画面に表示する。
+勤怠出力画面の一括出力は承認済み・締め済みのみが対象である。
 
 `year_month`クエリパラメータは配列(`year_month[]=2026-06&year_month[]=2026-07`)で複数月を
 指定できる(単一の`year_month=2026-06`形式も後方互換で受け付ける)。複数月×複数社員の
@@ -140,6 +140,6 @@ freee/MoneyForward等の会計クラウドへ実際にAPI送信する`ExternalAp
   済み以降であれば出力可能とする(締め前でもバックオフィス確認のためにCSV/帳票を出力できる
   必要があるため)。実装では対象月の `attendance_months` が `approved` または `closed`
   ステータスの社員のみをCSVに含める(未承認・未提出の社員は自動的に除外される)。
-  Excel出力で`include_submitted=true`を付けた場合のみ、`submitted`の月も対象に加える(差戻し・未提出は含めない)。
+  CSV・Excelとも`include_submitted=true`を付けた場合のみ、`submitted`の月も対象に加える(差戻し・未提出は含めない)。
   締め([UC-A011](./07-usecases-attendance.md#uc-a011-月次勤怠を締める))自体はCSV出力の
   前提条件ではない。

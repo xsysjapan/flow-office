@@ -194,6 +194,49 @@ class AttendanceExportTest extends TestCase
         $this->assertStringContainsString('120', $csv);
     }
 
+    public function test_csv_with_include_submitted_outputs_submitted_month_but_not_returned_or_not_submitted(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        $submittedEmployee = User::factory()->create(['name' => '提出済みCSV社員']);
+        AttendanceMonth::query()->create([
+            'user_id' => $submittedEmployee->id,
+            'year_month' => '2026-06',
+            'status' => AttendanceMonthStatus::SUBMITTED,
+            'snapshot_json' => $this->submittedSnapshot(),
+        ]);
+
+        // 差戻し中の月はスナップショットを持つが対象外。
+        $returnedEmployee = User::factory()->create(['name' => '差戻しCSV社員']);
+        AttendanceMonth::query()->create([
+            'user_id' => $returnedEmployee->id,
+            'year_month' => '2026-06',
+            'status' => AttendanceMonthStatus::RETURNED,
+            'snapshot_json' => $this->submittedSnapshot(),
+        ]);
+
+        // 未提出の月は対象外。
+        $notSubmittedEmployee = User::factory()->create(['name' => '未提出CSV社員']);
+        AttendanceMonth::query()->create([
+            'user_id' => $notSubmittedEmployee->id,
+            'year_month' => '2026-06',
+            'status' => AttendanceMonthStatus::NOT_SUBMITTED,
+            'snapshot_json' => null,
+        ]);
+
+        // Excelと同じく "1" と "true" のどちらでも提出済みを含める。
+        foreach (['1', 'true'] as $value) {
+            $response = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06&include_submitted='.$value);
+
+            $response->assertSuccessful();
+            $csv = $response->streamedContent();
+            $this->assertStringContainsString('提出済みCSV社員', $csv);
+            $this->assertStringNotContainsString('差戻しCSV社員', $csv);
+            $this->assertStringNotContainsString('未提出CSV社員', $csv);
+        }
+    }
+
     public function test_admin_can_export_a_csv_across_multiple_months_and_employees(): void
     {
         $admin = User::factory()->create();

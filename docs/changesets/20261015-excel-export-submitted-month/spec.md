@@ -1,6 +1,6 @@
 # 承認待ち(提出済み)の月次勤怠でExcel勤怠管理表がタイトルだけになる不具合の修正
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > Excelの集計表もおかしくなっています。履歴を調べて対応をお願いします。
@@ -199,4 +199,13 @@
   - `npx tsc -b`・`npm run lint`: エラーなし
   - storybookプロジェクトの`AttendanceReferencePage.stories.tsx > No Employee Selected`が失敗(Routerのdecorator無し)。
     今回の変更を外した状態でも同じく失敗する既存の不具合で、対象外。
-- 受け入れ条件: 本番の`snapshot_json`がnullの月次の確認(リリース後、ユーザーに依頼)が未了のため、ステータスは実装中のまま。
+- 受け入れ条件: 本番の`snapshot_json`がnullの月次は0件(2026-10-16 ユーザー確認)。
+- 2026-10-16 CSVもExcelと同じ条件にする変更(implementer委譲、コミット「勤怠CSVも月次勤怠の画面からは承認待ちの月を出力できるようにする」):
+  `ExportController.php`(`validateAttendanceDownloadRequest`・`resolveExportableStatuses`をCSV・Excelで共有。外部連携は不変)、
+  `AttendanceExportTest.php`(CSVの1件追加、20件)、`AttendanceExternalApiPublishTest.php`(外部連携は`include_submitted`を
+  無視する1件追加)、frontend(押せる状態の定数を`ATTENDANCE_MONTH_EXPORTABLE_STATUSES`に統合、CSVにも`include_submitted`、
+  案内文を「提出後に出力できます。」に統一、テスト更新・`exports.test.ts`にCSV3件)、docs/14・docs/07。
+  - 検証(委譲元が実行): `php artisan test --filter "Export|Swagger|ExternalApiPublish"` 59件PASS、
+    `npx vitest run --project=unit src/pages/attendance/AttendanceReferencePage src/api` 27件PASS、`npx tsc -b`・`npm run lint` エラーなし。
+- 整合チェック: 「ドキュメントへの影響」のdocs/14・docs/07は更新済み(git差分で確認)。受け入れ条件は各テストと本番確認で充足。
+  未確定・要確認事項は全論点で空。

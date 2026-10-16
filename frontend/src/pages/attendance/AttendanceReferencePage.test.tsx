@@ -296,6 +296,7 @@ describe('AttendanceReferencePage', () => {
         year_month: [approvedMonth.year_month],
         user_id: [targetUser.id],
         format: 'generic',
+        include_submitted: true,
       }),
     )
     expect(excelSpy).toHaveBeenCalledWith({
@@ -306,8 +307,7 @@ describe('AttendanceReferencePage', () => {
   })
 
   describe('output card by monthly status', () => {
-    const notSubmittedHint = '提出後(CSVは承認後)に出力できます。'
-    const csvApprovedHint = 'CSVは承認後に出力できます。'
+    const exportHint = '提出後に出力できます。'
 
     function attendanceMonthWithStatus(status: AttendanceMonthStatus): AttendanceMonth {
       return {
@@ -335,29 +335,19 @@ describe('AttendanceReferencePage', () => {
       })
     }
 
-    it('enables only Excel output for a submitted month and explains that CSV needs approval', async () => {
-      mockMonthStatus('submitted')
+    it.each(['submitted', 'approved', 'closed'] as const)(
+      'enables both outputs without a hint for a %s month',
+      async (status) => {
+        mockMonthStatus(status)
 
-      renderPage()
-      await selectTargetUser()
+        renderPage()
+        await selectTargetUser()
 
-      expect(await screen.findByRole('button', { name: 'Excel出力' })).toBeEnabled()
-      expect(screen.getByRole('button', { name: 'CSV出力' })).toBeDisabled()
-      expect(screen.getByText(csvApprovedHint)).toBeInTheDocument()
-      expect(screen.queryByText(notSubmittedHint)).not.toBeInTheDocument()
-    })
-
-    it.each(['approved', 'closed'] as const)('enables both outputs without a hint for a %s month', async (status) => {
-      mockMonthStatus(status)
-
-      renderPage()
-      await selectTargetUser()
-
-      expect(await screen.findByRole('button', { name: 'CSV出力' })).toBeEnabled()
-      expect(screen.getByRole('button', { name: 'Excel出力' })).toBeEnabled()
-      expect(screen.queryByText(csvApprovedHint)).not.toBeInTheDocument()
-      expect(screen.queryByText(notSubmittedHint)).not.toBeInTheDocument()
-    })
+        expect(await screen.findByRole('button', { name: 'CSV出力' })).toBeEnabled()
+        expect(screen.getByRole('button', { name: 'Excel出力' })).toBeEnabled()
+        expect(screen.queryByText(exportHint)).not.toBeInTheDocument()
+      },
+    )
 
     it.each(['returned', 'not_submitted'] as const)(
       'disables both outputs and explains the requirement for a %s month',
@@ -369,20 +359,29 @@ describe('AttendanceReferencePage', () => {
 
         expect(await screen.findByRole('button', { name: 'CSV出力' })).toBeDisabled()
         expect(screen.getByRole('button', { name: 'Excel出力' })).toBeDisabled()
-        expect(screen.getByText(notSubmittedHint)).toBeInTheDocument()
-        expect(screen.queryByText(csvApprovedHint)).not.toBeInTheDocument()
+        expect(screen.getByText(exportHint)).toBeInTheDocument()
       },
     )
 
-    it('requests Excel for a submitted month with include_submitted set to true', async () => {
+    it('requests CSV and Excel with include_submitted set to true for a submitted month', async () => {
       mockMonthStatus('submitted')
+      const csvSpy = vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockResolvedValue(undefined)
       const excelSpy = vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockResolvedValue(undefined)
 
       renderPage()
       await selectTargetUser()
 
-      await userEvent.click(await screen.findByRole('button', { name: 'Excel出力' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'CSV出力' }))
+      await waitFor(() =>
+        expect(csvSpy).toHaveBeenCalledWith({
+          year_month: [formatDate(new Date()).slice(0, 7)],
+          user_id: [targetUser.id],
+          format: 'generic',
+          include_submitted: true,
+        }),
+      )
 
+      await userEvent.click(screen.getByRole('button', { name: 'Excel出力' }))
       await waitFor(() =>
         expect(excelSpy).toHaveBeenCalledWith({
           year_month: [formatDate(new Date()).slice(0, 7)],
