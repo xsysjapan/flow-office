@@ -1,4 +1,4 @@
-# 承認待ち(提出済み)の月次勤怠でExcel勤怠管理表がタイトルだけになる不具合の修正
+# 承認待ち(提出済み)の月次勤怠でExcel勤怠管理表がタイトルだけになる不具合の修正(CSVも同じ条件で出力可能に)
 
 ステータス: 完了
 
@@ -14,6 +14,7 @@
 ## 背景・目的
 承認者が承認待ちの月次勤怠(申請詳細画面)で「Excel出力」を押すと、31日分の行がある勤怠管理表ではなく
 タイトルだけのシートがダウンロードされる。承認前に勤怠管理表で内容を確認できるようにする。
+(2026-10-16 ユーザー指示により、同じ画面のCSV出力も同じ条件で承認待ちの月を出力できるようにした)
 対象者は「出力」カードが表示される勤怠出力権限(`attendance.export`。現行は人事・管理者)を持つ利用者で、一般の承認者への
 出力ボタンの開放は今回扱わない。
 
@@ -37,7 +38,8 @@
 ## 設計前提の検証
 - 正データと派生データ: Excelは読み取りだけ(日次勤怠・日次計算・月次の`snapshot_json`・付与/消化)。書き込みは出力履歴の
   `export.created`イベントだけで、今回は変えない。正データの二重化はない。
-- 定義と実態: 「出力対象=承認済み・締め済み」は給与連携(CSV・外部連携)の前提としては正しい。Excelは目視確認・提出用の帳票
+- 定義と実態: 「出力対象=承認済み・締め済み」は給与連携(CSV・外部連携)の前提としては正しい
+  (2026-10-16 追記: 画面のCSVは未承認でも出力してよいとユーザーが判断。外部連携と一括出力は承認済み・締め済みのまま)。Excelは目視確認・提出用の帳票
   (`AttendanceExportPage.tsx:177`)で、承認前の確認にも使われる実態に対し、CSVと同じ抽出条件を共有していることがずれの原因。
 - 提出済み以降は日次がロックされる(`AttendanceEditGuard`)ため、提出済みの月の日別行はスナップショットと同じ時点の内容。
   スナップショットは提出時に必ず記録される(`SubmitAttendanceMonthHandler.php:58,63`→`AttendanceMonthProjector.php:27-39`)。
@@ -59,7 +61,7 @@
   外部連携は外部システムへのデータ送信で、ユーザーの指示の対象(画面のCSV)ではないため変えない。
 - 未確定・要確認事項: なし
 
-### 論点2: Excelの対象に含める状態の範囲
+### 論点2: 対象に含める状態の範囲(2026-10-16以降はCSVも同じ)
 - 選択肢:
   - A. submitted・approved・closed(差戻し returned・未提出 not_submitted は含めない)
   - B. 全状態
@@ -128,13 +130,16 @@
 - 勤怠出力画面の一括出力(Excel・CSV)の対象は変わらない(承認済み・締め済みのみ)。
 - 差戻し中・未提出の月では、出力ボタンが無効になり理由が表示される。
 - 承認済み・締め済みの月のExcel・CSVの出力内容は変わらない(既存の`AttendanceExportTest`が全てPASS)。
-- 提出済みの月はCSV・外部連携の対象にならない(テストでPASS)。
+- ~~提出済みの月はCSV・外部連携の対象にならない(テストでPASS)。~~(2026-10-16変更)`include_submitted`を付けないCSV
+  (一括出力)と外部連携では、提出済みの月は対象にならない(テストでPASS)。
 - 承認待ちの月の「出力」カードでCSV出力も押せ、提出済みの月のCSVが出力される(2026-10-16変更)。
 - 本番で提出済み・承認済みの`snapshot_json`がnullの月次が無い(2026-10-16 ユーザー確認: 0件)。
 - backend・frontendの関連テストが全てPASSする。
 
 ## 対象外
-- 有給の0.5の件(ユーザー指示で保留)。
+- 有給の0.5の件(ユーザー指示で保留)。→ 2026-10-16 本番データで原因を特定(日次計算が休暇ビューへの行の投入より前に計算され、
+  再計算されていない)。コード変更は不要で、`attendance:recalculate-days`・`attendance:recalculate-month-snapshots`の実行で直す
+  (ユーザーが実施。記録は`20261009-keep-leave-work-type-on-edit`のリハーサル結果の末尾)。
 - 休暇の作り直し(論点18)前の本番データに起因する値の差。
 - 承認前のExcelに「未承認」等の表示を入れること。
 - 対象0件のときに空シートではなくエラーを返すこと。
@@ -145,35 +150,34 @@
 
 ## ドキュメントへの影響
 - `docs/14-usecases-export.md`: 「Excel出力(UC-E001 拡張)」(`:3-7`)に`include_submitted`(月次勤怠の画面から1か月単位で
-  出力するときだけ提出済みも対象)を追記する。`:35-36`に、承認待ちの月はExcelだけ出力でき、CSVは承認後である旨と、出力できない
-  状態ではボタンが無効になる旨を追記する。`:130-134`の対象状態の記述も合わせる。
-- `docs/07-usecases-attendance.md:256`: 給与計算用CSV/帳票(一括出力)は承認済み以降、承認前の確認用に月次勤怠の画面から
-  提出済みの月のExcelを出力できる旨を書き分ける。
+  出力するときだけ提出済みも対象)を追記する。`:35-36`に、承認待ちの月も出力できる旨(初版はExcelだけ。2026-10-16にCSVも同じに変更)と、
+  出力できない状態ではボタンが無効になる旨を追記する。`:130-134`の対象状態の記述も合わせる。
+- `docs/07-usecases-attendance.md:256`: 給与計算用CSV/帳票(一括出力)は承認済み以降、承認前の確認・先行作業用に月次勤怠の画面から
+  提出済みの月のExcel・CSV(2026-10-16にCSVを追加)を出力できる旨を書き分ける。
 
 ## モック・アセット
 なし
 
 ## 実装対象
 - `backend/app/Http/Controllers/Api/ExportController.php`
-- `backend/tests/Feature/Attendance/AttendanceExportTest.php`
-- `frontend/src/api/exports.ts`、押せる状態の定数(`frontend/src/utils/statusLabels.ts`等)
+- `backend/tests/Feature/Attendance/AttendanceExportTest.php`、`backend/tests/Feature/Attendance/AttendanceExternalApiPublishTest.php`(2026-10-16追加)
+- `frontend/src/api/exports.ts`・`frontend/src/api/exports.test.ts`(新規)、`frontend/src/hooks/useAttendance.ts`、
+  押せる状態の定数(`frontend/src/utils/statusLabels.ts`)
 - `frontend/src/pages/attendance/AttendanceReferencePage.tsx`・`AttendanceReferencePage.test.tsx`
 - `frontend/src/pages/attendance/AttendanceExportPage.tsx`(`:80`のコメント・`:111`の案内文の対象状態の記述のみ確認・更新)
 - `docs/14-usecases-export.md`、`docs/07-usecases-attendance.md`
 
 ## 検証方法
 - `cd backend && php artisan test tests/Feature/Attendance/AttendanceExportTest.php`
-- `cd backend && php artisan test --filter Export`
-- `cd frontend && npx vitest run src/pages/attendance/AttendanceReferencePage` と `npm run lint`・`npx tsc --noEmit`
+- `cd backend && php artisan test --filter "Export|Swagger|ExternalApiPublish"`
+- `cd frontend && npx vitest run --project=unit src/pages/attendance/AttendanceReferencePage src/api` と `npm run lint`・`npx tsc -b`
+  (storybookプロジェクトの既存の失敗1件は対象外)
 - リリース後、本番DBで`SELECT COUNT(*) FROM attendance_months WHERE status IN ('submitted','approved','closed') AND snapshot_json IS NULL`
   が0であること(ユーザーに依頼)
 
 ## レビュー履歴
 - 初版(2026-10-15)
 - 2026-10-15 ユーザーが承認(「実装をお願いします」)。実装中に更新
-- 2026-10-16 実装後のユーザー指示「CSVもExcelと同じ条件にしてください。未承認で出力できても問題ないです。」で論点1・4・
-  仕様確定事項・受け入れ条件を変更(CSVにもinclude_submitted、押せる状態の定数を1つに、案内文を1種類に)。外部連携・一括出力は
-  変えない。設計前提は覆っていない。本番のsnapshot_jsonがnullの月次は0件(ユーザー確認)。
 - 2026-10-15 独立設計レビュー(general-purpose)の指摘を反映:
   - major: 論点4はExcelも状態で無効化しないと差戻し・未提出で同じ不具合が残る → 決定をB→Cに変更。
   - major: 論点3で一括ZIPに未承認の月が無表示で混ざる(締め工程の帳票、CSVと件数不一致) → 決定をA→Bに変更
@@ -182,6 +186,11 @@
   - minor: docblock・OpenAPI・AttendanceExportPageのコメント/案内文・docs/14の他の箇所を実装対象・ドキュメントへの影響に追加。
   - minor: スナップショットがnullの行の確認を検証方法に追加。差戻し中(スナップショットあり)の月が対象外のテストを追加。
   - 前提(提出時のスナップショット・日次ロック・ビルダーの状態非依存・呼び出し元3か所)は覆っていないため作り直しは不要。
+- 2026-10-16 実装後のユーザー指示「CSVもExcelと同じ条件にしてください。未承認で出力できても問題ないです。」で論点1・4・
+  仕様確定事項・受け入れ条件を変更(CSVにもinclude_submitted、押せる状態の定数を1つに、案内文を1種類に)。外部連携・一括出力は
+  変えない。設計前提は覆っていない。本番のsnapshot_jsonがnullの月次は0件(ユーザー確認)。
+- 2026-10-16 記録の整合を見直し(タイトル・背景・論点2・受け入れ条件・対象外・ドキュメントへの影響・実装対象・検証方法を
+  CSVの変更に合わせて更新。変更前の記述は取り消し線・注記で残した)。
 
 ## 実装結果
 - backend・docs(implementer委譲、コミット「Excel勤怠管理表の出力でinclude_submittedのとき承認待ちの月も対象にする」):
