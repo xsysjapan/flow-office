@@ -1,0 +1,215 @@
+# 勤怠管理表(Excel)の備考に休暇を正しく表示する(代休の追加・特別休暇の種別名)
+
+ステータス: 完了
+
+## 変更要望(原文)
+> Excelの備考に代休が反映されていません。追加をお願いします
+
+> 特別休暇についても名称を表示するように変更をお願いします
+
+> 改めて変更セットを作成してください
+
+## 背景・目的
+勤怠管理表(Excel)の日別行の備考(K列)に、有給休暇・特別休暇は出るが、代休は出ない。また特別休暇は「特別休暇」とだけ出て、
+どの休暇(慶弔休暇・誕生日休暇など)か分からない。備考に、その日の休暇を種類(特別休暇は種別名)と取得単位つきで出す。
+
+## 現状(As-Is)
+- 備考は`AttendanceExcelBuilder::dayNote()`(`backend/app/Domain/Export/Services/AttendanceExcelBuilder.php:322-331`)が作る。
+  月の1日〜末日の各行で呼ばれ(`:171`・`:208`)、勤怠日が無い日は`$day`がnullになる。
+- 休暇は日次計算の値で判定している。`paid_leave_days > 0`なら「有給休暇」、`special_leave_days > 0`なら「特別休暇」で、
+  1日に1つだけ出す。
+- 日次計算は代休を日数に数えない(`backend/app/Domain/Attendance/Support/LeaveCalculationInput.php:12-13,73`)。
+  そのため代休は備考に出る経路が無い。
+- 時間休だけの日は`*_leave_days`が0(分数だけ)なので出ない。同じ日に複数の休暇(午前有給+午後代休など)があっても1つしか出ない。
+- 画面(勤怠の日次・週次・月次)は休暇ビュー`attendance_day_leaves`の有効な行(申請中・承認済み)から表示している。
+  - 文言は`attendanceDayLeaveLabels()`(`frontend/src/utils/statusLabels.ts:169-176`)で「代休(午前半休)」のように作る。
+  - APIは`AttendanceDayResource::leavesOn()`(`backend/app/Http/Resources/AttendanceDayResource.php:70-89`)が
+    `AttendanceDayLeaves::activeFor()`を使う。
+  - 画面は特別休暇を種別名ではなく「特別休暇」と出す。
+- `AttendanceDayLeaves`は`work_date`→`leave_kind`→`leave_request_id`の順に返す
+  (`backend/app/Domain/Attendance/Support/AttendanceDayLeaves.php:101-103`)。`leave_kind`は文字列順なので、代休→有給→特別の順になる。
+- 特別休暇の種別名は`special_leave_types.name`(`SpecialLeaveType`)。月次APIの特別休暇の内訳
+  (`MonthlyOvertimeCalculator::calculateSpecialLeaveBreakdown`、`:200-234`)も同じ列から名前を取っている。
+- 備考の文言を固定しているテストは無い。`AttendanceExportTest.php`で備考を見ているのは祝日名(`:55`)だけ。
+
+## 設計前提の検証
+- 正データと派生データ:
+  - 休暇の有無は、勤怠文脈の休暇ビュー`attendance_day_leaves`(休暇申請のイベントから作るProjection)が持つ。
+  - 日次計算の休暇日数は給与集計用の派生値で、代休を数えない仕様。
+  - 備考(表示)の判定に集計用の値を流用していたことが原因。
+- 定義と実態: `paid_leave_days`・`special_leave_days`は「日数」の集計値で、休暇の種類の判定には使えない(代休・時間休を表せない)。
+- 文脈の境界(原則15):
+  - Export文脈(帳票出力。読み取り専用)は、勤怠文脈の休暇ビューを`AttendanceDayLeaves`経由で読む。これは勤怠文脈が公開する
+    問い合わせクラスで、画面APIと同じ。`AttendanceDayLeave`モデル・テーブルは直接読まない。
+  - 特別休暇の種別名はマスタ`SpecialLeaveType`から読む(`MonthlyOvertimeCalculator`と同じ)。
+  - 書き込みは無い。
+  - 既存のビルダーは、勤怠日・日次計算・勤務予定・有給の付与/消化を直接読んでいる(`AttendanceExcelBuilder.php:71-118`)。
+    帳票出力を読み取り専用の例外とする記述は`docs/03-architecture.md`に無い。この整理は本変更の対象外とする。
+- 提出後の値のずれ: 起きない。
+  - 休暇の申請・承認・差戻し・取消の連鎖は、勤怠側の締め判定(`assertMutable`)を通る。
+  - 提出済み・承認済み・締め済みの月で連鎖が締め判定に引っかかると、連鎖全体が巻き戻る。
+  - そのためロック中の月で休暇ビューが変わることは無い。
+  - 日別行(時間・遅刻・早退・欠勤)は既に現在の勤怠日から出しているので、備考も現在値でそろう。
+- 代休の日の欠勤: 影響なし。欠勤は休暇区間から計算するため、代休の日に欠勤○は付かない(`AttendanceCalculator.php:296-301`)。
+- 原因の分類: 実装のミス(表示に集計値を流用していた)。設計の誤りではない。
+
+## 仕様検討
+
+### 論点1: 休暇の判定に使うデータ
+- 選択肢:
+  - A. 日次計算に代休の値を足す(計算・イベント・集計に影響し、代休を日数に数えない仕様と衝突する)
+  - B. 画面と同じく、休暇ビューの有効な行(`AttendanceDayLeaves`)から判定する
+- 決定: B
+- 理由: 画面と同じ正の情報源で、代休・時間休・複数休暇を表せる。計算・集計に影響しない。
+- 未確定・要確認事項: なし
+
+### 論点2: 備考の文言
+- 選択肢:
+  - A. 種類だけ(有給休暇・特別休暇・代休)
+  - B. 種類+取得単位(例: 有給休暇(全休)・代休(午前半休))。画面と同じ形
+- 決定: B
+- 理由:
+  - 画面の表示と同じ形になり、半休・時間休の区別がExcelでも分かる。
+  - 有給は「有給休暇」から「有給休暇(全休)」等に表記が変わる(受け入れ条件に明記)。
+  - 時間休は時間数を出さず「(時間休)」とする。同じ表記の行が複数あってもまとめない(画面と同じ)。
+- 未確定・要確認事項: なし
+
+### 論点3: 特別休暇の名称の出し方
+- 選択肢:
+  - A. 種類の代わりに種別名を出す(例: 誕生日休暇(全休))
+  - B. 種類と種別名を両方出す(例: 特別休暇:誕生日休暇(全休))
+- 決定: A
+  - 種別名が取れないとき(`special_leave_type_id`がnull、または種別が見つからない)は「特別休暇」にする。
+  - 無効化(`is_active=false`)された種別も名前を出す。過去の取得の記録のため。
+- 理由:
+  - ユーザー指示「特別休暇についても名称を表示」。
+  - 種別名(慶弔休暇・誕生日休暇など)だけで休暇だと分かり、備考の列幅に収まりやすい。
+  - 名前は月次APIの特別休暇の内訳と同じもの(`special_leave_types.name`)を使う。
+- 未確定・要確認事項: なし
+
+### 論点4: 同じ日に複数の休暇があるときの並び順
+- 選択肢:
+  - A. 休暇ビューの取得順(代休→有給→特別。画面と同じ)
+  - B. 単位の順(全休→午前半休→午後半休→時間休)。同じ単位は種類の順(有給→特別休暇→代休)、さらに同じなら申請IDの順
+- 決定: B。Excelだけで、画面の並びは変えない。
+- 理由: 午前→午後の順で読めるほうが帳票として自然。
+- 未確定・要確認事項: なし
+
+### 論点5: 申請中(未承認)の休暇の扱い
+- 選択肢:
+  - A. 承認済みと同じ表記で出す
+    - 承認済みの月の帳票に、未承認の代休・特別休暇が取得済みのように残り得る。
+    - 月次提出前の未承認チェックは有給だけ(`PaidLeaveApprovalGuard`)。
+  - B. 承認済みだけ出す(申請中の休暇が帳票から消え、その日が休暇なしに見える)
+  - C. 申請中は「・申請中」を付けて区別する(例: 代休(全休・申請中))
+- 決定: C
+- 理由:
+  - 日次計算(所定・欠勤)は申請中の休暇も休暇として扱う。備考から消すと、時間の欄と食い違う。
+  - 区別して出せば、承認前の確認(`include_submitted`)でも承認後の帳票でも誤解が無い。
+- 未確定・要確認事項: なし
+
+## 仕様確定事項(まとめ)
+- 取得(`AttendanceExcelBuilder::buildReportSheet()`):
+  - 対象月の有効な休暇を`AttendanceDayLeaves::activeForRange(user_id, 月初, 月末)`で1回だけ取得し、日付(Y-m-d)ごとにまとめる。
+  - 有効な休暇は申請中・承認済み(`AttendanceDayLeaves`の既存の判定)。差戻し・取消は出さない。
+  - 特別休暇の種別名は、その月の行に出てくる`special_leave_type_id`をまとめて1回で`SpecialLeaveType`から取得する。
+    行ごとには問い合わせない。
+- 休暇の表記(`dayNote()`。日次計算の休暇日数は見ない):
+  - 1件の休暇を「{種類}({単位})」とする。申請中(`request_status=submitted`)は「{種類}({単位}・申請中)」。
+  - 種類:
+    - paid = 有給休暇
+    - special = 種別名(取れなければ「特別休暇」)
+    - compensatory = 代休
+  - 単位: full = 全休、am_half = 午前半休、pm_half = 午後半休、hourly = 時間休
+  - 並び順: 単位(全休→午前半休→午後半休→時間休)→種類(有給→特別休暇→代休)→申請ID。
+  - 複数の休暇は「・」で連結する。
+- 備考の全体:
+  - 従来どおり「祝日名 / 休暇 / 勤怠日の備考」を「 / 」で連結する(空は省く)。
+  - 勤怠日が無い日でも、休暇があれば出す。
+- 表記の組み立て(種類・単位の文言、並び順、申請中の付記、連結)は、DBを読まない小さなクラス
+  `App\Domain\Export\Services\AttendanceExcelLeaveNote`に置く(原則16: 業務ルールをテストで直接呼べる単位に置く)。
+  入力はその日の休暇の行(`AttendanceDayLeaves`の配列)と特別休暇の種別名の対応表、出力は「・」で連結した文字列(休暇が無ければ空)。
+  文言はfrontendと同じにする。ビルダーは取得と日付ごとの受け渡しだけを行う。
+- 複数社員・複数月のZIP出力は同じ`buildForMonth`を使うため、同じ備考になる(追加の実装は不要)。
+- 単体テスト(`backend/tests/Unit/Export/AttendanceExcelLeaveNoteTest.php`、新規): 全種類×全単位の文言、並び順(入力順に
+  よらない)、申請中の付記、種別名が無い・見つからない特別休暇、休暇なし=空文字。
+- 通しのテスト(`backend/tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php`、新規。休暇は申請・承認のAPI/Command経由で作る):
+  - 代休(全休)の日 → 「代休(全休)」
+  - 特別休暇(種別「誕生日休暇」、全休)の日 → 「誕生日休暇(全休)」
+  - 種別が見つからない特別休暇 → 「特別休暇(全休)」
+  - 時間休の有給の日 → 「有給休暇(時間休)」
+  - 午前有給+午後代休の日 → 「有給休暇(午前半休)・代休(午後半休)」(午後の代休を先に申請しても同じ並び)
+  - 申請中の代休の日 → 「代休(全休・申請中)」
+  - 出さないもの: 差し戻した代休、取り消した特別休暇
+  - 差し戻した後に再提出した代休は出る
+  - 勤怠日の備考と「 / 」で連結される(祝日の日の休暇は、休暇の申請が勤務予定日を前提とし、祝日名は勤務予定の無い日にだけ出るため
+    同じ日に成立しない。連結は勤怠日の備考で確かめる。2026-10-16 実装時に判明)
+
+## 受け入れ条件
+- 代休を取得した日の勤怠管理表の備考に「代休(全休)」等が表示される。
+- 特別休暇は種別名で「誕生日休暇(午前半休)」等と表示される(従来の「特別休暇」から変わる)。
+- 有給は「有給休暇(全休)」等と表示される(従来の「有給休暇」から変わる)。
+- 時間休・同じ日の複数の休暇も備考に出て、単位→種類の順に並ぶ。
+- 申請中の休暇は「・申請中」付きで出る。差戻し・取消の休暇は出ない。
+- 複数社員・複数月のZIP出力も同じ備考になる。
+- 集計欄・日別の時間の値は変わらない(既存の`AttendanceExportTest`が全てPASS)。
+- 追加したテストがPASSする。
+
+## 対象外
+- 日次計算・月次集計で代休を日数に数えること。
+- 画面の休暇ラベル(並び順・特別休暇の種別名)。
+- CSV・外部連携の出力項目。日別の備考を持たないため。
+- MoneyForward形式のCSVの代休日数が0固定である件(別課題)。
+- 半休の日の遅刻・早退の判定。
+- Export文脈が他文脈のテーブルを直接読んでいる既存箇所の整理。
+
+## ドキュメントへの影響
+- `docs/14-usecases-export.md`「Excel出力(UC-E001 拡張)」の備考の説明に、次の旨を追記する:
+  休暇は休暇ビューから、種類(特別休暇は種別名)と取得単位つきで出す。申請中は「・申請中」を付ける。
+- 他のdocs: 変更なし(計算・API・画面の仕様は変えない)。
+
+## モック・アセット
+なし
+
+## 実装対象
+- `backend/app/Domain/Export/Services/AttendanceExcelBuilder.php`
+- `backend/app/Domain/Export/Services/AttendanceExcelLeaveNote.php`(新規)
+- `backend/tests/Unit/Export/AttendanceExcelLeaveNoteTest.php`(新規)
+- `backend/tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php`(新規)
+- `docs/14-usecases-export.md`
+
+## 検証方法
+- `cd backend && php artisan test tests/Unit/Export/AttendanceExcelLeaveNoteTest.php tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php tests/Feature/Attendance/AttendanceExportTest.php`
+- `cd backend && php artisan test --filter "Export|Swagger|ExternalApiPublish"`
+
+## レビュー履歴
+- 2026-10-16 初版(代休の追加、論点1・2)。
+- 2026-10-16 ユーザー指示「特別休暇についても名称を表示」で、論点3(種別名)を追加。
+- 2026-10-16 独立設計レビュー(general-purpose)の指摘を反映:
+  - blocker: 並び順を「取得順」としつつテストは有給→代休を期待していて矛盾 → 論点4を追加。
+  - major: 申請中の代休・特別休暇が承認済みの月に取得済みのように残る → 論点5を追加。
+  - major: 原則15の検討が無い → 設計前提の検証に文脈の境界を追記。
+  - minor: 提出後にずれない理由・欠勤への影響なし・ZIP・時間休の表記・勤怠日の無い日・取消/再提出・文言の固定のテストを追記。
+- 2026-10-16 ユーザー指示「改めて変更セットを作成してください」で作り直した。
+  - 追記を重ねて論点の順序が崩れていたため、全体を書き直した。論点は番号順に並べ、仕様確定事項は取得・表記・備考の全体・テストに分けた。
+  - 決定内容は前版から変えていない。設計前提(代休は日次計算に入らない、休暇ビューの並び順、日別行は現在値)はコードで再確認した。
+
+- 2026-10-16 ユーザーが承認(「実装をお願いします」)。実装中に更新。実装前に委譲元が次を調整した(決定内容は不変):
+  - 表記の組み立てをDBを読まないクラス`AttendanceExcelLeaveNote`に分け、文言の網羅・並び順・種別名の欠落は単体テストで確かめる。
+  - 「勤怠日の行が無い日」のテストは外した。休暇の申請で勤怠日が必ず作られる(`ApplyLeaveToAttendanceDay`)ためイベント経由では
+    作れず、ReadModelを直接書くテストは原則2に反するため。ビルダーは勤怠日の有無によらず日付で休暇を引く。
+
+## 実装結果
+- 実装(implementer委譲、コミット「Excelの備考に代休・特別休暇の種別名を表示する」):
+  - `backend/app/Domain/Export/Services/AttendanceExcelLeaveNote.php`(新規。表記の組み立て)
+  - `backend/app/Domain/Export/Services/AttendanceExcelBuilder.php`(休暇を月の範囲で1回取得、種別名を1回取得、`dayNote()`を差し替え)
+  - `backend/tests/Unit/Export/AttendanceExcelLeaveNoteTest.php`(14件)
+  - `backend/tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php`(8件。代休・特別休暇の種別名・午前有給+午後代休・申請中・
+    差戻し・取消・再提出・勤怠日の備考との連結)
+  - `docs/14-usecases-export.md`(備考の説明)
+- 検証(委譲元が実行):
+  - `php artisan test tests/Unit/Export/AttendanceExcelLeaveNoteTest.php tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php tests/Feature/Attendance/AttendanceExportTest.php`: 42件PASS
+  - `php artisan test --filter "Export|Swagger|ExternalApiPublish|Compensatory|SpecialLeave"`: 371件PASS
+- 仕様からの調整: 祝日の日の休暇の連結テストは作れない(上記「テスト」の注記)。代休の半休のテストのため、テスト内で代休の取得単位を
+  half_dayにしている。
+- 整合チェック: ドキュメントへの影響(docs/14)は更新済み。受け入れ条件は上記テストで確認。未確定・要確認事項は全論点で空。
