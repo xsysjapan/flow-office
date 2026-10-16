@@ -4,10 +4,12 @@ namespace App\Domain\Export\Services;
 
 use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
 use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
+use App\Domain\Attendance\Support\AttendanceDayLeaves;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
+use App\Models\SpecialLeaveType;
 use Illuminate\Support\Carbon;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -34,6 +36,8 @@ class AttendanceExcelBuilder
     public function __construct(
         private readonly WorkStyleFallbackResolver $workStyleResolver,
         private readonly ProvisionalScheduleCalculator $scheduleCalculator,
+        private readonly AttendanceDayLeaves $dayLeaves,
+        private readonly AttendanceExcelLeaveNote $leaveNote,
     ) {}
 
     public function buildForMonth(AttendanceMonth $month, string $yearMonth): Spreadsheet
@@ -93,6 +97,18 @@ class AttendanceExcelBuilder
                 $shifts,
             ))
             ->keyBy(fn (EmployeeCalendarEntry $entry) => $entry->work_date->toDateString());
+
+        // 休暇は休暇ビュー(有効な申請中・承認済み)を月の範囲で1回だけ読み、日付ごとにまとめる。
+        $monthLeaves = $this->dayLeaves->activeForRange(
+            $month->user_id,
+            $yearMonth.'-01',
+            Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString(),
+        );
+        $leavesByDate = collect($monthLeaves)->groupBy('work_date')->map(fn ($leaves) => $leaves->values()->all())->all();
+        $specialLeaveTypeIds = collect($monthLeaves)->pluck('special_leave_type_id')->filter(fn ($id) => $id !== null)->unique()->values();
+        $specialLeaveTypeNames = $specialLeaveTypeIds->isEmpty()
+            ? []
+            : SpecialLeaveType::query()->whereIn('id', $specialLeaveTypeIds)->pluck('name', 'id')->all();
 
         $lateCount = $days->filter(fn (AttendanceDay $day) => $this->isLate($day))->count();
         $earlyCount = $days->filter(fn (AttendanceDay $day) => $this->isEarly($day))->count();
@@ -205,7 +221,12 @@ class AttendanceExcelBuilder
                 $day && $this->isLate($day) ? '○' : '',
                 $day && $this->isEarly($day) ? '○' : '',
                 $calculation && $calculation->absence_minutes > 0 ? '○' : '',
-                $this->dayNote($day, $effectiveSchedule->get($date->toDateString())?->public_holiday_name),
+                $this->dayNote(
+                    $day,
+                    $effectiveSchedule->get($date->toDateString())?->public_holiday_name,
+                    $leavesByDate[$date->toDateString()] ?? [],
+                    $specialLeaveTypeNames,
+                ),
             ], null, "A{$row}");
 
             if ($date->isWeekend()) {
@@ -319,13 +340,13 @@ class AttendanceExcelBuilder
             && $day->actual_end_at->lessThan($day->calendarEntry->planned_end_at);
     }
 
-    private function dayNote(?AttendanceDay $day, ?string $holidayName = null): string
+    /**
+     * @param  list<array<string, mixed>>  $leaves  その日の休暇ビューの有効な行
+     * @param  array<int, string>  $specialLeaveTypeNames
+     */
+    private function dayNote(?AttendanceDay $day, ?string $holidayName, array $leaves, array $specialLeaveTypeNames): string
     {
-        $leave = match (true) {
-            (float) ($day?->calculation?->paid_leave_days ?? 0) > 0 => '有給休暇',
-            (float) ($day?->calculation?->special_leave_days ?? 0) > 0 => '特別休暇',
-            default => null,
-        };
+        $leave = $this->leaveNote->format($leaves, $specialLeaveTypeNames);
 
         return collect([$holidayName, $leave, $day?->note])->filter()->implode(' / ');
     }

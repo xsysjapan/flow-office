@@ -1,6 +1,6 @@
 # 勤怠管理表(Excel)の備考に休暇を正しく表示する(代休の追加・特別休暇の種別名)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > Excelの備考に代休が反映されていません。追加をお願いします
@@ -142,7 +142,8 @@
   - 申請中の代休の日 → 「代休(全休・申請中)」
   - 出さないもの: 差し戻した代休、取り消した特別休暇
   - 差し戻した後に再提出した代休は出る
-  - 祝日名・勤怠日の備考と「 / 」で連結される
+  - 勤怠日の備考と「 / 」で連結される(祝日の日の休暇は、休暇の申請が勤務予定日を前提とし、祝日名は勤務予定の無い日にだけ出るため
+    同じ日に成立しない。連結は勤怠日の備考で確かめる。2026-10-16 実装時に判明)
 
 ## 受け入れ条件
 - 代休を取得した日の勤怠管理表の備考に「代休(全休)」等が表示される。
@@ -199,4 +200,16 @@
     作れず、ReadModelを直接書くテストは原則2に反するため。ビルダーは勤怠日の有無によらず日付で休暇を引く。
 
 ## 実装結果
-未着手
+- 実装(implementer委譲、コミット「Excelの備考に代休・特別休暇の種別名を表示する」):
+  - `backend/app/Domain/Export/Services/AttendanceExcelLeaveNote.php`(新規。表記の組み立て)
+  - `backend/app/Domain/Export/Services/AttendanceExcelBuilder.php`(休暇を月の範囲で1回取得、種別名を1回取得、`dayNote()`を差し替え)
+  - `backend/tests/Unit/Export/AttendanceExcelLeaveNoteTest.php`(14件)
+  - `backend/tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php`(8件。代休・特別休暇の種別名・午前有給+午後代休・申請中・
+    差戻し・取消・再提出・勤怠日の備考との連結)
+  - `docs/14-usecases-export.md`(備考の説明)
+- 検証(委譲元が実行):
+  - `php artisan test tests/Unit/Export/AttendanceExcelLeaveNoteTest.php tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php tests/Feature/Attendance/AttendanceExportTest.php`: 42件PASS
+  - `php artisan test --filter "Export|Swagger|ExternalApiPublish|Compensatory|SpecialLeave"`: 371件PASS
+- 仕様からの調整: 祝日の日の休暇の連結テストは作れない(上記「テスト」の注記)。代休の半休のテストのため、テスト内で代休の取得単位を
+  half_dayにしている。
+- 整合チェック: ドキュメントへの影響(docs/14)は更新済み。受け入れ条件は上記テストで確認。未確定・要確認事項は全論点で空。
