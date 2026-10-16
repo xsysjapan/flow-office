@@ -6,7 +6,14 @@ import { describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
-import type { AttendanceDay, AttendanceMonth, AttendanceMonthlyCalculationTotals, Paginated, User } from '../../api/types'
+import type {
+  AttendanceDay,
+  AttendanceMonth,
+  AttendanceMonthlyCalculationTotals,
+  AttendanceMonthStatus,
+  Paginated,
+  User,
+} from '../../api/types'
 import { datesInMonth, formatDate, mondayOf } from '../../utils/weekDates'
 import { AttendanceReferencePage } from './AttendanceReferencePage'
 
@@ -289,8 +296,99 @@ describe('AttendanceReferencePage', () => {
         year_month: [approvedMonth.year_month],
         user_id: [targetUser.id],
         format: 'generic',
+        include_submitted: true,
       }),
     )
-    expect(excelSpy).toHaveBeenCalledWith({ year_month: [approvedMonth.year_month], user_id: [targetUser.id] })
+    expect(excelSpy).toHaveBeenCalledWith({
+      year_month: [approvedMonth.year_month],
+      user_id: [targetUser.id],
+      include_submitted: true,
+    })
+  })
+
+  describe('output card by monthly status', () => {
+    const exportHint = '提出後に出力できます。'
+
+    function attendanceMonthWithStatus(status: AttendanceMonthStatus): AttendanceMonth {
+      return {
+        id: `month-${status}`,
+        user_id: targetUser.id,
+        year_month: formatDate(new Date()).slice(0, 7),
+        status,
+        submitted_at: null,
+        approved_at: null,
+        returned_at: null,
+        return_comment: null,
+        closed_at: null,
+        snapshot: null,
+        legal_holiday_warnings: [],
+      }
+    }
+
+    function mockMonthStatus(status: AttendanceMonthStatus) {
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+      vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+        days: [],
+        month: attendanceMonthWithStatus(status),
+        flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      })
+    }
+
+    it.each(['submitted', 'approved', 'closed'] as const)(
+      'enables both outputs without a hint for a %s month',
+      async (status) => {
+        mockMonthStatus(status)
+
+        renderPage()
+        await selectTargetUser()
+
+        expect(await screen.findByRole('button', { name: 'CSV出力' })).toBeEnabled()
+        expect(screen.getByRole('button', { name: 'Excel出力' })).toBeEnabled()
+        expect(screen.queryByText(exportHint)).not.toBeInTheDocument()
+      },
+    )
+
+    it.each(['returned', 'not_submitted'] as const)(
+      'disables both outputs and explains the requirement for a %s month',
+      async (status) => {
+        mockMonthStatus(status)
+
+        renderPage()
+        await selectTargetUser()
+
+        expect(await screen.findByRole('button', { name: 'CSV出力' })).toBeDisabled()
+        expect(screen.getByRole('button', { name: 'Excel出力' })).toBeDisabled()
+        expect(screen.getByText(exportHint)).toBeInTheDocument()
+      },
+    )
+
+    it('requests CSV and Excel with include_submitted set to true for a submitted month', async () => {
+      mockMonthStatus('submitted')
+      const csvSpy = vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockResolvedValue(undefined)
+      const excelSpy = vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockResolvedValue(undefined)
+
+      renderPage()
+      await selectTargetUser()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'CSV出力' }))
+      await waitFor(() =>
+        expect(csvSpy).toHaveBeenCalledWith({
+          year_month: [formatDate(new Date()).slice(0, 7)],
+          user_id: [targetUser.id],
+          format: 'generic',
+          include_submitted: true,
+        }),
+      )
+
+      await userEvent.click(screen.getByRole('button', { name: 'Excel出力' }))
+      await waitFor(() =>
+        expect(excelSpy).toHaveBeenCalledWith({
+          year_month: [formatDate(new Date()).slice(0, 7)],
+          user_id: [targetUser.id],
+          include_submitted: true,
+        }),
+      )
+    })
   })
 })

@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261015-excel-export-submitted-month](./20261015-excel-export-submitted-month/spec.md) | 承認待ち(提出済み)の月次勤怠でExcel勤怠管理表がタイトルだけになる不具合の修正(CSVも同じ条件で出力可能に) | 完了 |
 | [20261015-implementer-delegation-prompt](./20261015-implementer-delegation-prompt/spec.md) | implementerへの委譲指示のチェックリスト化 | 完了 |
 | [20261015-php84-cloud-setup](./20261015-php84-cloud-setup/spec.md) | クラウドセッション用 PHP 8.4 セットアップスクリプト・SessionStartフック | 完了 |
 | [20261009-keep-leave-work-type-on-edit](./20261009-keep-leave-work-type-on-edit/spec.md) | 休暇まわり(申請・承認/休暇申請/残数・使用管理/勤怠)をイベント連携で独立させる | 実装中 |

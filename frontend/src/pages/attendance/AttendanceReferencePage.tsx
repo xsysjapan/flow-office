@@ -31,6 +31,7 @@ import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown, weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
 import { isoToLocalDatetimeLiteral, isoToTimeLiteral } from '../../utils/offsetDateTime'
 import {
+  ATTENDANCE_MONTH_EXPORTABLE_STATUSES,
   attendanceMonthStatusLabel,
   attendanceRowDisplayLabel,
   legalHolidayWarningLabel,
@@ -174,6 +175,8 @@ export function MonthlyReferenceView({
 
   const month = data?.month
   const monthMeta = month ? attendanceMonthStatusLabel(month.status) : null
+  // CSV・Excelとも同じ状態のときだけ出力できる(backendはinclude_submitted=trueで提出済みも含める)。
+  const canExportMonth = month ? ATTENDANCE_MONTH_EXPORTABLE_STATUSES.includes(month.status) : false
   const daysByDate = new Map((data?.days ?? []).map((day) => [day.work_date, day]))
   const scheduleByDate = new Map((data?.schedule ?? []).map((entry) => [entry.work_date, entry]))
   const dates = datesInMonth(yearMonth)
@@ -236,19 +239,31 @@ export function MonthlyReferenceView({
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
+              disabled={!canExportMonth}
               isLoading={downloadCsv.isPending}
-              onClick={() => downloadCsv.mutate({ year_month: [month.year_month], user_id: [month.user_id], format: 'generic' })}
+              onClick={() =>
+                downloadCsv.mutate({
+                  year_month: [month.year_month],
+                  user_id: [month.user_id],
+                  format: 'generic',
+                  include_submitted: true,
+                })
+              }
             >
               CSV出力
             </Button>
             <Button
               variant="secondary"
+              disabled={!canExportMonth}
               isLoading={downloadExcel.isPending}
-              onClick={() => downloadExcel.mutate({ year_month: [month.year_month], user_id: [month.user_id] })}
+              onClick={() =>
+                downloadExcel.mutate({ year_month: [month.year_month], user_id: [month.user_id], include_submitted: true })
+              }
             >
               Excel出力
             </Button>
           </div>
+          {!canExportMonth && <p className="mt-2 text-sm text-muted-foreground">提出後に出力できます。</p>}
         </Card>
       )}
 

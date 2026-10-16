@@ -142,6 +142,13 @@ export function attendanceMonthStatusLabel(status: AttendanceMonthStatus): Statu
   return attendanceMonthStatusMeta[status]
 }
 
+/**
+ * 1か月単位の月次勤怠の画面(「出力」カード)からCSV・Excelを出力できる状態。backendの抽出条件
+ * (ExportController::resolveExportableStatuses)と揃える(`include_submitted=true`を付けたとき)。
+ * 差戻し・未提出の月は出力できない。一括出力(勤怠出力画面)と外部連携は承認済み・締め済みのみ。
+ */
+export const ATTENDANCE_MONTH_EXPORTABLE_STATUSES: AttendanceMonthStatus[] = ['submitted', 'approved', 'closed']
+
 /** UC-C005: シフト制勤務者の法定休日要件不足を1行の警告文言に整形する。 */
 export function legalHolidayWarningLabel(warning: LegalHolidayWarning): string {
   const rule = warning.rule === 'four_weeks_four_days' ? '4週4日以上' : '毎週1日'

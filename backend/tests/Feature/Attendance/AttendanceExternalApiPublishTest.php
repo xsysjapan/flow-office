@@ -144,6 +144,65 @@ class AttendanceExternalApiPublishTest extends TestCase
         );
     }
 
+    /**
+     * 外部連携はinclude_submittedを受け付けず、付けても提出済みの月は送信対象にしない
+     * (CSV・Excelの1か月単位の出力だけが提出済みを含める)。
+     */
+    public function test_external_publish_ignores_include_submitted_and_does_not_send_submitted_months(): void
+    {
+        Http::fake();
+
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        $employee = User::factory()->create(['name' => '提出済み外部社員']);
+        AttendanceMonth::query()->create([
+            'user_id' => $employee->id,
+            'year_month' => '2026-06',
+            'status' => 'submitted',
+            'snapshot_json' => $this->snapshot(),
+        ]);
+
+        ExternalIntegrationConnection::query()->create([
+            'id' => (string) Str::uuid(),
+            'provider' => ExternalIntegrationConnection::PROVIDER_FREEE,
+            'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
+            'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
+            'enabled' => true,
+            'external_office_id' => '999',
+            'access_token' => 'valid-access-token',
+            'refresh_token' => 'refresh-token',
+            'token_expires_at' => now()->addHour(),
+            'connected_at' => now(),
+        ]);
+
+        ExternalEmployeeMapping::query()->create([
+            'id' => (string) Str::uuid(),
+            'provider' => ExternalIntegrationConnection::PROVIDER_FREEE,
+            'user_id' => $employee->id,
+            'external_employee_code' => '4002',
+        ]);
+
+        $response = $this->actingAs($admin)->postJson('/api/exports/attendance/external-publish', [
+            'year_month' => ['2026-06'],
+            'provider' => 'freee',
+            'include_submitted' => true,
+        ]);
+
+        $response->assertSuccessful();
+        $response->assertJson([
+            'provider' => 'freee',
+            'successes' => [],
+            'failures' => [],
+        ]);
+
+        Http::assertNothingSent();
+        $this->assertSame(
+            0,
+            EloquentStoredEvent::query()->where('event_class', 'external_integration.published')->count(),
+        );
+    }
+
     public function test_missing_employee_mapping_is_reported_as_a_failure_without_sending(): void
     {
         Http::fake();

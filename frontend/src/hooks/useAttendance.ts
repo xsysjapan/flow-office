@@ -37,8 +37,13 @@ import {
   type GenerateAttendancePatternInput,
   type PreviewAttendancePatternInput,
 } from '../api/attendance'
-import { downloadAttendanceCsv, downloadAttendanceExcel } from '../api/exports'
-import type { AttendanceDailyCalculationAdjustment, AttendanceExportFilters } from '../api/types'
+import {
+  downloadAttendanceCsv,
+  downloadAttendanceExcel,
+  type AttendanceCsvExportFilters,
+  type AttendanceExcelExportFilters,
+} from '../api/exports'
+import type { AttendanceDailyCalculationAdjustment } from '../api/types'
 
 const TODAY_KEY = ['attendance', 'today']
 const WEEK_KEY = ['attendance', 'week']
@@ -328,7 +333,7 @@ export function useRevertMonthConfirmation() {
  */
 export function useDownloadAttendanceCsv() {
   return useMutation({
-    mutationFn: (filters: AttendanceExportFilters) => downloadAttendanceCsv(filters),
+    mutationFn: (filters: AttendanceCsvExportFilters) => downloadAttendanceCsv(filters),
   })
 }
 
@@ -338,7 +343,6 @@ export function useDownloadAttendanceCsv() {
  */
 export function useDownloadAttendanceExcel() {
   return useMutation({
-    mutationFn: (filters: Pick<AttendanceExportFilters, 'year_month' | 'user_id'>) =>
-      downloadAttendanceExcel(filters),
+    mutationFn: (filters: AttendanceExcelExportFilters) => downloadAttendanceExcel(filters),
   })
 }

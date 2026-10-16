@@ -42,24 +42,26 @@ use ZipArchive;
 class ExportController extends Controller
 {
     /**
-     * UC-E001: 勤怠CSVを出力する。承認済み(UC-A009)・締め済み(UC-A011)の月次勤怠が対象。
+     * UC-E001: 勤怠CSVを出力する。対象は承認済み(UC-A009)・締め済み(UC-A011)の月次勤怠。
      * 締め処理はバックオフィスタスク側の個別操作に変わったため、バックオフィス担当者が
      * 締める前でも承認済みの時点でCSV/帳票を出力できる必要がある。
+     * include_submitted=trueのとき(月次勤怠の画面から1か月単位で出力する場合)は承認待ち(提出済み)も
+     * 対象に含める。Excel(attendanceExcel())と同じ扱い。
      */
     #[OA\Get(
         path: '/exports/attendance',
         operationId: 'exports.attendance',
         summary: '勤怠CSVを出力する',
         tags: ['CSV出力'],
-        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string')), style: 'form', explode: true), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true), new OA\Parameter(name: 'format', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['generic', 'generic_tsv', 'generic_sjis', 'moneyforward', 'freee']))],
+        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string')), style: 'form', explode: true), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true), new OA\Parameter(name: 'format', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['generic', 'generic_tsv', 'generic_sjis', 'moneyforward', 'freee'])), new OA\Parameter(name: 'include_submitted', in: 'query', required: false, description: 'trueのとき承認待ち(提出済み)の月も対象に含める。既定false(承認済み・締め済みのみ)', schema: new OA\Schema(type: 'boolean', default: false))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function attendance(Request $request): StreamedResponse
     {
-        $data = $this->validateAttendanceExportRequest($request);
+        $data = $this->validateAttendanceDownloadRequest($request);
         $formatKey = $data['format'] ?? 'generic';
         $format = $this->resolveAttendanceCsvFormat($formatKey);
-        $months = $this->resolveAttendanceMonths($data);
+        $months = $this->resolveAttendanceMonths($data, $this->resolveExportableStatuses($request));
         $label = $this->yearMonthLabel($data['year_month']);
 
         $this->recordExport('attendance_csv', $data, $request->user()->id, $months->count());
@@ -89,8 +91,9 @@ class ExportController extends Controller
     }
 
     /**
-     * UC-E001: 勤怠実績をExcel(.xlsx)で出力する。attendance()と同じ対象月抽出ロジック
-     * (承認済み・締め済みのみ)・権限チェックを使い、見た目を整えた勤怠管理表を出力する。
+     * UC-E001: 勤怠実績をExcel(.xlsx)で出力する。権限チェックは共通。対象月は承認済み・締め済みのみ
+     * (attendance()と同じ)。include_submitted=trueのとき(月次勤怠の画面から1か月単位で出力する場合)は
+     * 承認待ち(提出済み)も対象に含める。見た目を整えた勤怠管理表を出力する。
      * 対象が2件以上の場合は各人・各月の.xlsxをZIPにまとめて返す。
      */
     #[OA\Get(
@@ -98,13 +101,13 @@ class ExportController extends Controller
         operationId: 'exports.attendanceExcel',
         summary: '勤怠実績Excelを出力する',
         tags: ['CSV出力'],
-        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string')), style: 'form', explode: true), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true)],
+        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string')), style: 'form', explode: true), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true), new OA\Parameter(name: 'include_submitted', in: 'query', required: false, description: 'trueのとき承認待ち(提出済み)の月も対象に含める。既定false(承認済み・締め済みのみ)', schema: new OA\Schema(type: 'boolean', default: false))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function attendanceExcel(Request $request, AttendanceExcelBuilder $builder): Response
     {
-        $data = $this->validateAttendanceExportRequest($request);
-        $months = $this->resolveAttendanceMonths($data);
+        $data = $this->validateAttendanceDownloadRequest($request);
+        $months = $this->resolveAttendanceMonths($data, $this->resolveExportableStatuses($request));
         $label = $this->yearMonthLabel($data['year_month']);
 
         if ($months->count() <= 1) {
@@ -293,7 +296,7 @@ class ExportController extends Controller
             'provider' => ['required', 'string', 'in:freee'],
         ]);
 
-        $months = $this->resolveAttendanceMonths($data);
+        $months = $this->resolveAttendanceMonths($data, [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED]);
 
         try {
             [$publisher, $builder, $externalCompanyId] = $resolver->resolve($data['provider']);
@@ -623,6 +626,37 @@ class ExportController extends Controller
     }
 
     /**
+     * 勤怠CSV・Excel(attendance()・attendanceExcel())共通の入力検証。include_submittedを加えて検証する。
+     * 外部連携(attendanceExternalPublish)は対象外でinclude_submittedを受け付けない。
+     *
+     * @return array{year_month: array<int, string>, user_id?: array<int, string>, format?: string, include_submitted?: bool|string}
+     */
+    private function validateAttendanceDownloadRequest(Request $request): array
+    {
+        // Laravelのbooleanルールは"1"/"0"を受けるが"true"/"false"の文字列は受けないため、
+        // クエリの"true"/"false"を真偽値に正規化してから検証する。
+        if (in_array($request->query('include_submitted'), ['true', 'false'], true)) {
+            $request->merge(['include_submitted' => $request->query('include_submitted') === 'true']);
+        }
+
+        return $this->validateAttendanceExportRequest($request) + $request->validate([
+            'include_submitted' => ['nullable', 'boolean'],
+        ]);
+    }
+
+    /**
+     * 勤怠CSV・Excelの出力対象の月次状態。include_submittedがtrueのときだけ提出済み(承認待ち)を含める。
+     *
+     * @return array<int, string>  AttendanceMonthStatus の値
+     */
+    private function resolveExportableStatuses(Request $request): array
+    {
+        return $request->boolean('include_submitted')
+            ? [AttendanceMonthStatus::SUBMITTED, AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED]
+            : [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED];
+    }
+
+    /**
      * @return array{year_month: array<int, string>, user_id?: array<int, string>, format?: string}
      */
     private function validateAttendanceExportRequest(Request $request): array
@@ -674,18 +708,21 @@ class ExportController extends Controller
     }
 
     /**
-     * attendance()・attendanceExcel()共通の対象月抽出ロジック。承認済み(UC-A009)・
-     * 締め済み(UC-A011)の月次勤怠のみを対象とする(docs/14-usecases-export.md)。
+     * attendance()・attendanceExcel()・attendanceExternalPublish()共通の対象月抽出ロジック。
+     * 対象の状態は呼び出し元が指定する(resolveExportableStatuses()/承認済み・締め済みの固定値)。
+     * CSV・Excelは include_submitted=true のとき(1か月単位の画面)提出済みも含め、それ以外および
+     * 外部連携は承認済み(UC-A009)・締め済み(UC-A011)のみ(docs/14-usecases-export.md)。
      *
      * @param  array{year_month: array<int, string>, user_id?: array<int, string>}  $data
+     * @param  array<int, string>  $statuses  対象とする AttendanceMonthStatus の値
      * @return Collection<int, AttendanceMonth>
      */
-    private function resolveAttendanceMonths(array $data): Collection
+    private function resolveAttendanceMonths(array $data, array $statuses): Collection
     {
         return AttendanceMonth::query()
             ->with('user')
             ->whereIn('year_month', $data['year_month'])
-            ->whereIn('status', [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED])
+            ->whereIn('status', $statuses)
             ->when($data['user_id'] ?? null, fn ($query, $userIds) => $query->whereIn('user_id', $userIds))
             ->orderBy('year_month')
             ->orderBy('user_id')

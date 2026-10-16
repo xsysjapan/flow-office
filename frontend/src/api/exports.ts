@@ -42,17 +42,27 @@ function yearMonthLabel(yearMonths: string[]): string {
 }
 
 /**
- * UC-E001: 勤怠CSVを出力する。締め後(UC-A011)の月次勤怠のみが対象。複数月・複数社員を
- * まとめて指定できる。CSVはブラウザのダウンロードとして扱うため、fetchでBlobを取得してから
- * クリックイベントを合成する(apiFetchのJSON前提の処理には乗せない)。
+ * 勤怠CSVのフィルター。`include_submitted`はtrueのとき提出済み(承認待ち)の月次も対象にする
+ * (月次勤怠の画面から1か月単位で出力する場合のみ使う。勤怠出力画面の一括出力は付けない)。
+ */
+export type AttendanceCsvExportFilters = Pick<AttendanceExportFilters, 'year_month' | 'user_id' | 'format'> & {
+  include_submitted?: boolean
+}
+
+/**
+ * UC-E001: 勤怠CSVを出力する。既定では承認済み・締め済みの月次勤怠が対象で、`include_submitted`
+ * をtrueにすると提出済み(承認待ち)も含む。複数月・複数社員をまとめて指定できる。CSVはブラウザの
+ * ダウンロードとして扱うため、fetchでBlobを取得してからクリックイベントを合成する(apiFetchの
+ * JSON前提の処理には乗せない)。
  * `format`ごとにファイル名が変わるため、`Content-Disposition`ヘッダーから読み取り、
  * 無ければ`attendance_{year_month(s)}.csv`にフォールバックする。
  */
-export async function downloadAttendanceCsv(filters: AttendanceExportFilters): Promise<void> {
+export async function downloadAttendanceCsv(filters: AttendanceCsvExportFilters): Promise<void> {
   const url = new URL('exports/attendance', `${API_BASE_URL.replace(/\/?$/, '/')}`)
   filters.year_month.forEach((yearMonth) => url.searchParams.append('year_month[]', yearMonth))
   filters.user_id?.forEach((userId) => url.searchParams.append('user_id[]', userId))
   if (filters.format !== undefined) url.searchParams.set('format', filters.format)
+  if (filters.include_submitted) url.searchParams.set('include_submitted', '1')
 
   const token = getToken()
   const response = await fetch(url.toString(), {
@@ -71,17 +81,24 @@ export async function downloadAttendanceCsv(filters: AttendanceExportFilters): P
 }
 
 /**
+ * 勤怠Excel出力のフィルター。`include_submitted`はtrueのとき提出済み(承認待ち)の月次も対象に
+ * する(月次勤怠の画面から1か月単位で出力する場合のみ使う。一括出力は付けない)。
+ */
+export type AttendanceExcelExportFilters = Pick<AttendanceExportFilters, 'year_month' | 'user_id'> & {
+  include_submitted?: boolean
+}
+
+/**
  * UC-E001: 勤怠Excel(単一社員・単一月次なら.xlsx、複数対象ならZIP)を出力する。複数月・
  * 複数社員をまとめて指定できる。`Content-Type`で拡張子を判定し、ファイル名は
  * `Content-Disposition`があればそれを優先、無ければ`Content-Type`から判定した拡張子で
  * `attendance_{year_month(s)}.xlsx`/`.zip`にフォールバックする。
  */
-export async function downloadAttendanceExcel(
-  filters: Pick<AttendanceExportFilters, 'year_month' | 'user_id'>,
-): Promise<void> {
+export async function downloadAttendanceExcel(filters: AttendanceExcelExportFilters): Promise<void> {
   const url = new URL('exports/attendance.xlsx', `${API_BASE_URL.replace(/\/?$/, '/')}`)
   filters.year_month.forEach((yearMonth) => url.searchParams.append('year_month[]', yearMonth))
   filters.user_id?.forEach((userId) => url.searchParams.append('user_id[]', userId))
+  if (filters.include_submitted) url.searchParams.set('include_submitted', '1')
 
   const token = getToken()
   const response = await fetch(url.toString(), {
