@@ -1,6 +1,6 @@
 # 勤怠管理表(Excel)の備考に休暇を正しく表示する(代休の追加・特別休暇の種別名)
 
-ステータス: レビュー中
+ステータス: 実装中
 
 ## 変更要望(原文)
 > Excelの備考に代休が反映されていません。追加をお願いします
@@ -126,9 +126,14 @@
 - 備考の全体:
   - 従来どおり「祝日名 / 休暇 / 勤怠日の備考」を「 / 」で連結する(空は省く)。
   - 勤怠日が無い日でも、休暇があれば出す。
-- 種類・単位の文言は定数としてビルダー内に置く。frontendの文言と同じにする。
+- 表記の組み立て(種類・単位の文言、並び順、申請中の付記、連結)は、DBを読まない小さなクラス
+  `App\Domain\Export\Services\AttendanceExcelLeaveNote`に置く(原則16: 業務ルールをテストで直接呼べる単位に置く)。
+  入力はその日の休暇の行(`AttendanceDayLeaves`の配列)と特別休暇の種別名の対応表、出力は「・」で連結した文字列(休暇が無ければ空)。
+  文言はfrontendと同じにする。ビルダーは取得と日付ごとの受け渡しだけを行う。
 - 複数社員・複数月のZIP出力は同じ`buildForMonth`を使うため、同じ備考になる(追加の実装は不要)。
-- テスト(`backend/tests/Feature/Attendance/AttendanceExportTest.php`に追加):
+- 単体テスト(`backend/tests/Unit/Export/AttendanceExcelLeaveNoteTest.php`、新規): 全種類×全単位の文言、並び順(入力順に
+  よらない)、申請中の付記、種別名が無い・見つからない特別休暇、休暇なし=空文字。
+- 通しのテスト(`backend/tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php`、新規。休暇は申請・承認のAPI/Command経由で作る):
   - 代休(全休)の日 → 「代休(全休)」
   - 特別休暇(種別「誕生日休暇」、全休)の日 → 「誕生日休暇(全休)」
   - 種別が見つからない特別休暇 → 「特別休暇(全休)」
@@ -137,9 +142,7 @@
   - 申請中の代休の日 → 「代休(全休・申請中)」
   - 出さないもの: 差し戻した代休、取り消した特別休暇
   - 差し戻した後に再提出した代休は出る
-  - 勤怠日の行が無い日でも、休暇ビューに有効な行があれば出る
   - 祝日名・勤怠日の備考と「 / 」で連結される
-  - 全種類×全単位の文言(表記を固定する)
 
 ## 受け入れ条件
 - 代休を取得した日の勤怠管理表の備考に「代休(全休)」等が表示される。
@@ -169,11 +172,13 @@
 
 ## 実装対象
 - `backend/app/Domain/Export/Services/AttendanceExcelBuilder.php`
-- `backend/tests/Feature/Attendance/AttendanceExportTest.php`
+- `backend/app/Domain/Export/Services/AttendanceExcelLeaveNote.php`(新規)
+- `backend/tests/Unit/Export/AttendanceExcelLeaveNoteTest.php`(新規)
+- `backend/tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php`(新規)
 - `docs/14-usecases-export.md`
 
 ## 検証方法
-- `cd backend && php artisan test tests/Feature/Attendance/AttendanceExportTest.php`
+- `cd backend && php artisan test tests/Unit/Export/AttendanceExcelLeaveNoteTest.php tests/Feature/Attendance/AttendanceExcelLeaveNoteTest.php tests/Feature/Attendance/AttendanceExportTest.php`
 - `cd backend && php artisan test --filter "Export|Swagger|ExternalApiPublish"`
 
 ## レビュー履歴
@@ -187,6 +192,11 @@
 - 2026-10-16 ユーザー指示「改めて変更セットを作成してください」で作り直した。
   - 追記を重ねて論点の順序が崩れていたため、全体を書き直した。論点は番号順に並べ、仕様確定事項は取得・表記・備考の全体・テストに分けた。
   - 決定内容は前版から変えていない。設計前提(代休は日次計算に入らない、休暇ビューの並び順、日別行は現在値)はコードで再確認した。
+
+- 2026-10-16 ユーザーが承認(「実装をお願いします」)。実装中に更新。実装前に委譲元が次を調整した(決定内容は不変):
+  - 表記の組み立てをDBを読まないクラス`AttendanceExcelLeaveNote`に分け、文言の網羅・並び順・種別名の欠落は単体テストで確かめる。
+  - 「勤怠日の行が無い日」のテストは外した。休暇の申請で勤怠日が必ず作られる(`ApplyLeaveToAttendanceDay`)ためイベント経由では
+    作れず、ReadModelを直接書くテストは原則2に反するため。ビルダーは勤怠日の有無によらず日付で休暇を引く。
 
 ## 実装結果
 未着手
