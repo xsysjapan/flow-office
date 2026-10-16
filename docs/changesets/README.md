@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261016-excel-note-compensatory-leave](./20261016-excel-note-compensatory-leave/spec.md) | 勤怠管理表(Excel)の備考に代休が表示されない不具合の修正 | 検討中 |
+| [20261016-excel-note-compensatory-leave](./20261016-excel-note-compensatory-leave/spec.md) | 勤怠管理表(Excel)の備考に代休が表示されない不具合の修正 | レビュー中 |
 | [20261015-excel-export-submitted-month](./20261015-excel-export-submitted-month/spec.md) | 承認待ち(提出済み)の月次勤怠でExcel勤怠管理表がタイトルだけになる不具合の修正(CSVも同じ条件で出力可能に) | 完了 |
 | [20261015-implementer-delegation-prompt](./20261015-implementer-delegation-prompt/spec.md) | implementerへの委譲指示のチェックリスト化 | 完了 |
 | [20261015-php84-cloud-setup](./20261015-php84-cloud-setup/spec.md) | クラウドセッション用 PHP 8.4 セットアップスクリプト・SessionStartフック | 完了 |
