@@ -9,6 +9,7 @@
 > 月次で出力される単票形式(31日分の行付き)のはずがタイトルしか表示されていない
 > (承認待ちの提出済み作業報告書のWeb画面)
 > 修正方針: 提出済み(承認待ち)も出力可
+> (2026-10-16 実装後)CSVもExcelと同じ条件にしてください。未承認で出力できても問題ないです。
 
 ## 背景・目的
 承認者が承認待ちの月次勤怠(申請詳細画面)で「Excel出力」を押すと、31日分の行がある勤怠管理表ではなく
@@ -52,8 +53,10 @@
   - A. Excelだけ提出済み(submitted)も対象にする。CSV・外部連携は承認済み・締め済みのまま。
   - B. Excel・CSVとも提出済みを対象にする(給与連携に未承認の月が混ざる)。
   - C. 承認前は出力させない(ボタンを無効化し、APIは0件ならエラー)。
-- 決定: A
-- 理由: ユーザー決定(2026-10-15)。承認者が承認前にExcelで確認できる。給与連携は承認後のデータだけという前提を崩さない。
+- 決定: A(2026-10-15)→ 2026-10-16 にユーザー決定で変更: CSVもExcelと同じ条件(月次勤怠の画面から1か月単位で出力する
+  ときだけ提出済みも対象)。外部連携(freee等へのAPI送信)と一括出力は承認済み・締め済みのまま。
+- 理由: ユーザー決定。「未承認で出力できても問題ない」(2026-10-16)。1か月単位の画面ではExcel・CSVを同じ条件にそろえる。
+  外部連携は外部システムへのデータ送信で、ユーザーの指示の対象(画面のCSV)ではないため変えない。
 - 未確定・要確認事項: なし
 
 ### 論点2: Excelの対象に含める状態の範囲
@@ -82,7 +85,7 @@
   - A. 変えない(押すと空のファイルになる)
   - B. CSVだけ、承認済み・締め済みでない月で無効にする(Excelは状態によらず押せる)
   - C. CSV・Excelそれぞれ、APIが対象にする状態のときだけ押せるようにし、それ以外は無効にして理由を表示する
-- 決定: C
+- 決定: C(2026-10-16の論点1の変更により、CSV・Excelの押せる状態は同じ submitted・approved・closed になる)
 - 理由: 差戻し中・未提出(申請取消・確定取消の後も月の行は残る)の月でも「出力」カードは出るため、Bでは同じ「空のファイル」が
   Excelで残る(設計レビューの指摘)。押せる状態はbackendの抽出条件と同じ値をフロントエンドの定数1か所にまとめる。
   (初版はB。レビュー履歴参照)
@@ -90,9 +93,11 @@
 
 ## 仕様確定事項(まとめ)
 - backend(`ExportController`):
+  - (2026-10-16追加)`GET /exports/attendance`(CSV)にも同じ`include_submitted`を追加し、Excelと同じ抽出条件にする。
+    外部連携(`attendanceExternalPublish`)は受け付けない・変えない。
   - `GET /exports/attendance.xlsx`に任意のクエリ`include_submitted`(boolean、既定false)を追加する。trueのとき出力対象の月次を
     `status IN (submitted, approved, closed)`、falseまたは未指定なら現行どおり`approved, closed`で抽出する。単一・ZIPとも同じ。
-  - CSV(`attendance`)・外部連携(`attendanceExternalPublish`)は変えない(`include_submitted`は受け付けない)。
+  - 外部連携(`attendanceExternalPublish`)は変えない(`include_submitted`は受け付けない)。(初版はCSVも変えない決定だったが2026-10-16に変更)
   - `resolveAttendanceMonths`は対象状態の配列を引数で受け取る。状態の値は`AttendanceMonthStatus`の定数を使う。
   - 出力履歴(`export.created`)の`filters`には検証済みの入力をそのまま残す(`include_submitted`も記録される)。
   - OpenAPI属性(`ExportController.php:100-102`付近)に`include_submitted`を追加し、`:100-102`・`:675-677`のdocblockの
@@ -101,18 +106,21 @@
 - frontend:
   - `api/exports.ts`の`downloadAttendanceExcel`のフィルタ型に`include_submitted?: boolean`を追加し、trueのときクエリに付ける。
   - 押せる状態の定数を1か所(`utils/statusLabels.ts`または`api/types.ts`の月次状態の近く)に置く:
-    Excel(1か月単位)=`submitted`・`approved`・`closed`、CSV=`approved`・`closed`。
-  - `AttendanceReferencePage.tsx`の「出力」カード: Excel出力は`include_submitted: true`を付けて呼ぶ。月次の状態が定数に
-    含まれないボタンは`disabled`にし、カード内に理由を表示する(CSVのみ不可:「CSVは承認後に出力できます。」、両方不可:
-    「提出後(CSVは承認後)に出力できます。」)。
+    Excel・CSV(1か月単位)とも`submitted`・`approved`・`closed`(2026-10-16にCSVもそろえたため定数は1つにまとめる)。
+  - `AttendanceReferencePage.tsx`の「出力」カード: Excel出力・CSV出力とも`include_submitted: true`を付けて呼ぶ。月次の状態が
+    定数に含まれないときは両方のボタンを`disabled`にし、カード内に「提出後に出力できます。」を表示する。
+  - `api/exports.ts`の`downloadAttendanceCsv`にも`include_submitted?: boolean`(trueのときだけクエリに`include_submitted=1`)。
+    勤怠出力画面(`AttendanceExportPage.tsx`)のCSV呼び出しには付けない。
   - 勤怠出力画面(`AttendanceExportPage.tsx`)の呼び出しは変えない(`include_submitted`を付けない)。
 - テスト(Feature、`backend/tests/Feature/Attendance/AttendanceExportTest.php`に追加):
   - `include_submitted=1`で提出済みの月のExcelに31日分の日別行と集計(スナップショット由来)が出る
   - `include_submitted`無しでは提出済みの月はExcelの対象外(タイトルだけ。一括出力の現行どおり)
   - `include_submitted=1`でも、スナップショットを持つ差戻し中の月と未提出の月は対象外
-  - 提出済みの月がCSVの対象外であることは既存テスト(`AttendanceExportTest.php:178-193`)で確認済み(追加不要)
-- テスト(frontend、`AttendanceReferencePage.test.tsx`): 提出済み=Excel有効・CSV無効+案内文、承認済み・締め済み=両方有効、
-  差戻し・未提出=両方無効+案内文、Excel出力の呼び出しに`include_submitted: true`が付く。
+  - (2026-10-16)CSVも`include_submitted=1`で提出済みの月が出力され、差戻し・未提出は対象外。`include_submitted`無しでは
+    提出済みは対象外(既存テスト`AttendanceExportTest.php:178-193`のまま)。外部連携は`include_submitted`を付けても提出済みを含めない。
+- テスト(frontend、`AttendanceReferencePage.test.tsx`): 提出済み・承認済み・締め済み=両方有効・案内文なし、
+  差戻し・未提出=両方無効+「提出後に出力できます。」、Excel・CSV出力の呼び出しに`include_submitted: true`が付く。
+  `api/exports.test.ts`にCSVのクエリ組み立てを追加。
 
 ## 受け入れ条件
 - 勤怠出力権限を持つ利用者が、承認待ち(提出済み)の月次勤怠の申請詳細画面で「Excel出力」を押すと、31日分の行と集計を持つ
@@ -121,8 +129,8 @@
 - 差戻し中・未提出の月では、出力ボタンが無効になり理由が表示される。
 - 承認済み・締め済みの月のExcel・CSVの出力内容は変わらない(既存の`AttendanceExportTest`が全てPASS)。
 - 提出済みの月はCSV・外部連携の対象にならない(テストでPASS)。
-- 承認待ちの月の「出力」カードでCSV出力ボタンが無効になり、理由が表示される。
-- 本番で提出済み・承認済みの`snapshot_json`がnullの月次が無い(リリース後に確認。あれば別途対応)。
+- 承認待ちの月の「出力」カードでCSV出力も押せ、提出済みの月のCSVが出力される(2026-10-16変更)。
+- 本番で提出済み・承認済みの`snapshot_json`がnullの月次が無い(2026-10-16 ユーザー確認: 0件)。
 - backend・frontendの関連テストが全てPASSする。
 
 ## 対象外
@@ -163,6 +171,9 @@
 ## レビュー履歴
 - 初版(2026-10-15)
 - 2026-10-15 ユーザーが承認(「実装をお願いします」)。実装中に更新
+- 2026-10-16 実装後のユーザー指示「CSVもExcelと同じ条件にしてください。未承認で出力できても問題ないです。」で論点1・4・
+  仕様確定事項・受け入れ条件を変更(CSVにもinclude_submitted、押せる状態の定数を1つに、案内文を1種類に)。外部連携・一括出力は
+  変えない。設計前提は覆っていない。本番のsnapshot_jsonがnullの月次は0件(ユーザー確認)。
 - 2026-10-15 独立設計レビュー(general-purpose)の指摘を反映:
   - major: 論点4はExcelも状態で無効化しないと差戻し・未提出で同じ不具合が残る → 決定をB→Cに変更。
   - major: 論点3で一括ZIPに未承認の月が無表示で混ざる(締め工程の帳票、CSVと件数不一致) → 決定をA→Bに変更
