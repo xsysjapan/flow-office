@@ -19,6 +19,8 @@ use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
@@ -652,6 +654,209 @@ class AttendanceExportTest extends TestCase
         $employee = User::factory()->create();
 
         $this->actingAs($employee)->get('/api/exports/attendance.xlsx?year_month=2026-06')->assertForbidden();
+    }
+
+    public function test_global_attendance_export_scope_outputs_all_employees_when_user_id_is_omitted(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+
+        $response = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06');
+
+        $response->assertSuccessful();
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('グループ内社員', $csv);
+        $this->assertStringContainsString('グループ外社員', $csv);
+    }
+
+    public function test_group_scoped_attendance_export_outputs_only_group_members_when_user_id_is_omitted(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $response = $this->actingAs($exporter)->get('/api/exports/attendance?year_month=2026-06');
+
+        $response->assertSuccessful();
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('グループ内社員', $csv);
+        $this->assertStringNotContainsString('グループ外社員', $csv);
+    }
+
+    public function test_group_scoped_attendance_export_rejects_user_id_outside_the_permitted_group_with_403(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $this->actingAs($exporter)
+            ->get('/api/exports/attendance?year_month=2026-06&user_id[]='.$outside->id)
+            ->assertForbidden();
+        $this->actingAs($exporter)
+            ->get('/api/exports/attendance?year_month=2026-06&user_id[]='.$inside->id.'&user_id[]='.$outside->id)
+            ->assertForbidden();
+    }
+
+    public function test_group_scoped_attendance_export_outputs_explicitly_requested_group_member(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $response = $this->actingAs($exporter)->get('/api/exports/attendance?year_month=2026-06&user_id[]='.$inside->id);
+
+        $response->assertSuccessful();
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('グループ内社員', $csv);
+        $this->assertStringNotContainsString('グループ外社員', $csv);
+    }
+
+    public function test_group_scoped_excel_export_rejects_outside_user_id_and_outputs_only_group_member_when_omitted(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $this->actingAs($exporter)
+            ->get('/api/exports/attendance.xlsx?year_month=2026-06&user_id[]='.$outside->id)
+            ->assertForbidden();
+
+        $response = $this->actingAs($exporter)->get('/api/exports/attendance.xlsx?year_month=2026-06');
+
+        $response->assertSuccessful();
+        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringContainsString(
+            rawurlencode('勤怠管理表_グループ内社員_2026年06月.xlsx'),
+            $response->headers->get('Content-Disposition'),
+        );
+        $this->loadSingleSheetWorkbook($response->getContent());
+    }
+
+    public function test_group_scoped_external_publish_rejects_outside_user_id_with_403(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $this->actingAs($exporter)->postJson('/api/exports/attendance/external-publish', [
+            'year_month' => ['2026-06'],
+            'user_id' => [$outside->id],
+            'provider' => 'freee',
+        ])->assertForbidden();
+    }
+
+    public function test_group_scope_with_include_descendants_outputs_members_of_child_groups(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $exporter = $this->createGroupScopedExporter($parent, includeDescendants: true);
+
+        $response = $this->actingAs($exporter)->get('/api/exports/attendance?year_month=2026-06&user_id[]='.$inside->id);
+
+        $response->assertSuccessful();
+        $this->assertStringContainsString('グループ内社員', $response->streamedContent());
+    }
+
+    /**
+     * 2026-06の承認済み月次勤怠を作る(出力対象になる)。
+     */
+    private function createApprovedJuneMonth(User $employee): void
+    {
+        AttendanceMonth::query()->create([
+            'user_id' => $employee->id,
+            'year_month' => '2026-06',
+            'status' => 'approved',
+        ]);
+    }
+
+    /**
+     * 親グループ(本社)と子グループ(支社)を作る。
+     *
+     * @return array{0: string, 1: string} 親グループID・子グループID
+     */
+    private function createExportGroupTree(): array
+    {
+        $typeId = DB::table('group_types')->insertGetId([
+            'code' => 'EXPORT_SCOPE', 'name' => '出力範囲', 'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $parent = (string) Str::uuid();
+        $child = (string) Str::uuid();
+        DB::table('groups')->insert([
+            ['id' => $parent, 'group_type_id' => $typeId, 'name' => '本社', 'code' => 'EXPORT_HQ', 'parent_group_id' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => $child, 'group_type_id' => $typeId, 'name' => '支社', 'code' => 'EXPORT_BRANCH', 'parent_group_id' => $parent, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        return [$parent, $child];
+    }
+
+    private function addMembership(User $user, string $groupId): void
+    {
+        DB::table('memberships')->insert([
+            'user_id' => $user->id, 'group_id' => $groupId, 'membership_kind' => 'member', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * attendance.exportをグループスコープ(global の割当は持たせない)だけで持つ利用者を作る。
+     * 権限の付与は既存のアクセス制御テストと同じく、テーブルへ直接用意する。
+     */
+    private function createGroupScopedExporter(string $scopeGroupId, bool $includeDescendants = false): User
+    {
+        $exporter = User::factory()->create();
+        $role = Role::query()->firstOrCreate(
+            ['code' => 'EXPORT_GROUP_TEST'],
+            ['name' => '勤怠出力(グループ)', 'status' => 'active'],
+        );
+
+        DB::table('permissions')->updateOrInsert(['code' => 'attendance.export'], [
+            'resource' => 'attendance',
+            'action' => 'export',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $permissionId = DB::table('permissions')->where('code', 'attendance.export')->value('id');
+        DB::table('permission_scope_types')->insertOrIgnore(['permission_id' => $permissionId, 'scope_type' => 'group']);
+        DB::table('permission_role')->insertOrIgnore(['permission_id' => $permissionId, 'role_id' => $role->id]);
+        DB::table('role_assignments')->insert([
+            'id' => (string) Str::uuid(),
+            'subject_type' => 'user',
+            'subject_id' => $exporter->id,
+            'role_id' => $role->id,
+            'scope_type' => 'group',
+            'scope_group_id' => $scopeGroupId,
+            'include_descendants' => $includeDescendants,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $exporter;
     }
 
     public function test_generic_tsv_format_uses_tab_delimiter_japanese_headers_and_colon_time(): void

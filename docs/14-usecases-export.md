@@ -29,6 +29,18 @@ ZIP自体は、単一社員なら`勤怠管理表_{社員名}_{対象期間}.zip
   1つの`.zip`にまとめて返す(`ExportController::buildAttendanceExcelZip()`)。
   出力履歴は`exportType: 'attendance_xlsx_zip'`として記録する。
 
+## 勤怠出力の権限と出力対象の社員(CSV・Excel・外部連携共通)
+
+勤怠のCSV(`GET /exports/attendance`)・Excel(`GET /exports/attendance.xlsx`)・外部連携
+(`POST /exports/attendance/external-publish`)は`attendance.export`で入口を通す。範囲は次のとおり
+(`ExportController::attendanceExportableUserIds()` / `abortUnlessAttendanceExportable()`)。
+
+- `attendance.export`を全社(`global`)スコープで持つ利用者は、全社員が出力対象。
+- `group`スコープだけの利用者は、許可グループ(子孫を含む割当なら子孫も)のメンバーだけが出力対象。
+  本人が許可グループに所属していなければ本人も対象外。
+- `user_id`を明示したとき、範囲外の社員が1人でも含まれていれば403(出力しない。メッセージ「出力する権限のない社員が含まれています。」)。
+- `user_id`を省略したとき、範囲内の社員だけを出力する。範囲が0人の場合は対象月次0件と同じ扱い(403にはしない)。
+
 ## UC-E001: 勤怠CSVを出力する
 
 1. 管理者が対象月を選択する(複数月をまとめて指定できる)
