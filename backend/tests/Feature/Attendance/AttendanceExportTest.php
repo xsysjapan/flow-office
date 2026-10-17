@@ -5,11 +5,15 @@ namespace Tests\Feature\Attendance;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\Export\Services\AttendanceExcelBuilder;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\PaidLeaveGrant;
+use App\Models\PaidLeaveUsage;
+use App\Models\PaidLeaveUsageAllocation;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -414,6 +418,74 @@ class AttendanceExportTest extends TestCase
             ->latest('id')
             ->firstOrFail();
         $this->assertSame('attendance_xlsx', $event->event_properties['exportType']);
+    }
+
+    public function test_excel_paid_leave_balance_excludes_a_cancelled_usage(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '取消消化社員']);
+
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        $this->approvePaidLeave($employee, $admin, '2026-06-22', 'full');
+        $cancelledRequestId = $this->approvePaidLeave($employee, $admin, '2026-06-23', 'full');
+        $this->actingAs($admin)->postJson("/api/paid-leave/requests/{$cancelledRequestId}/admin-cancel")->assertOk();
+
+        // 前提: 取消した消化の行はcancelled = trueになっている。
+        $this->assertTrue(PaidLeaveUsage::query()->where('paid_leave_request_id', $cancelledRequestId)->firstOrFail()->cancelled);
+
+        $this->assertSame('9日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
+    }
+
+    public function test_excel_paid_leave_balance_splits_a_usage_spanning_two_grants_by_allocation(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '複数付与社員']);
+
+        // 有効期限が近い付与Aから先に充当される(付与A 0.5日 → 付与B 0.5日)。
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 0.5, null));
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 10.0, null));
+        $requestId = $this->approvePaidLeave($employee, $admin, '2026-06-22', 'full');
+
+        // 前提: 1件の消化が2つの付与に0.5日ずつ充当されている。
+        $usageId = PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->value('usage_id');
+        $allocations = PaidLeaveUsageAllocation::query()->where('usage_id', $usageId)->get();
+        $this->assertCount(2, $allocations);
+        $this->assertSame([0.5, 0.5], $allocations->map(fn ($allocation) => (float) $allocation->allocated_days)->sort()->values()->all());
+
+        $this->assertSame('9.5日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
+    }
+
+    public function test_excel_paid_leave_balance_ignores_a_usage_after_the_month_end(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '翌月消化社員']);
+
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        $this->approvePaidLeave($employee, $admin, '2026-06-22', 'full');
+        $this->approvePaidLeave($employee, $admin, '2026-07-15', 'full');
+
+        $this->assertSame('9日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
+    }
+
+    public function test_excel_paid_leave_balance_excludes_a_revoked_grant(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '取消付与社員']);
+
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 5.0, null));
+        $revokedGrantId = PaidLeaveGrant::query()
+            ->where('user_id', $employee->id)
+            ->whereDate('granted_on', '2026-04-01')
+            ->value('id');
+        app(CommandBus::class)->dispatch(new RevokePaidLeaveGrant($employee->id, $revokedGrantId, $admin->id, null));
+
+        // 取り消した付与Bの5日は含めない。
+        $this->assertSame('10日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
     }
 
     public function test_excel_with_include_submitted_outputs_daily_rows_and_snapshot_totals_for_a_submitted_month(): void
@@ -823,8 +895,10 @@ class AttendanceExportTest extends TestCase
 
     /**
      * 有給を申請し承認する(消化記録・残数は承認のイベントを受けて口座集約側が作る)。
+     *
+     * @return string 申請ID
      */
-    private function approvePaidLeave(User $employee, User $approver, string $date, string $leaveType): void
+    private function approvePaidLeave(User $employee, User $approver, string $date, string $leaveType): string
     {
         $this->createWorkingDayShift($employee, $date);
 
@@ -835,6 +909,27 @@ class AttendanceExportTest extends TestCase
         ])->assertCreated()->json('id');
 
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
+
+        return $requestId;
+    }
+
+    /**
+     * 2026-06を締め済みにしてExcelを出力し、有給残日数(H10)を返す。
+     */
+    private function closedJuneExcelPaidLeaveBalance(User $employee, User $admin): mixed
+    {
+        AttendanceMonth::query()->create([
+            'user_id' => $employee->id,
+            'year_month' => '2026-06',
+            'status' => 'closed',
+            'snapshot_json' => $this->submittedSnapshot(),
+        ]);
+
+        $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06');
+
+        $response->assertSuccessful();
+
+        return $this->loadSingleSheetWorkbook($response->getContent())->getCell('H10')->getValue();
     }
 
     private function createWorkingDayShift(User $user, string $date): void

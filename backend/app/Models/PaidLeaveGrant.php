@@ -53,4 +53,14 @@ class PaidLeaveGrant extends Model
     {
         return $this->hasMany(PaidLeaveUsage::class, 'paid_leave_grant_id');
     }
+
+    /**
+     * 消化と付与の充当関係(paid_leave_usage_allocations)。残日数の月末時点の計算に使う。
+     *
+     * @return HasMany<PaidLeaveUsageAllocation, $this>
+     */
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(PaidLeaveUsageAllocation::class, 'grant_id');
+    }
 }
