@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import type { Paginated, SpecialLeaveGrantRule, SpecialLeaveType, User } from '../../api/types'
 import { SpecialLeaveAdminPage } from './SpecialLeaveAdminPage'
 
@@ -34,12 +35,14 @@ function withSeeded(seedTypes: SpecialLeaveType[], seedRules: SpecialLeaveGrantR
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['special-leave', 'types'], seedTypes)
   queryClient.setQueryData(['special-leave', 'grant-rules'], seedRules)
-  queryClient.setQueryData(['users', 'search', '', 100], paginatedUsers)
+  queryClient.setQueryData(['users', 'search', '', 100, ''], paginatedUsers)
 
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <SpecialLeaveAdminPage />
+        <MemoryRouter>
+          <SpecialLeaveAdminPage />
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }

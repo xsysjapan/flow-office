@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { fn } from 'storybook/test'
+import { MemoryRouter } from 'react-router-dom'
 import { AuthContext } from '../../auth/AuthContext'
 import { OnboardingPage } from './OnboardingPage'
 
@@ -20,7 +21,9 @@ function withProviders() {
             logout: fn(),
           }}
         >
-          <OnboardingPage />
+          <MemoryRouter>
+            <OnboardingPage />
+          </MemoryRouter>
         </AuthContext.Provider>
       </QueryClientProvider>
     )

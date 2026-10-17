@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import type { Notification, Paginated } from '../../api/types'
 import { NotificationsPage } from './NotificationsPage'
 
@@ -36,7 +37,9 @@ function withSeeded(data: Notification[]) {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <NotificationsPage />
+        <MemoryRouter>
+          <NotificationsPage />
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }
