@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import type { Paginated, User } from '../../api/types'
 import { AttendanceReferencePage } from './AttendanceReferencePage'
 
@@ -16,7 +17,9 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <AttendanceReferencePage />
+        <MemoryRouter>
+          <AttendanceReferencePage />
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }
