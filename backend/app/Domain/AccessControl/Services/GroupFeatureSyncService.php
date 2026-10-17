@@ -6,6 +6,7 @@ use App\Domain\AccessControl\Commands\AssignFeatureToGroup;
 use App\Domain\AccessControl\Commands\RemoveFeatureFromGroup;
 use App\Domain\AccessControl\Handlers\AssignFeatureToGroupHandler;
 use App\Domain\AccessControl\Handlers\RemoveFeatureFromGroupHandler;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -78,7 +79,7 @@ class GroupFeatureSyncService
             ->all();
     }
 
-    private function activeRoleAssignments(): \Illuminate\Database\Query\Builder
+    private function activeRoleAssignments(): Builder
     {
         $now = Carbon::now();
 

@@ -198,5 +198,4 @@ class SpecialLeaveAccountProjector extends Projector
             'remaining_days' => (float) $grant->granted_days - $usedDays,
         ]);
     }
-
 }

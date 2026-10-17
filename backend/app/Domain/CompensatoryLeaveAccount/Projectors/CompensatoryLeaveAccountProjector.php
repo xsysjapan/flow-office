@@ -272,5 +272,4 @@ class CompensatoryLeaveAccountProjector extends Projector
             'remaining_minutes' => $grant->granted_minutes !== null ? (int) $grant->granted_minutes - $usedMinutes : null,
         ]);
     }
-
 }

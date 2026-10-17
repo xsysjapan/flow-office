@@ -11,6 +11,7 @@ use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Models\RequestType;
 use App\Models\User;
 use App\Models\WorkflowRequest;
+use App\Models\WorkflowRequestHistoryEntry;
 use App\Models\WorkflowRequestStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -176,7 +177,7 @@ class WorkflowRequestRejectTest extends TestCase
 
         $this->bus()->dispatch(new RejectWorkflowRequest($id, $approver->id, '却下理由テキスト'));
 
-        $entry = \App\Models\WorkflowRequestHistoryEntry::query()
+        $entry = WorkflowRequestHistoryEntry::query()
             ->where('workflow_request_id', $id)
             ->where('action', 'rejected')
             ->first();

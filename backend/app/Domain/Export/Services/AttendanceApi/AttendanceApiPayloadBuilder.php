@@ -17,7 +17,7 @@ interface AttendanceApiPayloadBuilder
     /**
      * @param  string  $externalEmployeeCode  連携先側の従業員ID(ExternalEmployeeMapping)
      * @param  string|null  $externalCompanyId  連携先側の事業所ID(ExternalIntegrationConnection::external_office_id)。
-     *                                           連携先によっては不要な場合があるためnull許容。
+     *                                          連携先によっては不要な場合があるためnull許容。
      * @return array<string, mixed>
      */
     public function build(AttendanceMonth $month, string $externalEmployeeCode, ?string $externalCompanyId = null): array;

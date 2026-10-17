@@ -14,7 +14,7 @@ namespace App\Domain\CompensatoryLeaveAccount\Support;
 class CompensatoryLeaveGrantConversion
 {
     /**
-     * @return array{0: float, 1: ?int}  [付与日数, 付与分]
+     * @return array{0: float, 1: ?int} [付与日数, 付与分]
      */
     public function resolve(?string $unit, ?int $halfDayThresholdMinutes, int $workMinutes): array
     {

@@ -19,8 +19,11 @@ use Tests\TestCase;
 class SpecialLeaveRequestAggregateTest extends TestCase
 {
     private const REQUEST = 'request-1';
+
     private const USER = 'user-1';
+
     private const APPROVER = 'approver-1';
+
     private const TYPE = 1;
 
     private function requested(SpecialLeaveRequestAggregate $aggregate): SpecialLeaveRequestAggregate

@@ -24,6 +24,7 @@ class ChangePaidLeaveGrantDateHandler implements CommandHandler
                 changedByUserId: $command->changedByUserId,
             )
             ->persist();
+
         return null;
     }
 }

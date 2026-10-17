@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @property-read \App\Models\User $resource
+ * @property-read User $resource
  */
 class PaidLeaveGrantRuleTargetUserResource extends JsonResource
 {

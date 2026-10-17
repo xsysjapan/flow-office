@@ -3,7 +3,6 @@
 namespace Tests\Feature\SpecialLeave;
 
 use App\Models\AttendanceDay;
-use App\Models\AttendanceDayLeave;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\LeaveRequestWorkflowLink;

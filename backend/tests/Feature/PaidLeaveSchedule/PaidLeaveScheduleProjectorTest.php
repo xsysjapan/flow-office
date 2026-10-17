@@ -8,6 +8,7 @@ use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
 use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\OverrideScheduleAssessment;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
+use App\Domain\PaidLeaveSchedule\Projectors\PaidLeaveScheduleProjector;
 use App\Models\PaidLeaveScheduleAssessment;
 use App\Models\PaidLeaveScheduleEntry;
 use App\Models\User;
@@ -200,7 +201,7 @@ class PaidLeaveScheduleProjectorTest extends TestCase
         PaidLeaveScheduleEntry::query()->delete();
 
         Artisan::call('event-sourcing:replay', [
-            'projector' => [\App\Domain\PaidLeaveSchedule\Projectors\PaidLeaveScheduleProjector::class],
+            'projector' => [PaidLeaveScheduleProjector::class],
             '--force' => true,
         ]);
 

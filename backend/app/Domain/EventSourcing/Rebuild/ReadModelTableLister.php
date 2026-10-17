@@ -36,7 +36,7 @@ final class ReadModelTableLister
         'system_settings' => '管理者専用APIから直接更新する正データ(監査イベントのみ記録)。Projectorは既定値を読むだけ',
         'stored_events' => 'イベントストア本体(再生の入力)。PaidLeaveBalanceProjectorがEloquentStoredEventを読むため拾われるが、空にすると再生するものが無くなる',
         'snapshots' => 'Spatieのスナップショット(集約の再構築用)。ReadModelではない',
-        'user_credentials' =>'認証情報(パスワード・remember_token)。イベントに載せず直接更新する正データ。Projectorは書かない',
+        'user_credentials' => '認証情報(パスワード・remember_token)。イベントに載せず直接更新する正データ。Projectorは書かない',
     ];
 
     /** @return array<string, list<string>> テーブル名 => 参照元のProjectorファイル */

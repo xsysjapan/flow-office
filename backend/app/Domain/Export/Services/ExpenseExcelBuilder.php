@@ -42,7 +42,7 @@ class ExpenseExcelBuilder
 
     /**
      * @param  Collection<int, BackOfficeTask>  $tasks  source(ExpenseClaim)・items.category・
-     *                                                   items.attachments をloadMissing済みで渡すこと
+     *                                                  items.attachments をloadMissing済みで渡すこと
      */
     public function build(Collection $tasks): Spreadsheet
     {

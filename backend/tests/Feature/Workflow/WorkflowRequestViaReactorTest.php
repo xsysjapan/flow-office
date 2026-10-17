@@ -11,6 +11,7 @@ use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Models\RequestType;
 use App\Models\User;
 use App\Models\WorkflowRequest;
+use App\Models\WorkflowRequestHistoryEntry;
 use App\Models\WorkflowRequestStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -107,7 +108,7 @@ class WorkflowRequestViaReactorTest extends TestCase
         $this->assertSame(WorkflowRequestStatus::CANCELLED, $this->statusOf($id));
 
         // 取消の履歴は1件のまま(二重に取消されない)。
-        $count = \App\Models\WorkflowRequestHistoryEntry::query()
+        $count = WorkflowRequestHistoryEntry::query()
             ->where('workflow_request_id', $id)
             ->where('action', 'cancelled')
             ->count();
@@ -183,7 +184,7 @@ class WorkflowRequestViaReactorTest extends TestCase
         $this->assertSame(WorkflowRequestStatus::APPROVED, $this->statusOf($id));
 
         // 記録する承認者は連鎖の起点の操作者(initiatedByUserId)。
-        $entry = \App\Models\WorkflowRequestHistoryEntry::query()
+        $entry = WorkflowRequestHistoryEntry::query()
             ->where('workflow_request_id', $id)
             ->where('action', 'approved')
             ->first();
@@ -211,7 +212,7 @@ class WorkflowRequestViaReactorTest extends TestCase
         $this->assertSame(WorkflowRequestStatus::APPROVED, $this->statusOf($id));
 
         // 承認の履歴は1件のまま(二重に承認されない)。
-        $count = \App\Models\WorkflowRequestHistoryEntry::query()
+        $count = WorkflowRequestHistoryEntry::query()
             ->where('workflow_request_id', $id)
             ->where('action', 'approved')
             ->count();
@@ -274,7 +275,7 @@ class WorkflowRequestViaReactorTest extends TestCase
         $this->assertSame(WorkflowRequestStatus::SUBMITTED, $this->statusOf($id));
 
         // 記録する提出者は連鎖の起点の操作者(initiatedByUserId)。
-        $entry = \App\Models\WorkflowRequestHistoryEntry::query()
+        $entry = WorkflowRequestHistoryEntry::query()
             ->where('workflow_request_id', $id)
             ->where('action', 'submitted')
             ->first();
@@ -302,7 +303,7 @@ class WorkflowRequestViaReactorTest extends TestCase
 
         $this->assertSame(WorkflowRequestStatus::SUBMITTED, $result->status);
         $this->assertSame($eventCount, \DB::table('stored_events')->count());
-        $count = \App\Models\WorkflowRequestHistoryEntry::query()
+        $count = WorkflowRequestHistoryEntry::query()
             ->where('workflow_request_id', $id)
             ->where('action', 'submitted')
             ->count();

@@ -22,6 +22,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
@@ -1085,7 +1086,7 @@ class AttendanceExportTest extends TestCase
         ];
     }
 
-    private function loadSingleSheetWorkbook(string $contents): \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet
+    private function loadSingleSheetWorkbook(string $contents): Worksheet
     {
         $tmpFile = tempnam(sys_get_temp_dir(), 'xlsx');
         file_put_contents($tmpFile, $contents);

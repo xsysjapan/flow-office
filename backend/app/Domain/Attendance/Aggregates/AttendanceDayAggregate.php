@@ -11,7 +11,6 @@ use App\Domain\Attendance\Events\AttendanceDayEdited;
 use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
 use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
 use App\Domain\Attendance\Events\AttendanceWeeklyOvertimeAllocated;
-use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**

@@ -23,6 +23,7 @@ class RevokePaidLeaveGrantHandler implements CommandHandler
                 reason: $command->reason,
             )
             ->persist();
+
         return null;
     }
 }

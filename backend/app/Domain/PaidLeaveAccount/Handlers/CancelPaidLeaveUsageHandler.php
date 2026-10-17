@@ -44,6 +44,7 @@ class CancelPaidLeaveUsageHandler implements CommandHandler
                 reason: $command->reason,
             )
             ->persist();
+
         return null;
     }
 }

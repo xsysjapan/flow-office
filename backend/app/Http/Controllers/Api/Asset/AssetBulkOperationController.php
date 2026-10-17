@@ -13,6 +13,7 @@ use App\Models\Asset;
 use App\Models\AssetLendingMethod;
 use App\Models\AssetLoanRequest;
 use App\Models\AssetLoanRequestStatus;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -78,7 +79,7 @@ class AssetBulkOperationController extends Controller
                 $results[] = [
                     'asset_id' => $assetId,
                     'success' => false,
-                    'error' => $e instanceof DomainRuleException || $e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException
+                    'error' => $e instanceof DomainRuleException || $e instanceof ModelNotFoundException
                         ? $e->getMessage()
                         : '処理中にエラーが発生しました。',
                 ];

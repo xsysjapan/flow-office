@@ -43,7 +43,7 @@ abstract class StoredEventCorrectionCommand extends Command
         );
 
         $pending = count(array_filter($rows, fn (array $row) => $row['status'] === 'pending'));
-        $this->info("対象 ".count($rows)."件のうち修正対象 {$pending}件です。");
+        $this->info('対象 '.count($rows)."件のうち修正対象 {$pending}件です。");
 
         if (! $this->option('apply')) {
             $this->warn('試し実行です。内容を確認し、問題なければ --apply で本実行してください(バックアップを作成してから修正します)。');

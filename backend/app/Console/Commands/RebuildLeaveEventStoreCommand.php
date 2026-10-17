@@ -4,10 +4,10 @@ namespace App\Console\Commands;
 
 use App\Domain\EventSourcing\Rebuild\EventRestorabilityChecker;
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuilder;
+use App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter;
 use App\Domain\EventSourcing\Rebuild\ReadModelDiffer;
 use App\Domain\EventSourcing\Rebuild\ReadModelFingerprinter;
 use App\Domain\EventSourcing\Rebuild\ReadModelTableLister;
-use App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter;
 use App\Domain\EventSourcing\Rebuild\UserEventOccurredAt;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;

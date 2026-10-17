@@ -16,9 +16,9 @@ use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -242,7 +242,7 @@ class LeaveAttendanceRateScenarioTest extends TestCase
     /** 対象期間の有給の出勤率(分母・分子)を判定する。 */
     private function assess()
     {
-        return (new AttendanceRateAssessor())->assess(
+        return (new AttendanceRateAssessor)->assess(
             userId: $this->employee->id,
             periodStart: Carbon::parse(self::PERIOD_START),
             periodEnd: Carbon::parse(self::PERIOD_END),

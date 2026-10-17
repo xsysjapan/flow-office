@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Asset;
 
+use App\Domain\Asset\Commands\DeleteAsset;
 use App\Domain\Asset\Commands\LendAsset;
 use App\Domain\Asset\Commands\RegisterAsset;
 use App\Domain\EventSourcing\CommandBus;
@@ -286,6 +287,6 @@ class AssetLoanRequestTest extends TestCase
         $backoffice = User::factory()->create();
 
         $this->expectException(DomainRuleException::class);
-        $this->bus()->dispatch(new \App\Domain\Asset\Commands\DeleteAsset($asset->id, $backoffice->id));
+        $this->bus()->dispatch(new DeleteAsset($asset->id, $backoffice->id));
     }
 }

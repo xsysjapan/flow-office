@@ -3,6 +3,7 @@
 namespace App\Domain\LeaveRequestLink;
 
 use App\Models\LeaveRequestWorkflowLink;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * ワークフローID→休暇申請の対応表(leave_request_workflow_links)への問い合わせ。
@@ -43,7 +44,7 @@ final class LeaveRequestWorkflowLinks
      * `workflow_request_id`として付ける(対応が無ければnull)。一覧はまとめて1回の問い合わせで
      * 引く(N+1を避ける)。ワークフローのテーブルは読まない。
      *
-     * @param  iterable<int, \Illuminate\Database\Eloquent\Model>  $leaveRequests
+     * @param  iterable<int, Model>  $leaveRequests
      */
     public function attachWorkflowRequestIds(string $leaveKind, iterable $leaveRequests): void
     {

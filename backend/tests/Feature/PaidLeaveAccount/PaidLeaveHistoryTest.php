@@ -2,8 +2,6 @@
 
 namespace Tests\Feature\PaidLeaveAccount;
 
-use App\Domain\EventSourcing\CommandBus;
-use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;

@@ -2,7 +2,6 @@
 
 namespace App\Domain\Attendance\Projectors;
 
-use App\Domain\Attendance\Services\CalendarWeekdayPatternDayGenerator;
 use App\Domain\Attendance\Events\HolidayCalendarSourceDeleted;
 use App\Domain\Attendance\Events\HolidayCalendarSourceDisabled;
 use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
@@ -10,6 +9,7 @@ use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncFailed;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncReverted;
 use App\Domain\Attendance\Events\HolidayCalendarSourceUpdated;
+use App\Domain\Attendance\Services\CalendarWeekdayPatternDayGenerator;
 use App\Models\CompanyCalendarDay;
 use App\Models\CompanyCalendarDaySource;
 use App\Models\HolidayCalendarEvent;
