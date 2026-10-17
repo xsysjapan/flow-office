@@ -243,9 +243,14 @@ describe('BackOfficeTaskDetailPage', () => {
           year_month: ['2026-07'],
           user_id: ['user-1'],
           format: 'generic',
+          include_submitted: true,
         }),
       )
-      expect(excelSpy).toHaveBeenCalledWith({ year_month: ['2026-07'], user_id: ['user-1'] })
+      expect(excelSpy).toHaveBeenCalledWith({
+        year_month: ['2026-07'],
+        user_id: ['user-1'],
+        include_submitted: true,
+      })
     })
 
     it('keeps the attendance month visible but hides the 締める button when already closed', async () => {

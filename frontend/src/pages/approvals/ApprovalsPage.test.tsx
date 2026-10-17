@@ -6,9 +6,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseClaimsApi from '../../api/expenseClaims'
-import type { Paginated, WorkflowRequest } from '../../api/types'
+import type { Paginated, User, WorkflowRequest } from '../../api/types'
 import * as workflowRequestsApi from '../../api/workflowRequests'
 import { ApprovalsPage } from './ApprovalsPage'
+
+const currentUser: User = {
+  id: 'approver-1',
+  name: '承認者花子',
+  email: 'hanako@example.com',
+  department: null,
+  job_title: null,
+  employment_status: 'active',
+  last_login_at: null,
+  effective_permissions: [],
+}
+
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ user: currentUser }),
+}))
 
 const applicant = {
   id: 'applicant-1',
