@@ -1,6 +1,6 @@
 # attendance-export-button-scope
 
-- ステータス: レビュー待ち
+- ステータス: 完了(2026-10-17 ユーザー承認)
 
 ## 変更要望(原文)
 
@@ -61,3 +61,11 @@
 - frontend(`AttendanceReferencePage.test.tsx`): `can_export: false`のとき出力カードが出ない、`true`のとき出る。
   既存の出力ボタンのテスト(勤怠参照・バックオフィスタスク詳細)はモックに`can_export: true`を足して通す。
 - `npx vitest run --project=unit`・`npx tsc -b --noEmit`が通る。
+
+## 結果
+
+- backend: `AttendanceExportScope`(allowedUserIds・canExport)を新設し、ExportController(出力API3つ)と`AttendanceController::month`(`can_export`)が共有。
+  Featureテスト4件追加。`--filter Export` 79件・`--filter Attendance` 634件PASS、pint passed。
+- 前提の補足: 他の社員の月次を見るには`attendance.read`のglobal(または承認者)が要るため、テストのグループ内・グループ外の両ケースで閲覧用の割当を付けた(本体の規則は不変)。
+- frontend: `fetchMonth`に`can_export?`、出力カードは`data?.can_export ?? false`。unit 964件PASS・tsc OK。
+- storybook(`src/pages/attendance`)の`AttendanceMonthsPage.stories.tsx`の2件は`useAuth`のProvider欠落による既存の失敗(このブランチで未変更のファイル。CIはstorybookのビルドのみでテストは実行しない)。

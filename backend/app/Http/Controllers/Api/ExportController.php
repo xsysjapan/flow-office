@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\Export\Aggregates\ExportAuditAggregate;
 use App\Domain\Export\Services\AttendanceCsv\AttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceCsv\FreeeAttendanceCsvFormat;
@@ -11,6 +10,7 @@ use App\Domain\Export\Services\AttendanceCsv\GenericSjisAttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceCsv\GenericTsvAttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceCsv\MoneyForwardAttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceExcelBuilder;
+use App\Domain\Export\Services\AttendanceExportScope;
 use App\Domain\Export\Services\ExpenseCsv\ExpenseCsvFormat;
 use App\Domain\Export\Services\ExpenseCsv\FreeeExpenseCsvFormat;
 use App\Domain\Export\Services\ExpenseCsv\GenericExpenseCsvFormat;
@@ -30,7 +30,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
@@ -62,7 +62,7 @@ class ExportController extends Controller
     public function attendance(Request $request): StreamedResponse
     {
         $data = $this->validateAttendanceDownloadRequest($request);
-        $allowedUserIds = $this->attendanceExportableUserIds($request);
+        $allowedUserIds = app(AttendanceExportScope::class)->allowedUserIds($request->user());
         $this->abortUnlessAttendanceExportable($allowedUserIds, $data);
         $formatKey = $data['format'] ?? 'generic';
         $format = $this->resolveAttendanceCsvFormat($formatKey);
@@ -112,7 +112,7 @@ class ExportController extends Controller
     public function attendanceExcel(Request $request, AttendanceExcelBuilder $builder): Response
     {
         $data = $this->validateAttendanceDownloadRequest($request);
-        $allowedUserIds = $this->attendanceExportableUserIds($request);
+        $allowedUserIds = app(AttendanceExportScope::class)->allowedUserIds($request->user());
         $this->abortUnlessAttendanceExportable($allowedUserIds, $data);
         $months = $this->resolveAttendanceMonths($data, $this->resolveExportableStatuses($request), $allowedUserIds);
         $label = $this->yearMonthLabel($data['year_month']);
@@ -303,7 +303,7 @@ class ExportController extends Controller
             'provider' => ['required', 'string', 'in:freee'],
         ]);
 
-        $allowedUserIds = $this->attendanceExportableUserIds($request);
+        $allowedUserIds = app(AttendanceExportScope::class)->allowedUserIds($request->user());
         $this->abortUnlessAttendanceExportable($allowedUserIds, $data);
         $months = $this->resolveAttendanceMonths($data, [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED], $allowedUserIds);
 
@@ -724,10 +724,10 @@ class ExportController extends Controller
      *
      * @param  array{year_month: array<int, string>, user_id?: array<int, string>}  $data
      * @param  array<int, string>  $statuses  対象とする AttendanceMonthStatus の値
-     * @param  Collection<int, string>|null  $allowedUserIds  出力できる社員ID(nullは制限なし)
+     * @param  SupportCollection<int, string>|null  $allowedUserIds  出力できる社員ID(nullは制限なし)
      * @return Collection<int, AttendanceMonth>
      */
-    private function resolveAttendanceMonths(array $data, array $statuses, ?Collection $allowedUserIds): Collection
+    private function resolveAttendanceMonths(array $data, array $statuses, ?SupportCollection $allowedUserIds): Collection
     {
         return AttendanceMonth::query()
             ->with('user')
@@ -741,36 +741,13 @@ class ExportController extends Controller
     }
 
     /**
-     * 勤怠CSV・Excel・外部連携で出力できる社員ID。attendance.exportを全社(global)で持つ利用者は
-     * null(制限なし)。グループスコープだけの利用者は許可グループのメンバー(memberships)の社員IDだけ。
-     * 本人が許可グループに所属していなければ本人も含めない。
-     *
-     * @return Collection<int, string>|null
-     */
-    private function attendanceExportableUserIds(Request $request): ?Collection
-    {
-        $resolver = app(EffectiveAccessResolver::class);
-        if ($resolver->hasGlobalPermission($request->user(), 'attendance.export')) {
-            return null;
-        }
-
-        $groupIds = $resolver->permittedGroupIds($request->user(), 'attendance.export');
-        $userIds = DB::table('memberships')
-            ->whereIn('group_id', $groupIds)
-            ->distinct()
-            ->pluck('user_id');
-
-        return Collection::make($userIds->all());
-    }
-
-    /**
      * 明示された user_id に出力できない社員が1件でも含まれていれば403にする(出力漏れに気づけるよう、
      * 範囲外を黙って除外しない)。$allowedUserIds が null(制限なし)のときは何もしない。
      *
-     * @param  Collection<int, string>|null  $allowedUserIds
+     * @param  SupportCollection<int, string>|null  $allowedUserIds
      * @param  array{user_id?: array<int, string>}  $data
      */
-    private function abortUnlessAttendanceExportable(?Collection $allowedUserIds, array $data): void
+    private function abortUnlessAttendanceExportable(?SupportCollection $allowedUserIds, array $data): void
     {
         if ($allowedUserIds === null) {
             return;

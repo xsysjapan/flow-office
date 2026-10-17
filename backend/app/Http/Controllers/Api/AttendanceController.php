@@ -29,6 +29,7 @@ use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Export\Services\AttendanceExportScope;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -715,6 +716,8 @@ class AttendanceController extends Controller
             'days' => AttendanceDayResource::collection($days),
             'schedule' => EmployeeCalendarEntryResource::collection($effectiveSchedule),
             'month' => $month ? new AttendanceMonthResource($month) : null,
+            // 対象社員の月次勤怠を出力できるか(出力ボタンの出し分け用。ExportControllerと同じ判定規則)。
+            'can_export' => app(AttendanceExportScope::class)->canExport($request->user(), $userId),
             // フレックスタイム制(指示書 7.6節)のみ非nullを返す。attendance_monthsの提出前
             // (未提出でまだ行が存在しない月)でも表示できるよう、monthとは独立して都度計算する。
             'flex_settlement_summary' => app(FlexSettlementSummaryCalculator::class)->calculateForMonth($userId, $yearMonth),

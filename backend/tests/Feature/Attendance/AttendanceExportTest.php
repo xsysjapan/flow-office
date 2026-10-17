@@ -784,6 +784,63 @@ class AttendanceExportTest extends TestCase
         $this->assertStringContainsString('グループ内社員', $response->streamedContent());
     }
 
+    public function test_month_can_export_is_true_for_any_employee_when_export_is_global(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => 'グループ外社員']);
+        $this->createApprovedJuneMonth($employee);
+
+        $this->actingAs($admin)
+            ->getJson('/api/attendance/months/2026-06?user_id='.$employee->id)
+            ->assertOk()
+            ->assertJsonPath('can_export', true);
+    }
+
+    public function test_month_can_export_is_true_for_a_member_of_the_group_scoped_exporter(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $exporter = $this->createGroupScopedExporter($child);
+        $this->grantGlobalAttendanceRead($exporter);
+
+        $this->actingAs($exporter)
+            ->getJson('/api/attendance/months/2026-06?user_id='.$inside->id)
+            ->assertOk()
+            ->assertJsonPath('can_export', true);
+    }
+
+    public function test_month_can_export_is_false_for_an_employee_outside_the_group_scoped_exporter(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+        $this->grantGlobalAttendanceRead($exporter);
+
+        $this->actingAs($exporter)
+            ->getJson('/api/attendance/months/2026-06?user_id='.$outside->id)
+            ->assertOk()
+            ->assertJsonPath('can_export', false);
+    }
+
+    public function test_month_can_export_is_false_for_own_month_without_attendance_export_permission(): void
+    {
+        $employee = User::factory()->create();
+        $this->assignRole($employee, Role::query()->create(['code' => Role::EMPLOYEE, 'name' => '一般社員']));
+        $this->createApprovedJuneMonth($employee);
+
+        $this->actingAs($employee)
+            ->getJson('/api/attendance/months/2026-06')
+            ->assertOk()
+            ->assertJsonPath('can_export', false);
+    }
+
     /**
      * 2026-06の承認済み月次勤怠を作る(出力対象になる)。
      */
@@ -858,6 +915,40 @@ class AttendanceExportTest extends TestCase
         ]);
 
         return $exporter;
+    }
+
+    /**
+     * attendance.readを全社(global)で持つ別ロールの割当を追加する(他人の月次勤怠を閲覧するために必要。
+     * attendance.exportのスコープ(グループ)は変えない)。
+     */
+    private function grantGlobalAttendanceRead(User $user): void
+    {
+        $role = Role::query()->firstOrCreate(
+            ['code' => 'ATTENDANCE_READ_TEST'],
+            ['name' => '勤怠閲覧(全社・テスト)', 'status' => 'active'],
+        );
+
+        DB::table('permissions')->updateOrInsert(['code' => 'attendance.read'], [
+            'resource' => 'attendance',
+            'action' => 'read',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $permissionId = DB::table('permissions')->where('code', 'attendance.read')->value('id');
+        DB::table('permission_scope_types')->insertOrIgnore(['permission_id' => $permissionId, 'scope_type' => 'global']);
+        DB::table('permission_role')->insertOrIgnore(['permission_id' => $permissionId, 'role_id' => $role->id]);
+        DB::table('role_assignments')->insert([
+            'id' => (string) Str::uuid(),
+            'subject_type' => 'user',
+            'subject_id' => $user->id,
+            'role_id' => $role->id,
+            'scope_type' => 'global',
+            'scope_group_id' => null,
+            'include_descendants' => false,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     public function test_generic_tsv_format_uses_tab_delimiter_japanese_headers_and_colon_time(): void
