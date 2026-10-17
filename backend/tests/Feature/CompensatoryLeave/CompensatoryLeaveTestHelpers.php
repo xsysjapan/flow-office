@@ -44,11 +44,11 @@ trait CompensatoryLeaveTestHelpers
         EmployeeCalendarEntry::query()->updateOrCreate(
             ['user_id' => $user->id, 'work_date' => $date],
             ['work_style_id' => $workStyle->id,
-            'day_type' => 'weekday', 'is_working_day' => true,
-            'is_legal_holiday' => false, 'is_company_holiday' => false,
-            'planned_start_at' => "{$date} 09:00:00", 'planned_end_at' => "{$date} 18:00:00",
-            'planned_break_minutes' => 60,
-        ]);
+                'day_type' => 'weekday', 'is_working_day' => true,
+                'is_legal_holiday' => false, 'is_company_holiday' => false,
+                'planned_start_at' => "{$date} 09:00:00", 'planned_end_at' => "{$date} 18:00:00",
+                'planned_break_minutes' => 60,
+            ]);
     }
 
     private function recordCompensatoryAttendance(User $user, string $date, string $start, string $end, array $breaks = []): void

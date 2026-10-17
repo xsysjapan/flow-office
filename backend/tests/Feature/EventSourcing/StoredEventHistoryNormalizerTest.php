@@ -2,13 +2,14 @@
 
 namespace Tests\Feature\EventSourcing;
 
-use App\Domain\EventSourcing\Migration\StoredEventHistoryNormalizer;
 use App\Domain\EventSourcing\Migration\AttendanceBackOfficeTaskHistoryBackfiller;
+use App\Domain\EventSourcing\Migration\StoredEventHistoryNormalizer;
 use App\Domain\UserManagement\Support\UserManagementStreamId;
 use App\Models\User;
 use Database\Seeders\AccessControlSeeder;
 use Database\Seeders\UserManagementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
@@ -127,7 +128,7 @@ class StoredEventHistoryNormalizerTest extends TestCase
             'task_type' => $task->task_type,
             'title' => $task->title,
         ]);
-        $this->assertSame('2026-08-11', \Illuminate\Support\Carbon::parse($task->due_on)->toDateString());
+        $this->assertSame('2026-08-11', Carbon::parse($task->due_on)->toDateString());
         $this->assertDatabaseHas('stored_events', [
             'event_class' => 'backoffice_task.created',
             'created_at' => $approvedAt,

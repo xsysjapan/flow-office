@@ -61,7 +61,7 @@ function withSeeded(workStyles: WorkStyle[] = [workStyle]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['work-styles'], workStyles)
   queryClient.setQueryData(['work-calendars'], [calendar])
-  queryClient.setQueryData(['users', 'search', '', 100], paginatedUsers)
+  queryClient.setQueryData(['users', 'search', '', 100, ''], paginatedUsers)
 
   return function Decorator() {
     return (

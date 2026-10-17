@@ -643,5 +643,4 @@ class SpecialLeaveAccountAggregateTest extends TestCase
             'request_missing' => null,
         ], $results);
     }
-
 }

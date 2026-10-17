@@ -24,7 +24,7 @@ class ScheduleCandidateGeneratorTest extends TestCase
 
     private function generator(): ScheduleCandidateGenerator
     {
-        return new ScheduleCandidateGenerator(new GrantCategoryClassifier());
+        return new ScheduleCandidateGenerator(new GrantCategoryClassifier);
     }
 
     private function createWorkStyle(): WorkStyle

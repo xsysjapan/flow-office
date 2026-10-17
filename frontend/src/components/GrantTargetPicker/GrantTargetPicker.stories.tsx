@@ -31,7 +31,7 @@ const members: GroupMember[] = [
 
 function withSeeded() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['users', 'search', '', 100], paginatedUsers)
+  queryClient.setQueryData(['users', 'search', '', 100, ''], paginatedUsers)
   queryClient.setQueryData(['groups', 'list'], groups)
   queryClient.setQueryData(['groups', 'members', 'group-1'], members)
 

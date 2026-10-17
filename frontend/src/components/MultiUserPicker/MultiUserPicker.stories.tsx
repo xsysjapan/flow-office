@@ -33,7 +33,7 @@ const paginatedUsers: Paginated<User> = {
 
 function withSeeded(value: string[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['users', 'search', '', 100], paginatedUsers)
+  queryClient.setQueryData(['users', 'search', '', 100, ''], paginatedUsers)
 
   return function Decorator() {
     return (

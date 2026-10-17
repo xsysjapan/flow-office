@@ -2,7 +2,6 @@
 
 namespace App\Domain\PaidLeaveSchedule\Projectors;
 
-use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentOverridden;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentRecorded;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCancelled;

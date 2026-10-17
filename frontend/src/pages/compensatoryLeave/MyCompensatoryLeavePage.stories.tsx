@@ -86,7 +86,7 @@ function withSeeded(grantData: CompensatoryLeaveGrant[], requestData: Compensato
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['compensatory-leave', 'grants', 'mine'], grantData)
   queryClient.setQueryData(['compensatory-leave', 'requests', 'mine'], requestData)
-  queryClient.setQueryData(['users', 'search', '', 100], emptyUsers)
+  queryClient.setQueryData(['users', 'search', '', 100, ''], emptyUsers)
 
   return function Decorator() {
     return (

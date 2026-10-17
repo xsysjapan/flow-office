@@ -19,9 +19,7 @@ use App\Support\FrontendUrl;
  */
 class CancelWorkflowRequestHandler implements CommandHandler
 {
-    public function __construct(private readonly EffectiveAccessResolver $effectiveAccessResolver)
-    {
-    }
+    public function __construct(private readonly EffectiveAccessResolver $effectiveAccessResolver) {}
 
     public function handle(Command $command): WorkflowRequest
     {

@@ -9,8 +9,8 @@ use App\Domain\PaidLeaveSchedule\Support\AttendanceRateAssessor;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -98,7 +98,7 @@ class AttendanceRateAssessorTest extends TestCase
             $this->recordAttendance($user, "2025-0{$i}-01");
         }
 
-        $result = (new AttendanceRateAssessor())->assess(
+        $result = (new AttendanceRateAssessor)->assess(
             userId: $user->id,
             periodStart: Carbon::parse('2025-01-01'),
             periodEnd: Carbon::parse('2025-05-01'),
@@ -122,7 +122,7 @@ class AttendanceRateAssessorTest extends TestCase
             $this->recordAttendance($user, sprintf('2025-01-%02d', $i));
         }
 
-        $result = (new AttendanceRateAssessor())->assess(
+        $result = (new AttendanceRateAssessor)->assess(
             userId: $user->id,
             periodStart: Carbon::parse('2025-01-01'),
             periodEnd: Carbon::parse('2025-01-31'),
@@ -137,7 +137,7 @@ class AttendanceRateAssessorTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $result = (new AttendanceRateAssessor())->assess(
+        $result = (new AttendanceRateAssessor)->assess(
             userId: $user->id,
             periodStart: Carbon::parse('2025-01-01'),
             periodEnd: Carbon::parse('2025-01-31'),
@@ -155,7 +155,7 @@ class AttendanceRateAssessorTest extends TestCase
         $this->scheduleWorkingDay($user, '2025-01-01');
         $this->recordAttendance($user, '2025-01-01');
 
-        $result = (new AttendanceRateAssessor())->assess(
+        $result = (new AttendanceRateAssessor)->assess(
             userId: $user->id,
             periodStart: Carbon::parse('2025-01-01'),
             periodEnd: Carbon::parse('2025-06-01'),
@@ -174,7 +174,7 @@ class AttendanceRateAssessorTest extends TestCase
         $this->scheduleWorkingDay($user, '2025-01-01');
         $this->recordAttendance($user, '2025-01-01');
 
-        $result = (new AttendanceRateAssessor())->assess(
+        $result = (new AttendanceRateAssessor)->assess(
             userId: $user->id,
             periodStart: Carbon::parse('2025-01-01'),
             periodEnd: Carbon::parse('2025-06-01'),
@@ -192,7 +192,7 @@ class AttendanceRateAssessorTest extends TestCase
         $this->scheduleWorkingDay($user, '2025-04-01');
         $this->recordAttendance($user, '2025-04-01');
 
-        $result = (new AttendanceRateAssessor())->assess(
+        $result = (new AttendanceRateAssessor)->assess(
             userId: $user->id,
             periodStart: Carbon::parse('2025-04-01'),
             periodEnd: Carbon::parse('2025-06-01'),
@@ -212,7 +212,7 @@ class AttendanceRateAssessorTest extends TestCase
         $this->scheduleWorkingDay($user, '2025-01-02');
         $this->recordAttendance($user, '2025-01-02');
 
-        $result = (new AttendanceRateAssessor())->assess(
+        $result = (new AttendanceRateAssessor)->assess(
             userId: $user->id,
             periodStart: Carbon::parse('2025-01-01'),
             periodEnd: Carbon::parse('2025-01-31'),

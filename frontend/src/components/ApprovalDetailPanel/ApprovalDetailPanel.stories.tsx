@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import type { WorkflowRequest } from '../../api/types'
+import { fn } from 'storybook/test'
+import type { User, WorkflowRequest } from '../../api/types'
+import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { ApprovalDetailPanel } from './ApprovalDetailPanel'
 
 const applicant = {
@@ -11,6 +13,25 @@ const applicant = {
   job_title: null,
   employment_status: 'active',
   last_login_at: null,
+}
+
+const currentUser: User = {
+  id: 'user-1',
+  name: '本人太郎',
+  email: 'taro@example.com',
+  department: null,
+  job_title: null,
+  employment_status: 'active',
+  last_login_at: null,
+}
+
+const authValue: AuthContextValue = {
+  user: currentUser,
+  status: 'authenticated',
+  login: fn(),
+  completeLogin: fn(),
+  applySession: fn(),
+  logout: fn(),
 }
 
 const genericRequest: WorkflowRequest = {
@@ -97,7 +118,9 @@ const meta = {
   decorators: [
     (Story) => (
       <QueryClientProvider client={queryClient}>
-        <Story />
+        <AuthContext.Provider value={authValue}>
+          <Story />
+        </AuthContext.Provider>
       </QueryClientProvider>
     ),
   ],

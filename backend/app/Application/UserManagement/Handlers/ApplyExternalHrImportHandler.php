@@ -7,7 +7,6 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Aggregates\ExternalHrImportAggregate;
 use App\Domain\UserManagement\Aggregates\MembershipChangeSetAggregate;
-use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Aggregates\UserMembershipAggregate;
 use App\Domain\UserManagement\Commands\ApplyExternalHrImport;
 use App\Domain\UserManagement\Services\MembershipConstraintValidator;

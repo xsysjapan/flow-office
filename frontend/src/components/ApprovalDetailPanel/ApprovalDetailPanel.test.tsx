@@ -4,8 +4,23 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
-import type { AttendanceMonthlyCalculationTotals, WorkflowRequest } from '../../api/types'
+import type { AttendanceMonthlyCalculationTotals, User, WorkflowRequest } from '../../api/types'
 import { ApprovalDetailPanel } from './ApprovalDetailPanel'
+
+const currentUser: User = {
+  id: 'approver-1',
+  name: '承認者花子',
+  email: 'hanako@example.com',
+  department: null,
+  job_title: null,
+  employment_status: 'active',
+  last_login_at: null,
+  effective_permissions: [],
+}
+
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ user: currentUser }),
+}))
 
 const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
   work_minutes: 0,

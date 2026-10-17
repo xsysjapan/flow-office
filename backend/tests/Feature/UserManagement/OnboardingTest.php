@@ -2,18 +2,18 @@
 
 namespace Tests\Feature\UserManagement;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\UserManagement\Commands\CompleteOnboardingSsoLink;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\UserCredential;
-use Illuminate\Support\Facades\Hash;
 use Database\Seeders\AccessControlSeeder;
 use Database\Seeders\UserManagementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;

@@ -2,8 +2,8 @@
 
 namespace App\Domain\Attendance\Services;
 
-use App\Models\WorkStyle;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
 /**

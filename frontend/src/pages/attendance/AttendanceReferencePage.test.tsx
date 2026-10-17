@@ -281,6 +281,7 @@ describe('AttendanceReferencePage', () => {
       month: approvedMonth,
       flex_settlement_summary: null,
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      can_export: true,
     })
     const csvSpy = vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockResolvedValue(undefined)
     const excelSpy = vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockResolvedValue(undefined)
@@ -325,15 +326,39 @@ describe('AttendanceReferencePage', () => {
       }
     }
 
-    function mockMonthStatus(status: AttendanceMonthStatus) {
+    /** extraでcan_exportを上書きする(既定はtrue。{}を渡すと未指定の扱いになる)。 */
+    function mockMonthStatus(status: AttendanceMonthStatus, extra: { can_export?: boolean } = { can_export: true }) {
       vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
       vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
         days: [],
         month: attendanceMonthWithStatus(status),
         flex_settlement_summary: null,
         monthly_calculation_totals: zeroMonthlyCalculationTotals,
+        ...extra,
       })
     }
+
+    it('hides the output card when can_export is false, even if the user has attendance.export', async () => {
+      mockMonthStatus('approved', { can_export: false })
+
+      renderPage()
+      await selectTargetUser()
+
+      expect(await screen.findByText('今月の集計')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'CSV出力' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Excel出力' })).not.toBeInTheDocument()
+    })
+
+    it('hides the output card when can_export is not provided, even if the user has attendance.export', async () => {
+      mockMonthStatus('approved', {})
+
+      renderPage()
+      await selectTargetUser()
+
+      expect(await screen.findByText('今月の集計')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'CSV出力' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Excel出力' })).not.toBeInTheDocument()
+    })
 
     it.each(['submitted', 'approved', 'closed'] as const)(
       'enables both outputs without a hint for a %s month',

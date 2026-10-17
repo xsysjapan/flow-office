@@ -57,12 +57,13 @@ const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
 /** AttendanceMonthConfirmationSectionはuseAttendanceMonthByIdで対象月を解決した後、
  *  実際の表示・CSV/Excel出力・状態変更はAttendanceMonthReferenceTabs(useAttendanceMonth→
  *  fetchMonth)に委譲するため、両方のAPIをモックする必要がある。 */
-function mockFetchMonth(month: AttendanceMonth) {
+function mockFetchMonth(month: AttendanceMonth, canExport = false) {
   return vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
     days: [],
     month,
     flex_settlement_summary: null,
     monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    can_export: canExport,
   })
 }
 
@@ -229,7 +230,7 @@ describe('BackOfficeTaskDetailPage', () => {
 
     it('downloads CSV and Excel for the attendance month from the task detail', async () => {
       vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
-      mockFetchMonth(baseMonth)
+      mockFetchMonth(baseMonth, true)
       const csvSpy = vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockResolvedValue(undefined)
       const excelSpy = vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockResolvedValue(undefined)
 
@@ -243,9 +244,14 @@ describe('BackOfficeTaskDetailPage', () => {
           year_month: ['2026-07'],
           user_id: ['user-1'],
           format: 'generic',
+          include_submitted: true,
         }),
       )
-      expect(excelSpy).toHaveBeenCalledWith({ year_month: ['2026-07'], user_id: ['user-1'] })
+      expect(excelSpy).toHaveBeenCalledWith({
+        year_month: ['2026-07'],
+        user_id: ['user-1'],
+        include_submitted: true,
+      })
     })
 
     it('keeps the attendance month visible but hides the 締める button when already closed', async () => {

@@ -37,7 +37,7 @@ class AttendanceExcelLeaveNoteTest extends TestCase
     /**
      * 利用者(代休の付与済み・有給の付与済み)と承認者・管理者を作る。
      *
-     * @return array{0: User, 1: User, 2: User}  [利用者, 承認者, 管理者]
+     * @return array{0: User, 1: User, 2: User} [利用者, 承認者, 管理者]
      */
     private function setUpEmployee(): array
     {

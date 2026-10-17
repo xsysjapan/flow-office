@@ -78,7 +78,7 @@ function withSeeded(grantData: PaidLeaveGrant[], requestData: PaidLeaveRequest[]
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['paid-leave', 'grants', 'mine'], grantData)
   queryClient.setQueryData(['paid-leave', 'requests', 'mine'], requestData)
-  queryClient.setQueryData(['users', 'search', '', 100], emptyUsers)
+  queryClient.setQueryData(['users', 'search', '', 100, ''], emptyUsers)
 
   return function Decorator() {
     return (

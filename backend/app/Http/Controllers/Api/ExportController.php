@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Export\Aggregates\ExportAuditAggregate;
-use App\Domain\Export\Services\ExternalIntegrationPublisherResolver;
 use App\Domain\Export\Services\AttendanceCsv\AttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceCsv\FreeeAttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceCsv\GenericAttendanceCsvFormat;
@@ -11,11 +10,13 @@ use App\Domain\Export\Services\AttendanceCsv\GenericSjisAttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceCsv\GenericTsvAttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceCsv\MoneyForwardAttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceExcelBuilder;
+use App\Domain\Export\Services\AttendanceExportScope;
 use App\Domain\Export\Services\ExpenseCsv\ExpenseCsvFormat;
 use App\Domain\Export\Services\ExpenseCsv\FreeeExpenseCsvFormat;
 use App\Domain\Export\Services\ExpenseCsv\GenericExpenseCsvFormat;
 use App\Domain\Export\Services\ExpenseCsv\MoneyForwardExpenseCsvFormat;
 use App\Domain\Export\Services\ExpenseExcelBuilder;
+use App\Domain\Export\Services\ExternalIntegrationPublisherResolver;
 use App\Domain\Export\Services\Publishers\InternalArchivePublisher;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceMonth;
@@ -25,9 +26,11 @@ use App\Models\ExpenseClaim;
 use App\Models\ExpenseClaimStatus;
 use App\Models\ExternalEmployeeMapping;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
@@ -59,9 +62,11 @@ class ExportController extends Controller
     public function attendance(Request $request): StreamedResponse
     {
         $data = $this->validateAttendanceDownloadRequest($request);
+        $allowedUserIds = app(AttendanceExportScope::class)->allowedUserIds($request->user());
+        $this->abortUnlessAttendanceExportable($allowedUserIds, $data);
         $formatKey = $data['format'] ?? 'generic';
         $format = $this->resolveAttendanceCsvFormat($formatKey);
-        $months = $this->resolveAttendanceMonths($data, $this->resolveExportableStatuses($request));
+        $months = $this->resolveAttendanceMonths($data, $this->resolveExportableStatuses($request), $allowedUserIds);
         $label = $this->yearMonthLabel($data['year_month']);
 
         $this->recordExport('attendance_csv', $data, $request->user()->id, $months->count());
@@ -107,7 +112,9 @@ class ExportController extends Controller
     public function attendanceExcel(Request $request, AttendanceExcelBuilder $builder): Response
     {
         $data = $this->validateAttendanceDownloadRequest($request);
-        $months = $this->resolveAttendanceMonths($data, $this->resolveExportableStatuses($request));
+        $allowedUserIds = app(AttendanceExportScope::class)->allowedUserIds($request->user());
+        $this->abortUnlessAttendanceExportable($allowedUserIds, $data);
+        $months = $this->resolveAttendanceMonths($data, $this->resolveExportableStatuses($request), $allowedUserIds);
         $label = $this->yearMonthLabel($data['year_month']);
 
         if ($months->count() <= 1) {
@@ -279,7 +286,7 @@ class ExportController extends Controller
         tags: ['CSV出力'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function attendanceExternalPublish(Request $request, ExternalIntegrationPublisherResolver $resolver): \Illuminate\Http\JsonResponse
+    public function attendanceExternalPublish(Request $request, ExternalIntegrationPublisherResolver $resolver): JsonResponse
     {
         if (is_string($request->input('year_month'))) {
             $request->merge(['year_month' => [$request->input('year_month')]]);
@@ -296,7 +303,9 @@ class ExportController extends Controller
             'provider' => ['required', 'string', 'in:freee'],
         ]);
 
-        $months = $this->resolveAttendanceMonths($data, [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED]);
+        $allowedUserIds = app(AttendanceExportScope::class)->allowedUserIds($request->user());
+        $this->abortUnlessAttendanceExportable($allowedUserIds, $data);
+        $months = $this->resolveAttendanceMonths($data, [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED], $allowedUserIds);
 
         try {
             [$publisher, $builder, $externalCompanyId] = $resolver->resolve($data['provider']);
@@ -471,7 +480,7 @@ class ExportController extends Controller
         tags: ['CSV出力'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function expensesExternalPublish(Request $request, ExternalIntegrationPublisherResolver $resolver): \Illuminate\Http\JsonResponse
+    public function expensesExternalPublish(Request $request, ExternalIntegrationPublisherResolver $resolver): JsonResponse
     {
         if (is_string($request->input('year_month'))) {
             $request->merge(['year_month' => [$request->input('year_month')]]);
@@ -647,7 +656,7 @@ class ExportController extends Controller
     /**
      * 勤怠CSV・Excelの出力対象の月次状態。include_submittedがtrueのときだけ提出済み(承認待ち)を含める。
      *
-     * @return array<int, string>  AttendanceMonthStatus の値
+     * @return array<int, string> AttendanceMonthStatus の値
      */
     private function resolveExportableStatuses(Request $request): array
     {
@@ -715,17 +724,38 @@ class ExportController extends Controller
      *
      * @param  array{year_month: array<int, string>, user_id?: array<int, string>}  $data
      * @param  array<int, string>  $statuses  対象とする AttendanceMonthStatus の値
+     * @param  SupportCollection<int, string>|null  $allowedUserIds  出力できる社員ID(nullは制限なし)
      * @return Collection<int, AttendanceMonth>
      */
-    private function resolveAttendanceMonths(array $data, array $statuses): Collection
+    private function resolveAttendanceMonths(array $data, array $statuses, ?SupportCollection $allowedUserIds): Collection
     {
         return AttendanceMonth::query()
             ->with('user')
             ->whereIn('year_month', $data['year_month'])
             ->whereIn('status', $statuses)
             ->when($data['user_id'] ?? null, fn ($query, $userIds) => $query->whereIn('user_id', $userIds))
+            ->when($allowedUserIds !== null, fn ($query) => $query->whereIn('user_id', $allowedUserIds))
             ->orderBy('year_month')
             ->orderBy('user_id')
             ->get();
+    }
+
+    /**
+     * 明示された user_id に出力できない社員が1件でも含まれていれば403にする(出力漏れに気づけるよう、
+     * 範囲外を黙って除外しない)。$allowedUserIds が null(制限なし)のときは何もしない。
+     *
+     * @param  SupportCollection<int, string>|null  $allowedUserIds
+     * @param  array{user_id?: array<int, string>}  $data
+     */
+    private function abortUnlessAttendanceExportable(?SupportCollection $allowedUserIds, array $data): void
+    {
+        if ($allowedUserIds === null) {
+            return;
+        }
+
+        $outside = collect($data['user_id'] ?? [])->diff($allowedUserIds->all());
+        if ($outside->isNotEmpty()) {
+            abort(403, '出力する権限のない社員が含まれています。');
+        }
     }
 }

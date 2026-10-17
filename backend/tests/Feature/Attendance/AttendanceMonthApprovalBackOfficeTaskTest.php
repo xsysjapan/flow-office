@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromAttendanceMonthApproval;
+use App\Domain\EventSourcing\CommandBus;
 use App\Models\AttendanceMonth;
 use App\Models\BackOfficeTask;
 use App\Models\User;
@@ -69,8 +71,8 @@ class AttendanceMonthApprovalBackOfficeTaskTest extends TestCase
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")->assertOk();
         $this->assertSame(1, BackOfficeTask::query()->where('source_type', 'attendance_month')->where('source_id', $monthId)->count());
 
-        app(\App\Domain\EventSourcing\CommandBus::class)->dispatch(
-            new \App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromAttendanceMonthApproval($monthId)
+        app(CommandBus::class)->dispatch(
+            new CreateBackOfficeTaskFromAttendanceMonthApproval($monthId)
         );
 
         $this->assertSame(1, BackOfficeTask::query()->where('source_type', 'attendance_month')->where('source_id', $monthId)->count());

@@ -10,6 +10,7 @@ use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
@@ -31,7 +32,7 @@ class PaidLeaveGrantTimeAllocationTest extends TestCase
         $approver = User::factory()->create();
         $usageId = $this->bus()->dispatch(new DesignatePaidLeaveUsage(
             userId: $user->id, workflowRequestId: null, attendanceDayId: null, usedOn: $usedOn, usedDays: $days,
-            usageType: 'full', paidLeaveRequestId: (string) \Illuminate\Support\Str::uuid(), approverUserId: $approver->id,
+            usageType: 'full', paidLeaveRequestId: (string) Str::uuid(), approverUserId: $approver->id,
         ));
         $this->bus()->dispatch(new ConfirmPaidLeaveUsage($user->id, $usageId, $approver->id));
 

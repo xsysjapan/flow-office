@@ -1135,5 +1135,4 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
         $this->assertSame('u1', $results['request_r1_after_cancel']);
         $this->assertSame('cancelled', $results['status_u1_after_cancel']);
     }
-
 }

@@ -115,7 +115,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             ];
         }
 
-        $plan = (new GrantTimeAllocationPlanner())->plan(
+        $plan = (new GrantTimeAllocationPlanner)->plan(
             $grant['grantedDays'] - array_sum($grant['allocations']),
             $pending,
         );
@@ -411,7 +411,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             return;
         }
 
-        $plan = (new AllocationPlanner())->plan($usage['usedOn'], $remaining, $this->grantsSnapshot());
+        $plan = (new AllocationPlanner)->plan($usage['usedOn'], $remaining, $this->grantsSnapshot());
 
         foreach ($plan as $entry) {
             if ($entry['allocatedDays'] <= 0) {

@@ -37,6 +37,7 @@ class ConfirmPaidLeaveUsageHandler implements CommandHandler
                 confirmedByUserId: $command->confirmedByUserId,
             )
             ->persist();
+
         return null;
     }
 }

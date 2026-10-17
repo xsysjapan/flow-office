@@ -26,9 +26,13 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 class PaidLeaveRequestAggregate extends AggregateRoot
 {
     private const STATUS_NONE = 'none';
+
     private const STATUS_SUBMITTED = 'submitted';
+
     private const STATUS_RETURNED = 'returned';
+
     private const STATUS_APPROVED = 'approved';
+
     private const STATUS_CANCELLED = 'cancelled';
 
     private string $status = self::STATUS_NONE;

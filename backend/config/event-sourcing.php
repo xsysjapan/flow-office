@@ -96,6 +96,12 @@ use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
 use App\Domain\BackOffice\Events\BackOfficeTaskCompleted;
 use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
 use App\Domain\BackOffice\Events\BackOfficeTaskStatusChanged;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestApproved;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestResubmitted;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantCancelled;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantConfirmed;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantManuallyGranted;
@@ -104,12 +110,6 @@ use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantSync
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageCancelled;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageConfirmed;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageDesignated;
-use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestApproved;
-use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
-use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
-use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
-use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestResubmitted;
-use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
 use App\Domain\Device\Events\DeviceDeleted;
 use App\Domain\Device\Events\DeviceDisabled;
 use App\Domain\Device\Events\DeviceEnabled;
@@ -147,12 +147,6 @@ use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
 use App\Domain\Notification\Events\NotificationConfirmed;
 use App\Domain\Notification\Events\NotificationQueued;
 use App\Domain\Notification\Events\NotificationSent;
-use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleApproved;
-use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleCancelled;
-use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleRequested;
-use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleResubmitted;
-use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleReturned;
-use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantAmountChanged as PaidLeaveAccountGrantAmountChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated as PaidLeaveAccountGrantCreated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged as PaidLeaveAccountGrantDateChanged;
@@ -164,12 +158,13 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocationReleased as PaidL
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled as PaidLeaveAccountUsageCancelled;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed as PaidLeaveAccountUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated as PaidLeaveAccountUsageDesignated;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleApproved;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleCancelled;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleRequested;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleResubmitted;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleReturned;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentOverridden;
-use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
-use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
-use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
-use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageConfirmed;
-use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageDesignated;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentRecorded;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCancelled;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCreated;
@@ -187,6 +182,11 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestResubmitted;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageConfirmed;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageDesignated;
 use App\Domain\SystemSettings\Events\SystemSettingsUpdated;
 use App\Domain\UserManagement\Events\ExternalHrImportApplied;
 use App\Domain\UserManagement\Events\ExternalIdentityLinked;
@@ -499,7 +499,6 @@ return [
         'workflow_request.returned' => WorkflowRequestReturned::class,
         'workflow_request.cancelled' => WorkflowRequestCancelled::class,
         'workflow_request.rejected' => WorkflowRequestRejected::class,
-
 
         // PaidLeaveAccountAggregate(社員単位の年休台帳集約。Grant/Usage/Allocationの
         // 不変条件をAggregate自身が保証する。docs/changesets/20260906-paid-leave-domain-redesign/spec.md参照)。

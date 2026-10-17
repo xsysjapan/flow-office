@@ -4,6 +4,7 @@ namespace Tests\Unit\EventSourcing\Rebuild;
 
 use App\Domain\EventSourcing\Rebuild\LeaveUsageId;
 use App\Domain\EventSourcing\Rebuild\PaidLeaveRequestRebuilder;
+use App\Domain\EventSourcing\Rebuild\RebuiltEvent;
 use App\Domain\EventSourcing\Rebuild\StoredEventRow;
 use App\Domain\EventSourcing\Rebuild\UnsupportedEventSequence;
 use PHPUnit\Framework\TestCase;
@@ -430,8 +431,8 @@ class PaidLeaveRequestRebuilderTest extends TestCase
     }
 
     /**
-     * @param  list<\App\Domain\EventSourcing\Rebuild\RebuiltEvent>  $events
-     * @return list<\App\Domain\EventSourcing\Rebuild\RebuiltEvent>
+     * @param  list<RebuiltEvent>  $events
+     * @return list<RebuiltEvent>
      */
     private function ordered(array $events): array
     {
@@ -474,7 +475,7 @@ class PaidLeaveRequestRebuilderTest extends TestCase
     }
 
     /**
-     * @param  list<\App\Domain\EventSourcing\Rebuild\RebuiltEvent>  $events
+     * @param  list<RebuiltEvent>  $events
      * @return list<string>
      */
     private function classes(array $events): array

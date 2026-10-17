@@ -47,9 +47,6 @@ class CompensatoryGrantDayViewProjector extends Projector
         CompensatoryGrantDayView::query()->whereKey($event->grantId)->delete();
     }
 
-    /**
-     * @param  CompensatoryLeaveAccountUsageConfirmed  $event
-     */
     public function onCompensatoryLeaveAccountUsageConfirmed(CompensatoryLeaveAccountUsageConfirmed $event): void
     {
         $this->replaceAllocations($event->usageId, $event->allocations);

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\EventSourcing;
 
+use App\Domain\EventSourcing\Rebuild\EventStoreRebuilder;
+use App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter;
 use App\Domain\EventSourcing\Rebuild\ReadModelTableLister;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -118,11 +120,11 @@ class SeededDataRebuildScenarioTest extends TestCase
         $eventsBefore = DB::table('stored_events')->count();
 
         // 再生後のReadModelはイベントと一致するため、もう一度試し実行しても導出イベントは増えない(created_at の違いは比べない)。
-        $result = app(\App\Domain\EventSourcing\Rebuild\EventStoreRebuilder::class)->rebuild(
-            app(\App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter::class)->readRows(),
+        $result = app(EventStoreRebuilder::class)->rebuild(
+            app(EventStoreRebuildWriter::class)->readRows(),
             [],
             [],
-            app(\App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter::class)->readSeededData(),
+            app(EventStoreRebuildWriter::class)->readSeededData(),
         );
 
         $this->assertTrue($result->ok, json_encode($result->unsupported, JSON_UNESCAPED_UNICODE));

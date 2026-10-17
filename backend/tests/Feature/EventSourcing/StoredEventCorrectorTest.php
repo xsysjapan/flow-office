@@ -6,14 +6,14 @@ use App\Console\Commands\Concerns\StoredEventCorrectionCommand;
 use App\Domain\EventSourcing\Correction\StoredEventCorrectionPlan;
 use App\Domain\EventSourcing\Correction\StoredEventCorrector;
 use App\Domain\EventSourcing\Correction\StoredEventRewrite;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\TestCase;
 
 /**
@@ -170,10 +170,10 @@ class StoredEventCorrectorTest extends TestCase
         };
         $command->setLaravel($this->app);
 
-        $this->assertSame(0, $command->run(new ArrayInput([]), new BufferedOutput()));
+        $this->assertSame(0, $command->run(new ArrayInput([]), new BufferedOutput));
         $this->assertSame(['value' => 'v2', 'workType' => 'paid_leave_full'], $this->payload($this->ids[1]), '既定は試し実行');
 
-        $this->assertSame(0, $command->run(new ArrayInput(['--apply' => true, '--backup-table' => 'stored_events_backup_test_cmd']), new BufferedOutput()));
+        $this->assertSame(0, $command->run(new ArrayInput(['--apply' => true, '--backup-table' => 'stored_events_backup_test_cmd']), new BufferedOutput));
         $this->assertSame(['value' => 'fixed'], $this->payload($this->ids[1]));
         $this->assertTrue(Schema::hasTable('stored_events_backup_test_cmd'));
     }

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import type { Paginated, User } from '../../api/types'
 import { CompensatoryLeaveAdminPage } from './CompensatoryLeaveAdminPage'
 
@@ -11,12 +12,14 @@ const paginatedUsers: Paginated<User> = {
 
 function withSeeded() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['users', 'search', '', 100], paginatedUsers)
+  queryClient.setQueryData(['users', 'search', '', 100, ''], paginatedUsers)
 
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <CompensatoryLeaveAdminPage />
+        <MemoryRouter>
+          <CompensatoryLeaveAdminPage />
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }

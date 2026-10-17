@@ -9,6 +9,7 @@ use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
+use App\Models\PaidLeaveUsage;
 use App\Models\SpecialLeaveType;
 use Illuminate\Support\Carbon;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -118,19 +119,27 @@ class AttendanceExcelBuilder
         $actualDays = $days->filter(fn (AttendanceDay $day) => ($day->calculation?->work_minutes ?? 0) > 0)->count();
         $paidLeaveDays = (float) ($snapshot['paid_leave_days'] ?? 0);
         $monthEnd = Carbon::parse($yearMonth.'-01')->endOfMonth();
+        // 残日数は充当(paid_leave_usage_allocations)から月末時点で算出する。取り消した消化・
+        // 月末より後の消化・未確定の消化は差し引かず、取り消した付与(status!=active)は除く。
         $paidLeaveBalance = PaidLeaveGrant::query()
             ->where('user_id', $month->user_id)
+            ->where('status', 'active')
             ->whereDate('granted_on', '<=', $monthEnd)
             ->whereDate('expires_on', '>=', $monthEnd)
             ->withSum([
-                'usages as used_days_at_month_end' => fn ($query) => $query
-                    ->where('is_confirmed', true)
-                    ->whereDate('used_on', '<=', $monthEnd),
-            ], 'used_days')
+                'allocations as allocated_days_at_month_end' => fn ($query) => $query->whereIn(
+                    'usage_id',
+                    PaidLeaveUsage::query()
+                        ->select('usage_id')
+                        ->where('is_confirmed', true)
+                        ->where('cancelled', false)
+                        ->whereDate('used_on', '<=', $monthEnd),
+                ),
+            ], 'allocated_days')
             ->get()
             ->sum(fn (PaidLeaveGrant $grant): float => max(
                 0,
-                (float) $grant->granted_days - (float) ($grant->used_days_at_month_end ?? 0),
+                (float) $grant->granted_days - (float) ($grant->allocated_days_at_month_end ?? 0),
             ));
 
         $sheet->mergeCells('A2:F3');

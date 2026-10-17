@@ -249,6 +249,9 @@ export function fetchMonth(yearMonth: string, userId?: string): Promise<{
    *  互換性のためoptionalにしておく(未指定時はAttendanceCalculationSummaryが従来通り
    *  合計のみを表示する)。 */
   special_leave_breakdown?: SpecialLeaveBreakdownEntry[]
+  /** 対象社員の月次勤怠を出力できるか(backendが判定)。既存のテストモック等との互換性のため
+   *  optionalにしておく(未指定時は出力不可として扱う)。 */
+  can_export?: boolean
 }> {
   return apiFetch(`/attendance/months/${yearMonth}`, { query: { user_id: userId } })
 }

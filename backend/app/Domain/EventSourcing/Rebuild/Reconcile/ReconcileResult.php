@@ -2,6 +2,8 @@
 
 namespace App\Domain\EventSourcing\Rebuild\Reconcile;
 
+use App\Domain\EventSourcing\Rebuild\RebuiltEvent;
+
 /**
  * 照合による補完(論点19 決定1)の結果。
  *
@@ -10,7 +12,7 @@ namespace App\Domain\EventSourcing\Rebuild\Reconcile;
 final readonly class ReconcileResult
 {
     /**
-     * @param  list<\App\Domain\EventSourcing\Rebuild\RebuiltEvent>  $events  導出イベントと、集約を付け替えた既存イベント
+     * @param  list<RebuiltEvent>  $events  導出イベントと、集約を付け替えた既存イベント
      * @param  list<int>  $consumedIds  付け替えで置き換える(元の位置の行は削除する)既存の行のid
      * @param  list<array{key: string, reason: string}>  $issues  扱えない並び
      * @param  array<string, array<string, int>>  $derivedByTable  テーブル => event_class => 導出した件数

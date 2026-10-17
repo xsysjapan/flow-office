@@ -218,6 +218,7 @@ class CompensatoryLeaveTest extends TestCase
 
         $this->confirmedGrant($employee, '2026-08-08', 'half_day');
     }
+
     private function confirmedGrant(User $employee, string $workDate = '2026-08-08', string $unit = 'daily'): CompensatoryLeaveGrant
     {
         SystemSetting::current()->update(['compensatory_leave_enabled' => true, 'compensatory_leave_unit' => $unit]);

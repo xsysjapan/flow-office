@@ -167,8 +167,8 @@ export function MonthlyReferenceView({
   const { user } = useAuth()
   const canReopenMonth = user?.effective_permissions?.includes('attendance.month_reopen') ?? false
   const canCloseMonth = user?.effective_permissions?.includes('backoffice_task.execute') ?? false
-  const canExport = user?.effective_permissions?.includes('attendance.export') ?? false
   const { data, isLoading, error } = useAttendanceMonth(yearMonth, userId)
+  const canExport = data?.can_export ?? false
   const closeMonth = useCloseMonth()
   const downloadCsv = useDownloadAttendanceCsv()
   const downloadExcel = useDownloadAttendanceExcel()

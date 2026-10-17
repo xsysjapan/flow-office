@@ -100,9 +100,9 @@ class RequestTypeSeeder extends Seeder
             [
                 'code' => 'asset_loan',
                 'name' => '備品貸出申請',
-                'description' => '貸出方式が承認制(approval)の備品を借りるための申請。' .
-                    '承認されただけでは貸出中にはならず、承認済み申請に基づき' .
-                    'バックオフィスがLendAssetを実行して初めて貸与される' .
+                'description' => '貸出方式が承認制(approval)の備品を借りるための申請。'.
+                    '承認されただけでは貸出中にはならず、承認済み申請に基づき'.
+                    'バックオフィスがLendAssetを実行して初めて貸与される'.
                     '(docs/26-usecases-asset-management.md参照)。',
                 'form_schema' => [
                     ['key' => 'asset_id', 'label' => '対象備品', 'type' => 'uuid', 'required' => true],

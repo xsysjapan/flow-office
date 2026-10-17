@@ -8,7 +8,6 @@ use App\Domain\Notification\Notifier;
 use App\Domain\UserManagement\Graph\HttpMicrosoftGraphClient;
 use App\Domain\UserManagement\Graph\MicrosoftGraphClient;
 use App\Domain\UserManagement\LocalAzureProvider;
-use App\Domain\UserManagement\Ms365ConfigResolver;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\ExpenseClaim;

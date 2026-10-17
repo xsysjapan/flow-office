@@ -5,17 +5,24 @@ namespace Tests\Feature\Attendance;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\Export\Services\AttendanceExcelBuilder;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\PaidLeaveGrant;
+use App\Models\PaidLeaveUsage;
+use App\Models\PaidLeaveUsageAllocation;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
@@ -416,6 +423,74 @@ class AttendanceExportTest extends TestCase
         $this->assertSame('attendance_xlsx', $event->event_properties['exportType']);
     }
 
+    public function test_excel_paid_leave_balance_excludes_a_cancelled_usage(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '取消消化社員']);
+
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        $this->approvePaidLeave($employee, $admin, '2026-06-22', 'full');
+        $cancelledRequestId = $this->approvePaidLeave($employee, $admin, '2026-06-23', 'full');
+        $this->actingAs($admin)->postJson("/api/paid-leave/requests/{$cancelledRequestId}/admin-cancel")->assertOk();
+
+        // 前提: 取消した消化の行はcancelled = trueになっている。
+        $this->assertTrue(PaidLeaveUsage::query()->where('paid_leave_request_id', $cancelledRequestId)->firstOrFail()->cancelled);
+
+        $this->assertSame('9日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
+    }
+
+    public function test_excel_paid_leave_balance_splits_a_usage_spanning_two_grants_by_allocation(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '複数付与社員']);
+
+        // 有効期限が近い付与Aから先に充当される(付与A 0.5日 → 付与B 0.5日)。
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 0.5, null));
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 10.0, null));
+        $requestId = $this->approvePaidLeave($employee, $admin, '2026-06-22', 'full');
+
+        // 前提: 1件の消化が2つの付与に0.5日ずつ充当されている。
+        $usageId = PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->value('usage_id');
+        $allocations = PaidLeaveUsageAllocation::query()->where('usage_id', $usageId)->get();
+        $this->assertCount(2, $allocations);
+        $this->assertSame([0.5, 0.5], $allocations->map(fn ($allocation) => (float) $allocation->allocated_days)->sort()->values()->all());
+
+        $this->assertSame('9.5日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
+    }
+
+    public function test_excel_paid_leave_balance_ignores_a_usage_after_the_month_end(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '翌月消化社員']);
+
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        $this->approvePaidLeave($employee, $admin, '2026-06-22', 'full');
+        $this->approvePaidLeave($employee, $admin, '2026-07-15', 'full');
+
+        $this->assertSame('9日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
+    }
+
+    public function test_excel_paid_leave_balance_excludes_a_revoked_grant(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '取消付与社員']);
+
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 5.0, null));
+        $revokedGrantId = PaidLeaveGrant::query()
+            ->where('user_id', $employee->id)
+            ->whereDate('granted_on', '2026-04-01')
+            ->value('id');
+        app(CommandBus::class)->dispatch(new RevokePaidLeaveGrant($employee->id, $revokedGrantId, $admin->id, null));
+
+        // 取り消した付与Bの5日は含めない。
+        $this->assertSame('10日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
+    }
+
     public function test_excel_with_include_submitted_outputs_daily_rows_and_snapshot_totals_for_a_submitted_month(): void
     {
         $admin = User::factory()->create();
@@ -580,6 +655,300 @@ class AttendanceExportTest extends TestCase
         $employee = User::factory()->create();
 
         $this->actingAs($employee)->get('/api/exports/attendance.xlsx?year_month=2026-06')->assertForbidden();
+    }
+
+    public function test_global_attendance_export_scope_outputs_all_employees_when_user_id_is_omitted(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+
+        $response = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06');
+
+        $response->assertSuccessful();
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('グループ内社員', $csv);
+        $this->assertStringContainsString('グループ外社員', $csv);
+    }
+
+    public function test_group_scoped_attendance_export_outputs_only_group_members_when_user_id_is_omitted(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $response = $this->actingAs($exporter)->get('/api/exports/attendance?year_month=2026-06');
+
+        $response->assertSuccessful();
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('グループ内社員', $csv);
+        $this->assertStringNotContainsString('グループ外社員', $csv);
+    }
+
+    public function test_group_scoped_attendance_export_rejects_user_id_outside_the_permitted_group_with_403(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $this->actingAs($exporter)
+            ->get('/api/exports/attendance?year_month=2026-06&user_id[]='.$outside->id)
+            ->assertForbidden();
+        $this->actingAs($exporter)
+            ->get('/api/exports/attendance?year_month=2026-06&user_id[]='.$inside->id.'&user_id[]='.$outside->id)
+            ->assertForbidden();
+    }
+
+    public function test_group_scoped_attendance_export_outputs_explicitly_requested_group_member(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $response = $this->actingAs($exporter)->get('/api/exports/attendance?year_month=2026-06&user_id[]='.$inside->id);
+
+        $response->assertSuccessful();
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('グループ内社員', $csv);
+        $this->assertStringNotContainsString('グループ外社員', $csv);
+    }
+
+    public function test_group_scoped_excel_export_rejects_outside_user_id_and_outputs_only_group_member_when_omitted(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $this->actingAs($exporter)
+            ->get('/api/exports/attendance.xlsx?year_month=2026-06&user_id[]='.$outside->id)
+            ->assertForbidden();
+
+        $response = $this->actingAs($exporter)->get('/api/exports/attendance.xlsx?year_month=2026-06');
+
+        $response->assertSuccessful();
+        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringContainsString(
+            rawurlencode('勤怠管理表_グループ内社員_2026年06月.xlsx'),
+            $response->headers->get('Content-Disposition'),
+        );
+        $this->loadSingleSheetWorkbook($response->getContent());
+    }
+
+    public function test_group_scoped_external_publish_rejects_outside_user_id_with_403(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+
+        $this->actingAs($exporter)->postJson('/api/exports/attendance/external-publish', [
+            'year_month' => ['2026-06'],
+            'user_id' => [$outside->id],
+            'provider' => 'freee',
+        ])->assertForbidden();
+    }
+
+    public function test_group_scope_with_include_descendants_outputs_members_of_child_groups(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $exporter = $this->createGroupScopedExporter($parent, includeDescendants: true);
+
+        $response = $this->actingAs($exporter)->get('/api/exports/attendance?year_month=2026-06&user_id[]='.$inside->id);
+
+        $response->assertSuccessful();
+        $this->assertStringContainsString('グループ内社員', $response->streamedContent());
+    }
+
+    public function test_month_can_export_is_true_for_any_employee_when_export_is_global(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => 'グループ外社員']);
+        $this->createApprovedJuneMonth($employee);
+
+        $this->actingAs($admin)
+            ->getJson('/api/attendance/months/2026-06?user_id='.$employee->id)
+            ->assertOk()
+            ->assertJsonPath('can_export', true);
+    }
+
+    public function test_month_can_export_is_true_for_a_member_of_the_group_scoped_exporter(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $exporter = $this->createGroupScopedExporter($child);
+        $this->grantGlobalAttendanceRead($exporter);
+
+        $this->actingAs($exporter)
+            ->getJson('/api/attendance/months/2026-06?user_id='.$inside->id)
+            ->assertOk()
+            ->assertJsonPath('can_export', true);
+    }
+
+    public function test_month_can_export_is_false_for_an_employee_outside_the_group_scoped_exporter(): void
+    {
+        [$parent, $child] = $this->createExportGroupTree();
+        $inside = User::factory()->create(['name' => 'グループ内社員']);
+        $outside = User::factory()->create(['name' => 'グループ外社員']);
+        $this->addMembership($inside, $child);
+        $this->createApprovedJuneMonth($inside);
+        $this->createApprovedJuneMonth($outside);
+        $exporter = $this->createGroupScopedExporter($child);
+        $this->grantGlobalAttendanceRead($exporter);
+
+        $this->actingAs($exporter)
+            ->getJson('/api/attendance/months/2026-06?user_id='.$outside->id)
+            ->assertOk()
+            ->assertJsonPath('can_export', false);
+    }
+
+    public function test_month_can_export_is_false_for_own_month_without_attendance_export_permission(): void
+    {
+        $employee = User::factory()->create();
+        $this->assignRole($employee, Role::query()->create(['code' => Role::EMPLOYEE, 'name' => '一般社員']));
+        $this->createApprovedJuneMonth($employee);
+
+        $this->actingAs($employee)
+            ->getJson('/api/attendance/months/2026-06')
+            ->assertOk()
+            ->assertJsonPath('can_export', false);
+    }
+
+    /**
+     * 2026-06の承認済み月次勤怠を作る(出力対象になる)。
+     */
+    private function createApprovedJuneMonth(User $employee): void
+    {
+        AttendanceMonth::query()->create([
+            'user_id' => $employee->id,
+            'year_month' => '2026-06',
+            'status' => 'approved',
+        ]);
+    }
+
+    /**
+     * 親グループ(本社)と子グループ(支社)を作る。
+     *
+     * @return array{0: string, 1: string} 親グループID・子グループID
+     */
+    private function createExportGroupTree(): array
+    {
+        $typeId = DB::table('group_types')->insertGetId([
+            'code' => 'EXPORT_SCOPE', 'name' => '出力範囲', 'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $parent = (string) Str::uuid();
+        $child = (string) Str::uuid();
+        DB::table('groups')->insert([
+            ['id' => $parent, 'group_type_id' => $typeId, 'name' => '本社', 'code' => 'EXPORT_HQ', 'parent_group_id' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => $child, 'group_type_id' => $typeId, 'name' => '支社', 'code' => 'EXPORT_BRANCH', 'parent_group_id' => $parent, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        return [$parent, $child];
+    }
+
+    private function addMembership(User $user, string $groupId): void
+    {
+        DB::table('memberships')->insert([
+            'user_id' => $user->id, 'group_id' => $groupId, 'membership_kind' => 'member', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * attendance.exportをグループスコープ(global の割当は持たせない)だけで持つ利用者を作る。
+     * 権限の付与は既存のアクセス制御テストと同じく、テーブルへ直接用意する。
+     */
+    private function createGroupScopedExporter(string $scopeGroupId, bool $includeDescendants = false): User
+    {
+        $exporter = User::factory()->create();
+        $role = Role::query()->firstOrCreate(
+            ['code' => 'EXPORT_GROUP_TEST'],
+            ['name' => '勤怠出力(グループ)', 'status' => 'active'],
+        );
+
+        DB::table('permissions')->updateOrInsert(['code' => 'attendance.export'], [
+            'resource' => 'attendance',
+            'action' => 'export',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $permissionId = DB::table('permissions')->where('code', 'attendance.export')->value('id');
+        DB::table('permission_scope_types')->insertOrIgnore(['permission_id' => $permissionId, 'scope_type' => 'group']);
+        DB::table('permission_role')->insertOrIgnore(['permission_id' => $permissionId, 'role_id' => $role->id]);
+        DB::table('role_assignments')->insert([
+            'id' => (string) Str::uuid(),
+            'subject_type' => 'user',
+            'subject_id' => $exporter->id,
+            'role_id' => $role->id,
+            'scope_type' => 'group',
+            'scope_group_id' => $scopeGroupId,
+            'include_descendants' => $includeDescendants,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $exporter;
+    }
+
+    /**
+     * attendance.readを全社(global)で持つ別ロールの割当を追加する(他人の月次勤怠を閲覧するために必要。
+     * attendance.exportのスコープ(グループ)は変えない)。
+     */
+    private function grantGlobalAttendanceRead(User $user): void
+    {
+        $role = Role::query()->firstOrCreate(
+            ['code' => 'ATTENDANCE_READ_TEST'],
+            ['name' => '勤怠閲覧(全社・テスト)', 'status' => 'active'],
+        );
+
+        DB::table('permissions')->updateOrInsert(['code' => 'attendance.read'], [
+            'resource' => 'attendance',
+            'action' => 'read',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $permissionId = DB::table('permissions')->where('code', 'attendance.read')->value('id');
+        DB::table('permission_scope_types')->insertOrIgnore(['permission_id' => $permissionId, 'scope_type' => 'global']);
+        DB::table('permission_role')->insertOrIgnore(['permission_id' => $permissionId, 'role_id' => $role->id]);
+        DB::table('role_assignments')->insert([
+            'id' => (string) Str::uuid(),
+            'subject_type' => 'user',
+            'subject_id' => $user->id,
+            'role_id' => $role->id,
+            'scope_type' => 'global',
+            'scope_group_id' => null,
+            'include_descendants' => false,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     public function test_generic_tsv_format_uses_tab_delimiter_japanese_headers_and_colon_time(): void
@@ -808,7 +1177,7 @@ class AttendanceExportTest extends TestCase
         ];
     }
 
-    private function loadSingleSheetWorkbook(string $contents): \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet
+    private function loadSingleSheetWorkbook(string $contents): Worksheet
     {
         $tmpFile = tempnam(sys_get_temp_dir(), 'xlsx');
         file_put_contents($tmpFile, $contents);
@@ -823,8 +1192,10 @@ class AttendanceExportTest extends TestCase
 
     /**
      * 有給を申請し承認する(消化記録・残数は承認のイベントを受けて口座集約側が作る)。
+     *
+     * @return string 申請ID
      */
-    private function approvePaidLeave(User $employee, User $approver, string $date, string $leaveType): void
+    private function approvePaidLeave(User $employee, User $approver, string $date, string $leaveType): string
     {
         $this->createWorkingDayShift($employee, $date);
 
@@ -835,6 +1206,27 @@ class AttendanceExportTest extends TestCase
         ])->assertCreated()->json('id');
 
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
+
+        return $requestId;
+    }
+
+    /**
+     * 2026-06を締め済みにしてExcelを出力し、有給残日数(H10)を返す。
+     */
+    private function closedJuneExcelPaidLeaveBalance(User $employee, User $admin): mixed
+    {
+        AttendanceMonth::query()->create([
+            'user_id' => $employee->id,
+            'year_month' => '2026-06',
+            'status' => 'closed',
+            'snapshot_json' => $this->submittedSnapshot(),
+        ]);
+
+        $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06');
+
+        $response->assertSuccessful();
+
+        return $this->loadSingleSheetWorkbook($response->getContent())->getCell('H10')->getValue();
     }
 
     private function createWorkingDayShift(User $user, string $date): void

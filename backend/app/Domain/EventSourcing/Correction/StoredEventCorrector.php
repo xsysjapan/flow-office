@@ -163,7 +163,7 @@ final class StoredEventCorrector
 
         $copied = DB::table($table)->count();
         if ($copied !== count($ids)) {
-            throw new RuntimeException("バックアップの行数が一致しません(期待 ".count($ids)."件、実際 {$copied}件)。");
+            throw new RuntimeException('バックアップの行数が一致しません(期待 '.count($ids)."件、実際 {$copied}件)。");
         }
     }
 
