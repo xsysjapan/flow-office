@@ -189,12 +189,88 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
 - 理由: §18が主要導線そのもの。
 - 未確定・要確認事項: なし
 
+### 論点8: 画面が無かった期間に付与されずに残った付与予定を見つける
+- 背景: `ApplyScheduledGrants`を呼ぶのは一括付与API(`PaidLeaveScheduleController::bulkGrant`)
+  だけで、cronは付与予定を作るだけ(`routes/console.php:29-32`)。そのため画面を削除した9/19以降、
+  付与予定日を過ぎても付与されていない行が残っているおそれがある。
+- 選択肢:
+  - A. 何もしない(一覧を目で探す)。
+  - B. 「付与予定日超過(未付与)」の絞り込みを足し、付与予定画面と有給休暇画面のボタンに件数を出す。
+  - C. 超過分を自動で付与する。原則11の「AIは決めない」とは別の話だが、3段階フロー
+    (「管理者が確認の上で一括付与」、`docs/09:36-46`)に反する。
+- 決定: B。
+  - 状態の絞り込みに`overdue`(付与予定日超過・未付与)を足す。条件は`scheduled_on <= 今日`
+    (アプリのタイムゾーン)かつ、状態が`Scheduled`/`AssessmentPending`/`Eligible`/`NeedsReview`。
+    `NotEligible`は「付与しない」という判定結果なので含めない。
+  - 付与予定画面の上部: 超過が1件以上あれば警告`Alert`「付与予定日を過ぎて未付与の付与予定が
+    N件あります。」と`[表示する]`(状態を`overdue`にする)を出す。
+  - 有給休暇画面の「付与予定を確認」ボタン: 超過が1件以上あれば、件数の`Badge`(warning)を付ける。
+  - 件数は`GET /paid-leave/schedule-entries?filter=overdue`の件数を使う。件数専用のAPIは作らない。
+- 理由: 入口がボタン1つで目に付きにくく、付与漏れは社員の不利益になる。自動付与はせず、
+  確認と付与の判断は管理者に残す。
+- 未確定・要確認事項: なし
+
+### 論点9: 付与予定日より前の一括付与
+- 選択肢:
+  - A. 禁止する(業務ルールとして、行単位で失敗にする)。
+  - B. 許可する。確認ダイアログで知らせる。
+- 決定: B(2026-10-20 ユーザー確認)。
+  - 選んだ行に`scheduled_on > 今日`の行が含まれていたら、確認ダイアログに警告文を足す:
+    「付与予定日前の付与予定がN件含まれます。出勤率の判定期間にまだ経過していない日が含まれて
+    います。」
+- 理由: 付与日は付与予定日で記録されるので、基準日はずれない(`ApplyScheduledGrantsHandler.php:50-51`)。
+  前倒しの処理には運用上の必要がありうる。判定期間に未経過の日が含まれるリスクだけを知らせる。
+- 未確定・要確認事項: なし
+
+### 論点10: 付与ルール・法定付与日数を変えると、個別修正が上書きされることの通知
+- 選択肢:
+  - A. 付与予定画面の注意書きだけにする。
+  - B. 付与ルール・法定付与日数を保存する画面にも、静的な注意書きを出す。
+  - C. 保存時に、影響する修正済み行の件数を数えて確認ダイアログを出す(件数のAPIが要る)。
+- 決定: B。注意書きは「保存すると将来の付与予定が再計算され、付与予定画面で個別に修正した区分・
+  日数も上書きされます。」。出す場所は次の3つ。
+  - `PaidLeaveGrantRuleEditPage`の保存ボタン付近
+  - `PaidLeavePolicyPage`の「新しい付与ルールを作成」フォーム
+  - 法定付与日数の「新しいバージョンを作成」ダイアログ
+- 理由: 再計算の起点は付与ルールの作成・編集と、法定付与表の作成
+  (`PaidLeaveController.php:109,167,309,368`)。操作する人が、その場で影響を知れる。件数の確認は
+  個別修正の運用が増えてから検討する。
+- 未確定・要確認事項: なし
+
+### 論点11: 一括付与の権限
+- 選択肢:
+  - A. 現状の`leave.manage`のままにする(閲覧と付与が同じ権限)。
+  - B. 付与専用の権限を新設する。
+- 決定: A
+- 理由: 同じく戻せない手動付与(UC-P002)も`leave.manage`で行っていて、権限の粒度が揃う。分けるなら
+  手動付与も含めた権限設計の見直しになるので、別の変更として扱う。
+- 未確定・要確認事項: なし
+
+### 論点12: 進め方(リリースの前提と実装の分割)
+- 削除理由は不明(ユーザーにも心当たりなし、2026-10-20)。同じ日に作り直しコマンドが入っているので、
+  データ不整合の可能性は否定できない。
+- 決定
+  - リリース後の運用確認として、次を行う。
+    - 本番で`filter=overdue`と`NeedsReview`の行を確認する。
+    - 不整合が疑われる場合は`/admin/commands`の`paid-leave:schedule:rebuild`(`20260919`の変更セット、
+      完了済み)で作り直してから、一括付与する。
+  - 実装は2段階に分け、それぞれ委譲・コミットする。
+    - 段階1: 画面の復元、導線、ナビ、絞り込み、超過件数、確認ダイアログ、注意書き、e2e、docs。
+    - 段階2: 区分・日数の修正(PATCH、Aggregateの許可キーの規則、パネルのステップ4)。
+- 理由: 段階1だけで付与漏れを処理できるようになる。PATCHはAggregateの規則を変えるので、
+  分けてレビューする。
+- 未確定・要確認事項: なし
+
 ## 仕様確定事項(まとめ)
 
 ### 画面と導線(frontend)
 - `PaidLeavePolicyPage`
   - 「付与ルール」Cardの`actions`に`Button asChild variant="secondary" size="sm"`の
     `Link to="/admin/paid-leave/schedule"`「付与予定を確認」を置く。
+  - 超過(`filter=overdue`)が1件以上あれば、ボタンに件数の`Badge`(warning)を付ける。
+    アクセシブルネームは「付与予定を確認(付与予定日超過 N件)」にする。
+  - 論点10の注意書きを、「新しい付与ルールを作成」フォームと、法定付与日数の「新しいバージョンを
+    作成」ダイアログに出す。`PaidLeaveGrantRuleEditPage`の保存ボタン付近にも同じ文を出す。
   - docコメント`:837-845`を現状に合わせる。
   - リンクのテストを`PaidLeavePolicyPage.test.tsx`に戻す。
 - `App.tsx`: `RequireAdminRoute`配下に`paid-leave/schedule`→`PaidLeaveSchedulePage`を登録する。
@@ -206,7 +282,10 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
 `3a4187d^`の版を土台にする。
 - 上部
   - `← 有給休暇`リンク、`Card title="付与予定"`。
-  - 絞り込み欄1行: 状態(`NativeSelect`)、社員名(`Input`、Enter/blurで反映)、付与予定日の期間
+  - 超過が1件以上あれば、警告`Alert`「付与予定日を過ぎて未付与の付与予定がN件あります。」と
+    `[表示する]`を出す。
+  - 絞り込み欄1行: 状態(`NativeSelect`。既存の5種に「付与予定日超過(未付与)」=`overdue`を足して
+    6種)、社員名(`Input`、Enter/blurで反映)、付与予定日の期間
     (`DateRangePicker`)。
   - 絞り込みを変えたら、選択と一括付与の結果をリセットする。
 - 一覧
@@ -225,6 +304,8 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
   - タイトルは「付与予定を一括付与しますか?」。
   - 本文: 「N件(合計X日)」、付与予定日の範囲、「付与後は付与予定画面から取り消せません。
     取消は使用状況から付与ごとに行います。」
+  - 選んだ行に`scheduled_on > 今日`の行が含まれていれば、警告文「付与予定日前の付与予定がN件
+    含まれます。出勤率の判定期間にまだ経過していない日が含まれています。」を足す。
   - 確定ボタンは「一括付与する」。
   - 実行後は`BulkGrantResultSummary`(N件成功 / M件失敗と理由)を出す。
 - キャッシュ
@@ -258,6 +339,9 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
 
 ### バックエンド
 - `PaidLeaveScheduleController::index`
+  - `filter`に`overdue`を足す。条件は`scheduled_on <= today()`(アプリのタイムゾーン)かつ
+    `status in (Scheduled, AssessmentPending, Eligible, NeedsReview)`。判定は名前付きの
+    クエリスコープなど、テストで直接呼べる単位に置く。
   - 追加するパラメータ: `user_name`(string)、`scheduled_on_from`/`scheduled_on_to`(`date`)。
     `scheduled_on_to`には`after_or_equal:scheduled_on_from`をかけ、違反は422。
   - `user_name`は`whereHas('user', fn ($q) => $q->where('name', 'like', ...))`で絞り込む。
@@ -284,6 +368,8 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
   - Controller(`PaidLeaveScheduleControllerTest`)
     - index: `user_name`の部分一致(`%`を含む名前のエスケープを含む)、期間の両端、状態フィルタとの
       AND、from>toで422。
+    - `overdue`の境界: 今日の行は含む、明日の行は含まない(時刻を固定する)。Granted・Cancelled・
+      NotEligibleの行は含まない。Scheduled・AssessmentPending・Eligible・NeedsReviewの行は含む。
     - PATCH: 正常系(イベントが記録され、Projectionの`category`/`candidate_grant_days`/
       `is_manually_overridden=true`/`manual_override_reason`が更新され、`filter=changed`でヒットする)、
       理由なしで422、項目なしで422、`scheduled_on`を送っても無視されて変わらない、
@@ -297,6 +383,9 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
 - 管理画面「有給休暇」の「付与ルール」カードに「付与予定を確認」ボタンがあり、押すと
   `/admin/paid-leave/schedule`が開く。`← 有給休暇`で戻れる。付与予定画面とルール編集画面でも、
   ナビの「有給休暇」が点灯する。
+- 付与予定日を過ぎて未付与の行があると、有給休暇画面のボタンに件数が出る。付与予定画面には警告が出て、
+  「付与予定日超過(未付与)」で一覧できる。
+- 付与ルール・法定付与日数を保存する画面に、個別修正が上書きされる旨の注意書きがある。
 - 状態・社員名・付与予定日の期間で絞り込める。条件はURLに残り、再読込しても保たれる。0件のときは
   「検索条件をクリア」で戻せる。
 - 行をクリックすると詳細パネルが開き、内訳の確認・再判定・Override(理由必須)ができる。
@@ -313,8 +402,10 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
 - 管理ナビへの「付与予定」項目の追加。
 - 付与予定日の個別変更(論点3)。
 - 一覧のページング・並べ替えの変更(`scheduled_on`昇順のまま)。
-- 付与予定日より前に一括付与できてしまうこと(Handlerに日付の確認が無い)への対策。確認ダイアログに
-  付与予定日の範囲を出すだけに留める。
+- 付与予定日より前の一括付与の禁止(論点9で許可と決定。確認ダイアログで警告するだけ)。
+- 一括付与専用の権限の新設(論点11)。
+- 付与予定日を過ぎた行の自動付与(論点8)。
+- 付与ルール変更時に、影響する修正済み行の件数を数えて確認するダイアログ(論点10)。
 - 社員本人向けの「次回付与予定」表示。
 - 未使用の`PaidLeaveScheduleEntryResource`の整理。
 - `paid-leave:schedule:rebuild`など運用コマンドのUI化。
@@ -326,7 +417,8 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
     ボタンから遷移する、と書く。
   - UC-P012: `assessment_final_result`等を`paid_leave_schedule_assessments`の列として書き直す。
   - UC-P013
-    - パラメータ`filter`と、社員名・期間のパラメータ名を書く。
+    - パラメータ`filter`(`overdue`を含む)と、社員名・期間のパラメータ名を書く。
+    - 超過の件数を有給休暇画面と付与予定画面に出すことを書く。
     - 区分値を`normal`/`proportional`/`shift`/`needs_review`にする。
     - `changed`は「個別修正済み(`is_manually_overridden=true`)の行。状態を問わない」とする。
   - UC-P014(PATCH)
@@ -336,7 +428,9 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
   - UC-P015
     - `POST /paid-leave/schedule-entries/bulk-grant`(`schedule_entry_ids`)。
     - Commandは社員ごとに発行する。付与IDは`grant_id`。
-    - 実行前に確認ダイアログを出す。
+    - 実行前に確認ダイアログを出す。付与予定日前の行が含まれる場合は警告する(付与予定日前でも
+      付与はできる)。
+  - UC-P002(付与ルールの編集)・UC-P011b: 保存すると個別修正が上書きされる旨の注意書きを書く。
 - `docs/16-database-schema.md`
   - 重複している`:1255`の節を削除し、`:1053`の節に一本化する。
   - `:1069`の「管理者による手動判定上書き」を「区分・候補日数の個別修正(`ManuallyEditScheduleEntry`)」
@@ -365,8 +459,8 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
 
 ## 実装対象
 - frontend
-  - `src/pages/paidLeave/`(`PaidLeavePolicyPage`の変更、`PaidLeaveSchedulePage`の
-    page / stories / test)
+  - `src/pages/paidLeave/`(`PaidLeavePolicyPage`と`PaidLeaveGrantRuleEditPage`の変更、
+    `PaidLeaveSchedulePage`のpage / stories / test)
   - `src/components/PaidLeaveScheduleAssessmentPanel/`、`src/components/PaidLeaveScheduleBulkGrantBar/`
   - `src/components/AdminLayout/`(`adminNavGroups.ts`、`AdminLayout.tsx`とテスト)
   - `src/api/paidLeave.ts`、`src/api/types.ts`、`src/hooks/usePaidLeave.ts`、
@@ -382,6 +476,9 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
 - backend: `php artisan test --filter=PaidLeaveSchedule`と、テスト一式
 - frontend: `npx vitest run`、storybookテスト、`npx tsc --noEmit`、`npm run lint`
 - e2e: `npx playwright test e2e/scenario-15-paid-leave-schedule.spec.ts e2e/scenario-00-master-data.spec.ts`
+- リリース後の運用確認(論点12、利用者側で行う)
+  - 本番の付与予定画面で、「付与予定日超過(未付与)」と「要確認」の行を確認する。
+  - 不整合が疑われる場合は`paid-leave:schedule:rebuild`で作り直してから、一括付与する。
 
 ## レビュー履歴
 - 初版(2026-10-20)
@@ -411,6 +508,13 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
     - `changed`が新たに増えない、という表現を正確にした。
     - `multiple_of:0.5`を追加した。
     - 「変更項目なし」を、UIでは差分なし、APIではキーなし、と定義した。
+
+- 2026-10-20 委譲元から懸念点を提示し、ユーザーの指示(「適切に修正、問題は個別に確認」)で反映した。
+  - 付与漏れの可視化(論点8)。一括付与APIだけが`ApplyScheduledGrants`を呼ぶことを、委譲元がgrepで確認した。
+  - 前倒し付与は許可し、警告に留める(論点9、ユーザー確認)。
+  - ルール変更時の注意書き(論点10)。
+  - 権限は現状維持(論点11)。
+  - 削除理由は不明(ユーザー確認)。リリース後の運用確認と2段階の実装に分ける(論点12)。
 
 ## 実装結果
 未着手
