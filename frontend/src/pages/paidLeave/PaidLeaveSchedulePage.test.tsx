@@ -359,4 +359,44 @@ describe('PaidLeaveSchedulePage', () => {
     await waitFor(() => expect(screen.queryByText('勤怠データを確認')).not.toBeInTheDocument())
     expect(confirmSpy).not.toHaveBeenCalled()
   })
+
+  it('edits the category and days from the detail panel, sends a PATCH, and reloads the list', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchPaidLeaveScheduleEntry').mockResolvedValue(detail)
+    const editSpy = vi.spyOn(paidLeaveApi, 'editPaidLeaveScheduleEntry').mockResolvedValue({ ...eligibleEntry, candidate_grant_days: 12, is_manually_overridden: true })
+
+    renderPage()
+    await userEvent.click(await screen.findByText('鈴木一郎'))
+    await screen.findByText('勤怠データを確認')
+
+    const countAllFetches = () =>
+      vi.mocked(paidLeaveApi.fetchPaidLeaveScheduleEntries).mock.calls.filter(([params]) => params.filter === 'all').length
+    const fetchesBefore = countAllFetches()
+
+    await userEvent.clear(screen.getByLabelText('付与候補日数'))
+    await userEvent.type(screen.getByLabelText('付与候補日数'), '12')
+    await userEvent.type(screen.getByLabelText('修正理由'), '勤務実績に合わせて日数を補正')
+    await userEvent.click(screen.getByRole('button', { name: '区分・日数を修正する' }))
+
+    await waitFor(() =>
+      expect(editSpy).toHaveBeenCalledWith('entry-1', { candidate_grant_days: 12, reason: '勤務実績に合わせて日数を補正' }),
+    )
+    await waitFor(() => expect(countAllFetches()).toBeGreaterThan(fetchesBefore))
+  })
+
+  it('asks for confirmation before closing the detail sheet with unsaved edit input', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchPaidLeaveScheduleEntry').mockResolvedValue(detail)
+    const editSpy = vi.spyOn(paidLeaveApi, 'editPaidLeaveScheduleEntry')
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    renderPage()
+    await userEvent.click(await screen.findByText('鈴木一郎'))
+    await userEvent.type(await screen.findByLabelText('修正理由'), '記録漏れ')
+
+    await userEvent.keyboard('{Escape}')
+
+    expect(confirmSpy).toHaveBeenCalledWith('入力中の内容は破棄されます。閉じますか?')
+    expect(screen.getByText('勤怠データを確認')).toBeInTheDocument()
+    expect(currentLocation()).toContain('scheduleEntryId=entry-1')
+    expect(editSpy).not.toHaveBeenCalled()
+  })
 })

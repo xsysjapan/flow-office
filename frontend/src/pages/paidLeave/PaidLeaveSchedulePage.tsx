@@ -21,6 +21,7 @@ import type { PaidLeaveScheduleBulkGrantResponse, PaidLeaveScheduleEntry } from 
 import type { PaidLeaveScheduleEntriesParams, PaidLeaveScheduleFilter } from '../../api/paidLeave'
 import {
   useBulkGrantPaidLeaveScheduleEntries,
+  useEditPaidLeaveScheduleEntry,
   useOverridePaidLeaveScheduleAssessment,
   usePaidLeaveScheduleEntries,
   usePaidLeaveScheduleEntry,
@@ -119,6 +120,7 @@ export function PaidLeaveSchedulePage() {
 
   const reassess = useReassessPaidLeaveScheduleEntry()
   const override = useOverridePaidLeaveScheduleAssessment()
+  const edit = useEditPaidLeaveScheduleEntry()
   const bulkGrant = useBulkGrantPaidLeaveScheduleEntries()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -187,6 +189,7 @@ export function PaidLeaveSchedulePage() {
     updateParams({ scheduleEntryId: null })
     reassess.reset()
     override.reset()
+    edit.reset()
   }
 
   function toggleRow(id: string) {
@@ -398,6 +401,11 @@ export function PaidLeaveSchedulePage() {
                 }
                 overrideIsPending={override.isPending}
                 overrideError={override.error}
+                onEdit={(input, callbacks) =>
+                  edit.mutate({ scheduleEntryId: selectedEntry.id, input }, { onSuccess: callbacks.onSuccess })
+                }
+                editIsPending={edit.isPending}
+                editError={edit.error}
                 workStyleSettingsHref="/admin/work-styles"
                 onDirtyChange={setIsDetailDirty}
               />

@@ -42,6 +42,7 @@ const meta = {
   args: {
     onReassess: fn(),
     onOverride: fn(),
+    onEdit: fn(),
   },
 } satisfies Meta<typeof PaidLeaveScheduleAssessmentPanel>
 
@@ -56,6 +57,19 @@ export const NeedsReview: Story = {
   args: {
     entry: { ...baseEntry, status: 'NeedsReview', category: 'needs_review', assessments: [] },
     workStyleSettingsHref: '/admin/work-styles',
+  },
+}
+
+/** 区分・候補日数を修正済みの行。修正理由を「修正理由: …」として表示する。 */
+export const Edited: Story = {
+  args: {
+    entry: {
+      ...baseEntry,
+      category: 'proportional',
+      candidate_grant_days: 7,
+      is_manually_overridden: true,
+      manual_override_reason: '社員の勤務形態変更に合わせて区分を比例に修正',
+    },
   },
 }
 

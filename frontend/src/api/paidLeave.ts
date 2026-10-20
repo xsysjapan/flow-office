@@ -198,6 +198,24 @@ export function overridePaidLeaveScheduleAssessment(
   }).then((res) => res.data)
 }
 
+/** 付与予定の区分・候補日数の個別修正の入力(spec.md論点3)。変更した項目だけを送る。 */
+export interface EditPaidLeaveScheduleEntryInput {
+  category?: 'normal' | 'proportional' | 'shift'
+  candidate_grant_days?: number
+  reason: string
+}
+
+/** 付与予定の区分・候補日数を理由付きで修正する(UC-P014後半、spec.md論点3)。付与予定日は変更しない。 */
+export function editPaidLeaveScheduleEntry(
+  scheduleEntryId: string,
+  input: EditPaidLeaveScheduleEntryInput,
+): Promise<PaidLeaveScheduleEntry> {
+  return apiFetch<{ data: PaidLeaveScheduleEntry }>(`/paid-leave/schedule-entries/${scheduleEntryId}`, {
+    method: 'PATCH',
+    body: input,
+  }).then((res) => res.data)
+}
+
 /** 選択したEligibleエントリを一括付与する(spec.md論点15-6、既存ManualGrantCardのResultSummaryパターンを踏襲)。 */
 export function bulkGrantPaidLeaveScheduleEntries(scheduleEntryIds: string[]): Promise<PaidLeaveScheduleBulkGrantResponse> {
   return apiFetch('/paid-leave/schedule-entries/bulk-grant', {

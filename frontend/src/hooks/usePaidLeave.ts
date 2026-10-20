@@ -8,6 +8,7 @@ import {
   createPaidLeaveProportionalGrantPolicyVersion,
   createPaidLeaveRequest,
   deletePaidLeaveGrantRule,
+  editPaidLeaveScheduleEntry,
   fetchMyPaidLeaveGrants,
   fetchMyPaidLeaveHistory,
   fetchMyPaidLeaveRequests,
@@ -26,6 +27,7 @@ import {
   updatePaidLeaveGrantRule,
   type CreatePaidLeaveGrantRuleInput,
   type CreatePaidLeaveRequestInput,
+  type EditPaidLeaveScheduleEntryInput,
   type GrantPaidLeaveInput,
   type OverridePaidLeaveScheduleAssessmentInput,
   type PaidLeaveScheduleEntriesParams,
@@ -283,6 +285,26 @@ export function useOverridePaidLeaveScheduleAssessment() {
       input: OverridePaidLeaveScheduleAssessmentInput
     }) => overridePaidLeaveScheduleAssessment(scheduleEntryId, input),
     onSuccess: (data) => invalidate(data.id),
+  })
+}
+
+/**
+ * 付与予定の区分・候補日数の個別修正(spec.md論点3、UC-P014後半)。修正は一覧の「変更あり」と詳細に
+ * 反映されるため、一覧と詳細を無効化する。無効化を待ってから完了を返す(完了時点で画面が新しい内容になるよう、
+ * 呼び出し側の成功後処理で未保存フラグを正しく解除するため)。
+ */
+export function useEditPaidLeaveScheduleEntry() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ scheduleEntryId, input }: { scheduleEntryId: string; input: EditPaidLeaveScheduleEntryInput }) =>
+      editPaidLeaveScheduleEntry(scheduleEntryId, input),
+    onSuccess: async (data) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['paid-leave', 'schedule-entries'] }),
+        queryClient.invalidateQueries({ queryKey: scheduleEntryKey(data.id) }),
+      ])
+    },
   })
 }
 
