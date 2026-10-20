@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -61,5 +63,26 @@ class PaidLeaveScheduleEntry extends Model
     public function assessments(): HasMany
     {
         return $this->hasMany(PaidLeaveScheduleAssessment::class, 'schedule_entry_id')->orderBy('created_at');
+    }
+
+    /**
+     * 付与予定日超過(未付与)の付与予定(spec.md 論点8)。`scheduled_on`が`$today`以前で、
+     * まだ付与・取消されておらず付与しないとも判定されていない状態
+     * (Scheduled/AssessmentPending/Eligible/NeedsReview)を対象とする。NotEligibleは
+     * 「付与しない」という判定結果なので含めない。
+     *
+     * `scheduled_on`は`date`キャストだがsqliteでは日時文字列で保存されうるため、
+     * 日付部分だけを`whereDate`で比べる。
+     */
+    public function scopeOverdue(Builder $query, CarbonInterface $today): void
+    {
+        $query
+            ->whereDate('scheduled_on', '<=', $today->toDateString())
+            ->whereIn('status', [
+                self::STATUS_SCHEDULED,
+                self::STATUS_ASSESSMENT_PENDING,
+                self::STATUS_ELIGIBLE,
+                self::STATUS_NEEDS_REVIEW,
+            ]);
     }
 }

@@ -41,9 +41,14 @@ class PaidLeaveScheduleController extends Controller
 
     private const FILTER_CHANGED = 'changed';
 
+    private const FILTER_OVERDUE = 'overdue';
+
     /**
-     * 付与予定一覧(依頼書§39・spec.md論点12)。5フィルタ:
-     * すべて/付与対象(eligible)/対象外(not_eligible)/要確認(needs_review)/変更あり(changed)。
+     * 付与予定一覧(依頼書§39・spec.md論点12)。フィルタ:
+     * すべて/付与対象(eligible)/対象外(not_eligible)/要確認(needs_review)/変更あり(changed)/
+     * 付与予定日超過・未付与(overdue、spec.md論点8)。
+     * 社員名(user_name、部分一致)・付与予定日の期間(scheduled_on_from/to、両端含む)は
+     * 状態フィルタとANDで組み合わせる(spec.md論点4)。
      *
      * 「変更あり」の定義について: `PaidLeaveScheduleAggregate::recalculateFutureSchedule()`は
      * 個別修正済み(`is_manually_overridden=true`)エントリを再計算対象から除外して保護するが
@@ -60,12 +65,31 @@ class PaidLeaveScheduleController extends Controller
         operationId: 'paidLeave.schedule.index',
         summary: '有給付与予定Scheduleエントリ一覧を取得する',
         tags: ['有給休暇付与予定'],
-        parameters: [new OA\Parameter(name: 'filter', in: 'query', schema: new OA\Schema(type: 'string', enum: ['all', 'eligible', 'not_eligible', 'needs_review', 'changed']))],
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden')],
+        parameters: [
+            new OA\Parameter(name: 'filter', in: 'query', schema: new OA\Schema(type: 'string', enum: ['all', 'eligible', 'not_eligible', 'needs_review', 'changed', 'overdue'])),
+            new OA\Parameter(name: 'user_name', in: 'query', schema: new OA\Schema(type: 'string', maxLength: 200), description: '社員名の部分一致'),
+            new OA\Parameter(name: 'scheduled_on_from', in: 'query', schema: new OA\Schema(type: 'string', format: 'date'), description: '付与予定日の開始日(含む)'),
+            new OA\Parameter(name: 'scheduled_on_to', in: 'query', schema: new OA\Schema(type: 'string', format: 'date'), description: '付与予定日の終了日(含む)。scheduled_on_from以上'),
+        ],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function index(Request $request): JsonResponse
     {
-        $filter = $request->query('filter', self::FILTER_ALL);
+        $data = $request->validate([
+            'filter' => ['nullable', Rule::in([
+                self::FILTER_ALL,
+                self::FILTER_ELIGIBLE,
+                self::FILTER_NOT_ELIGIBLE,
+                self::FILTER_NEEDS_REVIEW,
+                self::FILTER_CHANGED,
+                self::FILTER_OVERDUE,
+            ])],
+            'user_name' => ['nullable', 'string', 'max:200'],
+            'scheduled_on_from' => ['nullable', 'date'],
+            'scheduled_on_to' => ['nullable', 'date', 'after_or_equal:scheduled_on_from'],
+        ]);
+
+        $filter = $data['filter'] ?? self::FILTER_ALL;
 
         $query = PaidLeaveScheduleEntry::query()->with('user', 'assessments')->orderBy('scheduled_on');
 
@@ -74,8 +98,33 @@ class PaidLeaveScheduleController extends Controller
             self::FILTER_NOT_ELIGIBLE => $query->where('status', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
             self::FILTER_NEEDS_REVIEW => $query->where('status', PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW),
             self::FILTER_CHANGED => $query->where('is_manually_overridden', true),
+            self::FILTER_OVERDUE => $query->overdue(Carbon::today()),
             default => null,
         };
+
+        $query
+            // LIKEのワイルドカード(`%`・`_`)と、エスケープ文字自身(`\`)を文字どおりに扱う。
+            // sqliteはLIKEにデフォルトのエスケープ文字が無いため`ESCAPE`句を明示する
+            // (MySQLでも同じ書き方で動く)。Laravelの`whereLike`は値をエスケープしないため使わない。
+            ->when($data['user_name'] ?? null, fn ($query, $name) => $query->whereHas(
+                'user',
+                fn ($userQuery) => $userQuery->whereRaw(
+                    'users.name LIKE ? ESCAPE ?',
+                    ['%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $name).'%', '\\'],
+                ),
+            ))
+            // scheduled_onは`date`キャストだが、sqlite上は日付部分だけを保証しない
+            // 生文字列(datetime相当)で保存されうるため、日付部分だけを`whereDate`で比較する
+            // (素の文字列比較では期間の開始日=終了日の境界値が一致しなくなる。E2E
+            // `scenario-15-paid-leave-schedule.spec.ts`で発見)。
+            ->when(
+                $data['scheduled_on_from'] ?? null,
+                fn ($query, $from) => $query->whereDate('scheduled_on', '>=', $from),
+            )
+            ->when(
+                $data['scheduled_on_to'] ?? null,
+                fn ($query, $to) => $query->whereDate('scheduled_on', '<=', $to),
+            );
 
         return response()->json([
             'data' => $query->get()->map(fn (PaidLeaveScheduleEntry $entry) => $this->summarize($entry)),
