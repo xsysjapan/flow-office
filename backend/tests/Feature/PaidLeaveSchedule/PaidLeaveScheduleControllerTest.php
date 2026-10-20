@@ -14,6 +14,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -247,6 +248,141 @@ class PaidLeaveScheduleControllerTest extends TestCase
             PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE,
             PaidLeaveScheduleEntry::query()->findOrFail($notEligibleEntryId)->status,
         );
+    }
+
+    public function test_admin_can_patch_category_and_candidate_grant_days(): void
+    {
+        $admin = $this->admin();
+        $user = User::factory()->create();
+        $entryId = (string) Str::uuid();
+        $this->createEntry($user->id, $entryId);
+
+        $response = $this->actingAs($admin)->patchJson("/api/paid-leave/schedule-entries/{$entryId}", [
+            'category' => 'proportional',
+            'candidate_grant_days' => 7.5,
+            'reason' => '勤務形態変更に伴う個別調整',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('proportional', $response->json('data.category'));
+        $this->assertSame(7.5, $response->json('data.candidate_grant_days'));
+        $this->assertTrue($response->json('data.is_manually_overridden'));
+
+        $entry = PaidLeaveScheduleEntry::query()->findOrFail($entryId);
+        $this->assertSame('proportional', $entry->category);
+        $this->assertSame(7.5, $entry->candidate_grant_days);
+        $this->assertTrue($entry->is_manually_overridden);
+        $this->assertSame('勤務形態変更に伴う個別調整', $entry->manual_override_reason);
+
+        $recorded = DB::table('stored_events')
+            ->where('event_class', 'paid_leave_schedule.entry_manually_edited')
+            ->get();
+        $this->assertCount(1, $recorded);
+        $this->assertSame(
+            ['category' => 'proportional', 'candidateGrantDays' => 7.5],
+            json_decode((string) $recorded->first()->event_properties, true)['changes'],
+        );
+
+        $this->assertSame([$entryId], $this->listedEntryIds($admin, ['filter' => 'changed']));
+    }
+
+    public function test_patch_rejects_invalid_input_without_recording_events(): void
+    {
+        $admin = $this->admin();
+        $user = User::factory()->create();
+        $entryId = (string) Str::uuid();
+        $this->createEntry($user->id, $entryId);
+        $url = "/api/paid-leave/schedule-entries/{$entryId}";
+
+        $missingReason = $this->actingAs($admin)->patchJson($url, [
+            'category' => 'proportional',
+        ]);
+        $missingReason->assertUnprocessable();
+        $missingReason->assertJsonValidationErrors(['reason']);
+
+        $missingEditableFields = $this->actingAs($admin)->patchJson($url, [
+            'reason' => '項目なし',
+        ]);
+        $missingEditableFields->assertUnprocessable();
+        $missingEditableFields->assertJsonValidationErrors(['category', 'candidate_grant_days']);
+
+        $tooSmallDays = $this->actingAs($admin)->patchJson($url, [
+            'candidate_grant_days' => 0.3,
+            'reason' => '刻み違反',
+        ]);
+        $tooSmallDays->assertUnprocessable();
+        $tooSmallDays->assertJsonValidationErrors(['candidate_grant_days']);
+
+        $unknownCategory = $this->actingAs($admin)->patchJson($url, [
+            'category' => 'needs_review',
+            'reason' => '区分違反',
+        ]);
+        $unknownCategory->assertUnprocessable();
+        $unknownCategory->assertJsonValidationErrors(['category']);
+
+        $this->assertSame(0, DB::table('stored_events')->where('event_class', 'paid_leave_schedule.entry_manually_edited')->count());
+        $this->assertFalse(PaidLeaveScheduleEntry::query()->findOrFail($entryId)->is_manually_overridden);
+    }
+
+    public function test_patch_ignores_scheduled_on(): void
+    {
+        $admin = $this->admin();
+        $user = User::factory()->create();
+        $entryId = (string) Str::uuid();
+        $this->createEntry($user->id, $entryId, '2026-10-01');
+
+        $response = $this->actingAs($admin)->patchJson("/api/paid-leave/schedule-entries/{$entryId}", [
+            'scheduled_on' => '2026-10-05',
+            'candidate_grant_days' => 8,
+            'reason' => '付与予定日は変更しない',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('2026-10-01', $response->json('data.scheduled_on'));
+        $this->assertSame(8.0, (float) $response->json('data.candidate_grant_days'));
+
+        $entry = PaidLeaveScheduleEntry::query()->findOrFail($entryId);
+        $this->assertSame('2026-10-01', $entry->scheduled_on->toDateString());
+        $this->assertSame(8.0, $entry->candidate_grant_days);
+    }
+
+    public function test_patch_on_granted_entry_is_rejected(): void
+    {
+        $admin = $this->admin();
+        $user = User::factory()->create();
+        $entryId = (string) Str::uuid();
+        $this->createEntry($user->id, $entryId);
+        $this->assessEntry($user->id, $entryId, PaidLeaveScheduleAggregate::STATUS_ELIGIBLE);
+
+        $this->bus()->dispatch(new ApplyScheduledGrants(
+            userId: $user->id,
+            scheduleEntryIds: [$entryId],
+            operatorUserId: $admin->id,
+        ));
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_GRANTED, PaidLeaveScheduleEntry::query()->findOrFail($entryId)->status);
+
+        $response = $this->actingAs($admin)->patchJson("/api/paid-leave/schedule-entries/{$entryId}", [
+            'candidate_grant_days' => 9,
+            'reason' => '付与後の修正',
+        ]);
+
+        $response->assertUnprocessable();
+        $entry = PaidLeaveScheduleEntry::query()->findOrFail($entryId);
+        $this->assertSame(10.0, $entry->candidate_grant_days);
+        $this->assertFalse($entry->is_manually_overridden);
+    }
+
+    public function test_employee_cannot_patch_schedule_entry(): void
+    {
+        $employee = User::factory()->create();
+        $user = User::factory()->create();
+        $entryId = (string) Str::uuid();
+        $this->createEntry($user->id, $entryId);
+
+        $this->actingAs($employee)->patchJson("/api/paid-leave/schedule-entries/{$entryId}", [
+            'candidate_grant_days' => 9,
+            'reason' => '権限なし',
+        ])->assertForbidden();
     }
 
     protected function tearDown(): void

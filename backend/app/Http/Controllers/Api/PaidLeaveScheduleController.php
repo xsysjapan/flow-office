@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
+use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\OverrideScheduleAssessment;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
 use App\Domain\PaidLeaveSchedule\Support\AttendanceRateAssessor;
@@ -255,6 +256,57 @@ class PaidLeaveScheduleController extends Controller
             userId: $scheduleEntry->user_id,
             scheduleEntryId: $scheduleEntry->id,
             finalResult: $data['final_result'],
+            reason: $data['reason'],
+            operatorUserId: $request->user()->id,
+        ));
+
+        return response()->json(['data' => $this->summarize($scheduleEntry->refresh()->load('user', 'assessments'))]);
+    }
+
+    /**
+     * 区分・候補付与日数の個別修正(UC-P014後半、spec.md論点3)。付与予定日は変更対象にせず、
+     * 送られても無視する。理由は必須。送られたキーだけを`ManuallyEditScheduleEntry`の`changes`に入れる。
+     * 確定・取消済みの行は集約の`DomainRuleException`で422になる。
+     */
+    #[OA\Patch(
+        path: '/paid-leave/schedule-entries/{scheduleEntry}',
+        operationId: 'paidLeave.schedule.update',
+        summary: '付与予定の区分・候補付与日数を個別修正する',
+        tags: ['有給休暇付与予定'],
+        parameters: [new OA\Parameter(name: 'scheduleEntry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [
+            new OA\Property(property: 'category', type: 'string', enum: ['normal', 'proportional', 'shift'], nullable: true, description: '区分。candidate_grant_daysと少なくとも一方が必須'),
+            new OA\Property(property: 'candidate_grant_days', type: 'number', format: 'float', minimum: 0.5, nullable: true, description: '候補付与日数(0.5日単位)。categoryと少なくとも一方が必須'),
+            new OA\Property(property: 'reason', type: 'string', maxLength: 1000),
+        ])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function update(Request $request, PaidLeaveScheduleEntry $scheduleEntry, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'category' => ['nullable', 'required_without:candidate_grant_days', Rule::in([
+                'normal',
+                'proportional',
+                'shift',
+            ])],
+            'candidate_grant_days' => ['nullable', 'required_without:category', 'numeric', 'min:0.5', 'multiple_of:0.5'],
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $changes = [];
+        if (isset($data['category'])) {
+            $changes['category'] = $data['category'];
+        }
+        if (isset($data['candidate_grant_days'])) {
+            $changes['candidateGrantDays'] = (float) $data['candidate_grant_days'];
+        }
+
+        $scheduleEntry->loadMissing('user');
+
+        $commandBus->dispatch(new ManuallyEditScheduleEntry(
+            userId: $scheduleEntry->user_id,
+            scheduleEntryId: $scheduleEntry->id,
+            changes: $changes,
             reason: $data['reason'],
             operatorUserId: $request->user()->id,
         ));

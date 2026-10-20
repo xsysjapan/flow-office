@@ -7,7 +7,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class PaidLeaveScheduleEntryManuallyEdited extends ShouldBeStored
 {
     /**
-     * @param  array{scheduledOn?: string, category?: string, candidateGrantDays?: float}  $changes
+     * @param  array{category?: string, candidateGrantDays?: float}  $changes
      */
     public function __construct(
         public readonly string $scheduleEntryId,

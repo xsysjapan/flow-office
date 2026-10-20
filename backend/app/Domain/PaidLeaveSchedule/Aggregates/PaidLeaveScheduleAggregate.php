@@ -46,6 +46,12 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     private const FINALIZED_STATUSES = [self::STATUS_GRANTED, self::STATUS_CANCELLED];
 
+    /**
+     * 個別修正(manuallyEditScheduleEntry)で変更してよいキー。付与予定日(scheduledOn)や
+     * status等を混入させると、集約の状態とProjectionが食い違うため制限する。
+     */
+    private const MANUALLY_EDITABLE_KEYS = ['category', 'candidateGrantDays'];
+
     /** @var array<string, EntryState> */
     private array $entries = [];
 
@@ -224,8 +230,10 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     /**
      * Scheduleエントリの個別修正。修正後は`recalculateFutureSchedule`の対象から除外される。
+     * 個別修正できる項目は区分(category)と候補付与日数(candidateGrantDays)のみ。付与予定日は
+     * 変更対象にしない(docs/changesets/20261020-paid-leave-schedule-page-restore/spec.md 論点3)。
      *
-     * @param  array{scheduledOn?: string, category?: string, candidateGrantDays?: float}  $changes
+     * @param  array{category?: string, candidateGrantDays?: float}  $changes
      */
     public function manuallyEditScheduleEntry(
         string $scheduleEntryId,
@@ -234,6 +242,15 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         string $operatorUserId,
     ): self {
         $entry = $this->requireEntry($scheduleEntryId);
+
+        if ($changes === []) {
+            throw new DomainRuleException('個別修正する項目がありません。');
+        }
+
+        $disallowedKeys = array_diff(array_keys($changes), self::MANUALLY_EDITABLE_KEYS);
+        if ($disallowedKeys !== []) {
+            throw new DomainRuleException('個別修正できる項目は区分・候補付与日数のみです。');
+        }
 
         if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
             throw new DomainRuleException("Scheduleエントリ [{$scheduleEntryId}] は確定済み・取消済みのため編集できません。");

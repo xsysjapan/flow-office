@@ -402,6 +402,46 @@ class PaidLeaveScheduleAggregateTest extends TestCase
             });
     }
 
+    public function test_manual_edit_with_disallowed_key_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->manuallyEditScheduleEntry('e1', ['scheduledOn' => '2025-10-02'], '日付を動かす', 'admin-1');
+            });
+    }
+
+    public function test_manual_edit_with_empty_changes_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->manuallyEditScheduleEntry('e1', [], '空の修正', 'admin-1');
+            });
+    }
+
+    public function test_manual_edit_on_granted_entry_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->manuallyEditScheduleEntry('e1', ['candidateGrantDays' => 9.0], '付与後の修正', 'admin-1');
+            });
+    }
+
     // ---- 付与(ApplyScheduledGrants経由) ----
 
     public function test_grant_entry_transitions_eligible_to_granted(): void

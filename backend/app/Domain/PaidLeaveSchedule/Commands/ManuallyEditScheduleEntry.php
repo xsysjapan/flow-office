@@ -11,7 +11,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class ManuallyEditScheduleEntry implements Command
 {
     /**
-     * @param  array{scheduledOn?: string, category?: string, candidateGrantDays?: float}  $changes
+     * @param  array{category?: string, candidateGrantDays?: float}  $changes
      */
     public function __construct(
         public readonly string $userId,
