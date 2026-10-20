@@ -82,22 +82,40 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     await loginAs(page, SCENARIO_USERS.hrStaff)
     await page.goto(`/admin/paid-leave/schedule?user_name=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`)
 
-    await page.getByRole('row', { name: new RegExp(`${REGULAR_EMPLOYEE_NAME}の付与予定詳細を開く`) }).first().click()
+    const row = page.getByRole('row', { name: new RegExp(`${REGULAR_EMPLOYEE_NAME}の付与予定詳細を開く`) }).first()
+    await row.click()
 
-    await expect(page.getByText('勤怠データを確認')).toBeVisible()
-    await page.getByRole('button', { name: '再判定する' }).click()
-    await expect(page.getByText('再判定に失敗しました。')).toHaveCount(0)
+    const sheet = page.getByRole('dialog')
+    await expect(sheet.getByText('勤怠データを確認')).toBeVisible()
 
-    await page.getByLabel('上書き後の判定').selectOption('Eligible')
-    await page.getByLabel('上書き理由').fill('E2Eで出勤簿の記録漏れを確認したため')
-    await page.getByRole('button', { name: '判定結果を上書きする' }).click()
+    // 再判定・上書きはAPIの完了を待ってから次の操作に進む(完了前に閉じると未保存扱いで確認ダイアログが出る)。
+    await Promise.all([
+      page.waitForResponse(
+        (response) => /\/paid-leave\/schedule-entries\/[^/]+\/reassess$/.test(response.url()) && response.request().method() === 'POST' && response.ok(),
+      ),
+      sheet.getByRole('button', { name: '再判定する' }).click(),
+    ])
+    await expect(sheet.getByText('再判定に失敗しました。')).toHaveCount(0)
 
-    // 上書き後は保存済みとして扱い、確認なしで閉じられる。一覧には「変更あり」が付く。
+    await sheet.getByLabel('上書き後の判定').selectOption('Eligible')
+    await sheet.getByLabel('上書き理由').fill('E2Eで出勤簿の記録漏れを確認したため')
+    await Promise.all([
+      page.waitForResponse(
+        (response) => /\/paid-leave\/schedule-entries\/[^/]+\/override$/.test(response.url()) && response.request().method() === 'POST' && response.ok(),
+      ),
+      sheet.getByRole('button', { name: '判定結果を上書きする' }).click(),
+    ])
+    // 上書き後はパネル見出しの判定状態が「付与対象」に変わり、保存済みとして扱われて確認なしで閉じられる。
+    // (「自動判定」欄にも同じ語が出得るため、見出しのバッジ=先頭の一致を見る)
+    await expect(sheet.getByText('付与対象', { exact: true }).first()).toBeVisible()
     await page.keyboard.press('Escape')
-    await expect(page.getByText('勤怠データを確認')).toHaveCount(0)
-    await expect(page.getByRole('status', { name: '変更あり' }).first()).toBeVisible()
+    await expect(sheet.getByText('勤怠データを確認')).toHaveCount(0)
+
+    // 判定結果の上書きは「変更あり」(is_manually_overridden)を立てない。一覧の該当行の判定状態が「付与対象」になる。
+    await expect(row.getByText('付与対象', { exact: true })).toBeVisible()
   })
 
+  // 直前の「判定結果を上書きできる」テストで対象社員の先頭行をEligibleにしていることに依存する(serial実行)。
   test('付与対象の行を選び、確認ダイアログを経て一括付与できる', async ({ page }) => {
     await loginAs(page, SCENARIO_USERS.hrStaff)
     await page.goto(`/admin/paid-leave/schedule?filter=eligible&user_name=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`)

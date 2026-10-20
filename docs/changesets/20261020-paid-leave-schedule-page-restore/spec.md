@@ -511,7 +511,7 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
 
 ## 検証方法
 - backend: `php artisan test --filter=PaidLeaveSchedule`と、テスト一式
-- frontend: `npx vitest run`、storybookテスト、`npx tsc --noEmit`、`npm run lint`
+- frontend: `npx vitest run --project=unit`、`npx vitest run --project=storybook`、`npx tsc -p tsconfig.app.json --noEmit`(ルートの`tsconfig.json`は`files: []`の参照だけで、`npx tsc --noEmit`では何も検査されない)、`npm run lint`
 - e2e: `npx playwright test e2e/scenario-15-paid-leave-schedule.spec.ts e2e/scenario-00-master-data.spec.ts`
 - リリース後の運用確認(論点12、利用者側で行う)
   - 本番の付与予定画面で、「付与予定日超過(未付与)」と「要確認」の行を確認する。
