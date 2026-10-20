@@ -12,7 +12,7 @@ import { apiFetch } from './support/api'
  * 付与予定画面(`/admin/paid-leave/schedule`)へ進み、絞り込み(URLに残る)・詳細パネルの
  * 再判定と判定結果の上書き・確認ダイアログを経た一括付与、を画面操作で確認する。
  *
- * 区分・日数の個別修正(§18の手順8)は後続の段階2で追加するため、ここでは扱わない。
+ * 区分・日数の個別修正(§18の手順8)は詳細パネルの「4. 区分・日数を修正」で確認する。
  * 部分失敗(対象外の行を含む一括付与)は画面では対象外の行を選べないためAPIで確認する。
  * 付与予定日超過(overdue)の件数は、データの有無で分岐して確認する(超過データを
  * E2Eの中で作る手段が無いため。超過が無い環境では警告が出ないことを確認する)。
@@ -28,7 +28,9 @@ interface ScheduleEntryRow {
   id: string
   user_name: string | null
   scheduled_on: string
+  category: string
   status: string
+  is_manually_overridden: boolean
 }
 
 interface ScheduleEntryList {
@@ -132,6 +134,88 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     await dialog.getByRole('button', { name: '一括付与する' }).click()
 
     await expect(page.getByText(/\d+件成功 \/ \d+件失敗/)).toBeVisible()
+  })
+
+  // 直前の一括付与テストで対象社員の行が付与済み(Granted)になっているため、対象社員を限定せず探す。
+  // 一括付与テストの対象社員(REGULAR_EMPLOYEE_NAME)以外を優先する。区分だけを変えるので判定状態は変わらない。
+  test('詳細パネルの「4. 区分・日数を修正」で区分を変えて保存すると「変更あり」になり、変更ありの絞り込みに出る', async ({ page }) => {
+    await loginAs(page, SCENARIO_USERS.hrStaff)
+
+    const entries = await apiFetch<ScheduleEntryList>(page, '/paid-leave/schedule-entries')
+    const editable = entries.data.filter(
+      (entry) => entry.user_name !== null && entry.status !== 'Granted' && entry.status !== 'Cancelled' && !entry.is_manually_overridden,
+    )
+    const target =
+      editable.find((entry) => entry.user_name === SCENARIO_USERS.monthlyEmployee) ??
+      editable.find((entry) => entry.user_name !== REGULAR_EMPLOYEE_NAME) ??
+      editable[0]
+    if (!target?.user_name) throw new Error('E2E setup: 修正できる付与予定が見つからない')
+    const targetUserName = target.user_name
+    const nextCategory = target.category === 'normal' ? 'proportional' : 'normal'
+
+    await page.goto(`/admin/paid-leave/schedule?user_name=${encodeURIComponent(targetUserName)}`)
+    const row = page
+      .getByRole('row', { name: new RegExp(`${targetUserName}の付与予定詳細を開く`) })
+      .filter({ hasText: target.scheduled_on })
+      .first()
+    await row.click()
+
+    const sheet = page.getByRole('dialog')
+    await expect(sheet.getByText('勤怠データを確認')).toBeVisible()
+    await expect(sheet.getByRole('heading', { name: /区分・日数を修正/ })).toBeVisible()
+
+    // 修正理由が空のままでは保存できない(APIは呼ばれず、理由の入力を促す)。
+    await sheet.getByLabel('区分', { exact: true }).selectOption(nextCategory)
+    await sheet.getByRole('button', { name: '区分・日数を修正する' }).click()
+    await expect(sheet.getByText('修正理由を入力してください。')).toBeVisible()
+
+    await sheet.getByLabel('修正理由', { exact: true }).fill('E2Eで区分の誤りを修正')
+    // 修正は保存完了(PATCHの2xx)を待ってから次の操作に進む。完了前に閉じると未保存扱いで確認ダイアログが出る。
+    await Promise.all([
+      page.waitForResponse(
+        (response) => /\/paid-leave\/schedule-entries\/[^/?]+$/.test(response.url()) && response.request().method() === 'PATCH' && response.ok(),
+      ),
+      sheet.getByRole('button', { name: '区分・日数を修正する' }).click(),
+    ])
+    await expect(sheet.getByText('修正理由: E2Eで区分の誤りを修正')).toBeVisible()
+
+    // 保存済みとして扱われるので、確認なしで閉じられる。
+    await page.keyboard.press('Escape')
+    await expect(sheet.getByText('勤怠データを確認')).toHaveCount(0)
+
+    await expect(row.getByText('変更あり')).toBeVisible()
+
+    await page.getByLabel('状態').selectOption('changed')
+    await expect(page).toHaveURL(/filter=changed/)
+    await expect(
+      page
+        .getByRole('row', { name: new RegExp(`${targetUserName}の付与予定詳細を開く`) })
+        .filter({ hasText: target.scheduled_on })
+        .first(),
+    ).toBeVisible()
+  })
+
+  test('付与済みの行の詳細パネルには「4. 区分・日数を修正」が出ない', async ({ page }) => {
+    await loginAs(page, SCENARIO_USERS.hrStaff)
+
+    const entries = await apiFetch<ScheduleEntryList>(
+      page,
+      `/paid-leave/schedule-entries?user_name=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`,
+    )
+    const granted = entries.data.find((entry) => entry.status === 'Granted')
+    if (!granted) throw new Error('E2E setup: 付与済みの付与予定が見つからない')
+
+    await page.goto(`/admin/paid-leave/schedule?user_name=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`)
+    await page
+      .getByRole('row', { name: new RegExp(`${REGULAR_EMPLOYEE_NAME}の付与予定詳細を開く`) })
+      .filter({ hasText: granted.scheduled_on })
+      .first()
+      .click()
+
+    const sheet = page.getByRole('dialog')
+    await expect(sheet.getByText('勤怠データを確認')).toBeVisible()
+    await expect(sheet.getByRole('heading', { name: /区分・日数を修正/ })).toHaveCount(0)
+    await expect(sheet.getByRole('button', { name: '区分・日数を修正する' })).toHaveCount(0)
   })
 
   test('一部失敗のケースはAPIで確認し、行ごとの失敗理由が返る', async ({ page }) => {

@@ -1,6 +1,6 @@
 # 有給休暇の付与予定画面の復元
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 以前に実装として有給の付与計画を一覧で見られる機能があったと思うのですが、現状では見られません。
@@ -568,4 +568,50 @@ cronが作る付与予定を人事が事前に確認できず、UC-P013〜P015(`
     理由を直した。
 
 ## 実装結果
-未着手
+### コミット(ブランチ `docs/paid-leave-schedule-investigation`)
+- `61b4d62` 仕様書(docs/09・16・17・scenario-tests §18)を現行実装と本変更の決定に合わせた
+- `b22863e` 段階1 backend: 一覧APIに`user_name`・`scheduled_on_from`/`to`・`filter=overdue`
+  (`PaidLeaveScheduleEntry::scopeOverdue`)を追加
+- `18c525b` 段階1 frontend: 付与予定画面を復元し、有給休暇画面の「付与予定を確認」(超過件数バッジ)、
+  ナビの前方一致(`matchPrefix`)、絞り込み欄、超過の警告、一括付与の確認ダイアログ、未保存の確認、
+  e2eの`scenario-15`を追加。`scenario-00`の到達確認も戻した
+- `6ddbaac` e2eで上書きAPIの完了を待つように直した
+- `3e63792` 段階2 backend: `PATCH /paid-leave/schedule-entries/{scheduleEntry}`を追加。Aggregateで
+  修正できるキーを`category`/`candidateGrantDays`に制限。シナリオテストを追加
+- `edfc913` 段階2 frontend: 詳細パネルに「4. 区分・日数を修正」を追加
+- (本コミット) e2eで修正の対象行の選び方を直し、変更セットを完了にした
+
+### 実装時の判断(specに追記した分を除く)
+- 詳細パネルの見出し部にあった「上書き理由」の表示を、ステップ4の「修正理由: …」にまとめた。
+  `manual_override_reason`は個別修正でのみ記録され、判定結果の上書きでは記録されないため。
+- 付与候補日数を空にしたときは送信不可とし、「付与候補日数を入力してください。」を出す。
+- `docs/16`に`paid_leave_schedule_assessments`の節を新設した(重複節の削除で失われる列情報の受け皿)。
+
+### 検証結果(委譲元で実行)
+- backend
+  - `php artisan test --filter=PaidLeaveSchedule`: 134件PASS
+  - `php artisan test`(全件): 1件失敗(`ReadModelFingerprintCommandTest`)。本変更を含まないHEAD
+    (`3e63792`の前)の作業ツリーでも同じ1件が失敗する既存の問題で、単独で実行すれば通る。本変更とは無関係
+- frontend
+  - `npx tsc -p tsconfig.app.json --noEmit`: OK
+  - `npx vitest run --project=unit`: 1016件PASS(2件は既存のskip)
+  - storybook(paidLeave・PaidLeaveSchedule・AdminLayout): 20件PASS
+  - lint: OK(implementerが実行。既存の警告のみ)
+- e2e: `scenario-00-master-data`・`scenario-15-paid-leave-schedule`で10件PASS
+  (ローカルのsqlite、mock-oidc)
+
+### 受け入れ条件との対応
+- ボタンからの遷移、戻り導線、ナビの点灯: e2e`scenario-15`の1件目、`AdminLayout.test.tsx`
+- 超過件数のバッジと警告: `PaidLeavePolicyPage.test.tsx`、`PaidLeaveSchedulePage.test.tsx`、e2e
+- 絞り込みのURL保持、検索条件のクリア: unit、e2e
+- 詳細・再判定・Override: e2e
+- 区分・日数の修正、「変更あり」、付与予定日は修正不可、確定済みは修正不可: Controller/Aggregateの
+  テスト、パネルのunit、e2e
+- 一括付与の確認ダイアログ、成否の表示、使用状況への反映: unit(キャッシュ無効化)、e2e
+- 権限: 既存の`RequireAdminRoute`・ミドルウェア、PATCHの403テスト
+- ドキュメントとの一致: `61b4d62`(「ドキュメントへの影響」の5ファイルをすべて更新)
+
+### 残る確認(利用者側)
+- 本番MySQLで、`%`・`_`を含む社員名の検索(`ESCAPE`)が意図どおりに動くこと
+- リリース後の運用確認(論点12): 「付与予定日超過(未付与)」と「要確認」の行を確認し、不整合が疑われる
+  場合は`paid-leave:schedule:rebuild`で作り直してから一括付与する
