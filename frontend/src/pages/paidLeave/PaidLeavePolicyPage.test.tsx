@@ -11,6 +11,7 @@ import type {
   PaidLeaveGrantPolicies,
   PaidLeaveGrantRule,
   PaidLeaveGrantRuleTargetUser,
+  PaidLeaveScheduleEntry,
   PaidLeaveUsage,
   User,
 } from '../../api/types'
@@ -45,10 +46,26 @@ const targetUser: User = {
   last_login_at: null,
 }
 
-function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/paid-leave') {
+const overdueEntry: PaidLeaveScheduleEntry = {
+  id: 'entry-overdue-1',
+  user_id: 'user-1',
+  user_name: '鈴木一郎',
+  scheduled_on: '2026-09-20',
+  category: 'normal',
+  candidate_grant_days: 10,
+  status: 'Eligible',
+  latest_assessment_id: 'assessment-1',
+  is_manually_overridden: false,
+  attendance_rate: 90,
+}
+
+function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/paid-leave', overdue: PaidLeaveScheduleEntry[] = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantRules').mockResolvedValue(rules)
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantPolicies').mockResolvedValue(policies)
+  vi.spyOn(paidLeaveApi, 'fetchPaidLeaveScheduleEntries').mockImplementation(async (params) =>
+    params.filter === 'overdue' ? overdue : [],
+  )
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -60,6 +77,19 @@ function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/
 }
 
 describe('PaidLeavePolicyPage', () => {
+  it('links to the schedule page from the grant rules card', async () => {
+    renderPage()
+    expect(await screen.findByRole('link', { name: '付与予定を確認' })).toHaveAttribute('href', '/admin/paid-leave/schedule')
+  })
+
+  it('shows the overdue count as a badge and in the accessible name of the schedule link', async () => {
+    renderPage([rule], '/admin/paid-leave', [overdueEntry, { ...overdueEntry, id: 'entry-overdue-2' }])
+
+    const link = await screen.findByRole('link', { name: '付与予定を確認(付与予定日超過 2件)' })
+    expect(link).toHaveAttribute('href', '/admin/paid-leave/schedule')
+    expect(within(link).getByText('2件')).toBeInTheDocument()
+  })
+
   it('lists existing grant rules with a sentence preview and steps table', async () => {
     renderPage()
 

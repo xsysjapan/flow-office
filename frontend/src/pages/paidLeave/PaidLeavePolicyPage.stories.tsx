@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter } from 'react-router-dom'
-import type { Paginated, PaidLeaveGrantPolicies, PaidLeaveGrantRule, User } from '../../api/types'
+import type { Paginated, PaidLeaveGrantPolicies, PaidLeaveGrantRule, PaidLeaveScheduleEntry, User } from '../../api/types'
 import { PaidLeavePolicyPage } from './PaidLeavePolicyPage'
 
 const rules: PaidLeaveGrantRule[] = [
@@ -40,11 +40,25 @@ const paginatedUsers: Paginated<User> = {
   links: { next: null, prev: null },
 }
 
-function withSeeded(seedRules: PaidLeaveGrantRule[]) {
+const overdueEntry: PaidLeaveScheduleEntry = {
+  id: 'entry-overdue-1',
+  user_id: 'user-1',
+  user_name: '鈴木一郎',
+  scheduled_on: '2026-09-20',
+  category: 'normal',
+  candidate_grant_days: 10,
+  status: 'Eligible',
+  latest_assessment_id: 'assessment-1',
+  is_manually_overridden: false,
+  attendance_rate: 90,
+}
+
+function withSeeded(seedRules: PaidLeaveGrantRule[], overdue: PaidLeaveScheduleEntry[] = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['paid-leave', 'grant-rules'], seedRules)
   queryClient.setQueryData(['paid-leave', 'grant-policies'], policies)
   queryClient.setQueryData(['users', 'search', '', 100, ''], paginatedUsers)
+  queryClient.setQueryData(['paid-leave', 'schedule-entries', 'list', { filter: 'overdue' }], overdue)
 
   return function Decorator() {
     return (
@@ -71,4 +85,8 @@ export const WithRules: Story = {
 
 export const NoRules: Story = {
   render: withSeeded([]),
+}
+
+export const WithOverdueSchedule: Story = {
+  render: withSeeded(rules, [overdueEntry]),
 }

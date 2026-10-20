@@ -7,6 +7,9 @@ import type {
   PaidLeaveGrantRuleTargetUser,
   PaidLeaveProportionalGrantPolicyStep,
   PaidLeaveRequest,
+  PaidLeaveScheduleBulkGrantResponse,
+  PaidLeaveScheduleEntry,
+  PaidLeaveScheduleEntryDetail,
   PaidLeaveType,
   PaidLeaveUsage,
   StoredEvent,
@@ -144,3 +147,61 @@ export function fetchPaidLeaveHistoryForUser(userId: string): Promise<StoredEven
   return apiFetch(`/paid-leave/history/user/${userId}`)
 }
 
+/** 付与予定の状態絞り込み。overdueは付与予定日を過ぎて未付与のもの(論点8)。 */
+export type PaidLeaveScheduleFilter = 'all' | 'eligible' | 'not_eligible' | 'needs_review' | 'changed' | 'overdue'
+
+export interface PaidLeaveScheduleEntriesParams {
+  filter: PaidLeaveScheduleFilter
+  user_name?: string
+  scheduled_on_from?: string
+  scheduled_on_to?: string
+}
+
+/**
+ * 付与予定Scheduleエントリ一覧(spec.md論点4・8の絞り込み)。空文字・undefinedのパラメータは送らない。
+ */
+export function fetchPaidLeaveScheduleEntries(params: PaidLeaveScheduleEntriesParams): Promise<PaidLeaveScheduleEntry[]> {
+  const query: Record<string, string> = { filter: params.filter }
+  if (params.user_name) query.user_name = params.user_name
+  if (params.scheduled_on_from) query.scheduled_on_from = params.scheduled_on_from
+  if (params.scheduled_on_to) query.scheduled_on_to = params.scheduled_on_to
+  return apiFetch<{ data: PaidLeaveScheduleEntry[] }>('/paid-leave/schedule-entries', { query }).then((res) => res.data)
+}
+
+/** 付与予定Scheduleエントリの詳細(Assessment履歴込み)。 */
+export function fetchPaidLeaveScheduleEntry(scheduleEntryId: string): Promise<PaidLeaveScheduleEntryDetail> {
+  return apiFetch<{ data: PaidLeaveScheduleEntryDetail }>(`/paid-leave/schedule-entries/${scheduleEntryId}`).then(
+    (res) => res.data,
+  )
+}
+
+/** 出勤率を同一条件で再判定する(依頼書§40「再判定」導線)。 */
+export function reassessPaidLeaveScheduleEntry(scheduleEntryId: string): Promise<PaidLeaveScheduleEntry> {
+  return apiFetch<{ data: PaidLeaveScheduleEntry }>(`/paid-leave/schedule-entries/${scheduleEntryId}/reassess`, {
+    method: 'POST',
+  }).then((res) => res.data)
+}
+
+export interface OverridePaidLeaveScheduleAssessmentInput {
+  final_result: 'Eligible' | 'NotEligible'
+  reason: string
+}
+
+/** 判定結果の上書き(理由必須、依頼書§40「判定結果を上書き」導線)。 */
+export function overridePaidLeaveScheduleAssessment(
+  scheduleEntryId: string,
+  input: OverridePaidLeaveScheduleAssessmentInput,
+): Promise<PaidLeaveScheduleEntry> {
+  return apiFetch<{ data: PaidLeaveScheduleEntry }>(`/paid-leave/schedule-entries/${scheduleEntryId}/override`, {
+    method: 'POST',
+    body: input,
+  }).then((res) => res.data)
+}
+
+/** 選択したEligibleエントリを一括付与する(spec.md論点15-6、既存ManualGrantCardのResultSummaryパターンを踏襲)。 */
+export function bulkGrantPaidLeaveScheduleEntries(scheduleEntryIds: string[]): Promise<PaidLeaveScheduleBulkGrantResponse> {
+  return apiFetch('/paid-leave/schedule-entries/bulk-grant', {
+    method: 'POST',
+    body: { schedule_entry_ids: scheduleEntryIds },
+  })
+}

@@ -40,7 +40,7 @@ function AdminNavigation({ groups, onNavigate }: NavigationProps) {
               <NavLink
                 key={item.to}
                 to={item.to}
-                end
+                end={!item.matchPrefix}
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(

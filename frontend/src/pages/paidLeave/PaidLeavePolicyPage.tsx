@@ -31,6 +31,7 @@ import {
   usePaidLeaveGrantRules,
   usePaidLeaveGrantRuleTargetUsers,
   usePaidLeaveGrantsForUser,
+  usePaidLeaveScheduleEntries,
   usePaidLeaveUsagesForUser,
   useRevokePaidLeaveGrant,
 } from '../../hooks/usePaidLeave'
@@ -449,7 +450,7 @@ function PaidLeaveGrantRulesCard() {
   }
 
   return (
-    <Card title="付与ルール">
+    <Card title="付与ルール" actions={<PaidLeaveScheduleLink />}>
       {error && <ErrorMessage error={error} fallback="付与ルールの取得に失敗しました。" />}
       {createRule.error && <ErrorMessage error={createRule.error} />}
 
@@ -836,12 +837,33 @@ function PaidLeaveUsageCard() {
 }
 
 /**
+ * 「付与予定を確認」導線(spec.md論点1・8)。付与ルールカードのactionsに置き、付与予定画面
+ * (`/admin/paid-leave/schedule`)へ遷移する。付与予定日を過ぎて未付与の件数(overdue)が
+ * 1件以上あれば件数のバッジを併記し、アクセシブルネームにも件数を含める。
+ * 件数の取得に失敗してもリンクは出す(導線を止めない)。
+ */
+function PaidLeaveScheduleLink() {
+  const { data: overdueEntries } = usePaidLeaveScheduleEntries({ filter: 'overdue' })
+  const overdueCount = overdueEntries?.length ?? 0
+
+  return (
+    <Button asChild variant="secondary" size="sm">
+      <Link
+        to="/admin/paid-leave/schedule"
+        aria-label={overdueCount > 0 ? `付与予定を確認(付与予定日超過 ${overdueCount}件)` : undefined}
+      >
+        付与予定を確認
+        {overdueCount > 0 && <Badge tone="warning">{overdueCount}件</Badge>}
+      </Link>
+    </Button>
+  )
+}
+
+/**
  * UC-P002 / UC-P007: 有給付与ルールの設定・手動付与・対象社員の使用状況確認・
- * 付与取消/申請取消を1画面にまとめて管理者・人事向けに提供する
- * (旧`PaidLeaveAdminPage`。spec.md論点11で「付与予定」画面(`PaidLeaveSchedulePage`)と
- * 分離し、こちらは付与ポリシー(独自ルール・法定Policy)専用のページへリネームした。
- * 「付与予定」は独立ナビ項目を持たず、本ページからのドリルダウンでのみ到達する
- * `docs/changesets/20260914-port-to-pr112/spec.md`参照)。
+ * 付与取消/申請取消を1画面にまとめて管理者・人事向けに提供する有給休暇画面。
+ * 付与予定(UC-P013〜P015)は独立ナビ項目を持たず、付与ルールカードの「付与予定を確認」
+ * ボタンから付与予定画面へ遷移する。
  */
 export function PaidLeavePolicyPage() {
   return (
