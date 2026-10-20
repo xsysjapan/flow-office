@@ -1061,17 +1061,40 @@ Schedule候補は生成されない(`docs/changesets/20260914-port-to-pr112/spec
 - id(uuid、scheduleEntryId)
 - user_id
 - scheduled_on(付与予定日)
-- category(`GrantCategoryClassifier`の区分: 通常/比例/シフト/要確認)
+- category(区分。`GrantCategoryClassifier`の定数: `normal`(通常付与)/`proportional`(比例付与)/
+  `shift`(シフト勤務)/`needs_review`(区分を判定できない・要確認))
 - candidate_grant_days(付与候補日数。区分・日数が確定できない場合は0)
 - status(`Scheduled` / `AssessmentPending` / `Eligible` / `NotEligible` / `NeedsReview` /
   `Granted` / `Cancelled`。対象ルールのsteps/法定Policyに該当する行が無く候補日数を
   確定できない場合は`Scheduled`ではなく`NeedsReview`で作成される。
   `docs/changesets/20260914-port-to-pr112/spec.md`参照)
-- latest_assessment_id
-- is_manually_overridden / manual_override_reason / manual_override_by_user_id /
-  manual_override_at(管理者による手動判定上書き)
+- latest_assessment_id(最新の`paid_leave_schedule_assessments`の行を指す)
+- is_manually_overridden(区分・候補日数の個別修正(`ManuallyEditScheduleEntry`)済みかどうか。
+  `PaidLeaveScheduleEntryManuallyEdited`で`true`になる。判定結果のOverrideでは立たない)/
+  manual_override_reason / manual_override_by_user_id / manual_override_at
 - grant_id(付与確定後、`paid_leave_grants`側のIDを紐付け)
 - cancelled_reason
+- created_at / updated_at
+
+## paid_leave_schedule_assessments(出勤率Assessmentの版履歴Projection)
+
+1つの付与予定(`paid_leave_schedule_entries`)に対して、出勤率Assessmentの実行(再判定・
+Override)ごとに1行を持つ。どの判定を根拠に、誰が上書きしたかを監査できるように残す
+(docs/09-usecases-paid-leave.md UC-P012・UC-P014)。
+
+- id (uuid)
+- schedule_entry_id (`paid_leave_schedule_entries.id`)
+- period_start / period_end (判定対象期間)
+- denominator_days (判定の分母(勤務予定日数))
+- attendance_days (判定の分子(出勤日数))
+- excluded_days (除外日数。既定0)
+- attendance_rate (nullable。出勤率)
+- policy_version (判定に用いた`paid_leave_grant_policies`等の版)
+- automatic_result (自動判定結果)
+- final_result (Override後の最終結果。未Overrideなら自動判定と同値)
+- override_reason (nullable)
+- overridden_by_user_id (nullable)
+- created_at / updated_at
 
 ## paid_leave_grant_policies(通常付与の法定日数マスタ)
 
@@ -1251,41 +1274,6 @@ Assessment・Grantの根拠(`policyVersion`)を変えずに新版を追加でき
 - version (unique)
 - expiry_years
 - created_at / updated_at
-
-## paid_leave_schedule_entries (付与予定のProjection)
-
-`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId = `userId`)の
-イベントから`App\Domain\PaidLeaveSchedule\Projectors\PaidLeaveScheduleEntryProjector`が
-再構築する画面表示用Projection(CLAUDE.md原則2、再生成可能な派生データ)。一覧画面
-(社員/付与予定日/区分/候補日数/出勤率/判定状態)とAssessment内訳(詳細パネル)に必要な値を
-そのまま持つ(docs/09-usecases-paid-leave.md UC-P011以降)。
-
-- id (uuid。`PaidLeaveScheduleEntryCreated.entryId`)
-- user_id
-- scheduled_on (付与予定日)
-- category (`regular`(通常付与) / `proportional`(比例付与) / `shift`(シフト勤務) /
-  `NeedsReview`(区分・判定とも要確認))
-- candidate_grant_days (候補付与日数)
-- status (`Scheduled` / `Eligible` / `NeedsReview` / `NotEligible` / `Granted` / `Cancelled`)
-- manual_override_reason (nullable。手動修正の理由)
-- manual_override_by_user_id (nullable)
-- manual_override_at (nullable)
-- assessment_period_start / assessment_period_end (nullable。出勤率判定の対象期間)
-- assessment_denominator_days (nullable。判定の分母(勤務予定日数))
-- assessment_attendance_days (nullable。判定の分子(出勤日数))
-- assessment_excluded_days (nullable)
-- assessment_attendance_rate (nullable)
-- assessment_policy_version (nullable。判定に用いた`paid_leave_grant_policies`等の版)
-- assessment_automatic_result (nullable。自動判定結果)
-- assessment_final_result (nullable。Override後の最終結果。未Overrideなら自動判定と同値)
-- assessment_override_reason (nullable)
-- granted_paid_leave_grant_id (nullable。一括付与後に紐づく`paid_leave_grants.id`)
-- created_at / updated_at
-
-「変更・要確認」表示は独立列を持たず、`status = NeedsReview`かつ
-`manual_override_by_user_id`が入っている(=個別修正済みだったのに新しい算出結果と
-食い違ってNeedsReviewへ押し出された)という既存列の組み合わせで判定する
-(CLAUDE.md原則2、冗長な列を追加しない)。
 
 ## paid_leave_balances (社員単位の現在残高キャッシュ)
 

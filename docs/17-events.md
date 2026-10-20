@@ -415,8 +415,13 @@ docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
   (scheduleEntryId, assessmentId, finalResult, reason, operatorUserId)。管理者による判定結果の
   上書き(理由必須)。
 - `paid_leave_schedule.entry_manually_edited` → `PaidLeaveScheduleEntryManuallyEdited`
-  (scheduleEntryId, changes, reason, operatorUserId)。Scheduleエントリの個別修正。以後の
-  自動再計算(`recalculateFutureSchedule`)の対象から除外される。
+  (scheduleEntryId, changes, reason, operatorUserId)。Scheduleエントリの個別修正
+  (`PATCH /paid-leave/schedule-entries/{entry}`、区分・候補日数のみ。付与予定日は対象外)。
+  `changes`のキーは`category`(`normal`/`proportional`/`shift`)と`candidateGrantDays`のみ。
+  以後の自動再計算(`recalculateFutureSchedule`)の対象から除外される。ただし付与ルール・
+  法定付与ポリシーの再適用(`overrideManualEdits=true`、`docs/changesets/20260916-paid-leave-policy-change-reapply`)
+  では、未確定(`Granted`/`Cancelled`以外)の行は個別修正も含めて新しい内容で作り直される
+  (その場合、修正前の内容は`entry_superseded`で記録される)。
 - `paid_leave_schedule.entry_granted` → `PaidLeaveScheduleEntryGranted`
   (scheduleEntryId, grantId, operatorUserId)。管理者の一括付与操作でEligibleエントリを
   Grantedへ遷移させる(実際の`PaidLeaveAccount\Commands\GrantPaidLeave`発行はHandlerが担う)。
