@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261021-paid-leave-schedule-recalc-on-assignment-change](./20261021-paid-leave-schedule-recalc-on-assignment-change/spec.md) | 勤務形態の割当の削除・月替わりで付与予定を再計算する | レビュー中 |
+| [20261021-paid-leave-schedule-recalc-on-assignment-change](./20261021-paid-leave-schedule-recalc-on-assignment-change/spec.md) | 勤務形態の割当の削除・月替わりで付与予定を再計算する | 実装中 |
 | [20261021-paid-leave-same-day-grants](./20261021-paid-leave-same-day-grants/spec.md) | 同じ日に複数の有給を付与できるようにする | レビュー中 |
 | [20261021-paid-leave-aggregate-stream-id](./20261021-paid-leave-aggregate-stream-id/spec.md) | 付与予定と有給口座のAggregateIdを社員から分離する | 実装中 |
 | [20261021-paid-leave-schedule-reactor-tests](./20261021-paid-leave-schedule-reactor-tests/spec.md) | 付与予定の再計算Reactorのテストを復元し、再計算の不具合を直す | 完了 |
