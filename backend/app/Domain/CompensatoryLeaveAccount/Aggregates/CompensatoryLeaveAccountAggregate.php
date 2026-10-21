@@ -23,7 +23,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * アクセスしない)。現行ルールの移植元は各メソッドのdocを参照する。
  *
  * 集約IDは利用者IDから決定的に派生させる(streamIdFor)。特別休暇の口座(`special_leave_account`)・
- * 有給の口座(集約ID=userId)と衝突しない。
+ * 有給の口座(`PaidLeaveAccountAggregate::streamIdFor`)と衝突しない。
  *
  * 付与の単位: grantedMinutes === null の付与は日単位(daily・half_day)、非nullは時間単位(hourly)。
  * 消化記録の単位: usageType === 'hourly' は時間単位(充当は時間単位の付与のみ)、それ以外は日単位。

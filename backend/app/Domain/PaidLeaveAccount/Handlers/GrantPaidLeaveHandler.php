@@ -19,7 +19,7 @@ class GrantPaidLeaveHandler implements CommandHandler
 
         $grantId = (string) Str::uuid();
 
-        PaidLeaveAccountAggregate::retrieve($command->userId)
+        PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId)
             ->grant(
                 grantId: $grantId,
                 grantedOn: $command->grantedOn,

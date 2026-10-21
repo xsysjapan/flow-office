@@ -26,7 +26,7 @@ class PaidLeaveScheduleProjector extends Projector
         PaidLeaveScheduleEntry::query()->updateOrCreate(
             ['id' => $event->scheduleEntryId],
             [
-                'user_id' => $event->aggregateRootUuid(),
+                'user_id' => $event->userId,
                 'scheduled_on' => $event->scheduledOn,
                 'category' => $event->category,
                 'candidate_grant_days' => $event->candidateGrantDays,

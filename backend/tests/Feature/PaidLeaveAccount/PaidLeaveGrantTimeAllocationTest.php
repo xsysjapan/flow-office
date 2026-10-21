@@ -3,6 +3,7 @@
 namespace Tests\Feature\PaidLeaveAccount;
 
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use App\Domain\PaidLeaveAccount\Commands\AllocateUnallocatedPaidLeaveUsages;
 use App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage;
@@ -41,7 +42,7 @@ class PaidLeaveGrantTimeAllocationTest extends TestCase
 
     private function allocatedCount(User $user): int
     {
-        return EloquentStoredEvent::query()->where('aggregate_uuid', $user->id)->where('event_class', 'paid_leave_account.usage_allocated')->count();
+        return EloquentStoredEvent::query()->where('aggregate_uuid', PaidLeaveAccountAggregate::streamIdFor($user->id))->where('event_class', 'paid_leave_account.usage_allocated')->count();
     }
 
     public function test_usage_approved_with_no_balance_is_allocated_when_a_grant_is_recorded_later(): void
@@ -70,7 +71,7 @@ class PaidLeaveGrantTimeAllocationTest extends TestCase
 
         $this->bus()->dispatch(new GrantPaidLeave($user->id, '2026-10-01', '2028-09-30', 3.0, null));
 
-        $allocated = DB::table('stored_events')->where('aggregate_uuid', $user->id)->where('event_class', 'paid_leave_account.usage_allocated')
+        $allocated = DB::table('stored_events')->where('aggregate_uuid', PaidLeaveAccountAggregate::streamIdFor($user->id))->where('event_class', 'paid_leave_account.usage_allocated')
             ->orderBy('id')->pluck('event_properties')->map(fn ($p) => json_decode($p, true))->all();
         $this->assertCount(2, $allocated);
         $this->assertEqualsWithDelta(2.0, $allocated[0]['allocatedDays'], 0.000001);
@@ -86,12 +87,12 @@ class PaidLeaveGrantTimeAllocationTest extends TestCase
         $this->usage($user, '2026-08-10', 2.0);
         $grantId = $this->bus()->dispatch(new GrantPaidLeave($user->id, '2026-10-01', '2028-09-30', 10.0, null));
         $this->assertSame(1, $this->allocatedCount($user));
-        $count = EloquentStoredEvent::query()->where('aggregate_uuid', $user->id)->count();
+        $count = EloquentStoredEvent::query()->where('aggregate_uuid', PaidLeaveAccountAggregate::streamIdFor($user->id))->count();
 
         $this->bus()->dispatch(new AllocateUnallocatedPaidLeaveUsages($user->id, $grantId, viaReactor: true));
 
         $this->assertSame(1, $this->allocatedCount($user));
-        $this->assertSame($count, EloquentStoredEvent::query()->where('aggregate_uuid', $user->id)->count());
+        $this->assertSame($count, EloquentStoredEvent::query()->where('aggregate_uuid', PaidLeaveAccountAggregate::streamIdFor($user->id))->count());
         $balance = DB::table('paid_leave_balances')->where('user_id', $user->id)->first();
         $this->assertEqualsWithDelta(8.0, (float) $balance->available_days, 0.000001);
     }

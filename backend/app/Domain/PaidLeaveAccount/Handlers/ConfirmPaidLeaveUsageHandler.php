@@ -17,7 +17,7 @@ class ConfirmPaidLeaveUsageHandler implements CommandHandler
     {
         assert($command instanceof ConfirmPaidLeaveUsage);
 
-        $aggregate = PaidLeaveAccountAggregate::retrieve($command->userId);
+        $aggregate = PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId);
 
         $usageId = $command->usageId
             ?? $aggregate->usageIdForRequest((string) $command->paidLeaveRequestId);

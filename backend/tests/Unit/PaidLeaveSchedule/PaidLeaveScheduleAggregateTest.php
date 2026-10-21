@@ -22,11 +22,47 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 {
     private const USER = 'user-1';
 
+    // ---- 集約ID・社員の束縛 ----
+
+    public function test_stream_id_is_derived_from_the_user_id_and_differs_from_it(): void
+    {
+        $streamId = PaidLeaveScheduleAggregate::streamIdFor(self::USER);
+
+        $this->assertNotSame(self::USER, $streamId);
+        $this->assertSame($streamId, PaidLeaveScheduleAggregate::streamIdFor(self::USER));
+        $this->assertNotSame($streamId, PaidLeaveScheduleAggregate::streamIdFor('user-2'));
+    }
+
+    public function test_recorded_events_carry_the_bound_user_id(): void
+    {
+        PaidLeaveScheduleAggregate::fake(PaidLeaveScheduleAggregate::streamIdFor('user-2'))->forUser('user-2')
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->ensureFutureScheduleGenerated([
+                    ['entryId' => 'e1', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                ]);
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntryCreated('user-2', 'e1', '2025-10-01', 'normal', 10.0),
+            ]);
+    }
+
+    public function test_operating_without_binding_a_user_is_rejected(): void
+    {
+        $this->expectException(\LogicException::class);
+
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->ensureFutureScheduleGenerated([
+                    ['entryId' => 'e1', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                ]);
+            });
+    }
+
     // ---- Schedule生成(新入社員・月次ローリング・1年先まで保証) ----
 
     public function test_new_hire_schedule_generation_creates_all_candidates(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->ensureFutureScheduleGenerated([
                     ['entryId' => 'e1', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
@@ -34,17 +70,17 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 ]);
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
-                new PaidLeaveScheduleEntryCreated('e2', '2026-04-01', 'normal', 11.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e2', '2026-04-01', 'normal', 11.0),
             ]);
     }
 
     public function test_monthly_rolling_generation_is_idempotent_for_existing_entries(): void
     {
         // 既に存在するscheduledOnはスキップされ、新規分(1年先までの追加ロール)だけ作られる。
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->ensureFutureScheduleGenerated([
@@ -53,16 +89,16 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 ]);
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCreated('e2', '2026-10-01', 'normal', 11.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e2', '2026-10-01', 'normal', 11.0),
             ]);
     }
 
     public function test_one_year_ahead_horizon_guarantee_generates_missing_far_entry(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
-                new PaidLeaveScheduleEntryCreated('e2', '2026-04-01', 'normal', 11.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e2', '2026-04-01', 'normal', 11.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 // cronロールが実行され、1年先(2026-10-01)まで存在保証を要求する。
@@ -73,7 +109,7 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 ]);
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCreated('e3', '2026-10-01', 'normal', 12.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e3', '2026-10-01', 'normal', 12.0),
             ]);
     }
 
@@ -81,9 +117,9 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 
     public function test_recalculation_supersedes_entry_when_content_changed(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule([
@@ -91,16 +127,16 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 ], 'work_style変更');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntrySuperseded('e1', 'work_style変更', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryCreated('e1-v2', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntrySuperseded(self::USER, 'e1', 'work_style変更', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1-v2', '2025-10-01', 'normal', 10.0),
             ]);
     }
 
     public function test_recalculation_is_noop_when_content_unchanged(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule([
@@ -115,24 +151,24 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 
     public function test_recalculation_cancels_entry_no_longer_needed(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule([], '退職予定日確定');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCancelled('e1', '退職予定日確定'),
+                new PaidLeaveScheduleEntryCancelled(self::USER, 'e1', '退職予定日確定'),
             ]);
     }
 
     public function test_past_confirmed_granted_entry_is_immutable_under_recalculation(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 // 同じscheduledOnで内容が異なる再計算を要求しても、確定済みentryは触らない。
@@ -150,10 +186,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 
     public function test_manually_edited_entry_is_not_silently_overwritten_by_recalculation(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryManuallyEdited('e1', ['candidateGrantDays' => 9.0], '手動調整', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryManuallyEdited(self::USER, 'e1', ['candidateGrantDays' => 9.0], '手動調整', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule([
@@ -173,10 +209,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         // docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md: 法定付与ポリシー・
         // 付与ルール変更トリガーに限り、個別修正済みエントリも保護せず再作成する。
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryManuallyEdited('e1', ['candidateGrantDays' => 9.0], '手動調整', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryManuallyEdited(self::USER, 'e1', ['candidateGrantDays' => 9.0], '手動調整', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule([
@@ -184,17 +220,17 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 ], '法定付与ポリシーの変更', overrideManualEdits: true);
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntrySuperseded('e1', '法定付与ポリシーの変更', '2025-10-01', 'proportional', 9.0),
-                new PaidLeaveScheduleEntryCreated('e1-v2', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntrySuperseded(self::USER, 'e1', '法定付与ポリシーの変更', '2025-10-01', 'proportional', 9.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1-v2', '2025-10-01', 'normal', 10.0),
             ]);
     }
 
     public function test_granted_entry_is_still_immutable_even_with_override_manual_edits(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule([], '法定付与ポリシーの変更', overrideManualEdits: true);
@@ -209,10 +245,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         // 過去分洗い替えコマンド専用: includeGrantedEntries=true の場合、
         // Grantedエントリも洗い替え対象に含める(Cancelled のみ保護)。
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule(
@@ -225,18 +261,18 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 );
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntrySuperseded('e1', '過去分洗い替え', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryCreated('e1-v2', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntrySuperseded(self::USER, 'e1', '過去分洗い替え', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1-v2', '2025-10-01', 'normal', 10.0),
             ]);
     }
 
     public function test_granted_entry_is_protected_when_include_granted_entries_is_false(): void
     {
         // デフォルト(includeGrantedEntries=false): Grantedエントリは保護。
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule(
@@ -257,10 +293,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     public function test_cancelled_entry_is_always_protected_even_with_include_granted_entries(): void
     {
         // Cancelled エントリは includeGrantedEntries の値に関わらず常に保護。
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryCancelled('e1', '一度目の取消'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCancelled(self::USER, 'e1', '一度目の取消'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule(
@@ -273,7 +309,7 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 );
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCreated('e1-v2', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1-v2', '2025-10-01', 'normal', 10.0),
             ]);
     }
 
@@ -281,28 +317,28 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 
     public function test_unconfirmed_entry_before_from_date_is_left_untouched(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('past', '2026-09-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryCreated('past-eligible', '2026-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleAssessmentRecorded('past-eligible', 'a1', '2026-04-01', '2026-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
-                new PaidLeaveScheduleEntryCreated('future', '2026-11-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'past', '2026-09-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'past-eligible', '2026-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleAssessmentRecorded(self::USER, 'past-eligible', 'a1', '2026-04-01', '2026-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'future', '2026-11-01', 'proportional', 8.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 // 候補は今日以降のみ。過去日付の行は状態に関わらず取消・置換されず、未来の行だけが取消になる。
                 $aggregate->recalculateFutureSchedule([], '入社日の変更', fromDate: '2026-10-21');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCancelled('future', '入社日の変更'),
+                new PaidLeaveScheduleEntryCancelled(self::USER, 'future', '入社日の変更'),
             ]);
     }
 
     public function test_candidate_on_same_date_as_granted_entry_is_not_created(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2026-10-21', 'normal', 10.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2026-10-21', 'normal', 10.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule([
@@ -311,16 +347,16 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 ], '入社日の変更', fromDate: '2026-10-21');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCreated('e2', '2027-10-21', 'normal', 11.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e2', '2027-10-21', 'normal', 11.0),
             ]);
     }
 
     public function test_candidate_on_same_date_as_cancelled_entry_is_created(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2026-10-21', 'normal', 10.0),
-                new PaidLeaveScheduleEntryCancelled('e1', '自動付与の無効化'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2026-10-21', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCancelled(self::USER, 'e1', '自動付与の無効化'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule([
@@ -328,16 +364,16 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 ], '自動付与の有効化', fromDate: '2026-10-21');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCreated('e1-v2', '2026-10-21', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1-v2', '2026-10-21', 'normal', 10.0),
             ]);
     }
 
     public function test_include_granted_entries_still_supersedes_granted_entry_on_or_after_from_date(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2026-10-21', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2026-10-21', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule(
@@ -351,17 +387,17 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 );
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntrySuperseded('e1', '過去分洗い替え', '2026-10-21', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryCreated('e1-v2', '2026-10-21', 'normal', 10.0),
+                new PaidLeaveScheduleEntrySuperseded(self::USER, 'e1', '過去分洗い替え', '2026-10-21', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1-v2', '2026-10-21', 'normal', 10.0),
             ]);
     }
 
     public function test_entry_before_from_date_is_untouched_even_with_include_granted_entries(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2026-09-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2026-09-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->recalculateFutureSchedule([], '過去分洗い替え', includeGrantedEntries: true, fromDate: '2026-10-01');
@@ -376,9 +412,9 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 
     public function test_attendance_rate_assessment_eligible_transitions_state(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->runAttendanceRateAssessment(
@@ -387,15 +423,15 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 );
             })
             ->assertRecorded([
-                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
+                new PaidLeaveScheduleAssessmentRecorded(self::USER, 'e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
             ]);
     }
 
     public function test_assessment_below_80_percent_is_not_eligible(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->runAttendanceRateAssessment(
@@ -404,15 +440,15 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 );
             })
             ->assertRecorded([
-                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
+                new PaidLeaveScheduleAssessmentRecorded(self::USER, 'e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
             ]);
     }
 
     public function test_needs_review_assessment_result_is_recorded(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->runAttendanceRateAssessment(
@@ -421,7 +457,7 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                 );
             })
             ->assertRecorded([
-                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 0, 0, 0, null, 'v1', PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW),
+                new PaidLeaveScheduleAssessmentRecorded(self::USER, 'e1', 'a1', '2025-04-01', '2025-10-01', 0, 0, 0, null, 'v1', PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW),
             ]);
     }
 
@@ -429,10 +465,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->runAttendanceRateAssessment('e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE);
@@ -443,16 +479,16 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 
     public function test_override_not_eligible_to_eligible(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
-                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded(self::USER, 'e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->overrideScheduleAssessment('e1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, '育休からの復職を考慮', 'admin-1');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleAssessmentOverridden('e1', 'a1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, '育休からの復職を考慮', 'admin-1'),
+                new PaidLeaveScheduleAssessmentOverridden(self::USER, 'e1', 'a1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, '育休からの復職を考慮', 'admin-1'),
             ]);
     }
 
@@ -460,9 +496,9 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->overrideScheduleAssessment('e1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, '理由', 'admin-1');
@@ -473,15 +509,15 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 
     public function test_manual_edit_is_recorded_and_protected(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->manuallyEditScheduleEntry('e1', ['candidateGrantDays' => 9.0], '個別事情による調整', 'admin-1');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryManuallyEdited('e1', ['candidateGrantDays' => 9.0], '個別事情による調整', 'admin-1'),
+                new PaidLeaveScheduleEntryManuallyEdited(self::USER, 'e1', ['candidateGrantDays' => 9.0], '個別事情による調整', 'admin-1'),
             ]);
     }
 
@@ -489,10 +525,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryCancelled('e1', '対象外'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCancelled(self::USER, 'e1', '対象外'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->manuallyEditScheduleEntry('e1', ['candidateGrantDays' => 9.0], '調整', 'admin-1');
@@ -503,9 +539,9 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->manuallyEditScheduleEntry('e1', ['scheduledOn' => '2025-10-02'], '日付を動かす', 'admin-1');
@@ -516,9 +552,9 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->manuallyEditScheduleEntry('e1', [], '空の修正', 'admin-1');
@@ -529,10 +565,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->manuallyEditScheduleEntry('e1', ['candidateGrantDays' => 9.0], '付与後の修正', 'admin-1');
@@ -543,16 +579,16 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 
     public function test_grant_entry_transitions_eligible_to_granted(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
-                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded(self::USER, 'e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->grantEntry('e1', 'grant-1', 'admin-1');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ]);
     }
 
@@ -560,10 +596,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
-                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded(self::USER, 'e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->grantEntry('e1', 'grant-1', 'admin-1');
@@ -574,11 +610,11 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
-                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded(self::USER, 'e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->grantEntry('e1', 'grant-2', 'admin-1');
@@ -589,15 +625,15 @@ class PaidLeaveScheduleAggregateTest extends TestCase
 
     public function test_cancel_entry_is_recorded(): void
     {
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->cancelEntry('e1', '退職確定');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCancelled('e1', '退職確定'),
+                new PaidLeaveScheduleEntryCancelled(self::USER, 'e1', '退職確定'),
             ]);
     }
 
@@ -605,10 +641,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
-                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
                 $aggregate->cancelEntry('e1', '取消');
@@ -621,10 +657,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
     {
         $capturedEntry = null;
 
-        PaidLeaveScheduleAggregate::fake(self::USER)
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
-                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded(self::USER, 'e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) use (&$capturedEntry) {
                 $aggregate->overrideScheduleAssessment('e1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, '復職考慮', 'admin-1');

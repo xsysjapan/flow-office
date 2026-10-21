@@ -80,7 +80,7 @@ class ReapplyPaidLeaveSchedulePolicyJobTest extends TestCase
         $this->artisan('paid-leave:roll-schedules')->assertSuccessful();
         $entry = PaidLeaveScheduleEntry::query()->where('user_id', $user->id)->firstOrFail();
 
-        PaidLeaveScheduleAggregate::retrieve($user->id)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($user->id))->forUser($user->id)
             ->manuallyEditScheduleEntry($entry->id, ['candidateGrantDays' => 9.0], '個別事情', $admin->id)
             ->persist();
 
@@ -120,7 +120,7 @@ class ReapplyPaidLeaveSchedulePolicyJobTest extends TestCase
         $this->artisan('paid-leave:roll-schedules')->assertSuccessful();
         $entry = PaidLeaveScheduleEntry::query()->where('user_id', $user->id)->firstOrFail();
 
-        PaidLeaveScheduleAggregate::retrieve($user->id)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($user->id))->forUser($user->id)
             ->runAttendanceRateAssessment($entry->id, 'assessment-1', '2026-03-01', '2026-03-13', 10, 10, 0, 1.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE)
             ->grantEntry($entry->id, 'grant-1', $admin->id)
             ->persist();

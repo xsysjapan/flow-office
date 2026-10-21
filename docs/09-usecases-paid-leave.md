@@ -1,7 +1,7 @@
 # 9. 有給管理ユースケース
 
 年次有給休暇のWrite Modelは`App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`
-(AggregateId = `userId`)を単一の集約ルートとする。社員一人の年休台帳全体
+(AggregateId = `PaidLeaveAccountAggregate::streamIdFor(userId)`。社員IDから派生する別のストリーム。各イベントは`userId`を持つ)を単一の集約ルートとする。社員一人の年休台帳全体
 (Grant/Usage/Allocation)の不変条件をこの集約自身がreplayのみで保証し、Handlerが
 Eloquent Projectionを読んで業務ルールを判定することはしない
 (docs/changesets/20260906-paid-leave-domain-redesign/spec.md参照)。旧`PaidLeaveGrantAggregate`
@@ -429,8 +429,10 @@ Allocationベースへ完全移行する等)は今回の再設計のスコープ
 `paid_leave_balances` の現在の残高・ステータス一覧(UC-P001〜UC-P004の画面)とは別に、
 `stored_events`(EventStore)を正の記録として直接検索し、対象社員に関する一連のイベントを
 時系列で表示する。`stored_events`の`aggregate_uuid`は`PaidLeaveAccountAggregate`の
-AggregateId(=対象社員の`user_id`)そのものであるため、旧ドメインのように個々のGrant/
-Request idで絞り込む必要はなく、社員の`user_id`1つで一連のイベント(Grant系・Usage系を含む)を横断的に取得できる(旧ドメインからの構造上の簡素化)。
+AggregateId(`streamIdFor(userId)`。社員の`user_id`から派生する)であるため、旧ドメインのように個々のGrant/
+Request idで絞り込む必要はなく、`LeaveHistoryQuery`の`additionalAggregateIds`に有給口座の集約IDを渡して
+一連のイベント(Grant系・Usage系を含む)を取得できる(特別休暇・代休と同じ読み方)。応答の`aggregate_id`・`version`は
+口座のストリームの値になる(社員の集約の値ではない)。
 
 自分の履歴は誰でも閲覧できる。他の社員の履歴は`paid_leave.read` Permissionを持ち、対象Userを
 含むScopeが有効な場合だけ閲覧できる(`GET /paid-leave/grants/user/{userId}`等)。
@@ -514,7 +516,7 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 
 旧`paid-leave:grant-scheduled`(UC-P002、`GrantScheduledPaidLeaveHandler`による日次全件
 評価)を置換するバッチで、`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`
-(AggregateId = `userId`)が状態を管理する(docs/changesets/20260906-paid-leave-schedule-assessment/spec.md)。
+(AggregateId = `PaidLeaveScheduleAggregate::streamIdFor(userId)`。社員IDから派生する別のストリーム)が状態を管理する(docs/changesets/20260906-paid-leave-schedule-assessment/spec.md)。
 1年先まで先出しでScheduleを生成しておくことで、UC-P013の一覧画面から確定前の付与予定を
 事前に確認できるようにする。1社員の失敗が他の社員の処理を止めないよう、行単位で成否を
 収集して継続する(部分失敗許容)。既存の`paid_leave_grant_rules`ベースのバッチ判定

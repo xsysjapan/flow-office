@@ -11,6 +11,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class PaidLeaveScheduleEntrySuperseded extends ShouldBeStored
 {
     public function __construct(
+        public readonly string $userId,
         public readonly string $scheduleEntryId,
         public readonly string $reason,
         public readonly string $previousScheduledOn,

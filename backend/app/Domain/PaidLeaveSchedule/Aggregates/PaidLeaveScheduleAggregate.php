@@ -10,10 +10,11 @@ use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCreated;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryGranted;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryManuallyEdited;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntrySuperseded;
+use App\Domain\UserManagement\Support\UserManagementStreamId;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * paid_leave_schedule集約(AggregateId = userId)。社員一人の将来付与予定Schedule一式を
+ * paid_leave_schedule集約(AggregateId = `streamIdFor(userId)`。社員IDから派生させた別のストリーム)。社員一人の将来付与予定Schedule一式を
  * 内部で保持し、「過去確定Schedule不変」「個別修正の保護」という不変条件を、replayされた
  * 自身の内部状態のみで保証する(Projection/Eloquentへは一切アクセスしない)。
  * docs/changesets/20260906-paid-leave-schedule-assessment/spec.md「仕様確定事項」参照。
@@ -54,6 +55,37 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     /** @var array<string, EntryState> */
     private array $entries = [];
+
+    /** 集約が対象とする社員(forUserで束縛する。イベントの社員IDに使う)。 */
+    private ?string $userId = null;
+
+    /**
+     * 社員IDから付与予定の集約IDを決定的に派生させる。方式は既存の`UserManagementStreamId`(UUIDv5)に従う。
+     * 社員の集約(集約ID=社員ID)や他の口座とストリームを共有しない。
+     */
+    public static function streamIdFor(string $userId): string
+    {
+        return UserManagementStreamId::for('paid_leave_schedule', $userId);
+    }
+
+    /**
+     * この集約が対象とする社員を束縛する(集約IDは`streamIdFor`で決める)。全ての操作の前に呼ぶ。
+     */
+    public function forUser(string $userId): self
+    {
+        $this->userId = $userId;
+
+        return $this;
+    }
+
+    private function requireUserId(): string
+    {
+        if ($this->userId === null) {
+            throw new \LogicException('付与予定の操作の前に社員を束縛してください(forUser)。');
+        }
+
+        return $this->userId;
+    }
 
     /**
      * 対象社員について、1年先までのScheduleエントリ存在を保証する(べき等)。
@@ -138,6 +170,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             if ($desired === null) {
                 // 最新条件ではこの日付にScheduleが不要になった。
                 $this->recordThat(new PaidLeaveScheduleEntryCancelled(
+                    userId: $this->requireUserId(),
                     scheduleEntryId: $entryId,
                     reason: $reason,
                 ));
@@ -154,6 +187,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             }
 
             $this->recordThat(new PaidLeaveScheduleEntrySuperseded(
+                userId: $this->requireUserId(),
                 scheduleEntryId: $entryId,
                 reason: $reason,
                 previousScheduledOn: $entry['scheduledOn'],
@@ -196,6 +230,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleAssessmentRecorded(
+            userId: $this->requireUserId(),
             scheduleEntryId: $scheduleEntryId,
             assessmentId: $assessmentId,
             periodStart: $periodStart,
@@ -231,6 +266,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleAssessmentOverridden(
+            userId: $this->requireUserId(),
             scheduleEntryId: $scheduleEntryId,
             assessmentId: $entry['latestAssessmentId'],
             finalResult: $finalResult,
@@ -270,6 +306,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleEntryManuallyEdited(
+            userId: $this->requireUserId(),
             scheduleEntryId: $scheduleEntryId,
             changes: $changes,
             reason: $reason,
@@ -293,6 +330,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleEntryGranted(
+            userId: $this->requireUserId(),
             scheduleEntryId: $scheduleEntryId,
             grantId: $grantId,
             operatorUserId: $operatorUserId,
@@ -310,6 +348,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleEntryCancelled(
+            userId: $this->requireUserId(),
             scheduleEntryId: $scheduleEntryId,
             reason: $reason,
         ));
@@ -339,6 +378,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
     private function createEntry(array $candidate): void
     {
         $this->recordThat(new PaidLeaveScheduleEntryCreated(
+            userId: $this->requireUserId(),
             scheduleEntryId: $candidate['entryId'],
             scheduledOn: $candidate['scheduledOn'],
             category: $candidate['category'],

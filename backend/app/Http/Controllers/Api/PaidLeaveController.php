@@ -9,6 +9,7 @@ use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest as ApprovePaidLeaveRequestCommand;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
+use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Domain\PaidLeaveSchedule\Support\GrantCategoryClassifier;
@@ -840,10 +841,9 @@ class PaidLeaveController extends Controller
             userId: $userId,
             grantModelClass: PaidLeaveGrant::class,
             requestModelClass: PaidLeaveRequest::class,
-            // Phase 5(cutover): PaidLeaveAccountAggregateの集約ルートはgrant/request単位
-            // ではなくuserId(社員単位の年休台帳)なので、grantIds/requestIdsでは拾えない。
-            // aggregate_uuid=userIdのpaid_leave_account.*イベントを別枠で追加する。
-            userScopedEventClassPrefixes: ['paid_leave_account.'],
+            // 有給口座の集約は社員単位(grant/request単位ではない)で、集約IDは社員IDから派生する。
+            // grantIds/requestIdsでは拾えないので、有給口座の集約IDを追加で読む。
+            additionalAggregateIds: [PaidLeaveAccountAggregate::streamIdFor($userId)],
         );
 
         return StoredEventResource::collection($events);

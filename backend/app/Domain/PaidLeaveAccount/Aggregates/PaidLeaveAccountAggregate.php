@@ -16,10 +16,11 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated;
 use App\Domain\PaidLeaveAccount\Support\AllocationPlanner;
 use App\Domain\PaidLeaveAccount\Support\GrantTimeAllocationPlanner;
+use App\Domain\UserManagement\Support\UserManagementStreamId;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * paid_leave_account集約(AggregateId = userId)。社員一人の年休台帳全体
+ * paid_leave_account集約(AggregateId = `streamIdFor(userId)`。社員IDから派生させた別のストリーム)。社員一人の年休台帳全体
  * (Grant時系列スタック・Usage・Allocation)の不変条件を、replayされた自身の内部状態のみで
  * 保証する(Projection/Eloquentへは一切アクセスしない)。
  * docs/changesets/20260906-paid-leave-domain-redesign/spec.md「仕様確定事項」参照。
@@ -60,6 +61,37 @@ class PaidLeaveAccountAggregate extends AggregateRoot
      */
     private array $usageIdByPaidLeaveRequestId = [];
 
+    /** 集約が対象とする社員(forUserで束縛する。イベントの社員IDに使う)。 */
+    private ?string $userId = null;
+
+    /**
+     * 社員IDから有給口座の集約IDを決定的に派生させる。方式は既存の`UserManagementStreamId`(UUIDv5)に従う。
+     * 社員の集約(集約ID=社員ID)や他の口座とストリームを共有しない。
+     */
+    public static function streamIdFor(string $userId): string
+    {
+        return UserManagementStreamId::for('paid_leave_account', $userId);
+    }
+
+    /**
+     * この集約が対象とする社員を束縛する(集約IDは`streamIdFor`で決める)。全ての操作の前に呼ぶ。
+     */
+    public function forUser(string $userId): self
+    {
+        $this->userId = $userId;
+
+        return $this;
+    }
+
+    private function requireUserId(): string
+    {
+        if ($this->userId === null) {
+            throw new \LogicException('有給口座の操作の前に社員を束縛してください(forUser)。');
+        }
+
+        return $this->userId;
+    }
+
     public function grant(
         string $grantId,
         string $grantedOn,
@@ -77,6 +109,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveGrantCreated(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             grantedOn: $grantedOn,
             expiresOn: $expiresOn,
@@ -122,6 +155,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
         foreach ($plan as $entry) {
             $this->recordThat(new PaidLeaveUsageAllocated(
+                userId: $this->requireUserId(),
                 usageId: $entry['usageId'],
                 grantId: $grantId,
                 allocatedDays: $entry['allocatedDays'],
@@ -142,6 +176,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveGrantAmountChanged(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             newGrantedDays: $newGrantedDays,
             reason: $reason,
@@ -168,6 +203,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveGrantDateChanged(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             newGrantedOn: $newGrantedOn,
             reason: $reason,
@@ -195,6 +231,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveGrantExpiryChanged(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             newExpiresOn: $newExpiresOn,
             reason: $reason,
@@ -212,6 +249,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
         foreach ($this->grants[$grantId]['allocations'] as $usageId => $days) {
             $this->recordThat(new PaidLeaveUsageAllocationReleased(
+                userId: $this->requireUserId(),
                 usageId: $usageId,
                 grantId: $grantId,
                 releasedDays: $days,
@@ -219,6 +257,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveGrantRevoked(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             revokedByUserId: $revokedByUserId,
             reason: $reason,
@@ -236,6 +275,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     public function raiseGrantWarning(string $grantId, string $warningType, string $message): self
     {
         $this->recordThat(new PaidLeaveGrantWarningRaised(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             warningType: $warningType,
             message: $message,
@@ -265,6 +305,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         // パラメータの表示投影用にイベントへ乗せて運ぶだけ。
         // PaidLeaveUsageAllocationProjector::createPaidLeaveRequestIfNeeded参照)。
         $this->recordThat(new PaidLeaveUsageDesignated(
+            userId: $this->requireUserId(),
             usageId: $usageId,
             workflowRequestId: $workflowRequestId,
             attendanceDayId: $attendanceDayId,
@@ -297,7 +338,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             throw new DomainRuleException('既に確定済みのUsageです。');
         }
 
-        $this->recordThat(new PaidLeaveUsageConfirmed(usageId: $usageId, confirmedByUserId: $confirmedByUserId));
+        $this->recordThat(new PaidLeaveUsageConfirmed(userId: $this->requireUserId(), usageId: $usageId, confirmedByUserId: $confirmedByUserId));
 
         $this->allocateUsage($usageId);
 
@@ -318,6 +359,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
         foreach ($usage['allocations'] as $grantId => $days) {
             $this->recordThat(new PaidLeaveUsageAllocationReleased(
+                userId: $this->requireUserId(),
                 usageId: $usageId,
                 grantId: $grantId,
                 releasedDays: $days,
@@ -325,6 +367,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveUsageCancelled(
+            userId: $this->requireUserId(),
             usageId: $usageId,
             cancelledByUserId: $cancelledByUserId,
             reason: $reason,
@@ -419,6 +462,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             }
 
             $this->recordThat(new PaidLeaveUsageAllocated(
+                userId: $this->requireUserId(),
                 usageId: $usageId,
                 grantId: $entry['grantId'],
                 allocatedDays: $entry['allocatedDays'],

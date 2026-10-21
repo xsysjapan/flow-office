@@ -16,7 +16,7 @@ class RunAttendanceRateAssessmentHandler implements CommandHandler
     {
         assert($command instanceof RunAttendanceRateAssessment);
 
-        PaidLeaveScheduleAggregate::retrieve($command->userId)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($command->userId))->forUser($command->userId)
             ->runAttendanceRateAssessment(
                 scheduleEntryId: $command->scheduleEntryId,
                 assessmentId: $command->assessmentId,

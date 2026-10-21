@@ -10,6 +10,7 @@ class PaidLeaveScheduleEntryManuallyEdited extends ShouldBeStored
      * @param  array{category?: string, candidateGrantDays?: float}  $changes
      */
     public function __construct(
+        public readonly string $userId,
         public readonly string $scheduleEntryId,
         public readonly array $changes,
         public readonly string $reason,

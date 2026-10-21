@@ -7,6 +7,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class PaidLeaveUsageDesignated extends ShouldBeStored
 {
     public function __construct(
+        public readonly string $userId,
         public readonly string $usageId,
         public readonly ?string $workflowRequestId,
         public readonly ?string $attendanceDayId,

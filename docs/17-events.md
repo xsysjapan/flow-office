@@ -246,30 +246,31 @@ docs/changesets/20260906-paid-leave-domain-redesign/spec.md)で、旧`paid_leave
 ## PaidLeaveAccount(現行、`App\Domain\PaidLeaveAccount\Events\`)
 
 `App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`
-(AggregateId = `userId`)が発行する。`config/event-sourcing.php`に`paid_leave_account.*`
+(AggregateId = `PaidLeaveAccountAggregate::streamIdFor(userId)`。`UserManagementStreamId::for('paid_leave_account', userId)`の派生ID)が発行する。
+全イベントが`userId`(社員ID)を持つ(社員の集約・付与予定の集約とストリームを共有しないため、社員IDを`aggregate_uuid`から逆算しない)。`config/event-sourcing.php`に`paid_leave_account.*`
 エイリアスで登録される(実クラス名は`PaidLeaveAccount`接頭辞を持たず、設定側で
 `use ... as PaidLeaveAccountXxx`のエイリアスにより`paid_leave.*`時代の同名クラスとの
 衝突を避けている)。詳細は docs/09-usecases-paid-leave.md「PaidLeaveAccountAggregateの
 内部モデル」を参照。
 
 - `paid_leave_account.grant_created` → `PaidLeaveGrantCreated`
-  (grantId, grantedOn, expiresOn, grantedDays, grantReason, source)。`source`は`manual`・`scheduled_batch`・
+  (userId, grantId, grantedOn, expiresOn, grantedDays, grantReason, source)。`source`は`manual`・`scheduled_batch`・
   `carried_over`(作り直しで作るcutoverの持ち込み残高)。新規Grant発行(手動・自動付与とも共通)。
 - `paid_leave_account.grant_amount_changed` → `PaidLeaveGrantAmountChanged`
-  (grantId, newGrantedDays, reason, changedByUserId)。最新Grantの日数変更
+  (userId, grantId, newGrantedDays, reason, changedByUserId)。最新Grantの日数変更
   (Allocation合計を下回る減額は不可)。
 - `paid_leave_account.grant_date_changed` → `PaidLeaveGrantDateChanged`
-  (grantId, newGrantedOn, reason, changedByUserId)。最新Grantの付与日変更。
+  (userId, grantId, newGrantedOn, reason, changedByUserId)。最新Grantの付与日変更。
 - `paid_leave_account.grant_expiry_changed` → `PaidLeaveGrantExpiryChanged`
-  (grantId, newExpiresOn, reason, changedByUserId)。最新Grantの有効期限変更
+  (userId, grantId, newExpiresOn, reason, changedByUserId)。最新Grantの有効期限変更
   (Allocation済みGrantの短縮は不可)。
 - `paid_leave_account.grant_revoked` → `PaidLeaveGrantRevoked`
-  (grantId, revokedByUserId, reason)。UC-P008。最新Grantの取消(全Allocationを解除)。
+  (userId, grantId, revokedByUserId, reason)。UC-P008。最新Grantの取消(全Allocationを解除)。
 - `paid_leave_account.grant_warning_raised` → `PaidLeaveGrantWarningRaised`
-  (grantId, warningType, message)。UC-P005/UC-P006の警告記録専用(`warningType`が
+  (userId, grantId, warningType, message)。UC-P005/UC-P006の警告記録専用(`warningType`が
   `expiry`/`five_day_obligation`)。残高等の不変条件には関与しない。
 - `paid_leave_account.usage_designated` → `PaidLeaveUsageDesignated`
-  (usageId, workflowRequestId, attendanceDayId, usedOn, usedDays, usageType,
+  (userId, usageId, workflowRequestId, attendanceDayId, usedOn, usedDays, usageType,
   paidLeaveRequestId, approverUserId, reason, requestGroupId, hours)。申請時点
   (承認前)に未確定Usageを1件作成する。`usageType`/`paidLeaveRequestId`等はAggregateの
   不変条件には使わず、`paid_leave_requests`Projection再構築用に運ぶだけ。
@@ -278,15 +279,15 @@ docs/changesets/20260906-paid-leave-domain-redesign/spec.md)で、旧`paid_leave
   消化記録を特定する対応にのみ使う。申請の作成・承認・差戻し・取消は`PaidLeaveAccount`に
   `usage_designated`/`usage_confirmed`/`usage_cancelled`を記録するReactorで行う。)
 - `paid_leave_account.usage_confirmed` → `PaidLeaveUsageConfirmed`
-  (usageId, confirmedByUserId)。承認によりUsageを確定し、続けてAllocationを実行する。
+  (userId, usageId, confirmedByUserId)。承認によりUsageを確定し、続けてAllocationを実行する。
 - `paid_leave_account.usage_cancelled` → `PaidLeaveUsageCancelled`
-  (usageId, cancelledByUserId, reason)。Usage取消(事前に全Allocationを解除する
+  (userId, usageId, cancelledByUserId, reason)。Usage取消(事前に全Allocationを解除する
   `usage_allocation_released`が発行される)。
 - `paid_leave_account.usage_allocated` → `PaidLeaveUsageAllocated`
-  (usageId, grantId, allocatedDays)。`AllocationPlanner`の算出結果に基づき、
+  (userId, usageId, grantId, allocatedDays)。`AllocationPlanner`の算出結果に基づき、
   UsageとGrantを充当する(1件のUsage確定で複数件発行されうる)。
 - `paid_leave_account.usage_allocation_released` → `PaidLeaveUsageAllocationReleased`
-  (usageId, grantId, releasedDays)。Grant取消・Usage取消時にAllocationを解除する。
+  (userId, usageId, grantId, releasedDays)。Grant取消・Usage取消時にAllocationを解除する。
 - (`paid_leave_account.migrated`は削除。cutover時点の残高は作り直しで`grant_created`(`source=carried_over`)に変換済み。
   docs/09-usecases-paid-leave.md UC-P010参照)
 
@@ -393,29 +394,30 @@ AggregateIdは特別休暇の口座と同じく種類ごとの派生IDを使う�
 
 ## PaidLeaveSchedule(`App\Domain\PaidLeaveSchedule\Events\`)
 
-`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId = `userId`)
-が発行する。`config/event-sourcing.php`に`paid_leave_schedule.*`エイリアスで登録される。
+`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`
+(AggregateId = `PaidLeaveScheduleAggregate::streamIdFor(userId)`。`UserManagementStreamId::for('paid_leave_schedule', userId)`の派生ID)
+が発行する。全イベントが`userId`(社員ID)を持つ。`config/event-sourcing.php`に`paid_leave_schedule.*`エイリアスで登録される。
 将来付与予定Schedule・出勤率Assessmentを扱う(Phase A、
 docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
 
 - `paid_leave_schedule.entry_created` → `PaidLeaveScheduleEntryCreated`
-  (scheduleEntryId, scheduledOn, category, candidateGrantDays, isDeterminate)。新規Schedule
+  (userId, scheduleEntryId, scheduledOn, category, candidateGrantDays, isDeterminate)。新規Schedule
   エントリ作成(新入社員展開・月次ローリング生成・再計算での再作成のいずれからも発行される)。
   `isDeterminate=false`の場合、エントリは`Scheduled`ではなく`NeedsReview`状態で作成される
   (候補日数を確定できない場合。`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
 - `paid_leave_schedule.entry_superseded` → `PaidLeaveScheduleEntrySuperseded`
-  (scheduleEntryId, reason, previousScheduledOn, previousCategory,
+  (userId, scheduleEntryId, reason, previousScheduledOn, previousCategory,
   previousCandidateGrantDays)。再計算により既存エントリが置き換えられたことを記録する
   (置き換え前の内容も監査用に保持)。
 - `paid_leave_schedule.assessment_recorded` → `PaidLeaveScheduleAssessmentRecorded`
-  (scheduleEntryId, assessmentId, periodStart, periodEnd, denominatorDays, attendanceDays,
+  (userId, scheduleEntryId, assessmentId, periodStart, periodEnd, denominatorDays, attendanceDays,
   excludedDays, attendanceRate, policyVersion, automaticResult)。出勤率Assessment結果を記録し、
   エントリの状態を`automaticResult`(Eligible/NotEligible/NeedsReview)へ遷移させる。
 - `paid_leave_schedule.assessment_overridden` → `PaidLeaveScheduleAssessmentOverridden`
-  (scheduleEntryId, assessmentId, finalResult, reason, operatorUserId)。管理者による判定結果の
+  (userId, scheduleEntryId, assessmentId, finalResult, reason, operatorUserId)。管理者による判定結果の
   上書き(理由必須)。
 - `paid_leave_schedule.entry_manually_edited` → `PaidLeaveScheduleEntryManuallyEdited`
-  (scheduleEntryId, changes, reason, operatorUserId)。Scheduleエントリの個別修正
+  (userId, scheduleEntryId, changes, reason, operatorUserId)。Scheduleエントリの個別修正
   (`PATCH /paid-leave/schedule-entries/{entry}`、区分・候補日数のみ。付与予定日は対象外)。
   `changes`のキーは`category`(`normal`/`proportional`/`shift`)と`candidateGrantDays`のみ。
   以後の自動再計算(`recalculateFutureSchedule`)の対象から除外される。ただし付与ルール・
@@ -423,10 +425,10 @@ docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
   では、未確定(`Granted`/`Cancelled`以外)の行は個別修正も含めて新しい内容で作り直される
   (その場合、修正前の内容は`entry_superseded`で記録される)。
 - `paid_leave_schedule.entry_granted` → `PaidLeaveScheduleEntryGranted`
-  (scheduleEntryId, grantId, operatorUserId)。管理者の一括付与操作でEligibleエントリを
+  (userId, scheduleEntryId, grantId, operatorUserId)。管理者の一括付与操作でEligibleエントリを
   Grantedへ遷移させる(実際の`PaidLeaveAccount\Commands\GrantPaidLeave`発行はHandlerが担う)。
 - `paid_leave_schedule.entry_cancelled` → `PaidLeaveScheduleEntryCancelled`
-  (scheduleEntryId, reason)。エントリが不要になった場合の取消(再計算での削除・
+  (userId, scheduleEntryId, reason)。エントリが不要になった場合の取消(再計算での削除・
   管理者操作の両方から発行されうる)。
 
 ## SpecialLeave

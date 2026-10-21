@@ -38,7 +38,7 @@ class ApplyScheduledGrantsHandler implements CommandHandler
             $grantId = null;
 
             try {
-                $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
+                $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($command->userId))->forUser($command->userId);
                 $entry = $aggregate->entry($scheduleEntryId);
 
                 if ($entry['status'] !== PaidLeaveScheduleAggregate::STATUS_ELIGIBLE) {
@@ -54,14 +54,8 @@ class ApplyScheduledGrantsHandler implements CommandHandler
                     source: 'scheduled_batch',
                 ));
 
-                // GrantPaidLeaveは`PaidLeaveAccountAggregate::retrieve($command->userId)`を
-                // 使う(=同じuserIdをaggregate_uuidとして共有する、spatie/laravel-event-sourcingの
-                // stored_eventsはaggregate_uuid単位でversionを管理し、aggregate root クラスの
-                // 違いを区別しない)。そのため上で保持していた`$aggregate`をそのまま使うと、
-                // 直前のGrantPaidLeave発行で同じuuidのversionが進んでしまい、
-                // 楽観的排他制御(CouldNotPersistAggregate)に失敗する。ここで取り直すことで
-                // 最新versionを読み直してから確定させる。
-                PaidLeaveScheduleAggregate::retrieve($command->userId)
+                // 有給口座(GrantPaidLeave)と付与予定は別のストリームなので、上で取った`$aggregate`のまま確定できる。
+                $aggregate
                     ->grantEntry($scheduleEntryId, $grantId, $command->operatorUserId)
                     ->persist();
 

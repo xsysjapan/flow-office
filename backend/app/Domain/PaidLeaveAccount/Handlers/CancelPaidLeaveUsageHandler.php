@@ -17,7 +17,7 @@ class CancelPaidLeaveUsageHandler implements CommandHandler
     {
         assert($command instanceof CancelPaidLeaveUsage);
 
-        $aggregate = PaidLeaveAccountAggregate::retrieve($command->userId);
+        $aggregate = PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId);
 
         $usageId = $command->usageId
             ?? ($command->paidLeaveRequestId !== null

@@ -18,7 +18,7 @@ class DesignatePaidLeaveUsageHandler implements CommandHandler
     {
         assert($command instanceof DesignatePaidLeaveUsage);
 
-        $aggregate = PaidLeaveAccountAggregate::retrieve($command->userId);
+        $aggregate = PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId);
 
         // viaReactor=true: 同じ有給申請IDの有効な消化記録が既にあれば何もしない(既存のusageIdを返す)。
         if ($command->viaReactor
