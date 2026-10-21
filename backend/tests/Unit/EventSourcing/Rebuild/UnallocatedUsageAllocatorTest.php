@@ -6,6 +6,7 @@ use App\Domain\EventSourcing\Rebuild\EventStoreRebuilder;
 use App\Domain\EventSourcing\Rebuild\RebuiltEvent;
 use App\Domain\EventSourcing\Rebuild\StoredEventRow;
 use App\Domain\EventSourcing\Rebuild\UnallocatedUsageAllocator;
+use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -362,8 +363,11 @@ class UnallocatedUsageAllocatorTest extends TestCase
         $allocated = $result->rows[5];
         $this->assertSame('G2', $allocated['event_properties']['grantId']);
         $this->assertEqualsWithDelta(1.0, $allocated['event_properties']['allocatedDays'], 0.000001);
-        $this->assertSame(self::USER, $allocated['aggregate_uuid']);
-        $this->assertSame([1, 2, 3, 4], array_column(array_filter($result->rows, fn (array $r) => $r['aggregate_uuid'] === self::USER), 'aggregate_version'));
+        // 充当は途中の工程では社員IDで書かれ、最後の工程で新しいストリームIDへ付け替わる(userId が入る)。
+        $accountStream = PaidLeaveAccountAggregate::streamIdFor(self::USER);
+        $this->assertSame($accountStream, $allocated['aggregate_uuid']);
+        $this->assertSame(self::USER, $allocated['event_properties']['userId']);
+        $this->assertSame([1, 2, 3, 4], array_column(array_filter($result->rows, fn (array $r) => $r['aggregate_uuid'] === $accountStream), 'aggregate_version'));
         $this->assertSame(1, $result->report['usage_allocation']['allocated_usages']);
         $this->assertSame(0, $result->report['usage_allocation']['unallocated_usages']);
     }

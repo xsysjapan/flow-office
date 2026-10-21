@@ -1,6 +1,6 @@
 # 付与予定と有給口座のAggregateIdを社員から分離する
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > このタスクをここで実行してください:「付与予定と有給口座のAggregateIdを分離する」
@@ -341,4 +341,46 @@
   明記した。
 
 ## 実装結果
-未着手
+### コミット
+- `21e69c2` コード本体
+  - 対象: 両集約の`streamIdFor`/`forUser`、イベント18種の`userId`、Handler 16本、Projector 3本、Reactor、有給の履歴
+  - 応急処置の除去
+  - 回帰テスト`PaidLeaveStreamSeparationTest`(R1〜R4)
+    - R1は修正前(応急処置だけを外した状態)に`CouldNotPersistAggregate`で失敗することを確かめた。
+- (次のコミット) 付け替えの手順
+  - `PaidLeaveStreamRekeyer`、`PaidLeaveStreamRekeyVerifier`、`leave:rekey-paid-leave-streams`
+  - 作り直しの最後の工程
+  - docs/32・docs/27(3.2)・docs/15
+### 読み手の一覧(grepの結果)
+- 社員IDとして扱っていて直したもの
+  - Projector 3本
+  - `PaidLeaveBalanceProjector`の`aggregate_uuid`による読み直し
+  - `UnallocatedUsageOnPaidLeaveGrantReactor`
+  - 有給の履歴(`PaidLeaveController`・`LeaveHistoryQuery`)
+- 直さなかったもの
+  - 社員の集約・勤務形態・有給申請のIDとして使っているReactor
+  - 監査ログ(論点4どおり)
+  - `StoredEventHistoryNormalizer`(対象外)
+### 実装時の判断
+- 作り直しの最後の工程では、止める条件を見ない。
+  - 本番では作り直しを実行済みで、もう使わない。付け替え専用の口には、止める条件がある。
+- 作り直しでは、最後にidを1から振り直す(既存の`verify`のid連番の検査のため)。付け替え専用の口では、idを変えない。
+- 本番の形の入力は、新しい作り直しが付け替え済みの出力を出すため、作り直し後の行を旧い形に戻して作った。
+- SQLiteで索引名がぶつかるため、`EventStoreRebuildWriter::write`の索引名に`_next`を付ける場合がある。
+- payloadには版に当たる項目が無いため、metaの`aggregate-root-version`だけを合わせた。
+### 検証(委譲元で実行)
+- backend全件(`./vendor/bin/phpunit`、APP_KEYを指定): 1933件PASS(割当の再計算の変更を含む)
+- e2e: `scenario-00`・`scenario-03`・`scenario-15`で13件PASS
+### 受け入れ条件
+- 別IDとuserId: R4、付け替えのシナリオテスト。
+- 応急処置なしの一括付与: R1。
+- 充当の継続: R3。
+- 履歴・残高: R4、`PaidLeaveHistoryTest`。
+- verifyの検査と指紋: `PaidLeaveStreamRekeyScenarioTest`(付与予定の2表を除いて一致)。
+- 付与予定の取り除き、止める条件: 同上。
+- docs: 09・17・32・27・15を更新した。
+### 環境
+テストの途中で、e2eのために委譲元が作った`backend/.env`が開発用のDBを指していたため、`php artisan test`が開発用のDBに
+対して動き、そのDBファイルが壊れた。`.env`・DBファイルは委譲元が作ったもの(gitの管理外)で、検証後に消した。
+### 本番での付け替え
+未実施。`docs/27`の3.2の手順で、試し実行の結果をユーザーに示し、許可を取ってから行う。

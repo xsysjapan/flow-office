@@ -204,6 +204,59 @@ php artisan <補正コマンド> --apply --backup-table=stored_events_backup_202
   再計算する。締め・提出済みの月のスナップショットとの差は、リハーサルで確認する。
 - 有給・特別休暇・代休の口座と勤怠の休暇ビューを空から再生成しても、作り直し前の再生成と同じ状態になること。
 
+### 作り直しの最後の工程(有給口座・付与予定のストリーム分離)
+
+作り直し(`EventStoreRebuilder`)は、id・版を振り直した後の最後の工程として`PaidLeaveStreamRekeyer`をかける(次節と同じ変換)。
+古い形のバックアップから作り直しても、有給口座は新しいストリームIDで`userId`を持ち、付与予定のイベントは出力に無い。
+
+- 途中の工程(`UnallocatedUsageAllocator`・各Rebuilder)は`aggregate_uuid`を社員IDとして扱う。付け替えは必ず最後に行う。
+- 作り直しでは事前条件を見ずに付与予定の行を取り除く(旧版の付与予定イベントはReadModelから現行の形へ置き換えた後に取り除かれる)。
+  取り除いた件数は試し実行の報告(「最後の工程」)に出る。付与予定の付与済み・上書き・個別修正を残したい場合は、この変換の前に判断する。
+- 取り除いた行の分だけidが飛ぶため、作り直しではidを1から詰め直す(既存の`--verify`のid連番の検査はそのまま通る)。
+
+## 有給口座・付与予定のストリーム付け替え(変更セット 20261021-paid-leave-aggregate-stream-id、論点3)
+
+有給口座(`paid_leave_account.*`)・付与予定(`paid_leave_schedule.*`)の集約IDは、以前は社員IDそのものだった(社員の集約と同じストリーム)。
+新しいコードは有給口座を`PaidLeaveAccountAggregate::streamIdFor(userId)`、付与予定を`PaidLeaveScheduleAggregate::streamIdFor(userId)`の
+別ストリームに書き、全イベントが`userId`を持つ。作り直し済みの本番の履歴は、専用の変換で直す(既存の作り直しはもう一度かけられない)。
+
+### 変換規則(`App\Domain\EventSourcing\Rebuild\PaidLeaveStreamRekeyer`。1行を1行に写す純粋な変換)
+
+- `paid_leave_account.*`: payloadに`userId`(元の`aggregate_uuid`)を入れ、`aggregate_uuid`と`meta_data`の`aggregate-root-uuid`を
+  `PaidLeaveAccountAggregate::streamIdFor(userId)`に替える。payloadの`userId`から作ったIDが`aggregate_uuid`と一致する行(付け替え済み)は
+  変えない(2回かけても同じ)。
+- `paid_leave_schedule.*`: 取り除く(自動付与の機能は使われておらず、生成は無かったことにする)。
+- 版: 影響するストリーム(付け替えた先の有給口座、行が抜けて詰まる元の社員の集約)だけを、id順に1から振り直し、`meta_data`の
+  `aggregate-root-version`も合わせる。それ以外の行は`id`・版・payload・meta・`created_at`を変えない。残る行の`id`は変えない
+  (取り除いた分は飛び番)。
+- 事前条件(1件でもあれば変換せず、件数を報告する): `paid_leave_schedule.entry_granted`・`assessment_overridden`・`entry_manually_edited`、
+  `paid_leave_account.grant_created`で`source='scheduled_batch'`のもの(付与予定が実際に使われていた形跡)。手動付与(`source='manual'`)・
+  移行(`carried_over`)は止める理由にしない(付け替えて残す)。
+
+### 実行(`leave:rekey-paid-leave-streams`。`#[AdminExecutable]`は付けず、本番ではメンテナンス中にCLIで実行する)
+
+```bash
+php artisan leave:rekey-paid-leave-streams            # 試し実行(既定。付け替える行・取り除く付与予定の行(種類別)・旧ID→新IDの件数・事前条件の結果)
+php artisan leave:rekey-paid-leave-streams --apply    # stored_events_rebuilt に書き、--verify を行う(事前条件に違反があれば拒否)
+php artisan leave:rekey-paid-leave-streams --verify   # stored_events_rebuilt を検査する
+php artisan leave:rekey-paid-leave-streams --swap     # 検査が通っていれば stored_events と入れ替える(元の表は stored_events_before_rekey_YYYYMMDDHHMMSS)
+```
+
+書き込み・入れ替えは`EventStoreRebuildWriter`(`write`・`swap`)を使う。既存の作り直しの事前条件(新しい休暇の種類がある等)では止めず、
+この変換専用の事前条件と検証(`PaidLeaveStreamRekeyVerifier`)を持つ。既存の`verify`のid連番の検査は行わない(付与予定の行を取り除くとidが飛ぶため)。
+
+### この変換の検証(`--verify`)
+
+1. `aggregate_uuid`が`users.id`の行は`user.*`だけ。
+2. `paid_leave_account.*`で、payloadの`userId`から作ったIDが`aggregate_uuid`(と`meta_data`の`aggregate-root-uuid`)と一致する。
+3. `paid_leave_schedule.*`が0件。
+4. 有給口座・付与予定・社員(`aggregate_uuid`が`users.id`)以外の行が、元の表と`id`・版・payload・meta・`created_at`すべて一致する(行の過不足も違反)。
+5. `EventRestorabilityChecker`が通る(全行を現行のイベントクラスへ復元できる)。
+
+付け替えの前後の再生結果は、`leave:rebuild-event-store --readmodel-fingerprint`(・`--readmodel-diff`)で比べる。基準A(付け替え前に全ReadModelを
+空にして再生)と、付け替え・swap後に空にして再生した指紋が、`paid_leave_schedule_entries`・`paid_leave_schedule_assessments`
+(付け替え後は空になる)を除いて一致すること。リリース手順は`docs/27-release-runbook.md` 3.2。
+
 ## ロールバック
 
 補正適用中に失敗した場合、イベント・Projection補正はロールバックされる。再実行前に原因を修正し、

@@ -146,6 +146,46 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
   で表を元に戻し、ReadModelを3の方法で取ったバックアップから戻し、旧コードを再配備する。新しいコードは旧イベントを読めないため、
   表とコードは同時に戻す。8以降の問題は、DB全体のバックアップからの復元を検討する(ユーザーの判断)。
 
+### 3.2 有給口座・付与予定のAggregateId分離(変更セット `20261021-paid-leave-aggregate-stream-id`)のリリース手順
+
+有給口座・付与予定のイベントを、社員IDとは別のストリームIDに分けるリリース。新しいコードは、付け替えの前の履歴を正しく読めない
+(空のストリームを読んだ状態で記録される)ため、付け替えが終わる前に1件でも書かれてはならない。本番の過去のイベントは、
+`leave:rekey-paid-leave-streams`で付け替える(有給口座は新しいIDへ、付与予定の行は取り除く。変換規則・事前条件・検証は
+`docs/32-stored-event-history-normalization.md`)。本番での実行の前に、複製DBでリハーサルする。
+
+止めるもの(付け替えの前から、再開まで):
+
+- `php artisan down`(メンテナンスモード)
+- cronの`schedule:run`(`paid-leave:roll-schedules`・警告・社員同期など、有給口座・付与予定に書くスケジューラ)
+- キュー(空になるまで処理してから止める。`userId`の無いイベントを持つ古いジョブ(`ReapplyPaidLeaveSchedulePolicyJob`等)を残さない)
+- 打刻端末・API・MCPの受付
+
+実行の順:
+
+1. 本番の複製DBでリハーサルする。複製に対して下の4〜8を行い、8の指紋の比較まで確認する。
+2. 本番のDB全体と、全ReadModelのテーブルのバックアップを取る(戻し方に使う)。
+3. 新しいコードを配備する(`php artisan migrate --force`があれば実行する)。止めるものは、ここまでに止めておく。
+4. 試し実行: `php artisan leave:rekey-paid-leave-streams`。付け替える行数・取り除く付与予定の行数(種類別)・旧ID→新IDの対応の件数を確かめる。
+   事前条件に違反がある(付与予定の付与済み・判定の上書き・個別修正、`source='scheduled_batch'`の付与)ときは止まる。件数をユーザーに報告して判断を仰ぐ。
+5. `php artisan leave:rekey-paid-leave-streams --apply`(`stored_events_rebuilt`に書き、検査する)。検査だけを再度行う場合は`--verify`。
+6. `php artisan leave:rekey-paid-leave-streams --swap`(検査が通っている場合のみ。元の表は`stored_events_before_rekey_YYYYMMDDHHMMSS`として残る)。
+7. ReadModelを作り直す: `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、`php artisan event-sourcing:replay`で
+   全Projectorを再生成する(必ず空にしてから)。
+8. 指紋を比べる(原則2の確認。リハーサルと本番で同じことをする)。
+   - 付け替えの前(手順4の前)に、全ReadModelを空にして再生し、`php artisan leave:rebuild-event-store --readmodel-fingerprint`を取る(基準A)。
+   - 7の再生の後に、もう一度指紋を取る(B)。
+   - AとBの差が、付与予定の2つの表(`paid_leave_schedule_entries`・`paid_leave_schedule_assessments`。Bでは空になる)を除いて0件であること。
+     差があれば`--readmodel-fingerprint-rows=<テーブル>`・`--readmodel-diff=<比較先DB>`で行を特定して止める。
+   - 本番のReadModelと基準Aの差は、別件として報告する。
+9. 受付を再開する(`php artisan up`、`schedule:run`・キュー・打刻端末・API・MCP)。再開後に、有給の付与・消化・履歴の画面と、
+   次の`paid-leave:roll-schedules`(自動付与が有効な社員がいれば、新しいIDで付与予定が作り直される)を確認する。
+
+- 戻し方: 表をRENAMEで戻し(`RENAME TABLE stored_events TO stored_events_rekeyed_失敗時刻, stored_events_before_rekey_YYYYMMDDHHMMSS TO stored_events`)、
+  ReadModelを2のバックアップから戻す(または旧コードで再生する)、旧コードを再配備する。付け替えでは残る行のidが変わらないので、戻すのは簡単。
+  表とコードは同時に戻す(新しいコードは付け替え前の履歴を、旧コードは付け替え後の履歴を、正しく読めない)。
+- 本番で実行する前に、試し実行(手順4)の結果をユーザーに示して許可を取る(`data-correction`スキル)。許可の日時と内容は、変更セットの
+  「レビュー履歴」に残す。
+
 ## 4. frontend/ のデプロイ手順
 
 ```

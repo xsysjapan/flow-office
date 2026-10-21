@@ -43,6 +43,32 @@ final class EventStoreRebuildWriter
     }
 
     /**
+     * stored_events の全行を、作り直し後の行と同じ形(RebuildResult::$rows の Row形)で id順に読む。PaidLeaveStreamRekeyer の入力。
+     *
+     * @return list<array{id: int, aggregate_uuid: ?string, aggregate_version: ?int, event_version: int, event_class: string, event_properties: array<string, mixed>, meta_data: array<string, mixed>, created_at: string}>
+     */
+    public function readRowArrays(string $table = 'stored_events'): array
+    {
+        $rows = [];
+        DB::table($table)->orderBy('id')->chunkById(self::CHUNK, function ($chunk) use (&$rows): void {
+            foreach ($chunk as $row) {
+                $rows[] = [
+                    'id' => (int) $row->id,
+                    'aggregate_uuid' => $row->aggregate_uuid !== null ? (string) $row->aggregate_uuid : null,
+                    'aggregate_version' => $row->aggregate_version !== null ? (int) $row->aggregate_version : null,
+                    'event_version' => (int) ($row->event_version ?? 1),
+                    'event_class' => (string) $row->event_class,
+                    'event_properties' => json_decode((string) $row->event_properties, true, 512, JSON_THROW_ON_ERROR),
+                    'meta_data' => json_decode((string) ($row->meta_data ?? '[]'), true, 512, JSON_THROW_ON_ERROR),
+                    'created_at' => (string) $row->created_at,
+                ];
+            }
+        });
+
+        return $rows;
+    }
+
+    /**
      * ReadModel(attendance_days)の現在値(勤怠日ID => 現在値)。旧コードが直接書いた勤怠の事実はReadModelにしか無いため、
      * 勤怠の変換(論点18 2.4)の入力に使う。休憩・休暇区間・打刻の有無も読む。
      *
@@ -278,7 +304,13 @@ final class EventStoreRebuildWriter
             throw new RuntimeException("{$table} が既に存在します。");
         }
 
-        Schema::create($table, function (Blueprint $blueprint) use ($table): void {
+        // SQLiteの索引名はデータベース全体で一意。swap後の stored_events は前回の作り直し表の索引名を持ち続けるので、同名なら避ける。
+        $indexName = "{$table}_stream_unique";
+        if (collect(Schema::getIndexes('stored_events'))->pluck('name')->contains($indexName)) {
+            $indexName .= '_next';
+        }
+
+        Schema::create($table, function (Blueprint $blueprint) use ($indexName): void {
             $blueprint->id();
             $blueprint->uuid('aggregate_uuid')->nullable();
             $blueprint->unsignedBigInteger('aggregate_version')->nullable();
@@ -287,7 +319,7 @@ final class EventStoreRebuildWriter
             $blueprint->json('event_properties');
             $blueprint->json('meta_data');
             $blueprint->timestamp('created_at');
-            $blueprint->unique(['aggregate_uuid', 'aggregate_version'], "{$table}_stream_unique");
+            $blueprint->unique(['aggregate_uuid', 'aggregate_version'], $indexName);
         });
 
         foreach (array_chunk($rows, self::CHUNK) as $chunk) {
