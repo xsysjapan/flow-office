@@ -103,28 +103,33 @@ class ScheduleRecalculationReactorTest extends TestCase
             'prescribed_weekly_minutes' => 1440,
             'is_shift_based' => false,
         ]);
-        $this->createRule($workStyle, [6 => 5, 18 => 6, 30 => 6, 42 => 8]);
+        // 区分が変わっても日数が同じになるよう、比例(週3日)の表と通常の表に同じ日数を入れる。
+        $this->createRule($workStyle, [6 => 5, 18 => 6, 30 => 6, 42 => 8], 'proportional_3');
+        $this->createRule($workStyle, [6 => 5, 18 => 6, 30 => 6, 42 => 8], 'normal', createRule: false);
 
         return $workStyle;
     }
 
     /**
      * @param  array<int, int>  $stepsByMonths  継続勤務月数 => 付与日数
+     * @param  string  $grantCategory  付与日数の表の区分(比例の社員は`proportional_N`の表を引く)
      */
-    private function createRule(WorkStyle $workStyle, array $stepsByMonths): void
+    private function createRule(WorkStyle $workStyle, array $stepsByMonths, string $grantCategory = 'normal', bool $createRule = true): void
     {
-        $rule = PaidLeaveGrantRule::query()->create([
-            'name' => $workStyle->code,
-            'work_style_id' => $workStyle->id,
-            'min_attendance_rate' => 80,
-            'first_grant_after_months' => 6,
-            'grant_cycle_months' => 12,
-            'grant_cycle_type' => PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY,
-            'is_active' => true,
-        ]);
+        $rule = $createRule
+            ? PaidLeaveGrantRule::query()->create([
+                'name' => $workStyle->code,
+                'work_style_id' => $workStyle->id,
+                'min_attendance_rate' => 80,
+                'first_grant_after_months' => 6,
+                'grant_cycle_months' => 12,
+                'grant_cycle_type' => PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY,
+                'is_active' => true,
+            ])
+            : PaidLeaveGrantRule::query()->where('work_style_id', $workStyle->id)->firstOrFail();
 
         foreach ($stepsByMonths as $months => $days) {
-            $rule->steps()->create(['continuous_service_months' => $months, 'grant_days' => $days]);
+            $rule->steps()->create(['grant_category' => $grantCategory, 'continuous_service_months' => $months, 'grant_days' => $days]);
         }
     }
 

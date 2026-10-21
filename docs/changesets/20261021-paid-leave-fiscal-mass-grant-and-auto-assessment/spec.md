@@ -344,6 +344,8 @@
 - 2026-03-31入社の社員には、翌日の2026-04-01に2件(計21日)を付与する(ユーザー回答: 「そのままでよい」)。
 - 日付の計算: `addMonths`を`addMonthsNoOverflow`にする。8/30・8/31入社の半年後が3/2・3/3になって、法定の3/1より遅れる
   ことを防ぐ。前倒しかどうかの判定にも同じ計算を使う。
+  - 8/31入社の半年後は2/28(閏年は2/29)になる。法定(3/1)より1日早い付与で、前倒しとして認められる。応当日の無い月だけ
+    翌日にする規則は足さない(実装時の判断。初版のテストの「3/1」は書き誤り)。
 - 名目の月数は、`first_grant_after_months`から計算する(初回=`first_grant_after_months`、以後+12)。規則の説明の「6・18か月」は
   既定値の例。
 - 論点3の「名目の月数が行に無ければ、付与予定のイベントに足す(実装時に確かめる)」は、`20261021-paid-leave-same-day-grants`で
@@ -357,7 +359,7 @@
   - 組の操作: 上書き・付与・置き換えが2行に及ぶ。片方だけの一括付与は422。
   - まとめた2件の後、付与済みを起点にした次回(名目の大きい方+12)。
   - 利用開始日による開始: 上の例。
-  - 8/31入社の半年後が3/1。
+  - 8/31入社の半年後が2/28(上記)。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
@@ -558,4 +560,32 @@
   `PaidLeaveGrantRuleResolver`に切り出して、判定と共有する。
 
 ## 実装結果
+### 段階1(コミット済み)
+- backend
+  - Support: `FiscalYearCalculator`(勤怠の年度の計算と共有)、`PaidLeaveGrantRuleResolver`(`matchingRuleFor`から切り出した)、
+    `FiscalYearStartResolver`、`GrantCategoryClassifier::proportionalGrantCategoryFor`
+  - Projector・Reactor: `PaidLeaveFiscalYearSettingsProjector`、`ReapplyScheduleOnFiscalYearStartChangedReactor`
+  - migration 4本(`2026_10_21_000002`〜`000005`)
+  - API: `PaidLeaveController`、`CompanyCalendarController`の月日の検証
+  - 運用コマンド: `paid-leave:schedule:reapply-policy`
+  - docs: 08・09・16・27(3.3)
+- frontend
+  - 部品: 付与方式の選択(`PaidLeaveGrantCycleTypeField`)、区分ごとの表(`PaidLeaveGrantStepsEditor`)
+  - 画面: 作成・編集・プレビュー・一覧
+  - e2e: `scenario-00`(初期値が法定の写しになったため)
+- 実装時の判断
+  - 8/31入社の半年後は2/28(上記)。
+  - 付与済みの行の名目の月数がnullのときは、入社日からの経過月数で推定する。
+  - 週所定日数の小数は切り捨てる。
+  - 勤務形態が無い社員、区分が要確認の社員は、ルールに表があっても要確認にする。
+  - 同じ区分・同じ月数の重複は422にする。
+- 検証(委譲元で実行)
+  - backend全件2046件PASS
+  - frontend: tsc OK、unit 1036件PASS
+  - e2e: `scenario-00`・`03`・`15`は全件PASS
+  - `scenario-08`は2件失敗。変更前(`259c8fa`)でも同じ2件が失敗し、今回の変更とは無関係。
+    - 1件目: すでに削除した`paid-leave:grant-scheduled`を呼んでいる。
+    - 2件目: 付与済みの社員に、それより前の日付で付与しようとしている。
+- 未検証: MySQLでのmigration(uniqueの付け替え)。リリースの前に、本番と同じMySQLで確かめる。
+### 段階2
 未着手

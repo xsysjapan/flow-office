@@ -34,6 +34,18 @@ class ReapplyPaidLeaveSchedulePolicyJob implements ShouldQueue
 
     public function handle(CommandBus $commandBus, ScheduleCandidateGenerator $generator): void
     {
+        $this->reapplyAll($commandBus, $generator);
+    }
+
+    /**
+     * 対象社員全員の未確定Scheduleを作り直す。運用コマンド`paid-leave:schedule:reapply-policy`も
+     * 同じ処理を同期で呼ぶ。
+     *
+     * @return int 作り直した社員の数(失敗した社員は含まない)
+     */
+    public function reapplyAll(CommandBus $commandBus, ScheduleCandidateGenerator $generator): int
+    {
+        $processed = 0;
         $from = Carbon::today();
         $to = $from->copy()->addYear();
 
@@ -54,11 +66,15 @@ class ReapplyPaidLeaveSchedulePolicyJob implements ShouldQueue
                     fromDate: $from->toDateString(),
                     overrideManualEdits: true,
                 ));
+
+                $processed++;
             } catch (Throwable $e) {
                 // 1社員の失敗が他の社員の再計算に影響しないようにする
                 // (RollPaidLeaveSchedulesCommandと同じフェイルセーフパターン)。
                 report($e);
             }
         }
+
+        return $processed;
     }
 }

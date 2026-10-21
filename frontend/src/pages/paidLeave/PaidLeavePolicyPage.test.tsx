@@ -3,8 +3,10 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
+import * as workCalendarsApi from '../../api/workCalendars'
 import type {
   Paginated,
   PaidLeaveGrant,
@@ -14,6 +16,7 @@ import type {
   PaidLeaveScheduleEntry,
   PaidLeaveUsage,
   User,
+  WorkCalendar,
 } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { PaidLeavePolicyPage } from './PaidLeavePolicyPage'
@@ -25,8 +28,9 @@ const rule: PaidLeaveGrantRule = {
   min_attendance_rate: 0.8,
   first_grant_after_months: 6,
   grant_cycle_months: 12,
+  grant_cycle_type: 'mass_grant_month',
   is_active: true,
-  steps: [{ continuous_service_months: 6, grant_days: 10 }],
+  steps: [{ grant_category: 'normal', continuous_service_months: 6, grant_days: 10 }],
 }
 
 const policies: PaidLeaveGrantPolicies = {
@@ -34,6 +38,22 @@ const policies: PaidLeaveGrantPolicies = {
   normal: [{ continuous_service_months: 6, grant_days: 10 }],
   proportional_version: 'v1',
   proportional: [{ weekly_scheduled_days_category: '4', continuous_service_months: 6, grant_days: 7 }],
+}
+
+function workCalendar(overrides: Partial<WorkCalendar>): WorkCalendar {
+  return {
+    id: 'calendar-1',
+    name: '標準カレンダー',
+    week_starts_on: 1,
+    fiscal_year_start_month: 4,
+    fiscal_year_start_day: 1,
+    holiday_calendar_source_id: null,
+    is_default: true,
+    status: 'active',
+    weekday_holiday_pattern: { '1': 'working', '2': 'working', '3': 'working', '4': 'working', '5': 'working', '6': 'legal_holiday', '7': 'legal_holiday' },
+    allow_daily_holiday_override: false,
+    ...overrides,
+  }
 }
 
 const targetUser: User = {
@@ -60,10 +80,16 @@ const overdueEntry: PaidLeaveScheduleEntry = {
   attendance_rate: 90,
 }
 
-function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/paid-leave', overdue: PaidLeaveScheduleEntry[] = []) {
+function renderPage(
+  rules: PaidLeaveGrantRule[] = [rule],
+  initialPath = '/admin/paid-leave',
+  overdue: PaidLeaveScheduleEntry[] = [],
+  calendars: WorkCalendar[] = [workCalendar({})],
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantRules').mockResolvedValue(rules)
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantPolicies').mockResolvedValue(policies)
+  vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue(calendars)
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveScheduleEntries').mockImplementation(async (params) =>
     params.filter === 'overdue' ? overdue : [],
   )
@@ -96,8 +122,11 @@ describe('PaidLeavePolicyPage', () => {
 
     expect(await screen.findByText('正社員標準ルール')).toBeInTheDocument()
     const ruleItem = screen.getByText('正社員標準ルール').closest('li')!
+    expect(within(ruleItem).getByText('年度はじめに一斉付与')).toBeInTheDocument()
     expect(
-      within(ruleItem).getByText('入社日から6か月後に最初の付与。以後12か月ごとに、付与テーブルに沿って日数が増えていきます。出勤率が0.8%未満の月は付与されません。'),
+      within(ruleItem).getByText(
+        '入社後最初の年度開始日(4月1日)と、入社から6か月の早い方に初回を付与。初回が前倒しになるときは、次の段もまとめて付与。以後は毎年の年度開始日。出勤率が0.8%未満の月は付与されません。',
+      ),
     ).toBeInTheDocument()
     expect(within(ruleItem).getByText('6か月')).toBeInTheDocument()
     expect(within(ruleItem).getByText('10日')).toBeInTheDocument()
@@ -107,7 +136,8 @@ describe('PaidLeavePolicyPage', () => {
     renderPage()
 
     expect(await screen.findByText('法定付与日数(参考・自動適用)')).toBeInTheDocument()
-    expect(await screen.findByText('週4日')).toBeInTheDocument()
+    const matrixSection = screen.getByText('法定付与日数(参考・自動適用)').parentElement!
+    expect(await within(matrixSection).findByText('週4日')).toBeInTheDocument()
     expect(screen.queryByRole('switch')).not.toBeInTheDocument()
   })
 
@@ -126,6 +156,7 @@ describe('PaidLeavePolicyPage', () => {
     renderPage([])
 
     await userEvent.type(await screen.findByLabelText('ルール名'), '新ルール')
+    await screen.findByText('(この継続勤務月数の法定最低日数: 10日)')
     await userEvent.click(screen.getByRole('button', { name: 'ルールを作成' }))
 
     await waitFor(() =>
@@ -134,10 +165,66 @@ describe('PaidLeavePolicyPage', () => {
         min_attendance_rate: undefined,
         first_grant_after_months: undefined,
         grant_cycle_months: undefined,
+        grant_cycle_type: 'mass_grant_month',
         is_active: true,
-        steps: undefined,
+        // 初期値は法定表の写し(全区分)。通常の表が先、比例は週所定日数4→1の順。
+        steps: [
+          { grant_category: 'normal', continuous_service_months: 6, grant_days: 10 },
+          { grant_category: 'proportional_4', continuous_service_months: 6, grant_days: 7 },
+        ],
       }),
     )
+  })
+
+  it('selects 年度はじめに一斉付与 by default and shows the default calendar year start', async () => {
+    renderPage([])
+
+    expect(await screen.findByLabelText('年度はじめに一斉付与')).toBeChecked()
+    expect(screen.getByLabelText('入社日を基準に付与')).not.toBeChecked()
+    expect(await screen.findByText('既定の会社カレンダーの年度開始日: 4月1日')).toBeInTheDocument()
+  })
+
+  it('shows 4月1日(既定) when there is no default calendar', async () => {
+    renderPage([], '/admin/paid-leave', [], [workCalendar({ is_default: false })])
+
+    expect(await screen.findByText('既定の会社カレンダーの年度開始日: 4月1日(既定)')).toBeInTheDocument()
+  })
+
+  it('uses the default calendar year start when it differs from 4月1日', async () => {
+    renderPage([], '/admin/paid-leave', [], [workCalendar({ fiscal_year_start_month: 10, fiscal_year_start_day: 1 })])
+
+    expect(await screen.findByText('既定の会社カレンダーの年度開始日: 10月1日')).toBeInTheDocument()
+  })
+
+  it('sends anniversary when 入社日を基準に付与 is selected', async () => {
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveGrantRule').mockResolvedValue({ ...rule, id: 2, name: '新ルール' })
+    renderPage([])
+
+    await userEvent.type(await screen.findByLabelText('ルール名'), '新ルール')
+    await userEvent.click(screen.getByLabelText('入社日を基準に付与'))
+    await userEvent.click(screen.getByRole('button', { name: 'ルールを作成' }))
+
+    await waitFor(() =>
+      expect(paidLeaveApi.createPaidLeaveGrantRule).toHaveBeenCalledWith(
+        expect.objectContaining({ grant_cycle_type: 'anniversary' }),
+      ),
+    )
+  })
+
+  it('shows a 422 error on the tab of the category whose row failed', async () => {
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveGrantRule').mockRejectedValue(
+      new ApiError(422, '入力内容に誤りがあります。', { 'steps.1.grant_days': ['週4日の法定最低日数は7日です。'] }),
+    )
+    renderPage([])
+
+    await userEvent.type(await screen.findByLabelText('ルール名'), '新ルール')
+    await screen.findByText('(この継続勤務月数の法定最低日数: 10日)')
+    await userEvent.click(screen.getByRole('button', { name: 'ルールを作成' }))
+
+    const weekly4Tab = await screen.findByRole('tab', { name: '週4日(エラーあり)' })
+    expect(screen.getByRole('tab', { name: '通常' })).not.toHaveTextContent('エラーあり')
+    await userEvent.click(weekly4Tab)
+    expect(within(screen.getByRole('tabpanel')).getByText('週4日の法定最低日数は7日です。')).toBeInTheDocument()
   })
 
   it('grants paid leave to the selected user', async () => {
@@ -245,8 +332,7 @@ describe('PaidLeavePolicyPage', () => {
 
     renderPage()
 
-    await screen.findByText('週4日')
-    const normalSection = screen.getByText(/通常付与\(週所定労働日数5日以上/).closest('div')!
+    const normalSection = (await screen.findByText(/通常付与\(週所定労働日数5日以上/)).closest('div')!
     await userEvent.click(within(normalSection).getByRole('button', { name: '新しいバージョンを作成' }))
 
     const dialog = await screen.findByRole('dialog')
@@ -277,8 +363,7 @@ describe('PaidLeavePolicyPage', () => {
 
     renderPage()
 
-    await screen.findByText('週4日')
-    const proportionalSection = screen.getByText(/比例付与\(週所定労働日数4日以下/).closest('div')!
+    const proportionalSection = (await screen.findByText(/比例付与\(週所定労働日数4日以下/)).closest('div')!
     await userEvent.click(within(proportionalSection).getByRole('button', { name: '新しいバージョンを作成' }))
 
     const dialog = await screen.findByRole('dialog')

@@ -1,9 +1,11 @@
 import { apiFetch } from './client'
 import type {
   PaidLeaveGrant,
+  PaidLeaveGrantCycleType,
   PaidLeaveGrantPolicies,
   PaidLeaveGrantPolicyStep,
   PaidLeaveGrantRule,
+  PaidLeaveGrantRuleStep,
   PaidLeaveGrantRuleTargetUser,
   PaidLeaveProportionalGrantPolicyStep,
   PaidLeaveRequest,
@@ -33,8 +35,9 @@ export interface CreatePaidLeaveGrantRuleInput {
   min_attendance_rate?: number
   first_grant_after_months?: number
   grant_cycle_months?: number
+  grant_cycle_type: PaidLeaveGrantCycleType
   is_active?: boolean
-  steps?: Array<{ continuous_service_months: number; grant_days: number }>
+  steps?: PaidLeaveGrantRuleStep[]
 }
 
 export function createPaidLeaveGrantRule(input: CreatePaidLeaveGrantRuleInput): Promise<PaidLeaveGrantRule> {

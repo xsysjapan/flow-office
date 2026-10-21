@@ -1030,24 +1030,46 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - min_attendance_rate
 - first_grant_after_months
 - grant_cycle_months
-- grant_cycle_type(`anniversary`(既定、hire_date起算の周年サイクル)/
-  `mass_grant_month`(会社が指定した特定月への一斉付与。前倒しアルゴリズムは
-  `ScheduleCandidateGenerator::massGrantScheduledDates()`参照))
-- mass_grant_month(nullable, 1-12。`grant_cycle_type=mass_grant_month`のときのみ使用)
+- grant_cycle_type(`mass_grant_month`(既定。年度はじめに一斉付与。一斉付与日は既定の会社カレンダーの年度開始日に連動する。
+  日付の計算は`ScheduleCandidateGenerator::massGrantScheduledDates()`参照)/
+  `anniversary`(入社日を基準に付与する、hire_date起算の周年サイクル))
 - is_active
 - created_at / updated_at
 
-`work_style_id IS NULL`の全社共通ルールが1件、migrationで冪等に投入される
-(`grant_cycle_type=mass_grant_month`, `mass_grant_month=4`)。対象社員に一致する
-有効なルールが(work_style固有・全社共通のいずれも)存在しない場合、その社員の
+`mass_grant_month`列(一斉付与の月)は削除した。一斉付与日は`paid_leave_fiscal_year_settings`(下記)の年度開始月日を使う。
+
+`work_style_id IS NULL`の全社共通ルール「全社共通(年度はじめ一斉付与)」が1件、migrationで冪等に投入される
+(`grant_cycle_type=mass_grant_month`)。付与日数の表(`paid_leave_grant_rule_steps`)には法定の写し(全区分)が入っている。
+対象社員に一致する有効なルールが(work_style固有・全社共通のいずれも)存在しない場合、その社員の
 Schedule候補は生成されない(`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
+ルールの選択は、勤務形態のルール→全社ルールの順、同じ種類は`created_at`→`id`の古い方
+(`PaidLeaveGrantRuleResolver`)。
 
 ## paid_leave_grant_rule_steps
 
 - id
 - rule_id
+- grant_category(string, NOT NULL, 既定`normal`。付与日数の表の区分: `normal`/`proportional_4`/`proportional_3`/
+  `proportional_2`/`proportional_1`)
 - continuous_service_months
 - grant_days
+- created_at / updated_at
+
+unique(rule_id, grant_category, continuous_service_months)。
+
+## paid_leave_fiscal_year_settings(有給の一斉付与日に使う年度開始日。付与予定の文脈の読み取りビュー)
+
+既定の会社カレンダーの年度開始月日を、有給(付与予定)の文脈へ写した1行(id=1)のビュー。
+`PaidLeaveFiscalYearSettingsProjector`が`company_calendar.created`・`updated`・`default_changed`・`deleted`のイベントから
+作る(勤怠の文脈のテーブルは読まない)。`FiscalYearStartResolver`が読み、行が無ければ4月1日として扱う。
+初期値は、migrationで今の既定の会社カレンダーから入れる(既定のカレンダーが無ければ行を作らない)。
+
+- id(tinyint, 主キー。常に1)
+- company_calendar_id(uuid, nullable。既定の会社カレンダー。既定のカレンダーが削除されたらnull)
+- fiscal_year_start_month(tinyint)
+- fiscal_year_start_day(tinyint)
+- last_changed_event_id(bigint, nullable。年度開始月日、または既定のカレンダーが実際に変わったイベントの`stored_events.id`。
+  `ReapplyScheduleOnFiscalYearStartChangedReactor`が、名前だけの変更と区別して付与予定を作り直すために使う)
 - created_at / updated_at
 
 ## paid_leave_schedule_entries(将来の付与予定のProjection)

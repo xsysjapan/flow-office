@@ -865,7 +865,15 @@ export interface GroupMember {
   is_primary: boolean;
 }
 
+/** 付与日数の表の区分。通常と比例(週所定日数4/3/2/1)。 */
+export type PaidLeaveGrantCategory =
+  "normal" | "proportional_4" | "proportional_3" | "proportional_2" | "proportional_1";
+
+/** 付与方式。`mass_grant_month`は年度はじめに一斉付与(既定の会社カレンダーの年度開始日)、`anniversary`は入社日基準。 */
+export type PaidLeaveGrantCycleType = "mass_grant_month" | "anniversary";
+
 export interface PaidLeaveGrantRuleStep {
+  grant_category: PaidLeaveGrantCategory;
   continuous_service_months: number;
   grant_days: number;
 }
@@ -945,6 +953,7 @@ export interface PaidLeaveGrantRule {
   min_attendance_rate: number;
   first_grant_after_months: number;
   grant_cycle_months: number;
+  grant_cycle_type: PaidLeaveGrantCycleType;
   is_active: boolean;
   steps?: PaidLeaveGrantRuleStep[];
 }

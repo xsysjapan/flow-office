@@ -186,6 +186,29 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 - 本番で実行する前に、試し実行(手順4)の結果をユーザーに示して許可を取る(`data-correction`スキル)。許可の日時と内容は、変更セットの
   「レビュー履歴」に残す。
 
+### 3.3 有給の年度はじめ一斉付与・付与日数の表の区分(変更セット `20261021-paid-leave-fiscal-mass-grant-and-auto-assessment` 段階1)のリリース手順
+
+付与方式の初期値を「年度はじめに一斉付与」にし、付与日数の表を区分(通常/比例の週4〜1日)ごとに持たせ、一斉付与日を既定の
+会社カレンダーの年度開始日に連動させるリリース。migrationはマスタの変更だけを行い、付与予定の作り直し(Job)は発行しない。
+デプロイの後に、運用コマンドで作り直す。
+
+1. `php artisan migrate --force`を実行する。次を行う。
+   - `paid_leave_grant_rules.grant_cycle_type`の既定値を`mass_grant_month`にし、`mass_grant_month`列を削除する。
+     既定のカレンダーの年度開始月と違う`mass_grant_month`を持つルールがあれば、ルール名と月を出力(コンソールと`storage/logs`)に出す。
+     付与日が年度開始日に変わるので、出力の内容を確認する。
+   - `paid_leave_grant_rule_steps.grant_category`を追加し、uniqueを(rule_id, grant_category, continuous_service_months)へ付け替える。
+   - 勤務形態が比例に分類されるルールの表を`proportional_{N}`へ移し、表が空の全社ルールに法定の写しを入れ、初期の全社ルールの名前を
+     「全社共通(年度はじめ一斉付与)」にする。
+   - `paid_leave_fiscal_year_settings`を作り、今の既定の会社カレンダーから初期値を入れる。
+2. `php artisan paid-leave:schedule:reapply-policy`を実行する(運用コマンド画面からも実行できる)。全アクティブ社員の未確定の
+   付与予定を、新しいルール・年度開始日で作り直す(個別修正の行も作り直す。付与済み・取消済みは変えない)。
+   出力の「作り直した社員の数」と「付与予定日・日数が変わった行の数」を確かめる。付与済みの社員は、最後の付与済みの行を起点に
+   次回が並ぶ。
+3. 付与予定画面で、一斉付与日・日数(通常は法定の通常表、比例の社員は週日数に応じた比例表)を確認する。
+   既存の比例のルールが要確認に後退していないこと。
+- 戻し方: 付与予定は、ルール・年度開始日を戻して`paid-leave:schedule:reapply-policy`をもう一度実行すれば作り直せる。
+  migrationの`down`は、列の既定値・区分・uniqueを戻すが、削除した`mass_grant_month`の値は戻らない(出力した内容を控えておく)。
+
 ## 4. frontend/ のデプロイ手順
 
 ```

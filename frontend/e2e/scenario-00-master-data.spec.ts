@@ -132,10 +132,8 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   // --- UC-P001: 有給付与ルール作成 ---
   await page.goto("/admin/paid-leave");
   await page.getByLabel("ルール名").fill(`E2Eテスト用付与ルール${fiscalYear}`);
-  await page.getByLabel("継続勤務(か月)").fill("6");
-  await page.locator("#step-days").fill("10");
-  await page.getByRole("button", { name: "追加" }).click();
-  await expect(page.getByText("継続勤務6か月→10日").last()).toBeVisible();
+  // 付与日数の初期値は法定表の写し(通常・比例の全区分)。通常の6か月は10日。
+  await expect(page.getByLabel("通常 継続勤務6か月の付与日数")).toHaveValue("10");
   await page.getByRole("button", { name: "ルールを作成" }).click();
   await expect(
     page.getByText(`E2Eテスト用付与ルール${fiscalYear}`),

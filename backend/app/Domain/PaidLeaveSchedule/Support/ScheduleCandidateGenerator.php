@@ -2,12 +2,13 @@
 
 namespace App\Domain\PaidLeaveSchedule\Support;
 
-use App\Models\PaidLeaveGrantPolicy;
 use App\Models\PaidLeaveGrantRule;
-use App\Models\PaidLeaveProportionalGrantPolicy;
+use App\Models\PaidLeaveGrantRuleStep;
+use App\Models\PaidLeaveScheduleEntry;
 use App\Models\User;
 use App\Models\UserWorkStyleMonthlyAssignment;
 use App\Models\WorkStyle;
+use App\Support\FiscalYearCalculator;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -40,10 +41,26 @@ use Illuminate\Support\Str;
  * - `grant_cycle_type === 'mass_grant_month'`のルールは、hire_date起算の周年ではなく
  *   年度一斉付与月への前倒しアルゴリズムで初回・以降の付与日を算出する。
  * - `usage_start_date`より前の候補日は生成しない(黙ってスキップする)。
+ *
+ * docs/changesets/20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md:
+ * - 一斉付与日は、既定の会社カレンダーの年度開始日(`FiscalYearStartResolver`)に連動する(ルールに月は持たない)。
+ * - ルールの付与日数の表は区分(`grant_category`)ごと。社員の区分(通常/比例の週日数)から引く。
+ * - 付与済みの付与予定がある社員は、最後の付与済みの行を起点に次の年度開始日から並べる。
  */
 class ScheduleCandidateGenerator
 {
-    public function __construct(private readonly GrantCategoryClassifier $classifier) {}
+    private readonly PaidLeaveGrantRuleResolver $ruleResolver;
+
+    private readonly FiscalYearStartResolver $fiscalYearStartResolver;
+
+    public function __construct(
+        private readonly GrantCategoryClassifier $classifier,
+        ?PaidLeaveGrantRuleResolver $ruleResolver = null,
+        ?FiscalYearStartResolver $fiscalYearStartResolver = null,
+    ) {
+        $this->ruleResolver = $ruleResolver ?? new PaidLeaveGrantRuleResolver;
+        $this->fiscalYearStartResolver = $fiscalYearStartResolver ?? new FiscalYearStartResolver;
+    }
 
     /**
      * @return array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, isDeterminate: bool, nominalServiceMonths: int}>
@@ -62,7 +79,7 @@ class ScheduleCandidateGenerator
         }
 
         $workStyle = $this->currentWorkStyleFor($user);
-        $rule = $this->matchingRuleFor($workStyle);
+        $rule = $this->ruleResolver->resolveFor($workStyle);
 
         // spec.md 移植対象Feature2: 対象社員にマッチする有効な付与ルールが
         // (work_style固有・全社共通のいずれも)存在しない場合、Schedule候補を
@@ -76,7 +93,7 @@ class ScheduleCandidateGenerator
             : GrantCategoryClassifier::CATEGORY_NEEDS_REVIEW;
 
         $scheduledDates = $rule->grant_cycle_type === PaidLeaveGrantRule::CYCLE_TYPE_MASS_GRANT_MONTH
-            ? $this->massGrantScheduledDates($user->hire_date, $rule, $to)
+            ? $this->massGrantScheduledDates($user, $rule, $to)
             : $this->anniversaryScheduledDates($user->hire_date, $rule, $to);
 
         $candidates = [];
@@ -110,40 +127,6 @@ class ScheduleCandidateGenerator
     }
 
     /**
-     * 対象社員の`WorkStyle`に一致する`paid_leave_grant_rules`を優先し、無ければ
-     * `work_style_id`がnullの全社共通ルールをフォールバックとして採用する。
-     * 外部(RebuildPaidLeaveScheduleCommand等)から「ある社員が現在どのルールにマッチするか」
-     * を解決する用途で使用される(docs/changesets/20260919-paid-leave-schedule-rebuild/spec.md)。
-     * 同じ種類(勤務形態固有・全社共通)のルールが複数あるときは、`created_at`→`id`の順で古い方を選ぶ
-     * (毎日の再計算で選ばれるルールが日によって変わり、置き換えが出続けるのを防ぐ。
-     * docs/changesets/20261021-paid-leave-schedule-recalc-on-assignment-change/spec.md 論点4)。
-     */
-    public function matchingRuleFor(?WorkStyle $workStyle): ?PaidLeaveGrantRule
-    {
-        if ($workStyle !== null) {
-            $specific = PaidLeaveGrantRule::query()
-                ->where('work_style_id', $workStyle->id)
-                ->where('is_active', true)
-                ->orderBy('created_at')
-                ->orderBy('id')
-                ->with('steps')
-                ->first();
-
-            if ($specific !== null) {
-                return $specific;
-            }
-        }
-
-        return PaidLeaveGrantRule::query()
-            ->whereNull('work_style_id')
-            ->where('is_active', true)
-            ->orderBy('created_at')
-            ->orderBy('id')
-            ->with('steps')
-            ->first();
-    }
-
-    /**
      * `nominalMonths`は継続勤務月数の法定tier判定(`resolveGrantDays`のstep/Policy
      * 参照キー)に使う「名目上の」継続勤務月数。周年方式は`scheduledOn`がちょうど
      * `hire_date + nominalMonths`なので、実際の暦月数とnominalMonthsは常に一致する。
@@ -160,7 +143,7 @@ class ScheduleCandidateGenerator
 
         // 安全弁: hire_dateが極端に古い/未来指定でも無限ループしないよう上限を設ける。
         for ($i = 0; $i < 600; $i++, $months += $grantCycleMonths) {
-            $scheduledOn = $hireDate->copy()->addMonths($months);
+            $scheduledOn = $hireDate->copy()->addMonthsNoOverflow($months);
 
             if ($scheduledOn->gt($to)) {
                 break;
@@ -173,75 +156,98 @@ class ScheduleCandidateGenerator
     }
 
     /**
-     * 年度一斉付与月への前倒しアルゴリズム(spec.md 移植対象Feature1)。
+     * 年度はじめ一斉付与の日付(docs/changesets/20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md 論点3・10)。
+     * 年度開始日は既定の会社カレンダーの年度開始月日(`FiscalYearStartResolver`)。
      *
-     * 1. `sixMonthMark` = hire_date + first_grant_after_months
-     * 2. `nextMassGrantDate` = hire_dateより後の直近の「一斉付与月の1日」
-     * 3. `nextMassGrantDate` が `sixMonthMark` より前なら、初回付与日は前倒しして
-     *    `nextMassGrantDate`(例: 一斉付与月=4月なら、11月〜3月入社者は6ヶ月経過を
-     *    待たず4月に前倒し)。
-     * 4. そうでなければ、初回付与日は `sixMonthMark`(4月〜10月入社者は6ヶ月経過時点。
-     *    一斉付与月まで待つと遅すぎるため)。
-     * 5. 2回目以降は、初回付与日より後の直近の「一斉付与月の1日」(初回付与日自体が
-     *    既にその日である場合は翌年扱い)、以降は毎年。
+     * 付与済みの付与予定が無い社員:
+     * 1. `sixMonthMark` = 入社日 + first_grant_after_months(`addMonthsNoOverflow`)
+     * 2. `firstFiscalStart` = 入社日より後で最初の年度開始日
+     * 3. 初回付与日は両者の早い方(前倒しは可、遅らせない)。名目の継続勤務月数は`first_grant_after_months`。
+     * 4. `firstFiscalStart`が`sixMonthMark`より前(前倒し。同じ日は前倒しではない)なら、同じ日に名目`first+12`の
+     *    2件目もまとめて作る。
+     * 5. 以後は、直前の付与日より後で最初の年度開始日ごと。名目は+12か月ずつ。
      *
-     * `nominalMonths`(法定tier判定用の名目継続勤務月数)は、実際の暦月数
-     * (`hire_date`から`scheduledOn`までの実日数ベースの経過月数)とは別に、
-     * 「これが何回目の付与か」から機械的に定める: 初回は前倒しの有無によらず
-     * 常に`first_grant_after_months`(例:6)、2回目以降は前回の`nominalMonths`+12
-     * (法定の1年ごとの加算)とする。前倒しで実際の経過月数が6ヶ月未満になっても、
-     * `steps`/法定Policyの参照キーには本来の「初回付与」時点の月数(6)を使うことで、
-     * 前倒し付与でも通常の付与日数テーブルが正しく参照される。
+     * 付与済みの付与予定がある社員は、最後の付与済みの付与予定日(同じ日に2件なら名目の大きい方)を起点に、
+     * 起点より後で最初の年度開始日から、名目+12か月ずつ並べる(年度開始日を変えたときに、付与済みの日付と
+     * 二重付与・付与漏れの日付を作らない)。
      *
      * @return array<int, array{scheduledOn: Carbon, nominalMonths: int}>
      */
-    private function massGrantScheduledDates(Carbon $hireDate, PaidLeaveGrantRule $rule, Carbon $to): array
+    private function massGrantScheduledDates(User $user, PaidLeaveGrantRule $rule, Carbon $to): array
     {
-        $massGrantMonth = $rule->mass_grant_month;
-
-        if ($massGrantMonth === null) {
-            // データ不整合(mass_grant_month未設定)。安全側に倒し、周年サイクルへ
-            // フォールバックする(コントローラ側バリデーションで通常発生しない想定)。
-            return $this->anniversaryScheduledDates($hireDate, $rule, $to);
-        }
+        $fiscalStart = $this->fiscalYearStartResolver->resolve();
+        $month = $fiscalStart['month'];
+        $day = $fiscalStart['day'];
+        $hireDate = $user->hire_date->copy()->startOfDay();
 
         $firstGrantAfterMonths = $rule->first_grant_after_months ?? 6;
-        $sixMonthMark = $hireDate->copy()->addMonths($firstGrantAfterMonths);
-        $nextMassGrantDate = $this->nextMassGrantMonthFirstDayAfter($hireDate, $massGrantMonth);
-
-        $firstGrantDate = $nextMassGrantDate->lt($sixMonthMark) ? $nextMassGrantDate : $sixMonthMark;
 
         $dates = [];
-        $current = $firstGrantDate;
-        $nominalMonths = $firstGrantAfterMonths;
+        $lastGranted = $this->lastGrantedEntryFor($user, $firstGrantAfterMonths);
+
+        if ($lastGranted !== null) {
+            $current = $lastGranted['scheduledOn'];
+            $nominalMonths = $lastGranted['nominalMonths'];
+        } else {
+            $sixMonthMark = $hireDate->copy()->addMonthsNoOverflow($firstGrantAfterMonths);
+            $firstFiscalStart = FiscalYearCalculator::nextStartAfter($hireDate, $month, $day);
+            $current = $firstFiscalStart->lt($sixMonthMark) ? $firstFiscalStart : $sixMonthMark;
+            $nominalMonths = $firstGrantAfterMonths;
+
+            $dates[] = ['scheduledOn' => $current->copy(), 'nominalMonths' => $nominalMonths];
+
+            if ($firstFiscalStart->lt($sixMonthMark)) {
+                $nominalMonths += 12;
+                $dates[] = ['scheduledOn' => $current->copy(), 'nominalMonths' => $nominalMonths];
+            }
+        }
 
         // 安全弁: 無限ループ防止。
         for ($i = 0; $i < 600; $i++) {
+            $current = FiscalYearCalculator::nextStartAfter($current, $month, $day);
+            $nominalMonths += 12;
+
             if ($current->gt($to)) {
                 break;
             }
 
             $dates[] = ['scheduledOn' => $current->copy(), 'nominalMonths' => $nominalMonths];
-            $current = $this->nextMassGrantMonthFirstDayAfter($current, $massGrantMonth);
-            $nominalMonths += 12;
         }
 
-        return $dates;
+        // 最初の1〜2件が`$to`より後でも、上のループは2件目以降だけを見るため、ここで取り除く。
+        return array_values(array_filter($dates, fn (array $date) => $date['scheduledOn']->lte($to)));
     }
 
     /**
-     * `$after`より厳密に後の、直近の「$month月1日」を返す。`$after`自身が
-     * ちょうどその日である場合は翌年の同日を返す(=「strictly after」)。
+     * 最後の付与済みの付与予定(付与予定日が最も遅い行。同じ日に複数あれば名目の月数が大きい方)。
+     * 付与予定の文脈のProjection(`paid_leave_schedule_entries`)から読む。
+     *
+     * @return array{scheduledOn: Carbon, nominalMonths: int}|null
      */
-    private function nextMassGrantMonthFirstDayAfter(Carbon $after, int $month): Carbon
+    private function lastGrantedEntryFor(User $user, int $firstGrantAfterMonths): ?array
     {
-        $candidate = Carbon::create($after->year, $month, 1)->startOfDay();
+        $entry = PaidLeaveScheduleEntry::query()
+            ->where('user_id', $user->id)
+            ->where('status', PaidLeaveScheduleEntry::STATUS_GRANTED)
+            ->orderByDesc('scheduled_on')
+            ->orderByDesc('nominal_service_months')
+            ->first();
 
-        if ($candidate->lte($after->copy()->startOfDay())) {
-            $candidate = $candidate->addYear();
+        if ($entry === null) {
+            return null;
         }
 
-        return $candidate;
+        $scheduledOn = Carbon::parse($entry->scheduled_on)->startOfDay();
+
+        if ($entry->nominal_service_months !== null) {
+            $nominalMonths = (int) $entry->nominal_service_months;
+        } else {
+            // 古いイベント由来で名目の月数が無い行。入社日からの経過月数に最も近い「初回+12か月ずつ」の値で推定する。
+            $elapsedMonths = (int) $user->hire_date->copy()->startOfDay()->diffInMonths($scheduledOn);
+            $nominalMonths = $firstGrantAfterMonths + 12 * max(0, (int) round(($elapsedMonths - $firstGrantAfterMonths) / 12));
+        }
+
+        return ['scheduledOn' => $scheduledOn, 'nominalMonths' => $nominalMonths];
     }
 
     public function currentWorkStyleFor(User $user): ?WorkStyle
@@ -283,98 +289,41 @@ class ScheduleCandidateGenerator
             ->all();
     }
 
-    private function resolveGrantDays(?PaidLeaveGrantRule $rule, string $category, ?WorkStyle $workStyle, int $continuousServiceMonths): GrantDaysResult
+    /**
+     * 付与日数。ルールの付与日数の表から、社員の区分(通常/比例の週日数)の表を引く。
+     * 区分は`grant_category`(normal / proportional_N)。シフト勤務は通常の表。区分を決められない
+     * (週0日・年間48日未満・所定日数が未入力・勤務形態なし)、該当する区分の表が無い、継続勤務月数に合う段が無い
+     * ときは、法定へ自動で切り替えず確定不可(要確認)にする。
+     */
+    private function resolveGrantDays(PaidLeaveGrantRule $rule, string $category, ?WorkStyle $workStyle, int $continuousServiceMonths): GrantDaysResult
     {
-        if ($rule !== null) {
-            $step = $rule->steps
-                ->filter(fn ($step) => $step->continuous_service_months <= $continuousServiceMonths)
-                ->sortByDesc('continuous_service_months')
-                ->first();
+        $grantCategory = $this->grantCategoryFor($category, $workStyle);
 
-            if ($step !== null) {
-                return GrantDaysResult::determinate((float) $step->grant_days);
-            }
-
-            // spec.md 移植対象Feature2 (a): ルールは存在するが、対象の継続勤務月数を
-            // カバーするstepが無い。法定Policyへフォールバックはせず、確定不可
-            // (NeedsReview)として扱う(ルールが指定されている以上、その内容が
-            // 不完全であることを可視化する)。
+        if ($grantCategory === null) {
             return GrantDaysResult::indeterminate();
         }
 
+        $step = $rule->steps
+            ->filter(fn ($step) => $step->grant_category === $grantCategory && $step->continuous_service_months <= $continuousServiceMonths)
+            ->sortByDesc('continuous_service_months')
+            ->first();
+
+        if ($step === null) {
+            return GrantDaysResult::indeterminate();
+        }
+
+        return GrantDaysResult::determinate((float) $step->grant_days);
+    }
+
+    /**
+     * 社員の区分から、付与日数の表の区分(`paid_leave_grant_rule_steps.grant_category`)を決める。
+     */
+    private function grantCategoryFor(string $category, ?WorkStyle $workStyle): ?string
+    {
         return match ($category) {
-            GrantCategoryClassifier::CATEGORY_NORMAL => $this->determinateOrIndeterminate(
-                PaidLeaveGrantPolicy::grantDaysFor(
-                    $continuousServiceMonths,
-                    PaidLeaveGrantPolicy::latestVersion() ?? 'v1',
-                )
-            ),
-            GrantCategoryClassifier::CATEGORY_PROPORTIONAL => $this->determinateOrIndeterminate(
-                PaidLeaveProportionalGrantPolicy::grantDaysFor(
-                    $this->weeklyScheduledDaysCategoryFor($workStyle),
-                    $continuousServiceMonths,
-                    PaidLeaveProportionalGrantPolicy::latestVersion() ?? 'v1',
-                )
-            ),
-            GrantCategoryClassifier::CATEGORY_SHIFT => $this->shiftGrantDaysEstimate($workStyle, $continuousServiceMonths),
-            // NeedsReview: 候補日数は未確定。管理者確認前提(依頼書§31の精神)。
-            default => GrantDaysResult::indeterminate(),
+            GrantCategoryClassifier::CATEGORY_NORMAL, GrantCategoryClassifier::CATEGORY_SHIFT => PaidLeaveGrantRuleStep::CATEGORY_NORMAL,
+            GrantCategoryClassifier::CATEGORY_PROPORTIONAL => $workStyle !== null ? $this->classifier->proportionalGrantCategoryFor($workStyle) : null,
+            default => null,
         };
-    }
-
-    /**
-     * spec.md 移植対象Feature2 (b)(c): 法定Policyテーブルに該当月数の行が無い場合
-     * (`grantDaysFor`がnullを返す場合)は、0.0日と確定不可を区別するためindeterminateとする。
-     */
-    private function determinateOrIndeterminate(?float $days): GrantDaysResult
-    {
-        return $days !== null ? GrantDaysResult::determinate($days) : GrantDaysResult::indeterminate();
-    }
-
-    /**
-     * 比例付与区分('4'/'3'/'2'/'1')への変換。`weekly_scheduled_days`が3〜4の間の
-     * 端数等は切り捨てず「以上」で判定し、範囲外は1〜4へクランプする
-     * (未入力の場合はGrantCategoryClassifierが既にNeedsReview/通常判定に倒しているため
-     * ここには来ない想定だが、防御的に'4'にフォールバックする)。
-     */
-    private function weeklyScheduledDaysCategoryFor(?WorkStyle $workStyle): string
-    {
-        $days = $workStyle?->weekly_scheduled_days;
-
-        if ($days === null) {
-            return PaidLeaveProportionalGrantPolicy::CATEGORY_WEEKLY_4_DAYS;
-        }
-
-        $clamped = (int) max(1, min(4, round($days)));
-
-        return (string) $clamped;
-    }
-
-    /**
-     * シフト勤務区分(依頼書§35)の候補日数。本来は「初回6ヶ月は実労働日数×2、
-     * 1.5年以降は前年実労働日数」という実績ベースの算出だが、Schedule事前生成の時点では
-     * 未来の実績が存在しないため、`WorkStyle.agreed_scheduled_days_per_year`
-     * (合意された目安勤務日数)を週相当日数に換算し、比例付与表を目安として適用する
-     * (実際の確定値は出勤率Assessment・管理者Overrideで補正する運用を前提にした
-     * 暫定近似値。Phase C実装時の判断)。目安が未設定の場合は確定不可
-     * (NeedsReview相当)として扱う。
-     */
-    private function shiftGrantDaysEstimate(?WorkStyle $workStyle, int $continuousServiceMonths): GrantDaysResult
-    {
-        $agreedDaysPerYear = $workStyle?->agreed_scheduled_days_per_year;
-
-        if ($agreedDaysPerYear === null) {
-            return GrantDaysResult::indeterminate();
-        }
-
-        $weeklyEquivalent = (int) max(1, min(4, round($agreedDaysPerYear / 52)));
-
-        return $this->determinateOrIndeterminate(
-            PaidLeaveProportionalGrantPolicy::grantDaysFor(
-                (string) $weeklyEquivalent,
-                $continuousServiceMonths,
-                PaidLeaveProportionalGrantPolicy::latestVersion() ?? 'v1',
-            )
-        );
     }
 }

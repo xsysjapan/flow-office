@@ -63,22 +63,57 @@ UC-P011の`paid-leave:roll-schedules`に置換される。
    **1件も存在しない場合、その社員のScheduleエントリは一切生成されない**
    (以前は付与ルールが無くても既定値〈6ヶ月後・周年〉で機械的に生成されてしまう
    不具合があったが修正済み。`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
-4. 付与サイクルは`grant_cycle_type`により2方式ある(`paid_leave_grant_rules`参照):
-   - `anniversary`(既定): 入社日起算の周年サイクル。初回は`first_grant_after_months`
-     ヶ月後、以降`grant_cycle_months`ヶ月ごと。
-   - `mass_grant_month`: 会社が指定した特定月(例: 4月)への一斉付与。初回付与日は、
-     入社日+`first_grant_after_months`(6ヶ月後の原則)と、直後の一斉付与月とを
-     比較し早い方(前倒し可、遅らせることはしない)。2回目以降は一斉付与月へ毎年揃う
-     (`ScheduleCandidateGenerator::massGrantScheduledDates()`)。
-5. `usage_start_date`(本システムでの有給管理開始日)より前の候補日は生成しない
-   (`hire_date`が本システム導入前の実際の入社日である社員向けのガード)。
+4. 付与サイクルは`grant_cycle_type`により2方式ある(`paid_leave_grant_rules`参照)。**初期値(列の既定値・
+   作成APIで未指定のとき・初期の全社ルール)は「年度はじめに一斉付与」(`mass_grant_month`)**。
+   - `mass_grant_month`(年度はじめに一斉付与): 一斉付与日は、**既定の会社カレンダーの年度開始日**
+     (`company_calendars.fiscal_year_start_month/day`の既定カレンダー。UC-C009)に連動する。ルールに月は持たない。
+     付与予定の文脈の読み取りビュー`paid_leave_fiscal_year_settings`(1行。行が無ければ4月1日)を
+     `FiscalYearStartResolver`が読む(`PaidLeaveFiscalYearSettingsProjector`が会社カレンダーのイベントから作る)。
+     年度開始日の計算は会社カレンダーの年度生成(`FiscalYearCalculator`)と共通。
+     - 付与済みの付与予定が無い社員: 初回は「入社日より後で最初の年度開始日」と「入社日+`first_grant_after_months`
+       (`addMonthsNoOverflow`)」の早い方(前倒しは可、遅らせない)。名目の継続勤務月数は`first_grant_after_months`(既定6)。
+       初回が前倒し(年度開始日が入社日+`first_grant_after_months`より前)なら、**同じ年度開始日に名目`first+12`(18か月)の
+       2件目もまとめて付与する**(年度開始日と半年の日が同じ日は前倒しではないので1件)。以後は、前回より後で最初の年度開始日ごと、
+       名目+12か月。
+       例(年度開始4/1・通常の社員): 2026-01-01入社→2026-04-01に名目6(10日)と名目18(11日)、2027-04-01に名目30(12日)。
+       2025-10-01入社→2026-04-01に名目6の1件、2027-04-01に名目18。2026-04-01入社→2026-10-01に名目6、2027-04-01に名目18。
+       2026-03-31入社→翌日の2026-04-01に2件(計21日)。
+     - 付与済みの付与予定がある社員: 最後の付与済みの付与予定日(同じ日に2件なら名目の大きい方)を起点に、起点より後で
+       最初の年度開始日、名目+12か月。以後は毎年。年度開始日を変えた年は、前回から1年以内(短い間隔)で次の付与が来る
+       (前回から1年を超えて遅らせない)。付与済みの行は付与予定のProjection(`paid_leave_schedule_entries`の
+       `status=Granted`・`nominal_service_months`)から読む。
+     - 既定のカレンダーの年度開始日を変えると、未確定の付与予定が作り直される(`ReapplyScheduleOnFiscalYearStartChangedReactor`が
+       `ReapplyPaidLeaveSchedulePolicyJob`を発行。名前だけの変更では作り直さない)。
+   - `anniversary`(入社日を基準に付与): 入社日起算の周年サイクル。初回は`first_grant_after_months`ヶ月後
+     (`addMonthsNoOverflow`)、以降`grant_cycle_months`ヶ月ごと。
+   - 8/30・8/31入社の半年後は、月末にそろえる(`addMonthsNoOverflow`。2/30・2/31があふれて3/2・3/3にならない)。
+   - 日付・名目の月数の計算は`ScheduleCandidateGenerator::massGrantScheduledDates()`。
+5. `usage_start_date`(本システムでの有給管理開始日)より前の付与日の行は作らない(付与日が利用開始日と同じ日なら作る)。
+   `hire_date`が本システム導入前の実際の入社日である既存の社員向けのガードで、付与日と名目の月数は入社日から計算する。
+   例: 2026-01-01入社・利用開始日2026-10-01の社員は、2026-04-01の2件は作らず、2027-04-01の名目30か月(12日)から作る。
+   利用開始日より前の分(手動の付与など)は、システムの計算に入れない。
 
 ### 付与候補日数の決定・判定不能時の扱い
 
-1. 一致した付与ルールの`paid_leave_grant_rule_steps`から、対象の継続勤務月数
-   (`mass_grant_month`方式で前倒しされた場合も、実際の暦月数ではなく「名目上の」
-   継続勤務月数〈初回=`first_grant_after_months`、以降+12ずつ〉を使う)を
-   カバーする最大の`continuous_service_months`の行を採用する。
+1. 付与ルールの付与日数の表(`paid_leave_grant_rule_steps`)は**区分(`grant_category`)ごと**に持つ。区分は
+   `normal`(通常)/`proportional_4`/`proportional_3`/`proportional_2`/`proportional_1`(比例付与の週所定日数)。
+   社員の区分から使う表を決め、対象の継続勤務月数(`mass_grant_month`方式で前倒しされた場合も、実際の暦月数ではなく
+   「名目上の」継続勤務月数〈初回=`first_grant_after_months`、以降+12ずつ〉を使う)をカバーする最大の
+   `continuous_service_months`の行を採用する。
+   - 通常の社員: `normal`の表。
+   - 比例の社員: 週所定日数(`weekly_scheduled_days`)が1以上5未満ならその整数部分(切り捨て)の`proportional_N`。週所定日数が無ければ
+     年間所定日数(`annual_scheduled_days`)で決める(労基則24条の3: 169〜216→4、121〜168→3、73〜120→2、48〜72→1)。
+     週0日、または年間48日未満は決められない(要確認)。
+   - シフトの社員: `normal`の表(今の目安の比例表より日数が増えることがある)。
+   - 勤務形態が無い・区分を判定できない社員、該当する区分の表が無い・継続勤務月数に合う段が無い場合は、法定へ自動で切り替えず
+     要確認(下の2.)にする。
+   - ルールの作成・編集では、行の区分に対応する法定表(通常=法定通常付与表、`proportional_N`=法定比例付与表の週N日)を
+     下回る日数を422にする(区分ごとにエラー)。
+   - 初期の全社ルール「全社共通(年度はじめ一斉付与)」(`work_style_id`がnull、`mass_grant_month`)には、現在有効な法定マスタの版
+     (無ければシーダと同じ値)の写しを、全区分に入れてある(migration)。
+     通常: 6→10, 18→11, 30→12, 42→14, 54→16, 66→18, 78→20。週4: 7, 8, 9, 10, 12, 13, 15。週3: 5, 6, 6, 8, 9, 10, 11。
+     週2: 3, 4, 4, 5, 6, 6, 7。週1: 1, 2, 2, 2, 3, 3, 3。既存の勤務形態のルールのうち、勤務形態が比例に分類されるものは、
+     既存の表を`proportional_{N}`へ移してある。
 2. 付与ルールが無い場合(work_style固有・全社共通いずれも無い場合)は、その社員の
    Scheduleエントリ自体が生成されない(上記参照)。付与ルールはあるが該当stepが
    無い場合、`WorkStyle`の区分(通常/比例/シフト)が未確定(`NEEDS_REVIEW`)な場合、
@@ -575,6 +610,12 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 「あくまで見込み」であり、ユーザー確認(UC-P014のOverride含む)の有無に関わらず最新の
 ルールに追従させる、という運用判断による
 (docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md)。
+
+同じJobは、既定の会社カレンダーの年度開始日(有給の一斉付与日)が変わったときにも発行される
+(`ReapplyScheduleOnFiscalYearStartChangedReactor`。名前だけの変更では発行しない。UC-C009)。
+デプロイ後など、手動で全社員を作り直すときは、運用コマンド`php artisan paid-leave:schedule:reapply-policy`
+(運用コマンド画面からも実行できる)を使う。Jobと同じ処理を同期で行い、作り直した社員の数と、付与予定日・日数が変わった
+行の数を出力する(`docs/27-release-runbook.md` 3.3)。
 
 ## UC-P012: 出勤率Assessmentを実行する
 
