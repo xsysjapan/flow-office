@@ -85,10 +85,15 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
      * (依頼書§28)、`$overrideManualEdits`が`true`の場合はこの保護を無視する
      * (法定付与ポリシー・付与ルール自体が変更された場合。未確定の予定は個別修正の有無に
      * 関わらず新しい内容に追従させる、docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md)。
+     * `$fromDate`(Y-m-d。候補を作るときの`from`)を渡した場合、`scheduledOn < $fromDate`のエントリは状態・
+     * `$includeGrantedEntries`に関わらず取消も置換もしない(過去日付の予定は再計算の対象外、
+     * docs/changesets/20261021-paid-leave-schedule-reactor-tests/spec.md 論点4)。`$includeGrantedEntries=false`で
+     * 読み飛ばす`Granted`エントリと同じ付与予定日の候補は消費し、付与済みの日付に予定を重ねて作らない
+     * (`Cancelled`は消費しない。取り消した日付に予定を作り直せるようにするため)。
      *
      * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float}>  $candidates
      */
-    public function recalculateFutureSchedule(array $candidates, string $reason, bool $overrideManualEdits = false, bool $includeGrantedEntries = false): self
+    public function recalculateFutureSchedule(array $candidates, string $reason, bool $overrideManualEdits = false, bool $includeGrantedEntries = false, ?string $fromDate = null): self
     {
         $desiredByScheduledOn = [];
         foreach ($candidates as $candidate) {
@@ -104,7 +109,15 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
                 ? [self::STATUS_CANCELLED]
                 : self::FINALIZED_STATUSES;
 
+            if ($fromDate !== null && $entry['scheduledOn'] < $fromDate) {
+                continue;
+            }
+
             if (in_array($entry['status'], $excludedStatuses, true)) {
+                if ($entry['status'] === self::STATUS_GRANTED) {
+                    unset($desiredByScheduledOn[$entry['scheduledOn']]);
+                }
+
                 continue;
             }
 

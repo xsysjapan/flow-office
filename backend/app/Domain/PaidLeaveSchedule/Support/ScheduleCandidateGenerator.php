@@ -8,6 +8,7 @@ use App\Models\PaidLeaveProportionalGrantPolicy;
 use App\Models\User;
 use App\Models\UserWorkStyleMonthlyAssignment;
 use App\Models\WorkStyle;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -246,6 +247,32 @@ class ScheduleCandidateGenerator
             ->first();
 
         return $assignment?->workStyle;
+    }
+
+    /**
+     * 「今この勤務形態の社員」のuser_id一覧。`currentWorkStyleFor`と同じ定義で、社員ごとに
+     * `year_month <= $today`の最大の月の割当を取り、その`work_style_id`が一致する社員を返す
+     * (当月より後にだけ割当がある社員は含まない)。勤務形態の更新による再計算の対象の取り出しに使う。
+     *
+     * @return array<int, string>
+     */
+    public function userIdsCurrentlyOn(string $workStyleId, CarbonInterface $today): array
+    {
+        $currentYearMonth = $today->format('Y-m');
+
+        $latestMonthByUser = UserWorkStyleMonthlyAssignment::query()
+            ->where('year_month', '<=', $currentYearMonth)
+            ->selectRaw('user_id, MAX(year_month) as latest_year_month')
+            ->groupBy('user_id');
+
+        return UserWorkStyleMonthlyAssignment::query()
+            ->joinSub($latestMonthByUser, 'latest', function ($join) {
+                $join->on('latest.user_id', '=', 'user_work_style_monthly_assignments.user_id')
+                    ->on('latest.latest_year_month', '=', 'user_work_style_monthly_assignments.year_month');
+            })
+            ->where('user_work_style_monthly_assignments.work_style_id', $workStyleId)
+            ->pluck('user_work_style_monthly_assignments.user_id')
+            ->all();
     }
 
     private function resolveGrantDays(?PaidLeaveGrantRule $rule, string $category, ?WorkStyle $workStyle, int $continuousServiceMonths): GrantDaysResult

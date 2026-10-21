@@ -278,4 +278,62 @@ class ScheduleCandidateGeneratorTest extends TestCase
         $dates = array_column($candidates, 'scheduledOn');
         $this->assertSame(['2027-06-01'], $dates);
     }
+
+    // ---- userIdsCurrentlyOn(勤務形態を更新したときの再計算対象) ----
+
+    private function createOtherWorkStyle(): WorkStyle
+    {
+        return WorkStyle::query()->create([
+            'code' => 'OTHER',
+            'name' => '別勤務',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'workday_boundary_type' => WorkStyle::WORKDAY_BOUNDARY_MIDNIGHT,
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 1440,
+            'weekly_scheduled_days' => 3,
+            'legal_holiday_rule' => WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY,
+        ]);
+    }
+
+    public function test_user_ids_currently_on_includes_user_whose_latest_assignment_up_to_this_month_is_the_work_style(): void
+    {
+        $workStyle = $this->createWorkStyle();
+        $other = $this->createOtherWorkStyle();
+        $user = User::factory()->create();
+        // 過去月の割当が別の勤務形態でも、当月以前で最新(当月)の割当が対象の勤務形態なら含む。
+        $this->assignWorkStyle($user, $other, '2026-01');
+        $this->assignWorkStyle($user, $workStyle, '2026-10');
+
+        $this->assertSame([$user->id], $this->generator()->userIdsCurrentlyOn($workStyle->id, Carbon::parse('2026-10-21')));
+    }
+
+    public function test_user_ids_currently_on_excludes_user_moved_to_another_work_style_in_a_later_month(): void
+    {
+        $workStyle = $this->createWorkStyle();
+        $other = $this->createOtherWorkStyle();
+        $user = User::factory()->create();
+        $this->assignWorkStyle($user, $workStyle, '2026-01');
+        $this->assignWorkStyle($user, $other, '2026-09');
+
+        $this->assertSame([], $this->generator()->userIdsCurrentlyOn($workStyle->id, Carbon::parse('2026-10-21')));
+        $this->assertSame([$user->id], $this->generator()->userIdsCurrentlyOn($other->id, Carbon::parse('2026-10-21')));
+    }
+
+    public function test_user_ids_currently_on_includes_user_assigned_only_in_a_past_month(): void
+    {
+        $workStyle = $this->createWorkStyle();
+        $user = User::factory()->create();
+        $this->assignWorkStyle($user, $workStyle, '2026-01');
+
+        $this->assertSame([$user->id], $this->generator()->userIdsCurrentlyOn($workStyle->id, Carbon::parse('2026-10-21')));
+    }
+
+    public function test_user_ids_currently_on_excludes_user_assigned_only_after_this_month(): void
+    {
+        $workStyle = $this->createWorkStyle();
+        $user = User::factory()->create();
+        $this->assignWorkStyle($user, $workStyle, '2026-11');
+
+        $this->assertSame([], $this->generator()->userIdsCurrentlyOn($workStyle->id, Carbon::parse('2026-10-21')));
+    }
 }

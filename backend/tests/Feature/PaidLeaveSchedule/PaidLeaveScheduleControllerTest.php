@@ -576,6 +576,7 @@ class PaidLeaveScheduleControllerTest extends TestCase
             userId: $cancelUser->id,
             candidates: [],
             reason: 'テスト用の取消',
+            fromDate: '2026-09-01',
         ));
 
         $statuses = PaidLeaveScheduleEntry::query()->pluck('status', 'id');

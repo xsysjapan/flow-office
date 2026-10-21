@@ -1,6 +1,6 @@
 # 付与予定の再計算Reactorのテストを復元し、再計算の不具合を直す
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > このタスクをここで実行してください:「付与予定の再計算Reactorのテストを復元する」
@@ -70,7 +70,8 @@
       (`AssignUserWorkStyleForMonth`)をCommandで行う。この時点で付与予定が1行できる(2027-07-01、継続42か月)。
     - イベントの件数は、`stored_events`の`paid_leave_schedule.*`の別名で数える。基準の件数は、前提を作り終えた後に取る。
   - 入社日・利用開始日・自動付与(1本目のReactor)
-    1. 入社日を2025-01-01に変える。2027-07-01の行は取消になり、2027-01-01(継続24か月→11日)の行が新しくできる。
+    1. 入社日を2025-02-01に変える。2027-07-01の行は取消になり、2027-08-01(継続30か月→12日)の行が新しくできる
+       (初版は2025-01-01→2027-01-01と書いたが、計算の誤り。2025-01-01では付与予定日が2027-07-01のまま変わらない)。
     2. 同じ入社日(2024-01-01)を設定し直しても、付与予定のイベントは増えない。
     3. 利用開始日を2027-08-01にすると、2027-07-01の行が取消になる。
     4. 自動付与を無効にすると未確定の行が取消になり、有効に戻すと作り直される。
@@ -210,5 +211,31 @@
     - イベントは別名で数えることにした。
   - 軽微: docblockの行番号を直した。`docs/17`は変更しない。
 
+- 2026-10-21 実装時に、ケース1の数値の誤りを直した(上記)。
+
 ## 実装結果
-未着手
+### 変更
+- `PaidLeaveScheduleAggregate::recalculateFutureSchedule`
+  - `?string $fromDate = null`を末尾に足した。`scheduledOn < fromDate`の行には触れない。
+  - 付与済みの行を読み飛ばすときに、同じ日付の候補を消費する。
+  - 判断: Aggregateの引数はnullableにした(既存のUnitテストの位置引数の呼び出しを壊さないため)。
+    `RecalculateFutureSchedule` Commandの`fromDate`は必須なので、実際の発行元は必ず渡す。
+- `RecalculateFutureSchedule`(Command・Handler)に`fromDate`を足した。発行元すべて(Reactor 2本・
+  `ReapplyPaidLeaveSchedulePolicyJob`・`RebuildPaidLeaveScheduleCommand`)で渡す。
+- `ScheduleCandidateGenerator::userIdsCurrentlyOn`を足した。勤務形態のReactorは、これで対象を取る。
+- `WorkStyleUpdated`のdocblock、`docs/09` UC-P011に2文。
+- 既存テストの期待値の変更: `PaidLeaveScheduleAggregateTest::test_past_confirmed_granted_entry_is_immutable_under_recalculation`。
+  旧い期待値(付与済みと同じ日付の予定が作られる)が、今回直した不具合そのものだったため。
+### テスト
+- 新規: `ScheduleRecalculationReactorTest`(16件。再生の確認は3件)、`ScheduleCandidateGeneratorTest`(4件)、
+  `PaidLeaveScheduleAggregateTest`(5件)。
+- 修正前に失敗したことの確認
+  - ケース5・6・11が失敗し、他の13件は通った。
+  - AggregateとGeneratorのUnitテストは、引数・メソッドが無いため失敗した。
+### 検証(委譲元で実行)
+- `php artisan test --filter='PaidLeaveSchedule|RebuildPaidLeaveSchedule'`: 159件PASS
+- 全件: 1902件中1901件PASS(implementerの報告)。失敗の1件は、既知の`ReadModelFingerprintCommandTest`。
+### 受け入れ条件
+- 新しいテストがPASSし、ケース5・6・11とUnitテストは、修正前に失敗した: 満たす(上記)。
+- 既存のテストに退行が無い: 満たす。期待値を変えた1件は理由つき。
+- 対象外に書いた2件(割当の削除、月の切り替わり)は、別のタスクとして提案した。

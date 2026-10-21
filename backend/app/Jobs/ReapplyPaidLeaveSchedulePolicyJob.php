@@ -51,6 +51,7 @@ class ReapplyPaidLeaveSchedulePolicyJob implements ShouldQueue
                     userId: $user->id,
                     candidates: $candidates,
                     reason: $this->reason,
+                    fromDate: $from->toDateString(),
                     overrideManualEdits: true,
                 ));
             } catch (Throwable $e) {

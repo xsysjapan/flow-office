@@ -8,7 +8,6 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Support\ScheduleCandidateGenerator;
 use App\Models\User;
-use App\Models\UserWorkStyleMonthlyAssignment;
 use Illuminate\Support\Carbon;
 use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
 
@@ -20,8 +19,9 @@ use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
  *
  * `UserWorkStyleAssignedForMonth`(AggregateId=assignment id)はペイロードに`userId`を
  * 直接持つため、対象社員1名を特定できる。`WorkStyleUpdated`(AggregateId=work_style_id)は
- * `userId`を持たないため、`user_work_style_monthly_assignments`から現在この`WorkStyle`に
- * 割り当てられている社員一覧を引いて再計算対象とする(過去月のみの割当は対象外)。
+ * `userId`を持たないため、`ScheduleCandidateGenerator::userIdsCurrentlyOn`で「今(当月以前で最新の割当が)
+ * この`WorkStyle`の社員」を引いて再計算対象とする(付与予定の計算と同じ定義。過去月に1回だけ割り当てて
+ * 今も有効な社員を含み、当月より後にだけ割当がある社員は含まない)。
  */
 class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
 {
@@ -58,14 +58,7 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
             return;
         }
 
-        $workStyleId = $event->aggregateRootUuid();
-        $thisMonth = Carbon::now()->format('Y-m');
-
-        $userIds = UserWorkStyleMonthlyAssignment::query()
-            ->where('work_style_id', $workStyleId)
-            ->where('year_month', '>=', $thisMonth)
-            ->distinct()
-            ->pluck('user_id');
+        $userIds = $this->generator->userIdsCurrentlyOn($event->aggregateRootUuid(), Carbon::today());
 
         foreach ($userIds as $userId) {
             $this->recalculate($userId, 'WorkStyleの区分判定関連列の変更');
@@ -87,6 +80,7 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
             userId: $userId,
             candidates: $candidates,
             reason: $reason,
+            fromDate: $from->toDateString(),
         ));
     }
 }

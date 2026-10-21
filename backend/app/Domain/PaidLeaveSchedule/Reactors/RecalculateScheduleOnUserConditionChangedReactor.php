@@ -65,6 +65,7 @@ class RecalculateScheduleOnUserConditionChangedReactor extends Reactor
             userId: $userId,
             candidates: $candidates,
             reason: $reason,
+            fromDate: $from->toDateString(),
         ));
     }
 }

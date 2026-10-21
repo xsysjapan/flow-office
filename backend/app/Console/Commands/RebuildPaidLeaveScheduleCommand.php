@@ -88,6 +88,7 @@ final class RebuildPaidLeaveScheduleCommand extends Command
                     userId: $user->id,
                     candidates: $candidates,
                     reason: $reason,
+                    fromDate: $fromDate->toDateString(),
                     overrideManualEdits: true,
                     includeGrantedEntries: true,
                 ));
