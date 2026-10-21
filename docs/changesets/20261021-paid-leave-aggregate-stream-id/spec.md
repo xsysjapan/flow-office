@@ -9,6 +9,8 @@
 - 分離の範囲: 「付与予定と有給口座の両方」
 - 本番のイベント履歴の作り直し(`leave:rebuild-event-store`の`--apply`/`--swap`): 最初は「まだ実行していない」との
   回答で、その後「実行済みでした」と訂正があった。
+- 付与予定(自動付与)の機能について: 「現在自動付与機能は使用していません。もし、イベントを見直すのであれば、
+  スケジュールの生成をなかったことにしてください。」(2026-10-21)
 
 ## 背景・目的
 社員(`UserAggregate`)・有給口座(`PaidLeaveAccountAggregate`)・付与予定(`PaidLeaveScheduleAggregate`)の3つの集約が、
@@ -19,8 +21,11 @@
 今は一括付与(`ApplyScheduledGrantsHandler`)だけが、集約を読み直す応急処置で回避している。PR#109(`d256bd7`)では
 付与予定のIDを分離していたが、9/14の競合解消(`ff64862`)で失われた。
 
-代休・特別休暇の口座と同じ方式で、付与予定と有給口座のIDを分ける。本番の過去のイベントは、付け替え専用の
-手順で付け替える(`data-correction`の方法2: 履歴そのものを直す)。
+代休・特別休暇の口座と同じ方式で、付与予定と有給口座のIDを分ける。本番の過去のイベントは、専用の手順で直す
+(`data-correction`の方法2: 履歴そのものを直す)。
+- 有給口座のイベント: 新しいIDに付け替える。
+- 付与予定のイベント: 自動付与の機能は本番で使われていないので、ユーザーの指示どおり履歴から取り除く(生成は無かった
+  ことにする)。新しいコードを出した後に、新しいIDで作り直される。
 
 ## 現状(As-Is)
 - 社員IDを共有している集約(他には無い)
@@ -100,40 +105,54 @@
 - 理由: 前例と同じ形で、逆算が要らなくなる。
 - 未確定・要確認事項: なし
 
-### 論点3: 本番の過去のイベントの付け替え
+### 論点3: 本番の過去のイベントの直し方
 - 選択肢:
-  - A. 既存の作り直し(`leave:rebuild-event-store`)を、もう一度かける。作り直し済みの履歴では事前条件で止まり、
-    止めを外してもイベントが二重になるので、使えない。
-  - B. 付け替え専用の手順を作る。行を1対1で写し、有給口座・付与予定の行の3点だけを変える。
-  - C. stored_eventsを、その場でUPDATEする。戻せない。
+  - A. 既存の作り直し(`leave:rebuild-event-store`)をもう一度かける。作り直し済みの履歴では事前条件で止まり、止めを
+    外してもイベントが二重になるので、使えない。
+  - B. 専用の手順を作る。行を1対1で写し、有給口座の行は付け替え、付与予定の行は取り除く。
+  - C. stored_eventsを、その場でUPDATE・DELETEする。戻せない。
 - 決定: B。
-  - 変換の本体: `PaidLeaveStreamRekeyer`(`app/Domain/EventSourcing/Rebuild/`)。
-    - 入力は`stored_events`の全行(並びはid順)。
-    - `paid_leave_account.*`・`paid_leave_schedule.*`の行について、次の3点だけを変える。
-      - payloadに`userId`を入れる(元のaggregate_uuid)。
-      - aggregate_uuidを新しいストリームIDに替える。
-      - metaの`aggregate-root-uuid`を新しいストリームIDに替える。
-    - すでに新しいストリームIDになっている行(payloadの`userId`から作ったIDとaggregate_uuidが一致する行)は、変えない。
-      2回かけても結果は同じになる。
-    - 版は、影響するストリームだけを振り直す。影響するのは、新しい有給口座、新しい付与予定、行が抜けて詰まる
-      社員の集約の3種類。
-      - meta、payloadの版に当たる値も合わせる。
-    - 行の数と並びは変えない。そのため`id`・`created_at`・metaの`created-at`・`stored-event-id`は変わらない。
+  - 変換の本体: `PaidLeaveStreamRekeyer`(`app/Domain/EventSourcing/Rebuild/`)。入力は`stored_events`の全行で、
+    id順に処理する。
+    - `paid_leave_account.*`の行は、次の3点だけを変える。
+      - payloadに`userId`(元のaggregate_uuid)を入れる。
+      - aggregate_uuidを、新しいストリームIDに替える。
+      - metaの`aggregate-root-uuid`を、新しいストリームIDに替える。
+    - すでに新しいストリームIDになっている行(payloadの`userId`から作ったIDと、aggregate_uuidが一致する行)は変えない。
+      2回かけても結果が同じになる。
+    - `paid_leave_schedule.*`の行は取り除く(ユーザーの指示。自動付与の機能は使われておらず、生成の事実は業務上の事実では
+      ない)。
+    - 版を振り直すのは、影響するストリーム(新しい有給口座と、行が抜けて詰まる社員の集約)だけ。meta・payloadの版も
+      合わせる。
+    - 残る行の`id`・`created_at`・metaの`created-at`・`stored-event-id`は変えない。付与予定の行を取り除いた分は、idが
+      飛び飛びになる。それでよい(付与予定のイベントのidを指すReadModelの列は無い)。
+  - 付与予定の行を取り除く前提(事前条件)
+    - 次のどれかが1件でもあれば、付与予定は実際に使われていたことになる。取り除かずに止めて、件数を報告する。
+      - `paid_leave_schedule.entry_granted`(付与済み)
+      - `paid_leave_schedule.assessment_overridden`(判定の上書き)
+      - `paid_leave_schedule.entry_manually_edited`(個別修正)
+    - `paid_leave_grants`に、付与予定から作った付与(付与予定のidを持つ付与)があれば、同じく止める。
   - 実行口: `leave:rekey-paid-leave-streams`。
-    - 既存の作り直しと同じ書き込み・`verify`・`swap`を使う。
-    - 既定は試し実行(件数と、旧ID→新IDの対応の件数を出す)。`--apply`(別表へ書く)・`--verify`・`--swap`。
-    - この口専用の事前条件を持たせる。休暇申請・新しい口座の種類があっても止めない。
-  - 既存の作り直しの出力にも、最後にこの変換をかける(`EventStoreRebuilder`の最後の工程にする)。
-    - 古いバックアップから作り直す場合にも、新しいIDになる。
-    - 作り直しのRebuilder 4本は、個別に直さない。ただし`UnallocatedUsageAllocator`は入力側でも社員IDを使うので、
-      変換をかける前の段階で動くことを確かめる。
-  - `verify`に足す検査
+    - 既定は試し実行。出す件数: 付け替える行、取り除く付与予定の行(種類ごと)、旧ID→新IDの対応、事前条件の結果。
+    - `--apply`(別表へ書く)・`--verify`・`--swap`は、既存の作り直しの書き込み・切り替えを使う。
+    - この口専用の事前条件と`verify`を持たせる。既存の`verify`のうち、idが連番であることの検査は、この口では行わない
+      (付与予定の行を取り除くとidが飛ぶため)。
+  - 既存の作り直しの出力にも、最後にこの変換をかける(`EventStoreRebuilder`の最後の工程)。古いバックアップから作り直す
+    場合にも、同じ結果になる。作り直しのRebuilder 4本は個別に直さない。
+  - この口の`verify`
     - 社員IDをaggregate_uuidに持つ行は、`user.*`だけであること。
-    - 有給口座・付与予定の行で、payloadの`userId`から作ったIDがaggregate_uuidと一致すること。
-    - 付け替えの前後で、有給口座・付与予定・社員以外の行は、id・版・payload・meta・created_atがすべて同じであること。
-    - `EventRestorabilityChecker`が通ること(全行が新しいイベントのクラスで復元できる)。
-- 理由: 作り直し済みの本番に対して、他のイベントを一切変えずに付け替えられる。idが変わらないので、`stored_event_id`を
-  持つProjectionにも影響せず、戻し方も簡単になる。
+    - `paid_leave_account.*`の行で、payloadの`userId`から作ったIDが、aggregate_uuidと一致すること。
+    - `paid_leave_schedule.*`の行が0件であること。
+    - 有給口座・付与予定・社員以外の行は、付け替えの前後でid・版・payload・meta・created_atがすべて同じであること。
+    - `EventRestorabilityChecker`が通ること。
+  - 取り除いた後
+    - 付与予定のProjection(`paid_leave_schedule_entries`・`paid_leave_schedule_assessments`)は、作り直すと空になる。
+    - 自動付与が有効な社員(`paid_leave_auto_grant_enabled=true`)がいれば、新しいコードの`paid-leave:roll-schedules`
+      (次のcron)が、新しいIDで付与予定を作り直す。
+- 理由
+  - 作り直し済みの本番について、他のイベントを一切変えずに直せる。
+  - 付与予定を取り除けば、付け替えの対象が減る。その後の変更セット(年度はじめ一斉付与)も、空の状態から始められる。
+  - 使われていた形跡があるときは、黙って消さずに止める(`data-correction`の安全手順)。
 - 未確定・要確認事項: なし
 
 ### 論点4: aggregate_uuid=社員IDを前提に読んでいる箇所
@@ -188,7 +207,8 @@
   - 原則2の確認(リハーサルと本番で同じことをする)
     - 付け替えの前に、全ReadModelを空にして再生し、`--readmodel-fingerprint`を取る(基準A)。
     - 付け替えと`swap`の後に、もう一度空にして再生し、指紋を取る(B)。
-    - AとBの差が0件であること。差があれば`--readmodel-diff`で行を特定して止める。
+    - AとBの差が、付与予定の2つの表(`paid_leave_schedule_entries`・`paid_leave_schedule_assessments`。Bでは空になる)を
+      除いて0件であること。差があれば`--readmodel-diff`で行を特定して止める。
     - 本番のReadModelと基準Aの差は、別件として報告する。
   - 戻し方
     - 表をRENAMEで戻す。
@@ -209,11 +229,11 @@
   - Projector 3本: `$event->userId`を使う。
   - `UnallocatedUsageOnPaidLeaveGrantReactor`: `$event->userId`を使う。
 - 読み手: 有給の履歴(論点4)と、grepで見つかったもの。
-- 付け替え
-  - `PaidLeaveStreamRekeyer`。
+- 付け替えと取り除き
+  - `PaidLeaveStreamRekeyer`(有給口座は付け替え、付与予定は取り除く。事前条件つき)。
   - `leave:rekey-paid-leave-streams`(試し実行・`--apply`・`--verify`・`--swap`)。
   - 作り直しの最後の工程に組み込む。
-  - `verify`の4つの検査。
+  - この口の`verify`の5つの検査。
 - テスト
   - 回帰
     - 同じ社員の複数の付与予定を、1回の一括付与で付与しても衝突しない(修正前に衝突することを確かめる)。
@@ -221,7 +241,8 @@
     - 未充当の消化がある社員に付与すると、新しいストリームに`usage_allocated`が記録される(Reactorの修正)。
   - 付け替え
     - 入力は「旧い形の行→作り直し→`swap`→新しいコードで少し操作」の後の`stored_events`(本番の形を再現する)。
-    - これに付け替えをかけ、`verify`が通ることを確かめる。他の行が変わらないことも確かめる。
+    - これに付け替えをかけ、`verify`が通ることを確かめる。他の行が変わらないこと、付与予定の行が無くなることも確かめる。
+    - 付与済み・判定の上書き・個別修正の付与予定のイベントがあると、試し実行が事前条件で止まる。
     - 全ReadModelを空にして再生し、付け替えの前の再生結果と指紋が一致することを確かめる。
     - 2回かけても結果が同じであること。
   - 既存のテストの修正(実装者が直す)
@@ -238,7 +259,9 @@
 - 一括付与が応急処置なしで動き、回帰テストがPASSする(修正前に失敗することを確かめている)。
 - 付与のときの未充当の充当が、分離した後も動く。
 - 有給の履歴・残高・付与予定が、分離した後も今と同じ結果を返す(テストで確かめる)。
-- 付け替えの後に`verify`の4つの検査が通る。本番の形を再現した入力で、付け替えの前後の再生結果の指紋が一致する。
+- 付け替えの後に、この口の`verify`の5つの検査が通る。本番の形を再現した入力で、付け替えの前後の再生結果の指紋が、
+  付与予定の2つの表を除いて一致する。
+- 付与予定のイベントが本番の履歴から無くなる。使われていた形跡があるときは、事前条件で止まる。
 - backendのテスト一式がPASSする(既知の`ReadModelFingerprintCommandTest`の失敗を除く)。e2eの`scenario-03`・
   `scenario-15`がPASSする。
 - docs(下記)が実装と一致する。リリースの手順が`docs/27`にある。
@@ -300,6 +323,10 @@
     - 回帰テストは、修正前に失敗することを確かめる。
     - 既存のテストへの影響を見積もった。
   - 軽微: Handlerの本数、docsの箇所、Normalizerは対象外、キューを空にする。
+
+- 2026-10-21 ユーザーの指示(自動付与は使っていない。イベントを見直すなら、付与予定の生成は無かったことにする)を
+  反映した。論点3を「有給口座は付け替え、付与予定は取り除く」に変えた。付与予定が使われていた形跡があれば止める
+  事前条件と、指紋の比較で除く表を足した。
 
 ## 実装結果
 未着手
