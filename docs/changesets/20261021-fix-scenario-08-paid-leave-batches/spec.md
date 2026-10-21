@@ -1,6 +1,6 @@
 # e2eのscenario-08で失敗している有給バッチの2件を直す
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > シナリオのエラーの修正もこの作業の一環として対応をお願いします。
@@ -108,4 +108,26 @@
 初版(2026-10-21)
 
 ## 実装結果
-未着手
+### 変更
+- `scenario-08-fiscal-year-cycle.spec.ts`
+  - 5日取得義務の警告のテストの対象を、人事担当者(加藤由美、`SCENARIO_USERS.hrStaff`)にした。
+    - ScenarioSeederと全てのe2eをgrepして選んだ。有給の付与(手動・一括)と付与予定の対象になっていない。
+    - 承認者の渡辺直樹も条件は満たすが、申請・承認の対象なので避けた。
+    - 理由はテストのコメントに書いた。
+  - 記念日のテストを、`roll-schedules`→`assess-schedules --trigger=manual`の疎通確認に置き換えた。
+  - 説明のコメントを直した。
+- `scenario-99-additional.spec.ts`・`frontend/e2e/README.md`のコメント。
+- `docs/testing/scenario-tests.md`シナリオ6
+  - 技術的な前提を直した。
+  - 手順4を書き換えた。
+  - PHPUnitの参照を`backend/tests/Feature/PaidLeaveAccount/PaidLeaveWarningBatchTest.php`にした。
+### 検証(委譲元で実行)
+- `scenario-08`: 4件PASS
+- implementerの実行: `scenario-00`・`03`・`15`で14件PASS
+- `grant-scheduled`の記述: docs/testing・frontend/e2eに0件
+### 受け入れ条件
+- scenario-08の全件PASS: 満たす。
+- 他のシナリオとの衝突なし: 満たす(14件PASS)。
+- 古い記述が残っていない: 満たす。
+### 注意
+- 過去の実行で作られた付与が残っているDBでは、社員の条件が崩れうる。e2eは毎回DBをリセットして実行する前提(`globalSetup`)。

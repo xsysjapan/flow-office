@@ -13,6 +13,7 @@ import {
   fetchMonthStatus,
   fetchOwnUserId,
   fetchPaidLeaveGrantsForUser,
+  fetchUserIdByEmail,
   generateShiftAssignments,
   publishWorkCalendar,
   putWorkCalendarDays,
@@ -377,7 +378,7 @@ test('2026年度(2026-04〜2027-03)の12か月連続サイクル', async ({ brow
 
 /**
  * シナリオ6手順4(境界条件の単発確認)。`paid-leave:warn-expiring`/
- * `paid-leave:warn-five-day-obligation`/`paid-leave:grant-scheduled`はいずれもサーバーの
+ * `paid-leave:warn-five-day-obligation`/`paid-leave:roll-schedules`・`paid-leave:assess-schedules`はいずれもサーバーの
  * 実時刻(`now()`)基準で動くため、12か月連続サイクルの一部にはできない。実際の今日の日付を
  * 起点に境界条件を満たすデータをAPIで作成した上で、`php artisan`コマンドを直接実行して
  * 完走することを確認する。
@@ -386,10 +387,10 @@ test('2026年度(2026-04〜2027-03)の12か月連続サイクル', async ({ brow
  * `expiry_warned_at`/`five_day_obligation_warned_at`相当のフィールドを返さないため、
  * 「警告済みになったこと」自体をAPI経由で直接検証する手段が無い。失効警告・年5日警告は
  * コマンドの標準出力(「N件の...を通知しました。」)から件数を読み取り、今回作成した
- * 対象が1件以上含まれることを確認する。年次自動付与は出勤率判定(直近1年分の
- * `employee_shift_assignments`が必要)まで満たすデータを用意するのは実行コストが高いため、
+ * 対象が1件以上含まれることを確認する。付与予定の作成・出勤率判定は、判定の結果まで
+ * 検証するには直近1年分の`employee_shift_assignments`が必要で実行コストが高いため、
  * ドキュメント記載の割り切り通り「artisanコマンドがエラー無く完走すること」の疎通確認に
- * とどめる。
+ * とどめる(付与は管理者の一括付与でscenario-15が確認する)。
  */
 test.describe('境界条件の単発確認(実時刻ベースの有給バッチ)', () => {
   test('paid-leave:warn-expiring: 失効まで90日の付与に警告が出る(標準出力の件数で確認)', async ({ page }) => {
@@ -420,7 +421,12 @@ test.describe('境界条件の単発確認(実時刻ベースの有給バッチ)
   test('paid-leave:warn-five-day-obligation: 年5日未取得の付与に警告が出る(標準出力の件数で確認)', async ({ page }) => {
     test.setTimeout(30000)
     await loginAs(page, SCENARIO_USERS.admin)
-    const userId = await fetchOwnUserId(page)
+    // 対象社員は人事担当者(加藤由美)。直前のwarn-expiringのテストは管理者に`granted_on`=昨日の付与を
+    // 作るため、管理者を対象にすると今日−305日の付与が最新付与より前になり422になる。
+    // 加藤由美は、どのシナリオ・テストでも今日−305日より後の日付の有給を付与されない
+    // (手動付与は高橋健太・中村恵・小林誠の対象のみ、一括付与はscenario-15の高橋健太の付与予定のみ。
+    // ScenarioSeederも高橋・伊藤にしか付与しない)ため、この付与が最新の付与になる。
+    const userId = await fetchUserIdByEmail(page, 'yumi.kato@example.com')
 
     // granted_on = 実日付-305日 → 取得義務期限(granted_on+1年)まで残り60日ちょうど。
     const today = new Date()
@@ -443,7 +449,7 @@ test.describe('境界条件の単発確認(実時刻ベースの有給バッチ)
     expect(Number(match?.[1])).toBeGreaterThanOrEqual(1)
   })
 
-  test('paid-leave:grant-scheduled: 継続勤務の記念日にコマンドがエラー無く完走する(疎通確認)', async ({ browser }) => {
+  test('paid-leave:roll-schedules・assess-schedules: 継続勤務の記念日の付与予定が作られ、判定がエラー無く完走する(疎通確認)', async ({ browser }) => {
     test.setTimeout(30000)
     const employeeContext = await browser.newContext()
     const adminContext = await browser.newContext()
@@ -458,16 +464,24 @@ test.describe('境界条件の単発確認(実時刻ベースの有給バッチ)
       // hire_date = 実日付から継続勤務ちょうど6か月前(付与ルールのfirst_grant_after_months=6の
       // 記念日)。出勤率判定(直近1年分のemployee_shift_assignmentsが必要)まで満たすデータを
       // 用意するのは実行コストが高いため、ドキュメント記載の割り切り通り、ここでは
-      // 「コマンドがエラー無く完走すること」の疎通確認にとどめる(対象者に実際に有給が
-      // 付与されるかどうかまでは検証しない)。
+      // 「コマンドがエラー無く完走すること」の疎通確認にとどめる。判定の結果(付与対象・要確認)は
+      // 確かめない(勤怠データが無いため判定は要確認になりうる。判定の規則は
+      // AssessPaidLeaveSchedulesCommandTestでカバー済み)。付与は管理者の一括付与でscenario-15が確認する。
       const today = new Date()
       const hireDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 6, today.getUTCDate()))
       await setUserHireDate(adminPage, userId, hireDate.toISOString().slice(0, 10))
 
-      const output = execSync('php artisan paid-leave:grant-scheduled', { cwd: BACKEND_DIR, encoding: 'utf-8' })
-      const match = output.match(/(\d+)\s*件の有給を自動付与しました/)
-      expect(match).not.toBeNull()
-      expect(Number(match?.[1])).toBeGreaterThanOrEqual(0)
+      // どちらも終了コード0で完走すること(execSyncは非0で例外を投げる)。assess-schedulesは判定に
+      // 失敗が1件でもあると終了コード1になり、その場合は失敗理由を含む例外としてテストが落ちる。
+      const rollOutput = execSync('php artisan paid-leave:roll-schedules', { cwd: BACKEND_DIR, encoding: 'utf-8' })
+      const rollMatch = rollOutput.match(/(\d+)\s*名の社員について、付与予定を再計算しました/)
+      expect(rollMatch).not.toBeNull()
+      expect(Number(rollMatch?.[1])).toBeGreaterThanOrEqual(0)
+
+      const assessOutput = execSync('php artisan paid-leave:assess-schedules --trigger=manual', { cwd: BACKEND_DIR, encoding: 'utf-8' })
+      const assessMatch = assessOutput.match(/判定しました: 対象(\d+)件/)
+      expect(assessMatch).not.toBeNull()
+      expect(Number(assessMatch?.[1])).toBeGreaterThanOrEqual(0)
     } finally {
       await employeeContext.close()
       await adminContext.close()

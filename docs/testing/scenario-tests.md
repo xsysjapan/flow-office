@@ -260,8 +260,8 @@ RoleAssignment・入社日を設定する。モックOIDCの
 `fetchPaidLeaveGrantsForUser`がユーザー単位で全付与を合算する都合上、本シナリオと
 並行実行すると有給消化数の検証に他シナリオの付与・消化が混入するため使わない)。
 
-**技術的な前提(重要)**: `paid-leave:grant-scheduled`/`paid-leave:warn-expiring`/
-`paid-leave:warn-five-day-obligation` はいずれもサーバーの実時刻(`now()`)を基準に
+**技術的な前提(重要)**: `paid-leave:warn-expiring`/
+`paid-leave:warn-five-day-obligation`/`paid-leave:roll-schedules`/`paid-leave:assess-schedules` はいずれもサーバーの実時刻(`now()`)を基準に
 cron実行される設計で、日付を偽装する手段が無い。Playwrightは実際に起動している
 `php artisan serve` プロセスにHTTPでアクセスするだけなので、1年間の経過を実時間の
 経過なしに外側から偽装することはできない。そのため本シナリオは **実時刻に依存しない
@@ -295,12 +295,15 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
    - 年5日警告: `granted_on` = 実行時の実日付 − 305日(期限まで60日)・
      使用日数4日以下の付与を作成し、`warn-five-day-obligation` 実行後に
      `five_day_obligation_warned_at` が記録されることを確認する。
-   - 年次自動付与: `hire_date` を実行時の実日付から逆算して「今日がちょうど
-     継続勤務6か月/1年6か月...の記念日」になる社員を作成し、`grant-scheduled`
-     実行後に `paid_leave_grants` が1件増えることを確認する。
+   - 付与予定(継続勤務の記念日): `hire_date` を実行時の実日付から逆算して「今日がちょうど
+     継続勤務6か月の記念日」になる社員を作成し、`paid-leave:roll-schedules` →
+     `paid-leave:assess-schedules --trigger=manual` を実行して、どちらもエラー無く完走
+     (終了コード0)し、出力の件数が出ることを確認する。自動付与は無く、付与は管理者の一括付与
+     (画面操作)で行うため、本項目では付与しない(一括付与はscenario-15で確認する)。判定の結果
+     (付与対象・要確認)は確かめない(判定の規則は`AssessPaidLeaveSchedulesCommandTest`でカバー)。
    - この3件は「送信結果を確認できるAPI」が無いため(§5-5の既知の欠落と同様)、
      DBの`paid_leave_grants`カラム(`expiry_warned_at`等)を直接検証するか、
-     `backend/tests/Feature/PaidLeave/PaidLeaveScheduledBatchTest.php`側の
+     `backend/tests/Feature/PaidLeaveAccount/PaidLeaveWarningBatchTest.php`側の
      PHPUnitテストでカバーし、本シナリオでは「実際にartisanコマンドがエラー無く
      完走し対象件数が期待通りであること」の疎通確認にとどめる、のいずれかを
      実装時に選ぶ。

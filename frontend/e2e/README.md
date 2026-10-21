@@ -74,7 +74,7 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
 - `scenario-08-fiscal-year-cycle.spec.ts` — 同ドキュメント「シナリオ6: 通年運用
   シミュレーション(1年間)」に対応。専用カレンダー・総務担当者(中村恵)で
   2026年度(2026-04〜2027-03)の12か月連続サイクルを回すテストと、実時刻ベースの
-  有給バッチ(`paid-leave:warn-expiring`/`warn-five-day-obligation`/`grant-scheduled`)を
+  有給バッチ(`paid-leave:warn-expiring`/`warn-five-day-obligation`/`roll-schedules`・`assess-schedules`)を
   `child_process`経由で直接実行する境界条件テストの2本立て
 - `scenario-09-cross-domain.spec.ts` — 同ドキュメント §5 項目14〜16(複数ユースケースの
   月内組み合わせ)に対応
@@ -138,10 +138,10 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
   毎月混在)→月次提出〜承認(一部の月は締めまで)を実施し、年度またぎでもシフト生成・
   日次入力・月次締めが途切れないこと、有給残数が年間を通じて正しく累積して減ることを
   確認。実時刻基準の3バッチ(`paid-leave:warn-expiring`/`warn-five-day-obligation`/
-  `grant-scheduled`)は別testブロックで、実際の今日の日付から境界条件を満たすデータを
+  `roll-schedules`・`assess-schedules`)は別testブロックで、実際の今日の日付から境界条件を満たすデータを
   作成した上で`child_process`経由でartisanコマンドを直接実行し、標準出力の件数
-  (失効警告・年5日警告)または完走のみ(年次自動付与、出勤率判定データの用意コストが
-  高いため疎通確認にとどめる)で確認する
+  (失効警告・年5日警告)または完走のみ(付与予定の作成・出勤率判定、判定データの用意
+  コストが高いため疎通確認にとどめる)で確認する
 - その他(§5-14): 有給消化(全休+半休)と月60時間超残業判定が同一月内で共存しても、
   実働日だけで残業が正しく積算されることを確認
 - その他(§5-15): 固定時間制・1か月単位変形労働時間制・裁量労働制・管理監督者が
