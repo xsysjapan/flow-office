@@ -7,220 +7,299 @@
 
 確認への回答(2026-10-21):
 - 分離の範囲: 「付与予定と有給口座の両方」
-- 本番のイベント履歴の作り直し(`leave:rebuild-event-store`の`--apply`/`--swap`): 最初は「まだ実行していない」と
-  回答があり、その後「実行済みでした」と訂正があった(2026-10-21)
+- 本番のイベント履歴の作り直し(`leave:rebuild-event-store`の`--apply`/`--swap`): 最初は「まだ実行していない」との
+  回答で、その後「実行済みでした」と訂正があった。
 
 ## 背景・目的
-社員(`UserAggregate`)・有給口座(`PaidLeaveAccountAggregate`)・付与予定(`PaidLeaveScheduleAggregate`)の
-3つの集約が、どれも社員IDをそのままAggregateIdに使っている。spatie/laravel-event-sourcingはaggregate_uuid単位で
-版を管理し、集約のクラスを区別しない。そのため、同じ社員について複数の集約へ続けて書くと、楽観的排他
+社員(`UserAggregate`)・有給口座(`PaidLeaveAccountAggregate`)・付与予定(`PaidLeaveScheduleAggregate`)の3つの集約が、
+どれも社員IDをそのままAggregateIdに使っている。spatie/laravel-event-sourcingはaggregate_uuid単位で版を管理し、
+集約のクラスを区別しない。そのため、同じ社員について複数の集約へ続けて書くと、楽観的排他
 (`CouldNotPersistAggregate`)が誤って発火する。
 
 今は一括付与(`ApplyScheduledGrantsHandler`)だけが、集約を読み直す応急処置で回避している。PR#109(`d256bd7`)では
 付与予定のIDを分離していたが、9/14の競合解消(`ff64862`)で失われた。
 
-代休・特別休暇の口座と同じ方式で、付与予定と有給口座のIDを分離する。過去のイベントは、`data-correction`の方法2に
-従って履歴を作り直して付け替える。本番では作り直しを実行済みなので、付け替えのために作り直しをもう一度行う。
+代休・特別休暇の口座と同じ方式で、付与予定と有給口座のIDを分ける。本番の過去のイベントは、付け替え専用の
+手順で付け替える(`data-correction`の方法2: 履歴そのものを直す)。
 
 ## 現状(As-Is)
-- 同じ社員IDを共有している集約
-  - `UserAggregate`(例: `SetUserUsageStartDateHandler:22`)
-  - `PaidLeaveAccountAggregate`(Handler 10本: GrantPaidLeave、RevokePaidLeaveGrant、ChangePaidLeaveGrantDate/Amount/Expiry、
-    Designate/Confirm/CancelPaidLeaveUsage、AllocateUnallocatedPaidLeaveUsages、RaisePaidLeaveGrantWarning)
-  - `PaidLeaveScheduleAggregate`(Handler 7本と、`ApplyScheduledGrantsHandler:41,64`)
-- 分離済みの集約: 代休・特別休暇の口座は`UserManagementStreamId::for('{kind}_account', userId)`(uuid5)で
-  IDを導出する(`CompensatoryLeaveAccountAggregate::streamIdFor:87-90`)。イベントに`userId`を持ち、Projectorは
-  `$event->userId`を使う。user-membership / user-identityも同じ方式。
-- spatieの挙動(7.15.0)
-  - `retrieve`はaggregate_uuidだけで読む(`EloquentStoredEventQueryBuilder:31-34`)。
-  - 対応するapplyが無いイベントも版を進める(`AggregateRoot:277-300`)。
-  - 版の衝突は、unique(aggregate_uuid, aggregate_version)によって`CouldNotPersistAggregate`になる。
+- 社員IDを共有している集約(他には無い)
+  - `UserAggregate`
+  - `PaidLeaveAccountAggregate`(Handler 10本)
+  - `PaidLeaveScheduleAggregate`(Handler 5本: Ensure・ManuallyEdit・Override・Recalculate・RunAssessment、
+    および`ApplyScheduledGrantsHandler:41,64`)
+- 分離済みの前例
+  - 代休・特別休暇の口座は、`UserManagementStreamId::for('{kind}_account', userId)`(uuid5)でストリームIDを作る
+    (`CompensatoryLeaveAccountAggregate::streamIdFor:87-90`)。
+  - これらのイベントは`userId`を持ち、Projectorは`$event->userId`を使う。
+  - 履歴は`additionalAggregateIds: [streamIdFor($userId)]`で読む(`SpecialLeaveController:581`、
+    `CompensatoryLeaveController:530`)。
+- spatieの動き(7.15.0)
+  - `retrieve`は、aggregate_uuidだけで読む。
+  - 対応するapplyが無いイベントでも、版を進める。
+  - 版が衝突すると、unique(aggregate_uuid, aggregate_version)により`CouldNotPersistAggregate`になる。
   - スナップショットは使っていない。
 - イベントの形
-  - `paid_leave_schedule.*`(7種)・`paid_leave_account.*`(11種)のどれにも`userId`が無い。
-  - Projectorは社員IDを`aggregateRootUuid()`から取る(`PaidLeaveScheduleProjector:29`、
-    `PaidLeaveBalanceProjector:39-90`、`PaidLeaveUsageAllocationProjector:48,100`)。
-- aggregate_uuid=社員IDを前提に読んでいる箇所
-  - 有給の履歴(`PaidLeaveController:845-848`、`Leave/Support/LeaveHistoryQuery:35-58`)
-  - 監査ログの社員での絞り込み(`AuditLogController:142-146`)
-  - `PaidLeaveBalanceProjector:90`
-- イベント履歴の作り直し(`app/Domain/EventSourcing/Rebuild/`、`leave:rebuild-event-store`)
-  - `PaidLeaveScheduleRebuilder:76`・`PaidLeaveGrantRebuilder:95`・`UnallocatedUsageAllocator:120`は
-    aggregate_uuid=社員IDで書く。
-  - 今の形のイベントは`EventStoreRebuilder:149-152`(passThrough)でそのまま写す。
-  - `renumber`(600-660付近)は、集約ごとに版を連番で振り直す。
-  - `verify`(`EventStoreRebuildWriter:312-345`)は、IDの付け方を検査していない。
-- 本番では、作り直しを実行済み(ユーザー回答)。本番の履歴は、作り直しの後の形(今の形のイベント)になっている。
-  手順は`docs/27-release-runbook.md:114-148`、`docs/32-stored-event-history-normalization.md`。
+  - `paid_leave_account.*`(11種)・`paid_leave_schedule.*`(7種)には`userId`が無い。
+  - 社員IDを`aggregateRootUuid()`から取っているもの
+    - Projector: `PaidLeaveScheduleProjector:29`、`PaidLeaveBalanceProjector:39-90`、
+      `PaidLeaveUsageAllocationProjector:48,100`
+    - Reactor: `PaidLeaveAccount/Reactors/UnallocatedUsageOnPaidLeaveGrantReactor:22`
+  - 有給口座・付与予定のイベントを購読しているのは、上の4つだけ。
+- aggregate_uuid=社員IDを前提に読んでいるもの
+  - 有給の履歴(`PaidLeaveController:845-848`、`Leave/Support/LeaveHistoryQuery:35-58,73-74`)。
+  - 監査ログ(`AuditLogController:124`の`aggregate_id`での絞り込み、`:142-146`の社員での絞り込み)。
+    - 社員での絞り込みは、payloadの`ACTOR_KEYS`(`user_id`を含む。`:37-41`)のLIKEでも拾う。
+- 作り直しの仕組み(`app/Domain/EventSourcing/Rebuild/`)は、作り直し済みの履歴にはもう一度かけられない。
+  - 事前条件の検査(`EventStoreRebuildWriter:249-262`)は、`paid_leave_request.*`・`special_leave_account.*`・
+    `compensatory_leave_account.*`が1件でもあると違反にする。
+  - 変換(`EventStoreRebuilder:47-51,142-143`)も、これらを未対応として扱う。
+  - 仮に止めを外しても、休暇申請や充当の変換器がもう一度動き、イベントが二重になる。行のidもずれる。
+- 作り直しで、aggregate=社員IDで書くもの
+  - `PaidLeaveGrantRebuilder:95`
+  - `UnallocatedUsageAllocator:120`(入力側でも`:163`で社員IDとして使う)
+  - `PaidLeaveScheduleRebuilder:76`
+  - `PaidLeaveRequestRebuilder:180,189,582,686,707,713`
+- 本番では、作り直しを実行済み。本番の履歴は、作り直した後の形になっている。手順は
+  `docs/27-release-runbook.md:114-148`(3.1)。
+- 有給口座・付与予定に書き込む、HTTP以外の経路
+  - スケジューラ
+    - `paid-leave:roll-schedules`
+    - `paid-leave:warn-expiring`・`warn-five-day-obligation`(`RaisePaidLeaveGrantWarning`)
+    - `apply-membership-changes`・`users:sync-ms365`(社員のイベント→Reactor→付与予定)
+  - キュー: `ReapplyPaidLeaveSchedulePolicyJob`
+  - 運用コマンド: `paid-leave:schedule:rebuild`
 
 ## 設計前提の検証
 - 正データと派生データ
   - 3つの集約のイベント(`stored_events`)が正。残高・付与・付与予定のテーブルはProjectionで、イベントから作り直せる。
-  - IDの付け替えはイベントの正データそのものの変更なので、`data-correction`に従い、補正イベントを足すのではなく
-    履歴を作り直す(移行イベントは作らない)。
-  - 作り直しのあと、Projectorを再生した結果が今のProjectionと一致することで確かめる(原則2)。
+  - IDの付け替えは、正データそのものの変更になる。`data-correction`に従い、補正イベントを足すのではなく履歴を直す。
+    移行イベントは作らない。
+  - 付け替えの前後で、全てのProjectionをイベントから作り直した結果が一致することで確かめる(原則2)。
 - 定義と実態
   - 「集約=1つのストリーム」が前提なのに、3つの集約が1つのストリームを共有している。設計の誤り。
-  - 社員IDをaggregate_uuidから逆算している箇所は、分離すると壊れる。イベントに`userId`を持たせ、
-    逆算をやめる(代休口座と同じ)。
-- 原因の分類: 設計の誤り(PR#112の実装)と、その修正(`d256bd7`)の競合解消での消失。応急処置(都度の読み直し)は
-  対症療法なので外す。
+  - 社員IDをaggregate_uuidから逆算する作りは、分離すると壊れる。イベントに`userId`を持たせる。
+- 原因の分類: 設計の誤り(PR#112の実装)と、その修正の競合解消での消失。応急処置は対症療法なので外す。
+- 作り直しの前提: 既存の作り直しの仕組みは、作り直しの前の形の履歴を入力にする作り。作り直し済みの本番には
+  使えない(現状を参照)。付け替えは、行を1対1で写す専用の手順にする(論点3)。
 
 ## 仕様検討
 
 ### 論点1: IDの導出方式
-- 選択肢:
-  - A. `UserManagementStreamId::for('paid_leave_account', userId)` / `for('paid_leave_schedule', userId)`
-    (代休・特別休暇の口座と同じ方式)。
-  - B. `d256bd7`の固有の名前空間によるuuid5。
-- 決定: A。各集約に`streamIdFor(string $userId): string`を置き、Handlerはこれで`retrieve`する。
-- 理由: 同じ方式に揃えると、監査ログ・作り直しの処理を共通化できる(論点4)。
+- 決定: `UserManagementStreamId::for('paid_leave_account', userId)` / `for('paid_leave_schedule', userId)`。
+  各集約に`streamIdFor(string $userId): string`を置く。代休・特別休暇の口座と同じ方式。
+- 理由: 方式をそろえると、履歴や監査ログの読み方も前例に合わせられる。
 - 未確定・要確認事項: なし
 
 ### 論点2: イベントに社員IDを持たせる
-- 選択肢:
-  - A. `paid_leave_account.*`と`paid_leave_schedule.*`の全イベントに`userId`を足し、Projectorは`$event->userId`を
-    使う。
-  - B. Projectorで、ストリームIDから社員を逆引きする表を持つ。
-- 決定: A。
-  - 集約に`forUser(string $userId)`を足して社員IDを束ね、イベントに入れる(代休口座の形)。
-  - 過去のイベントには、作り直しで`userId`を入れる(論点3)。そのため、`userId`の無いイベントを読む互換処理は
-    作らない。
-- 理由: 代休口座と同じ形で、逆算が要らなくなる。
+- 決定
+  - `paid_leave_account.*`・`paid_leave_schedule.*`の全イベントに`userId`を足す。
+  - 集約に`forUser(string $userId)`を足す(代休口座の形)。
+  - Projector 3本とReactor(`UnallocatedUsageOnPaidLeaveGrantReactor`)は、`$event->userId`を使う。
+  - 過去のイベントには付け替えで`userId`を入れるので、`userId`が無いイベントを読む互換処理は作らない。
+- 理由: 前例と同じ形で、逆算が要らなくなる。
 - 未確定・要確認事項: なし
 
-### 論点3: 過去のイベントの付け替え
-- 前提: 本番では作り直しを実行済みで、履歴は今の形のイベントになっている。
+### 論点3: 本番の過去のイベントの付け替え
 - 選択肢:
-  - A. 既存の作り直しの仕組み(`EventStoreRebuilder`・`EventStoreRebuildWriter`の試し実行・別表への書き込み・`verify`・
-    `swap`)に、有給口座・付与予定のストリームの付け替えを足す。作り直し済みの本番の履歴に対して、もう一度実行する。
-  - B. stored_eventsをその場でUPDATEする、付け替え専用のコマンドを作る。
-- 決定: A。
-  - 変換: 今の形の`paid_leave_account.*`・`paid_leave_schedule.*`の行を、passThroughではなく変換対象にする。
-    - payloadに`userId`(=元のaggregate_uuid)を入れる。
-    - aggregate_uuidとmetaの`aggregate-root-uuid`を、新しいストリームID(論点1)に替える。
-    - すでに新しいIDになっている行(payloadの`userId`から導出したIDとaggregate_uuidが一致する行)は、そのまま写す。
-      2回実行しても結果が同じになる。
-  - 旧い形のイベントを変換する3つのRebuilder(`PaidLeaveGrantRebuilder`・`UnallocatedUsageAllocator`・
-    `PaidLeaveScheduleRebuilder`)の出力も、新しいIDと`userId`入りにする(古いバックアップから作り直す場合に備える)。
-  - 版の振り直しは既存の`renumber`に任せる。ストリームが分かれると、社員の集約の版も詰め直される。
+  - A. 既存の作り直し(`leave:rebuild-event-store`)を、もう一度かける。作り直し済みの履歴では事前条件で止まり、
+    止めを外してもイベントが二重になるので、使えない。
+  - B. 付け替え専用の手順を作る。行を1対1で写し、有給口座・付与予定の行の3点だけを変える。
+  - C. stored_eventsを、その場でUPDATEする。戻せない。
+- 決定: B。
+  - 変換の本体: `PaidLeaveStreamRekeyer`(`app/Domain/EventSourcing/Rebuild/`)。
+    - 入力は`stored_events`の全行(並びはid順)。
+    - `paid_leave_account.*`・`paid_leave_schedule.*`の行について、次の3点だけを変える。
+      - payloadに`userId`を入れる(元のaggregate_uuid)。
+      - aggregate_uuidを新しいストリームIDに替える。
+      - metaの`aggregate-root-uuid`を新しいストリームIDに替える。
+    - すでに新しいストリームIDになっている行(payloadの`userId`から作ったIDとaggregate_uuidが一致する行)は、変えない。
+      2回かけても結果は同じになる。
+    - 版は、影響するストリームだけを振り直す。影響するのは、新しい有給口座、新しい付与予定、行が抜けて詰まる
+      社員の集約の3種類。
+      - meta、payloadの版に当たる値も合わせる。
+    - 行の数と並びは変えない。そのため`id`・`created_at`・metaの`created-at`・`stored-event-id`は変わらない。
+  - 実行口: `leave:rekey-paid-leave-streams`。
+    - 既存の作り直しと同じ書き込み・`verify`・`swap`を使う。
+    - 既定は試し実行(件数と、旧ID→新IDの対応の件数を出す)。`--apply`(別表へ書く)・`--verify`・`--swap`。
+    - この口専用の事前条件を持たせる。休暇申請・新しい口座の種類があっても止めない。
+  - 既存の作り直しの出力にも、最後にこの変換をかける(`EventStoreRebuilder`の最後の工程にする)。
+    - 古いバックアップから作り直す場合にも、新しいIDになる。
+    - 作り直しのRebuilder 4本は、個別に直さない。ただし`UnallocatedUsageAllocator`は入力側でも社員IDを使うので、
+      変換をかける前の段階で動くことを確かめる。
   - `verify`に足す検査
-    - `paid_leave_account.*`・`paid_leave_schedule.*`の行で、aggregate_uuidが`users.id`と同じものが無いこと。
-    - payloadの`userId`から導出したIDが、aggregate_uuidと一致すること。
-  - 作り直し済みの履歴に、作り直しの仕組みをもう一度かけられるかを、実装の最初に確かめる。
-    - 他の種類のイベントが変わらずに写ること(2回目の試し実行で、有給口座・付与予定以外の差分が0件)を確かめる。
-    - かけられない場合は、変換の部分だけを使う専用の実行口(同じ書き込み・`verify`・`swap`を使う)を作る。
-      どちらにしたかを実装結果に残す。
-  - リリースの手順(`docs/27`に書く)
-    - このコードを出すときは、メンテナンスの時間を取る。
-    - 次の順で行う: バックアップ→作り直しの試し実行(件数の確認)→`--apply`→`--verify`→`--swap`
-      →Projectionの作り直し→確認。
-    - コードを出してから付け替えが終わるまでの間は、有給の操作を止める。新しいIDで読むコードは、付け替え前の
-      履歴を読めないため。
-- 理由: 履歴そのものを直すのが`data-correction`の第一の方法で、作り直しの仕組みには試し実行・検証・切り替えの安全手順が
-  そろっている。Bはその場の書き換えで、戻せない。
+    - 社員IDをaggregate_uuidに持つ行は、`user.*`だけであること。
+    - 有給口座・付与予定の行で、payloadの`userId`から作ったIDがaggregate_uuidと一致すること。
+    - 付け替えの前後で、有給口座・付与予定・社員以外の行は、id・版・payload・meta・created_atがすべて同じであること。
+    - `EventRestorabilityChecker`が通ること(全行が新しいイベントのクラスで復元できる)。
+- 理由: 作り直し済みの本番に対して、他のイベントを一切変えずに付け替えられる。idが変わらないので、`stored_event_id`を
+  持つProjectionにも影響せず、戻し方も簡単になる。
 - 未確定・要確認事項: なし
 
 ### 論点4: aggregate_uuid=社員IDを前提に読んでいる箇所
 - 決定
-  - 有給の履歴(`PaidLeaveController:845-848`、`LeaveHistoryQuery`): `streamIdFor(userId)`で読む。代休・特別休暇で
-    すでに同じことをしていれば、それに合わせる。
-  - 監査ログの社員での絞り込み(`AuditLogController:142-146`)
-    - 「aggregate_uuid=社員ID、または社員から導出したストリームID(有給口座・付与予定・代休口座・特別休暇口座・
-      user-membership・user-identity)のどれか」で絞る。
-    - 導出の一覧は`UserManagementStreamId`の隣に`UserStreamIds::allFor(userId)`として置く。代休・特別休暇が今は
-      漏れているなら、ここで一緒に直る。
-  - `PaidLeaveBalanceProjector:90`など、Projectorの中でaggregate_uuidを社員IDとして使う箇所: `$event->userId`か、
-    `streamIdFor`に替える。
-  - 上記以外の読み手は、実装時に`grep -rn "aggregate_uuid" app`と`aggregateRootUuid()`の全箇所を確かめ、一覧を
-    実装結果に残す。
-- 理由: 漏れると、履歴の表示や残高の計算が空になる。
+  - 有給の履歴: 特別休暇・代休と同じく、`additionalAggregateIds: [PaidLeaveAccountAggregate::streamIdFor($userId)]`で読む。
+    `userScopedEventClassPrefixes`のうち有給口座の分はやめる。
+    - 応答の`aggregate_id`・`version`の値は変わる(画面は表示しているだけで、比較には使っていない)。
+  - 監査ログ
+    - 社員での絞り込み: payloadに`userId`が入るので、今の`ACTOR_KEYS`のLIKEで、有給口座・付与予定も拾える。
+      直さない。
+    - `userId`を持たない特別休暇の3イベント(`SpecialLeaveAccountGrantRevoked`・`UsageCancelled`・`UsageConfirmed`)の
+      漏れは、今回は扱わない(対象外)。
+    - `aggregate_id`での絞り込み(`:124`)に社員IDを入れたとき、有給口座・付与予定が出なくなる。この挙動の変更を
+      docsに書く。
+  - 上記以外の読み手は、実装の最初に`grep -rn "aggregate_uuid\|aggregateRootUuid\|whereAggregateRoot" app`で
+    全て洗い出す。一覧は実装結果に残す。
+  - `StoredEventHistoryNormalizer:157,170,226`は、旧い社員のイベントがあるときだけ動く1回限りの処理なので、
+    対象外とする。
+- 理由: 前例に合わせれば、新しい読み方を作らずに済む。
 - 未確定・要確認事項: なし
 
 ### 論点5: 一括付与の応急処置
-- 決定: `ApplyScheduledGrantsHandler`の都度の読み直し(57-66行)を外し、1回の`retrieve`で処理する。
-- 理由: ストリームが分かれれば、版の衝突は起きない。
+- 決定: `ApplyScheduledGrantsHandler`で、エントリごとの読み直し(64行)だけを外す。41行で取った`$aggregate`で
+  persistする。エントリごとのtry/catchの扱いは変えない。
+- 回帰テストは、修正前のコード(応急処置を外しただけの状態)で`CouldNotPersistAggregate`が起きることを確かめてから、
+  修正後にPASSさせる。
+- 理由: ストリームが分かれれば衝突しない。応急処置を外すのは、衝突が無くなったことをテストで示した後にする。
 - 未確定・要確認事項: なし
 
-### 論点6: 社員の集約(UserAggregate)のID
-- 決定: 変えない(社員IDのまま)。
-- 理由: 有給口座と付与予定が分かれれば、社員の集約は自分だけのストリームになる。社員IDのままで問題が無い。
+### 論点6: 社員の集約のID
+- 決定: 社員の集約のIDは、社員IDのまま変えない。
+- 理由: 有給口座・付与予定が分かれれば、社員の集約は自分だけのストリームになる。
+- 未確定・要確認事項: なし
+
+### 論点7: リリースの手順
+- 決定: `docs/27`の3.1と同じ細かさで、新しい節を書く。
+  - 止めるもの
+    - `php artisan down`
+    - cronの`schedule:run`
+    - キュー(空になるまで処理してから止める。`userId`の無いイベントを持つ古いジョブを残さない)
+    - 打刻端末・API・MCPの受付
+  - 実行の順
+    1. 本番の複製DBでリハーサルする(下の確認を含む)。
+    2. 本番のDB全体とReadModelをバックアップする。
+    3. 新しいコードを配備する。
+    4. 付け替えの試し実行を行い、件数を確かめる。
+    5. `--apply`・`--verify`を行う。
+    6. `--swap`を行う。
+    7. ReadModelを空にして、全Projectorを再生する。
+    8. 指紋を比べる。
+    9. 受付を再開する。
+  - 原則2の確認(リハーサルと本番で同じことをする)
+    - 付け替えの前に、全ReadModelを空にして再生し、`--readmodel-fingerprint`を取る(基準A)。
+    - 付け替えと`swap`の後に、もう一度空にして再生し、指紋を取る(B)。
+    - AとBの差が0件であること。差があれば`--readmodel-diff`で行を特定して止める。
+    - 本番のReadModelと基準Aの差は、別件として報告する。
+  - 戻し方
+    - 表をRENAMEで戻す。
+    - ReadModelを戻す(または旧コードで再生する)。
+    - 旧コードを再配備する。
+    - 表とコードは同時に戻す。idが変わらないので、戻すのは簡単。
+  - 本番で実行する前に、試し実行の結果をユーザーに示して許可を取る。日時と内容は、この変更セットの「レビュー履歴」に
+    残す(`data-correction`)。
+- 理由: 新しいコードは、付け替えの前の履歴を正しく読めない。付け替えが終わる前に1件でも書かれると、空のストリームを
+  読んだ状態で記録される。付け替えの「そのまま写す」規則でも直らない。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
-- 集約
-  - `PaidLeaveAccountAggregate`と`PaidLeaveScheduleAggregate`に、`streamIdFor(userId)`(`UserManagementStreamId::for('paid_leave_account'|'paid_leave_schedule', userId)`)と
-    `forUser(userId)`を足す。
-  - 全イベントに`public readonly string $userId`を足す。順番は代休口座のイベントに合わせる。
-- Handler: 17本と`ApplyScheduledGrantsHandler`を、`Aggregate::retrieve(Aggregate::streamIdFor($userId))->forUser($userId)`の形にする。
-  `ApplyScheduledGrantsHandler`の応急処置を外す。
-- Projector: 社員IDは`$event->userId`から取る(`PaidLeaveScheduleProjector`、`PaidLeaveBalanceProjector`、
-  `PaidLeaveUsageAllocationProjector`ほか、該当する全箇所)。
-- 読み手: 有給の履歴、監査ログの社員の絞り込み(`UserStreamIds::allFor`)、そのほか`aggregate_uuid`を読む箇所。
-- 作り直し
-  - 3つのRebuilderの出力を新しいIDにし、`userId`を入れる。
-  - 今の形の有給口座・付与予定のイベントを変換対象にする。
-  - `verify`に論点3の検査を足す。
-  - `docs/32`と`docs/27`を更新する。
+- 集約: 2つの集約に`streamIdFor`・`forUser`を足す。全イベントに`userId`を足す。
+- Handler: 有給口座10本、付与予定5本、`ApplyScheduledGrantsHandler`を、
+  `Aggregate::retrieve(Aggregate::streamIdFor($userId))->forUser($userId)`の形にする。応急処置を外す(論点5)。
+- 購読側
+  - Projector 3本: `$event->userId`を使う。
+  - `UnallocatedUsageOnPaidLeaveGrantReactor`: `$event->userId`を使う。
+- 読み手: 有給の履歴(論点4)と、grepで見つかったもの。
+- 付け替え
+  - `PaidLeaveStreamRekeyer`。
+  - `leave:rekey-paid-leave-streams`(試し実行・`--apply`・`--verify`・`--swap`)。
+  - 作り直しの最後の工程に組み込む。
+  - `verify`の4つの検査。
 - テスト
   - 回帰
-    - 同じ社員について、付与予定の複数行を1回の一括付与で付与しても`CouldNotPersistAggregate`にならない
-      (応急処置なしで)。
-    - 社員の更新(例: 利用開始日の変更)→Reactorによる付与予定の再計算→有給の付与を、同じ社員に続けて行っても
-      衝突しない。
-  - 作り直し
-    - 今の形の有給口座・付与予定のイベントを含む履歴を作り直すと、aggregate_uuidが新しいIDになり、
-      payloadに`userId`が入る。`verify`が通る。
-    - 作り直した履歴でProjectorを再生した結果(残高・付与・付与予定)が、作り直し前のProjectionと一致する。
-  - 既存のテスト一式(イベントを直接組み立てているテストは、`userId`を足して直す)。
+    - 同じ社員の複数の付与予定を、1回の一括付与で付与しても衝突しない(修正前に衝突することを確かめる)。
+    - 社員の更新→Reactorによる付与予定の再計算→付与を、同じ社員に続けて行っても衝突しない。
+    - 未充当の消化がある社員に付与すると、新しいストリームに`usage_allocated`が記録される(Reactorの修正)。
+  - 付け替え
+    - 入力は「旧い形の行→作り直し→`swap`→新しいコードで少し操作」の後の`stored_events`(本番の形を再現する)。
+    - これに付け替えをかけ、`verify`が通ることを確かめる。他の行が変わらないことも確かめる。
+    - 全ReadModelを空にして再生し、付け替えの前の再生結果と指紋が一致することを確かめる。
+    - 2回かけても結果が同じであること。
+  - 既存のテストの修正(実装者が直す)
+    - 集約の単体テスト: `PaidLeaveAccountAggregateTest`・`PaidLeaveScheduleAggregateTest`。`streamIdFor`・`forUser`・
+      `userId`を足す。
+    - 生の行を使うテスト: Rebuild系ほか12ファイル程度。
+    - `aggregate_uuid=$user->id`を直接見るテスト: `PaidLeaveGrantTimeAllocationTest`・`PaidLeaveUsageIdempotencyTest`・
+      `PaidLeaveRequestScenarioTest`。
+    - `retrieve($userId)`を直接呼ぶテスト: `LeaveAttendanceRateScenarioTest`・`ReapplyPaidLeaveSchedulePolicyJobTest`・
+      `AttendanceRateAssessorTest`。
 
 ## 受け入れ条件
 - 有給口座・付与予定のイベントが、社員IDとは別のaggregate_uuidで記録され、payloadに`userId`を持つ。
-- 一括付与が応急処置なしで動き、回帰テストがPASSする。
-- 有給の履歴・残高・付与予定・監査ログの社員の絞り込みが、分離後も今と同じ結果を返す(テストで確かめる)。
-- 作り直しで過去のイベントが付け替えられ、`verify`の新しい検査が通る。再生の結果が作り直し前と一致する。
+- 一括付与が応急処置なしで動き、回帰テストがPASSする(修正前に失敗することを確かめている)。
+- 付与のときの未充当の充当が、分離した後も動く。
+- 有給の履歴・残高・付与予定が、分離した後も今と同じ結果を返す(テストで確かめる)。
+- 付け替えの後に`verify`の4つの検査が通る。本番の形を再現した入力で、付け替えの前後の再生結果の指紋が一致する。
 - backendのテスト一式がPASSする(既知の`ReadModelFingerprintCommandTest`の失敗を除く)。e2eの`scenario-03`・
   `scenario-15`がPASSする。
-- `docs/09`(UC-P011のAggregateIdの記述)・`docs/17`(`userId`の追加)・`docs/32`・`docs/27`が実装と一致する。
+- docs(下記)が実装と一致する。リリースの手順が`docs/27`にある。
 
 ## 対象外
-- 社員の集約(UserAggregate)のIDの変更。
-- 本番での付け替えの実行そのもの(リリース時に`docs/27`の手順で利用者が行う)。
-- 年度はじめ一斉付与・自動判定(`20261021-paid-leave-fiscal-mass-grant-and-auto-assessment`)、Reactorのテスト
-  (`20261021-paid-leave-schedule-reactor-tests`)。
+- 社員の集約のIDの変更。
+- 本番での付け替えの実行そのもの(リリース時に、論点7の手順でユーザーの許可を取って行う)。
+- 監査ログで、特別休暇の3イベントが社員での絞り込みから漏れる件。
+- `StoredEventHistoryNormalizer`の社員IDの前提。
+- 年度はじめ一斉付与・自動判定、Reactorのテスト(別の変更セット)。
 
 ## ドキュメントへの影響
-- `docs/09-usecases-paid-leave.md`: UC-P011のAggregateIdの記述を、導出したストリームIDに直す。
-- `docs/17-events.md`: `paid_leave_account.*`・`paid_leave_schedule.*`に`userId`を足す。
-- `docs/32-stored-event-history-normalization.md`: 作り直しでの付け替えと、`verify`の検査。
-- `docs/27-release-runbook.md`: このコードのリリース手順(メンテナンスの時間、付け替えの実行順、終わるまで有給の操作を止める)。
+- `docs/09-usecases-paid-leave.md`: AggregateId=userIdの記述(4行、431-432行、517行、UC-P011)を直す。
+- `docs/17-events.md`
+  - 249行・397行の「AggregateId = userId」を直す。
+  - 有給口座・付与予定のイベントに`userId`を足す。
+- `docs/32-stored-event-history-normalization.md`: 付け替えの手順、作り直しの最後の工程、`verify`の検査。
+- `docs/27-release-runbook.md`: 論点7のリリースの手順。
+- 監査ログの`aggregate_id`での絞り込みの挙動の変更を、監査ログのドキュメント(該当する章)に書く。
 - `docs/changesets/20260906-paid-leave-schedule-assessment/spec.md`の論点14は、過去の記録なので書き換えない。
-- `docs/changesets/README.md`: 一覧に追加する。
+- `docs/changesets/README.md`
 
 ## モック・アセット
 なし
 
 ## 実装対象
-- `backend/app/Domain/PaidLeaveAccount/`(Aggregates・Events・Handlers・Projectors)
+- `backend/app/Domain/PaidLeaveAccount/`(Aggregates・Events・Handlers・Projectors・Reactors)
 - `backend/app/Domain/PaidLeaveSchedule/`(Aggregates・Events・Handlers・Projectors)
-- `backend/app/Domain/UserManagement/Support/`(`UserStreamIds`)
-- `backend/app/Domain/EventSourcing/Rebuild/`(3つのRebuilder、`EventStoreRebuilder`、`EventStoreRebuildWriter::verify`)
-- `backend/app/Http/Controllers/Api/PaidLeaveController.php`、`AuditLogController.php`、
-  `backend/app/Domain/Leave/Support/LeaveHistoryQuery.php`
-- `backend/tests/`(回帰・作り直し・既存の修正)
+- `backend/app/Domain/EventSourcing/Rebuild/`(`PaidLeaveStreamRekeyer`、`EventStoreRebuilder`の最後の工程、
+  `EventStoreRebuildWriter::verify`と事前条件)
+- `backend/app/Console/Commands/RekeyPaidLeaveStreamsCommand.php`
+- `backend/app/Http/Controllers/Api/PaidLeaveController.php`、`backend/app/Domain/Leave/Support/LeaveHistoryQuery.php`
+- `backend/tests/`
 - docs: 上記
 
 ## 検証方法
 - `cd backend && php artisan test`(全件)
-- 作り直しの試し実行を、開発用のDB(`database/database.sqlite`)に対して行う(`leave:rebuild-event-store`の
-  既定の試し実行、`--verify`)。
+- 付け替えの試し実行と`--verify`を、本番の形を再現したテスト用のDBで行う(開発用のDBには、作り直し後の種類のイベントが
+  無いので使わない)。本番の前に、本番の複製DBでリハーサルする(論点7)。
 - e2e: `npm run test:e2e -- scenario-03-paid-leave scenario-15-paid-leave-schedule`
 
 ## レビュー履歴
-初版(2026-10-21)
-
-- 2026-10-21 ユーザーの訂正(本番の作り直しは実行済み)で、論点3の前提が覆った。論点3を作り直した:
-  未実行の作り直しに組み込む案から、作り直し済みの履歴に付け替えをかける案に変えた。リリース手順を足した。
+- 初版(2026-10-21): 未実行の作り直しに付け替えを組み込む案。
+- 2026-10-21 ユーザーの訂正(本番の作り直しは実行済み)で、論点3の前提が覆った。作り直し済みの履歴に、作り直しを
+  もう一度かける案に変えた。
+- 2026-10-21 独立設計レビュー(同等モデル)で、その案も成り立たないと分かった(事前条件で止まる、止めを外すと
+  イベントが二重になる)。前提が覆ったので、「現状」「設計前提の検証」から作り直した。
+  - 要修正
+    - 論点3: 付け替え専用の手順(行を1対1で写す)に決めた。
+    - 読み手の漏れ(`UnallocatedUsageOnPaidLeaveGrantReactor`)を足した。
+    - 作り直しのRebuilderの漏れ(`PaidLeaveRequestRebuilder`)を足した。最後の工程にかける変換にして、個別には直さない。
+    - テストの入力を本番の形に合わせた。
+    - 原則2の確認を指紋の比較(A/B)にした。
+    - リリースの手順(止める範囲、戻し方、許可の取り方)を論点7として足した。
+  - 推奨
+    - 監査ログ・履歴の扱いを、事実に合わせて決め直した。
+    - `verify`の検査を足した。
+    - 論点5の書き方を直した。
+    - 回帰テストは、修正前に失敗することを確かめる。
+    - 既存のテストへの影響を見積もった。
+  - 軽微: Handlerの本数、docsの箇所、Normalizerは対象外、キューを空にする。
 
 ## 実装結果
 未着手
