@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\PaidLeave\ScheduleAssessmentRunService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -26,14 +27,30 @@ Schedule::command('users:sync-ms365')
     ->withoutOverlapping();
 
 // UC-P002: 有給付与Scheduleを毎日、明日から1年先まで再計算する(勤務形態の月替わりなど、
-// 再計算のきっかけを翌日以降に取りこぼさないため)。出勤率Assessmentは行わず、Grant自体は
-// 管理者が付与予定画面で確認した上で一括付与する — 自動確定はしない。
+// 再計算のきっかけを翌日以降に取りこぼさないため)。出勤率Assessment(判定)は行わない(判定は下の
+// `paid-leave:assess-schedules`)。Grant自体も管理者が付与予定画面で確認した上で一括付与する — 自動確定はしない。
 // docs/changesets/20260906-paid-leave-schedule-assessment/spec.md 論点6・10
 // (旧`paid-leave:grant-scheduled`を置換)、
 // docs/changesets/20261021-paid-leave-schedule-recalc-on-assignment-change/spec.md 論点2・4。
 Schedule::command('paid-leave:roll-schedules')
     ->dailyAt('02:00')
     ->withoutOverlapping();
+
+// UC-P012: 付与予定日が来た「予定」の行の出勤率を、毎月1日03:00(既定のタイムゾーン)に判定する。
+// キュー(`queue:work`は既定60秒で打ち切られる)を使わず、スケジューラーから直接動かす。
+// cron式は、画面に出す次回実行日時の計算と共有する(ScheduleAssessmentRunService::SCHEDULE_CRON)。
+// docs/changesets/20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md 論点6。
+Schedule::command('paid-leave:assess-schedules --trigger=schedule')
+    ->cron(ScheduleAssessmentRunService::SCHEDULE_CRON)
+    ->timezone(ScheduleAssessmentRunService::defaultTimezone())
+    ->withoutOverlapping(180)
+    ->runInBackground();
+
+// UC-P012: 画面の「今すぐ判定する」が作った待機中の記録を、1分ごとに1件拾って実行する。
+Schedule::command('paid-leave:assess-schedules --pending')
+    ->everyMinute()
+    ->withoutOverlapping(180)
+    ->runInBackground();
 
 // UC-P005: 有給消滅警告を毎日通知する。
 Schedule::command('paid-leave:warn-expiring')

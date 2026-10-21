@@ -22,11 +22,15 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * 状態遷移: Scheduled → AssessmentPending → (Eligible|NotEligible|NeedsReview) →
  * (Granted|Cancelled)。
  *
+ * まとめて付与する2件(同じ社員・同じ付与予定日で、名目の継続勤務月数が初回とその+12か月の2行)は常に組で扱う
+ * (`pairedEntryId`)。判定の上書き・個別修正・置き換え(Superseded)・取消は組の2行に同じ操作を行う
+ * (docs/changesets/20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md 論点10)。
+ *
  * 出勤率Assessmentの分母/分子算出そのものは`Support\AttendanceRateAssessor`が、
  * 通常/比例/シフト区分の算出は`Support\GrantCategoryClassifier`が、いずれも
  * ステートレスにCommandHandler側で行い、この集約はその結果の記録・状態遷移のみを担う。
  *
- * @phpstan-type AssessmentState array{periodStart: string, periodEnd: string, denominatorDays: int, attendanceDays: int, excludedDays: int, attendanceRate: ?float, policyVersion: string, automaticResult: string, finalResult: string, overrideReason: ?string}
+ * @phpstan-type AssessmentState array{periodStart: string, periodEnd: string, denominatorDays: int, attendanceDays: int, excludedDays: int, deemedAttendanceDays: int, attendanceRate: ?float, policyVersion: string, automaticResult: string, finalResult: string, overrideReason: ?string}
  * @phpstan-type EntryState array{scheduledOn: string, nominalServiceMonths: ?int, category: string, candidateGrantDays: float, status: string, manualOverride: ?array{reason: string, byUserId: string, at: ?string}, assessments: array<string, AssessmentState>, latestAssessmentId: ?string}
  */
 class PaidLeaveScheduleAggregate extends AggregateRoot
@@ -142,10 +146,13 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             $desiredByKey[self::entryKey($candidate['scheduledOn'], $candidate['nominalServiceMonths'] ?? null)] = $candidate;
         }
 
-        // 既存の再計算対象エントリを走査する。確定済みの扱いは$includeGrantedEntries次第:
+        // 既存の再計算対象エントリを走査して、行ごとの処理(取消/置き換え/そのまま)を決める。確定済みの扱いは$includeGrantedEntries次第:
         // - false(デフォルト): FINALIZED_STATUSES(Granted/Cancelled)を対象外
         // - true(過去分洗い替え用): Cancelledのみを対象外、Grantedも対象に含める
         // 個別修正済みは$overrideManualEdits次第。
+        /** @var array<string, array{type: string, desired: ?array<string, mixed>}> $actions */
+        $actions = [];
+
         foreach ($this->entries as $entryId => $entry) {
             $excludedStatuses = $includeGrantedEntries
                 ? [self::STATUS_CANCELLED]
@@ -180,11 +187,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
             if ($desired === null) {
                 // 最新条件ではこの日付にScheduleが不要になった。
-                $this->recordThat(new PaidLeaveScheduleEntryCancelled(
-                    userId: $this->requireUserId(),
-                    scheduleEntryId: $entryId,
-                    reason: $reason,
-                ));
+                $actions[$entryId] = ['type' => 'cancel', 'desired' => null];
 
                 continue;
             }
@@ -193,7 +196,41 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
             if ($desired['category'] === $entry['category']
                 && abs($desired['candidateGrantDays'] - $entry['candidateGrantDays']) < 0.0001) {
-                // 内容が変わらないため何もしない(冪等)。
+                // 内容が変わらない(冪等)。ただし組の相手が取消・置き換えになるときは、組の2行を同じように置き換える。
+                $actions[$entryId] = ['type' => 'keep', 'desired' => $desired];
+
+                continue;
+            }
+
+            $actions[$entryId] = ['type' => 'supersede', 'desired' => $desired];
+        }
+
+        // 組の片方だけが取消・置き換えになるとき、変わらない相手も置き換える(組は常に同じ扱い)。
+        foreach ($actions as $entryId => $action) {
+            if ($action['type'] === 'keep') {
+                continue;
+            }
+
+            $partnerId = $this->pairedEntryId($entryId);
+            if ($partnerId !== null && ($actions[$partnerId]['type'] ?? null) === 'keep') {
+                $actions[$partnerId]['type'] = 'supersede';
+            }
+        }
+
+        foreach ($actions as $entryId => $action) {
+            if ($action['type'] === 'keep') {
+                continue;
+            }
+
+            $entry = $this->entries[$entryId];
+
+            if ($action['type'] === 'cancel') {
+                $this->recordThat(new PaidLeaveScheduleEntryCancelled(
+                    userId: $this->requireUserId(),
+                    scheduleEntryId: $entryId,
+                    reason: $reason,
+                ));
+
                 continue;
             }
 
@@ -207,7 +244,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
                 previousNominalServiceMonths: $entry['nominalServiceMonths'],
             ));
 
-            $this->createEntry($desired);
+            $this->createEntry($action['desired']);
         }
 
         // 残った(既存に一致するものが無かった)候補は新規作成する。
@@ -234,6 +271,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         ?float $attendanceRate,
         string $policyVersion,
         string $automaticResult,
+        int $deemedAttendanceDays = 0,
     ): self {
         $entry = $this->requireEntry($scheduleEntryId);
 
@@ -253,6 +291,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             attendanceRate: $attendanceRate,
             policyVersion: $policyVersion,
             automaticResult: $automaticResult,
+            deemedAttendanceDays: $deemedAttendanceDays,
         ));
 
         return $this;
@@ -267,24 +306,30 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         string $reason,
         string $operatorUserId,
     ): self {
-        $entry = $this->requireEntry($scheduleEntryId);
+        $targetIds = $this->entryIdWithPartner($scheduleEntryId);
 
-        if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
-            throw new DomainRuleException("Scheduleエントリ [{$scheduleEntryId}] は確定済み・取消済みのため判定を上書きできません。");
+        foreach ($targetIds as $targetId) {
+            $entry = $this->requireEntry($targetId);
+
+            if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
+                throw new DomainRuleException("Scheduleエントリ [{$targetId}] は確定済み・取消済みのため判定を上書きできません。");
+            }
+
+            if ($entry['latestAssessmentId'] === null) {
+                throw new DomainRuleException("Scheduleエントリ [{$targetId}] はまだAssessmentが実行されていません。");
+            }
         }
 
-        if ($entry['latestAssessmentId'] === null) {
-            throw new DomainRuleException("Scheduleエントリ [{$scheduleEntryId}] はまだAssessmentが実行されていません。");
+        foreach ($targetIds as $targetId) {
+            $this->recordThat(new PaidLeaveScheduleAssessmentOverridden(
+                userId: $this->requireUserId(),
+                scheduleEntryId: $targetId,
+                assessmentId: $this->entries[$targetId]['latestAssessmentId'],
+                finalResult: $finalResult,
+                reason: $reason,
+                operatorUserId: $operatorUserId,
+            ));
         }
-
-        $this->recordThat(new PaidLeaveScheduleAssessmentOverridden(
-            userId: $this->requireUserId(),
-            scheduleEntryId: $scheduleEntryId,
-            assessmentId: $entry['latestAssessmentId'],
-            finalResult: $finalResult,
-            reason: $reason,
-            operatorUserId: $operatorUserId,
-        ));
 
         return $this;
     }
@@ -302,7 +347,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         string $reason,
         string $operatorUserId,
     ): self {
-        $entry = $this->requireEntry($scheduleEntryId);
+        $this->requireEntry($scheduleEntryId);
 
         if ($changes === []) {
             throw new DomainRuleException('個別修正する項目がありません。');
@@ -313,17 +358,23 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             throw new DomainRuleException('個別修正できる項目は区分・候補付与日数のみです。');
         }
 
-        if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
-            throw new DomainRuleException("Scheduleエントリ [{$scheduleEntryId}] は確定済み・取消済みのため編集できません。");
+        $targetIds = $this->entryIdWithPartner($scheduleEntryId);
+
+        foreach ($targetIds as $targetId) {
+            if (in_array($this->entries[$targetId]['status'], self::FINALIZED_STATUSES, true)) {
+                throw new DomainRuleException("Scheduleエントリ [{$targetId}] は確定済み・取消済みのため編集できません。");
+            }
         }
 
-        $this->recordThat(new PaidLeaveScheduleEntryManuallyEdited(
-            userId: $this->requireUserId(),
-            scheduleEntryId: $scheduleEntryId,
-            changes: $changes,
-            reason: $reason,
-            operatorUserId: $operatorUserId,
-        ));
+        foreach ($targetIds as $targetId) {
+            $this->recordThat(new PaidLeaveScheduleEntryManuallyEdited(
+                userId: $this->requireUserId(),
+                scheduleEntryId: $targetId,
+                changes: $changes,
+                reason: $reason,
+                operatorUserId: $operatorUserId,
+            ));
+        }
 
         return $this;
     }
@@ -353,19 +404,67 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     public function cancelEntry(string $scheduleEntryId, string $reason): self
     {
-        $entry = $this->requireEntry($scheduleEntryId);
+        $targetIds = $this->entryIdWithPartner($scheduleEntryId);
 
-        if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
-            throw new DomainRuleException("Scheduleエントリ [{$scheduleEntryId}] は既に確定済み・取消済みです。");
+        foreach ($targetIds as $targetId) {
+            if (in_array($this->requireEntry($targetId)['status'], self::FINALIZED_STATUSES, true)) {
+                throw new DomainRuleException("Scheduleエントリ [{$targetId}] は既に確定済み・取消済みです。");
+            }
         }
 
-        $this->recordThat(new PaidLeaveScheduleEntryCancelled(
-            userId: $this->requireUserId(),
-            scheduleEntryId: $scheduleEntryId,
-            reason: $reason,
-        ));
+        foreach ($targetIds as $targetId) {
+            $this->recordThat(new PaidLeaveScheduleEntryCancelled(
+                userId: $this->requireUserId(),
+                scheduleEntryId: $targetId,
+                reason: $reason,
+            ));
+        }
 
         return $this;
+    }
+
+    /**
+     * まとめて付与する2件の組の相手の行IDを返す(組でなければnull)。組の目印は、未取消で、付与予定日が同じで、
+     * 名目の継続勤務月数が12か月違う(初回とその+12か月)2行。どちらかの月数がnull・行が無い場合は組として扱わない。
+     */
+    public function pairedEntryId(string $scheduleEntryId): ?string
+    {
+        $entry = $this->entries[$scheduleEntryId] ?? null;
+
+        if ($entry === null || $entry['status'] === self::STATUS_CANCELLED || $entry['nominalServiceMonths'] === null) {
+            return null;
+        }
+
+        foreach ($this->entries as $otherId => $other) {
+            if ($otherId !== $scheduleEntryId
+                && $other['status'] !== self::STATUS_CANCELLED
+                && $other['scheduledOn'] === $entry['scheduledOn']
+                && $other['nominalServiceMonths'] !== null
+                && abs($other['nominalServiceMonths'] - $entry['nominalServiceMonths']) === 12) {
+                return $otherId;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 対象の行と、組の相手(あれば)の行ID。名目の月数の小さい方が先。
+     *
+     * @return array<int, string>
+     */
+    private function entryIdWithPartner(string $scheduleEntryId): array
+    {
+        $this->requireEntry($scheduleEntryId);
+
+        $partnerId = $this->pairedEntryId($scheduleEntryId);
+        if ($partnerId === null) {
+            return [$scheduleEntryId];
+        }
+
+        return $this->entries[$partnerId]['nominalServiceMonths'] < $this->entries[$scheduleEntryId]['nominalServiceMonths']
+            ? [$partnerId, $scheduleEntryId]
+            : [$scheduleEntryId, $partnerId];
     }
 
     /**
@@ -501,6 +600,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             'denominatorDays' => $event->denominatorDays,
             'attendanceDays' => $event->attendanceDays,
             'excludedDays' => $event->excludedDays,
+            'deemedAttendanceDays' => $event->deemedAttendanceDays,
             'attendanceRate' => $event->attendanceRate,
             'policyVersion' => $event->policyVersion,
             'automaticResult' => $event->automaticResult,

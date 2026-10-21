@@ -240,6 +240,33 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     expect(failed?.message).toBeTruthy()
   })
 
+  // 付与予定画面の「自動判定」カードの「今すぐ判定する」。受付(202)のあと、毎分のスケジュールの経路
+  // (`--pending`)を直接実行して判定を完了させ、カードに前回の結果が出るまで待つ。
+  test('「今すぐ判定する」で判定を受け付け、判定が終わると前回の結果が表示される', async ({ page }) => {
+    await loginAs(page, SCENARIO_USERS.hrStaff)
+    await page.goto('/admin/paid-leave/schedule')
+
+    const card = page.getByRole('region', { name: '自動判定' })
+    await expect(card.getByText(/^次回の自動判定: /)).toBeVisible()
+    await card.getByRole('button', { name: '今すぐ判定する' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('付与予定日を過ぎた『予定』の行を、今すぐ判定します。')).toBeVisible()
+    await Promise.all([
+      page.waitForResponse(
+        (response) => /\/paid-leave\/schedule-assessment-runs$/.test(response.url()) && response.request().method() === 'POST' && response.status() === 202,
+      ),
+      dialog.getByRole('button', { name: '判定する', exact: true }).click(),
+    ])
+
+    // 受付のあと、毎分のスケジュールと同じ経路で待っている実行を1件動かす(キューは使わない)。
+    execSync('php artisan paid-leave:assess-schedules --pending', { cwd: BACKEND_DIR, encoding: 'utf-8' })
+
+    // 実行中の間はカードが5秒ごとに状態を取り直すので、完了の表示を待つ。
+    await expect(card.getByText(/^前回: .+ 完了/)).toBeVisible({ timeout: 15000 })
+    await expect(card.getByText('判定を実行中です')).toHaveCount(0)
+  })
+
   test('付与予定日超過の件数があれば、警告と有給休暇画面のバッジが出る', async ({ page }) => {
     await loginAs(page, SCENARIO_USERS.hrStaff)
 

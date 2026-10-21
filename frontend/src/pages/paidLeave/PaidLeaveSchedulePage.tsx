@@ -11,6 +11,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PaidLeaveScheduleAssessmentPanel } from '../../components/PaidLeaveScheduleAssessmentPanel/PaidLeaveScheduleAssessmentPanel'
+import { PaidLeaveScheduleAssessmentRunCard } from '../../components/PaidLeaveScheduleAssessmentRunCard/PaidLeaveScheduleAssessmentRunCard'
 import { PaidLeaveScheduleBulkGrantBar } from '../../components/PaidLeaveScheduleBulkGrantBar/PaidLeaveScheduleBulkGrantBar'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
@@ -23,9 +24,11 @@ import {
   useBulkGrantPaidLeaveScheduleEntries,
   useEditPaidLeaveScheduleEntry,
   useOverridePaidLeaveScheduleAssessment,
+  usePaidLeaveScheduleAssessmentRunStatus,
   usePaidLeaveScheduleEntries,
   usePaidLeaveScheduleEntry,
   useReassessPaidLeaveScheduleEntry,
+  useStartPaidLeaveScheduleAssessmentRun,
 } from '../../hooks/usePaidLeave'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { paidLeaveScheduleCategoryLabel, paidLeaveScheduleStatusLabel } from '../../utils/statusLabels'
@@ -95,6 +98,24 @@ function buildBulkConfirmDescription(targets: PaidLeaveScheduleEntry[]): ReactNo
 }
 
 /**
+ * 組の相手(spec.md論点10)。同じ社員・同じ付与予定日で、名目の月数が初回とその+12か月の2行で、
+ * どちらも付与対象のときに組になる。組でないときはundefined。
+ */
+function pairPartnerOf(entry: PaidLeaveScheduleEntry, rows: PaidLeaveScheduleEntry[]): PaidLeaveScheduleEntry | undefined {
+  const months = entry.nominal_service_months
+  if (entry.status !== 'Eligible' || months === null) return undefined
+  return rows.find(
+    (other) =>
+      other.id !== entry.id &&
+      other.status === 'Eligible' &&
+      other.user_id === entry.user_id &&
+      other.scheduled_on === entry.scheduled_on &&
+      other.nominal_service_months !== null &&
+      Math.abs(other.nominal_service_months - months) === 12,
+  )
+}
+
+/**
  * 付与予定一覧(spec.md論点1・2・4・5・6・8・9)。絞り込みはURLクエリに保持し、行クリックで
  * 詳細Sheetを開く。Eligible行だけ選択して一括付与できる管理者向け画面。
  */
@@ -122,6 +143,8 @@ export function PaidLeaveSchedulePage() {
   const override = useOverridePaidLeaveScheduleAssessment()
   const edit = useEditPaidLeaveScheduleEntry()
   const bulkGrant = useBulkGrantPaidLeaveScheduleEntries()
+  const runStatus = usePaidLeaveScheduleAssessmentRunStatus()
+  const startRun = useStartPaidLeaveScheduleAssessmentRun()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkResult, setBulkResult] = useState<PaidLeaveScheduleBulkGrantResponse | null>(null)
@@ -192,11 +215,18 @@ export function PaidLeaveSchedulePage() {
     edit.reset()
   }
 
+  /** 組の片方を選ぶと相手も選び、外すと両方外す(組は常に両方を一括付与する。spec.md論点10)。 */
   function toggleRow(id: string) {
+    const entry = (entries ?? []).find((row) => row.id === id)
+    const partner = entry ? pairPartnerOf(entry, entries ?? []) : undefined
+    const ids = partner ? [id, partner.id] : [id]
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      const adding = !prev.has(id)
+      for (const target of ids) {
+        if (adding) next.add(target)
+        else next.delete(target)
+      }
       return next
     })
   }
@@ -224,6 +254,17 @@ export function PaidLeaveSchedulePage() {
         </Link>
       </div>
       <Card title="付与予定">
+        <PaidLeaveScheduleAssessmentRunCard
+          status={runStatus.data}
+          statusError={runStatus.error}
+          isStarting={startRun.isPending}
+          startError={startRun.error}
+          onStart={() => startRun.mutateAsync()}
+          onConfirmOpenChange={(open) => {
+            if (open) startRun.reset()
+          }}
+        />
+
         {overdueCount > 0 && (
           <Alert className="mb-4 border-warning/50 bg-warning/10">
             <AlertDescription className="flex flex-wrap items-center gap-3">

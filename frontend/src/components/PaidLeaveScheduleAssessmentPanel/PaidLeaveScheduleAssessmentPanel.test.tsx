@@ -26,6 +26,7 @@ const entry: PaidLeaveScheduleEntryDetail = {
       period_end: '2026-10-01',
       denominator_days: 240,
       attendance_days: 180,
+      deemed_attendance_days: 0,
       excluded_days: 5,
       attendance_rate: 75,
       policy_version: 'v1',
@@ -47,6 +48,25 @@ describe('PaidLeaveScheduleAssessmentPanel', () => {
     expect(screen.getByText('鈴木一郎')).toBeInTheDocument()
     expect(screen.getByText('240日')).toBeInTheDocument()
     expect(screen.getByText('75%')).toBeInTheDocument()
+  })
+
+  it('shows the deemed attendance days and the note when the period was shortened by an early grant', () => {
+    const early: PaidLeaveScheduleEntryDetail = {
+      ...entry,
+      assessments: [{ ...entry.assessments[0], deemed_attendance_days: 68 }],
+    }
+    render(<PaidLeaveScheduleAssessmentPanel entry={early} onReassess={vi.fn()} onOverride={vi.fn()} onEdit={vi.fn()} />)
+
+    expect(screen.getByText('みなし出勤')).toBeInTheDocument()
+    expect(screen.getByText('68日')).toBeInTheDocument()
+    expect(screen.getByText('前倒し付与で短縮された期間は全出勤とみなしています(社労士確認が前提)。')).toBeInTheDocument()
+  })
+
+  it('hides the deemed attendance row and the note when the deemed days are 0', () => {
+    render(<PaidLeaveScheduleAssessmentPanel entry={entry} onReassess={vi.fn()} onOverride={vi.fn()} onEdit={vi.fn()} />)
+
+    expect(screen.queryByText('みなし出勤')).not.toBeInTheDocument()
+    expect(screen.queryByText(/前倒し付与で短縮された期間は全出勤とみなしています/)).not.toBeInTheDocument()
   })
 
   it('calls onReassess when the reassess button is clicked', async () => {

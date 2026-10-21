@@ -8,6 +8,7 @@ use App\Models\PaidLeaveScheduleEntry;
 use App\Models\User;
 use App\Models\UserWorkStyleMonthlyAssignment;
 use App\Models\WorkStyle;
+use App\Support\BusinessDate;
 use App\Support\FiscalYearCalculator;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -252,7 +253,7 @@ class ScheduleCandidateGenerator
 
     public function currentWorkStyleFor(User $user): ?WorkStyle
     {
-        $currentYearMonth = Carbon::today()->format('Y-m');
+        $currentYearMonth = BusinessDate::today()->format('Y-m');
 
         $assignment = UserWorkStyleMonthlyAssignment::query()
             ->where('user_id', $user->id)

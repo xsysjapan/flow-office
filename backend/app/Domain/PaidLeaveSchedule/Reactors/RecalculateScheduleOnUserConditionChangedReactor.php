@@ -9,7 +9,7 @@ use App\Domain\UserManagement\Events\PaidLeaveAutoGrantEnabledSet;
 use App\Domain\UserManagement\Events\UserHireDateSet;
 use App\Domain\UserManagement\Events\UserUsageStartDateSet;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use App\Support\BusinessDate;
 use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
 
 /**
@@ -58,7 +58,7 @@ class RecalculateScheduleOnUserConditionChangedReactor extends Reactor
             return;
         }
 
-        $from = Carbon::today();
+        $from = BusinessDate::today();
         $candidates = $this->generator->candidatesFor($user, $from, $from->copy()->addYear());
 
         $this->commandBus->dispatch(new RecalculateFutureSchedule(

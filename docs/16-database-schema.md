@@ -1113,6 +1113,8 @@ Override)ごとに1行を持つ。どの判定を根拠に、誰が上書きし�
 - denominator_days (判定の分母(勤務予定日数))
 - attendance_days (判定の分子(出勤日数))
 - excluded_days (除外日数。既定0)
+- deemed_attendance_days (前倒しで短縮された期間のみなし出勤日数。既定0。`denominator_days`/`attendance_days`には含めない。
+  出勤率 = (attendance_days + deemed_attendance_days) ÷ (denominator_days + deemed_attendance_days))
 - attendance_rate (nullable。出勤率)
 - policy_version (判定に用いた`paid_leave_grant_policies`等の版)
 - automatic_result (自動判定結果)
@@ -1611,6 +1613,25 @@ docs/20-implementation-notes.md と同様の注記)。
 `stored_events`の`notification.queued` / `notification.sent` / `notification.confirmed`
 イベントから再生成できるProjection (docs/13-usecases-notification.md)。`resolved_at`は
 対象ドメイン側の状態変化(日次編集の完了、申請の承認等)をトリガーに更新する。
+
+## admin_command_runs (運用コマンド・自動判定の実行の記録)
+
+運用コマンド画面(`#[AdminExecutable]`のコマンド)の実行履歴と、有給付与予定の自動判定(`paid-leave:assess-schedules`)の
+実行の記録。運用の記録で、業務の状態ではない(イベントにしない)。`RunAdminCommandJob`と、自動判定のコマンド自身が更新する。
+
+- id (uuid)
+- command_name
+- parameters (json。自動判定は`{"trigger": "schedule"|"manual"}`)
+- status (`queued`/`running`/`succeeded`/`failed`。既定`queued`)
+- requested_by_user_id (nullable。`users.id`。定期実行(自動判定のスケジュール)はnull)
+- started_at / finished_at (nullable)
+- exit_code (nullable)
+- output (nullable。先頭の100000文字だけを残す)
+- error_message (nullable)
+- summary (json nullable。コマンドが書く集計。自動判定は`{targets, assessed, eligible, not_eligible, needs_review, failed}`の件数。
+  出力の切り詰めに左右されない)
+- created_at / updated_at
+- index(command_name, status)
 
 ## テーブル分類の考え方
 

@@ -3,8 +3,14 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as paidLeaveApi from '../../api/paidLeave'
-import type { PaidLeaveScheduleBulkGrantResponse, PaidLeaveScheduleEntry, PaidLeaveScheduleEntryDetail } from '../../api/types'
+import type {
+  PaidLeaveScheduleAssessmentRunStatus,
+  PaidLeaveScheduleBulkGrantResponse,
+  PaidLeaveScheduleEntry,
+  PaidLeaveScheduleEntryDetail,
+} from '../../api/types'
 import { PaidLeaveSchedulePage } from './PaidLeaveSchedulePage'
 
 const eligibleEntry: PaidLeaveScheduleEntry = {
@@ -69,6 +75,7 @@ const detail: PaidLeaveScheduleEntryDetail = {
       period_end: '2026-10-01',
       denominator_days: 240,
       attendance_days: 220,
+      deemed_attendance_days: 0,
       excluded_days: 0,
       attendance_rate: 92,
       policy_version: 'v1',
@@ -80,6 +87,33 @@ const detail: PaidLeaveScheduleEntryDetail = {
     },
   ],
 }
+
+/** 既定の自動判定の状態: 前回は完了、次回は11月1日 3:00。 */
+const defaultAssessmentRunStatus: PaidLeaveScheduleAssessmentRunStatus = {
+  next_run_at: '2026-11-01T03:00:00',
+  latest_run: {
+    id: 'run-1',
+    status: 'succeeded',
+    trigger: 'schedule',
+    requested_by_name: null,
+    started_at: '2026-10-01T03:00:00',
+    finished_at: '2026-10-01T03:02:00',
+    summary: { targets: 12, assessed: 12, eligible: 10, not_eligible: 1, needs_review: 1, failed: 0 },
+    error_message: null,
+  },
+}
+
+/** 同じ社員・同じ付与予定日で、名目6か月と18か月の組(どちらも付与対象)。 */
+const pairFirst: PaidLeaveScheduleEntry = {
+  ...eligibleEntry,
+  id: 'pair-6',
+  user_id: 'user-pair',
+  user_name: '佐藤三郎',
+  scheduled_on: '2026-04-01',
+  candidate_grant_days: 10,
+  nominal_service_months: 6,
+}
+const pairSecond: PaidLeaveScheduleEntry = { ...pairFirst, id: 'pair-18', candidate_grant_days: 11, nominal_service_months: 18 }
 
 function LocationProbe() {
   const location = useLocation()
@@ -94,11 +128,18 @@ function renderPage({
   entries = [eligibleEntry, needsReviewEntry],
   overdue = [],
   initialPath = '/admin/paid-leave/schedule',
-}: { entries?: PaidLeaveScheduleEntry[]; overdue?: PaidLeaveScheduleEntry[]; initialPath?: string } = {}) {
+  assessmentRunStatus = defaultAssessmentRunStatus,
+}: {
+  entries?: PaidLeaveScheduleEntry[]
+  overdue?: PaidLeaveScheduleEntry[]
+  initialPath?: string
+  assessmentRunStatus?: PaidLeaveScheduleAssessmentRunStatus
+} = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveScheduleEntries').mockImplementation(async (params) =>
     params.filter === 'overdue' ? overdue : entries,
   )
+  vi.spyOn(paidLeaveApi, 'fetchPaidLeaveScheduleAssessmentRunStatus').mockResolvedValue(assessmentRunStatus)
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -413,5 +454,95 @@ describe('PaidLeaveSchedulePage', () => {
     expect(screen.getByText('勤怠データを確認')).toBeInTheDocument()
     expect(currentLocation()).toContain('scheduleEntryId=entry-1')
     expect(editSpy).not.toHaveBeenCalled()
+  })
+
+  it('shows the automatic assessment card with the next run and the previous result above the list', async () => {
+    renderPage()
+
+    const card = await screen.findByRole('region', { name: '自動判定' })
+    expect(within(card).getByText('次回の自動判定: 11月1日 3:00')).toBeInTheDocument()
+    expect(within(card).getByText('前回: 10月1日 3:02 完了(対象12件 / 付与対象10件 / 対象外1件 / 要確認1件 / 失敗0件)')).toBeInTheDocument()
+  })
+
+  it('starts an assessment run after the confirmation and fetches the run status again', async () => {
+    const startSpy = vi.spyOn(paidLeaveApi, 'startPaidLeaveScheduleAssessmentRun').mockResolvedValue(undefined)
+
+    renderPage()
+    const card = await screen.findByRole('region', { name: '自動判定' })
+    const statusFetches = () => vi.mocked(paidLeaveApi.fetchPaidLeaveScheduleAssessmentRunStatus).mock.calls.length
+    const before = statusFetches()
+
+    await userEvent.click(within(card).getByRole('button', { name: '今すぐ判定する' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('付与予定日を過ぎた『予定』の行を、今すぐ判定します。')).toBeInTheDocument()
+    expect(startSpy).not.toHaveBeenCalled()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '判定する' }))
+
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(statusFetches()).toBeGreaterThan(before))
+  })
+
+  it('shows the 409 error inside the confirmation dialog when a run is already in progress', async () => {
+    vi.spyOn(paidLeaveApi, 'startPaidLeaveScheduleAssessmentRun').mockRejectedValue(new ApiError(409, '判定は既に実行中です。'))
+
+    renderPage()
+    const card = await screen.findByRole('region', { name: '自動判定' })
+    await userEvent.click(within(card).getByRole('button', { name: '今すぐ判定する' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: '判定する' }))
+
+    expect(await within(dialog).findByText('判定は既に実行中です。')).toBeInTheDocument()
+  })
+
+  it('disables the run button and shows that the run is in progress', async () => {
+    renderPage({
+      assessmentRunStatus: {
+        next_run_at: '2026-11-01T03:00:00',
+        latest_run: { ...defaultAssessmentRunStatus.latest_run!, status: 'running', finished_at: null, summary: null },
+      },
+    })
+
+    const card = await screen.findByRole('region', { name: '自動判定' })
+    expect(within(card).getByText('判定を実行中です')).toBeInTheDocument()
+    expect(within(card).getByRole('button', { name: '今すぐ判定する' })).toBeDisabled()
+  })
+
+  it('selects both rows of a pair when one is selected, and clears both when one is cleared', async () => {
+    renderPage({ entries: [pairFirst, pairSecond] })
+    await screen.findAllByText('継続6か月分')
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: '佐藤三郎を選択' })
+    expect(checkboxes).toHaveLength(2)
+
+    await userEvent.click(checkboxes[0])
+    expect(screen.getByText('2件を選択中')).toBeInTheDocument()
+    expect(screen.getAllByRole('checkbox', { name: '佐藤三郎を選択' }).every((box) => box.getAttribute('data-state') === 'checked')).toBe(true)
+
+    await userEvent.click(screen.getAllByRole('checkbox', { name: '佐藤三郎を選択' })[1])
+    expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument()
+  })
+
+  it('counts a selected pair as two entries in the bulk grant confirmation and submits both ids', async () => {
+    const bulkSpy = vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeaveScheduleEntries').mockResolvedValue({
+      success_count: 2,
+      failure_count: 0,
+      results: [
+        { schedule_entry_id: 'pair-6', success: true, message: null, grant_id: 'g1' },
+        { schedule_entry_id: 'pair-18', success: true, message: null, grant_id: 'g2' },
+      ],
+    } satisfies PaidLeaveScheduleBulkGrantResponse)
+
+    renderPage({ entries: [pairSecond, pairFirst] })
+    await screen.findAllByText('継続6か月分')
+    await userEvent.click(screen.getAllByRole('checkbox', { name: '佐藤三郎を選択' })[0])
+    await userEvent.click(screen.getByRole('button', { name: '一括付与する' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('2件(合計21日)を付与します。')).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: '一括付与する' }))
+
+    await waitFor(() => expect(bulkSpy).toHaveBeenCalledWith(expect.arrayContaining(['pair-6', 'pair-18'])))
+    expect(bulkSpy.mock.calls[0][0]).toHaveLength(2)
   })
 })

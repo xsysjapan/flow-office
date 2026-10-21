@@ -161,6 +161,7 @@ export function PaidLeaveScheduleAssessmentPanel({
       <div className="flex flex-col gap-2">
         <SectionHeading step={1}>勤怠データを確認</SectionHeading>
         {latestAssessment ? (
+          <>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
             <dt className="font-medium text-muted-foreground">対象期間</dt>
             <dd className="text-foreground">
@@ -172,6 +173,12 @@ export function PaidLeaveScheduleAssessmentPanel({
             <dd className="text-foreground">{latestAssessment.attendance_days ?? '-'}日</dd>
             <dt className="font-medium text-muted-foreground">除外日数</dt>
             <dd className="text-foreground">{latestAssessment.excluded_days ?? '-'}日</dd>
+            {latestAssessment.deemed_attendance_days > 0 && (
+              <>
+                <dt className="font-medium text-muted-foreground">みなし出勤</dt>
+                <dd className="text-foreground">{latestAssessment.deemed_attendance_days}日</dd>
+              </>
+            )}
             <dt className="font-medium text-muted-foreground">出勤率</dt>
             <dd className="text-foreground">
               {latestAssessment.attendance_rate !== null ? `${latestAssessment.attendance_rate}%` : '-'}
@@ -181,6 +188,12 @@ export function PaidLeaveScheduleAssessmentPanel({
               {latestAssessment.automatic_result ? paidLeaveScheduleStatusLabel(latestAssessment.automatic_result).label : '-'}
             </dd>
           </dl>
+          {latestAssessment.deemed_attendance_days > 0 && (
+            <p className="text-xs text-muted-foreground">
+              前倒し付与で短縮された期間は全出勤とみなしています(社労士確認が前提)。
+            </p>
+          )}
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">まだ判定が実行されていません。</p>
         )}

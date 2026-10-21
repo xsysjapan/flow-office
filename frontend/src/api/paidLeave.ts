@@ -9,6 +9,7 @@ import type {
   PaidLeaveGrantRuleTargetUser,
   PaidLeaveProportionalGrantPolicyStep,
   PaidLeaveRequest,
+  PaidLeaveScheduleAssessmentRunStatus,
   PaidLeaveScheduleBulkGrantResponse,
   PaidLeaveScheduleEntry,
   PaidLeaveScheduleEntryDetail,
@@ -225,4 +226,16 @@ export function bulkGrantPaidLeaveScheduleEntries(scheduleEntryIds: string[]): P
     method: 'POST',
     body: { schedule_entry_ids: scheduleEntryIds },
   })
+}
+
+/** 自動判定の実行状況(次回の定期実行の日時と直近の実行記録)。 */
+export function fetchPaidLeaveScheduleAssessmentRunStatus(): Promise<PaidLeaveScheduleAssessmentRunStatus> {
+  return apiFetch<{ data: PaidLeaveScheduleAssessmentRunStatus }>('/paid-leave/schedule-assessment-runs/status').then(
+    (res) => res.data,
+  )
+}
+
+/** 「今すぐ判定する」。実行は非同期に行われ、APIは受付(202)だけを返す。実行中なら409。 */
+export function startPaidLeaveScheduleAssessmentRun(): Promise<void> {
+  return apiFetch('/paid-leave/schedule-assessment-runs', { method: 'POST' })
 }

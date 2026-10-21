@@ -13,3 +13,16 @@ client.setQueryData(['admin-command-runs'], { data: [], meta: { current_page: 1,
 const meta = { component: AdminCommandsPage, decorators: [(Story) => <QueryClientProvider client={client}><Story /></QueryClientProvider>] } satisfies Meta<typeof AdminCommandsPage>
 export default meta
 export const Default: StoryObj<typeof meta> = {}
+
+/** 定期の実行(依頼者なし)の履歴は依頼者を「システム」と表示する。 */
+const systemRunClient = new QueryClient()
+systemRunClient.setQueryData(['admin-commands'], { data: [] })
+systemRunClient.setQueryData(['admin-command-runs'], { data: [{
+  id: 'run-1', command_name: 'paid-leave:assess-schedules', parameters: {}, status: 'succeeded',
+  requested_by_user_id: null, requested_by_user: null, started_at: null, finished_at: null,
+  exit_code: 0, output: null, error_message: null, created_at: '2026-10-01T03:00:00+09:00',
+}], meta: { current_page: 1, last_page: 1, total: 1 }, links: { next: null, prev: null } })
+
+export const SystemRun: StoryObj<typeof meta> = {
+  decorators: [(Story) => <QueryClientProvider client={systemRunClient}><Story /></QueryClientProvider>],
+}

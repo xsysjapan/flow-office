@@ -25,6 +25,7 @@ const baseEntry: PaidLeaveScheduleEntryDetail = {
       period_end: '2026-10-01',
       denominator_days: 240,
       attendance_days: 180,
+      deemed_attendance_days: 0,
       excluded_days: 5,
       attendance_rate: 75,
       policy_version: 'v1',
@@ -71,6 +72,17 @@ export const Edited: Story = {
       nominal_service_months: null,
       is_manually_overridden: true,
       manual_override_reason: '社員の勤務形態変更に合わせて区分を比例に修正',
+    },
+  },
+}
+
+/** 前倒し付与で短縮された期間を全出勤とみなした行。判定内訳にみなし出勤と注記を出す。 */
+export const DeemedAttendance: Story = {
+  args: {
+    entry: {
+      ...baseEntry,
+      status: 'Eligible',
+      assessments: [{ ...baseEntry.assessments[0], attendance_days: 50, deemed_attendance_days: 68, attendance_rate: 95, automatic_result: 'Eligible', final_result: 'Eligible' }],
     },
   },
 }

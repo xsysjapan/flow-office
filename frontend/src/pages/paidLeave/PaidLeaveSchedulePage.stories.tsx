@@ -46,6 +46,36 @@ const entries: PaidLeaveScheduleEntry[] = [
   },
 ]
 
+/** 名目6か月と18か月の組(同じ社員・同じ付与予定日・どちらも付与対象)。一覧で片方を選ぶと両方が選ばれる。 */
+const pairEntries: PaidLeaveScheduleEntry[] = [
+  {
+    id: 'entry-pair-6',
+    user_id: 'user-6',
+    user_name: '佐藤三郎',
+    scheduled_on: '2026-04-01',
+    category: 'normal',
+    candidate_grant_days: 10,
+    nominal_service_months: 6,
+    status: 'Eligible',
+    latest_assessment_id: 'assessment-pair-6',
+    is_manually_overridden: false,
+    attendance_rate: 95,
+  },
+  {
+    id: 'entry-pair-18',
+    user_id: 'user-6',
+    user_name: '佐藤三郎',
+    scheduled_on: '2026-04-01',
+    category: 'normal',
+    candidate_grant_days: 11,
+    nominal_service_months: 18,
+    status: 'Eligible',
+    latest_assessment_id: 'assessment-pair-18',
+    is_manually_overridden: false,
+    attendance_rate: 95,
+  },
+]
+
 const overdueEntries: PaidLeaveScheduleEntry[] = [
   {
     id: 'entry-4',
@@ -74,6 +104,20 @@ function withSeeded(
   queryClient.setQueryData(['paid-leave', 'schedule-entries', 'list', { filter: 'all' }], seedEntries)
   queryClient.setQueryData(['paid-leave', 'schedule-entries', 'list', { filter: 'overdue' }], options.overdue ?? [])
   queryClient.setQueryData(['paid-leave', 'schedule-entries', 'list', { filter: 'needs_review' }], [])
+  // 自動判定カードの状態(前回は完了、次回は11月1日 3:00)。取得エラーにならないよう仕込む。
+  queryClient.setQueryData(['paid-leave', 'schedule-assessment-runs', 'status'], {
+    next_run_at: '2026-11-01T03:00:00',
+    latest_run: {
+      id: 'run-1',
+      status: 'succeeded',
+      trigger: 'schedule',
+      requested_by_name: null,
+      started_at: '2026-10-01T03:00:00',
+      finished_at: '2026-10-01T03:02:00',
+      summary: { targets: 3, assessed: 3, eligible: 1, not_eligible: 1, needs_review: 1, failed: 0 },
+      error_message: null,
+    },
+  })
 
   return function Decorator() {
     return (
@@ -100,6 +144,10 @@ export const WithEntries: Story = {
 
 export const WithOverdue: Story = {
   render: withSeeded(entries, { overdue: overdueEntries }),
+}
+
+export const WithPair: Story = {
+  render: withSeeded(pairEntries),
 }
 
 export const Empty: Story = {

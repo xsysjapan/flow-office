@@ -6,12 +6,12 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Support\ScheduleCandidateGenerator;
 use App\Models\User;
+use App\Support\BusinessDate;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Carbon;
 use Throwable;
 
 /**
@@ -46,7 +46,7 @@ class ReapplyPaidLeaveSchedulePolicyJob implements ShouldQueue
     public function reapplyAll(CommandBus $commandBus, ScheduleCandidateGenerator $generator): int
     {
         $processed = 0;
-        $from = Carbon::today();
+        $from = BusinessDate::today();
         $to = $from->copy()->addYear();
 
         $users = User::query()

@@ -130,6 +130,29 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
+     * 複数の付与を、1回のpersistで記録する(まとめて付与する2件を、片方だけ記録されないようにするため)。
+     * 各付与は`grant`と同じ検証を順に受ける(同じ日の付与は可)。1件でも失敗したら、何も記録しない
+     * (例外はpersist前に出る)。
+     *
+     * @param  array<int, array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source?: string}>  $grants
+     */
+    public function grantMany(array $grants): self
+    {
+        foreach ($grants as $grant) {
+            $this->grant(
+                grantId: $grant['grantId'],
+                grantedOn: $grant['grantedOn'],
+                expiresOn: $grant['expiresOn'],
+                grantedDays: $grant['grantedDays'],
+                grantReason: $grant['grantReason'],
+                source: $grant['source'] ?? 'manual',
+            );
+        }
+
+        return $this;
+    }
+
+    /**
      * 付与時の未充当の充当(論点19 決定10-1)。確定済み・未取消で充当が使用日数に足りない消化記録へ、確定の古い順に、
      * 指定した付与の残りの範囲で充当する。付与の有効期間と消化記録の対象日の関係は問わない。
      * 既に充当済みの消化記録・取消済みの消化記録は対象外。対象が無ければ何も記録しない(冪等)。

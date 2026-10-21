@@ -55,6 +55,7 @@ class PaidLeaveScheduleProjector extends Projector
                 'denominator_days' => $event->denominatorDays,
                 'attendance_days' => $event->attendanceDays,
                 'excluded_days' => $event->excludedDays,
+                'deemed_attendance_days' => $event->deemedAttendanceDays,
                 'attendance_rate' => $event->attendanceRate,
                 'policy_version' => $event->policyVersion,
                 'automatic_result' => $event->automaticResult,

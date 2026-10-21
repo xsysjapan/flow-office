@@ -9,16 +9,16 @@ use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\OverrideScheduleAssessment;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
 use App\Domain\PaidLeaveSchedule\Support\AttendanceRateAssessor;
+use App\Domain\PaidLeaveSchedule\Support\PaidLeaveScheduleAssessmentPlanner;
 use App\Http\Controllers\Controller;
-use App\Models\PaidLeaveGrant;
-use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveScheduleEntry;
-use App\Models\UserWorkStyleMonthlyAssignment;
+use App\Support\BusinessDate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 /**
@@ -99,7 +99,7 @@ class PaidLeaveScheduleController extends Controller
             self::FILTER_NOT_ELIGIBLE => $query->where('status', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
             self::FILTER_NEEDS_REVIEW => $query->where('status', PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW),
             self::FILTER_CHANGED => $query->where('is_manually_overridden', true),
-            self::FILTER_OVERDUE => $query->overdue(Carbon::today()),
+            self::FILTER_OVERDUE => $query->overdue(BusinessDate::today()),
             default => null,
         };
 
@@ -160,6 +160,7 @@ class PaidLeaveScheduleController extends Controller
                     'denominator_days' => $assessment->denominator_days,
                     'attendance_days' => $assessment->attendance_days,
                     'excluded_days' => $assessment->excluded_days,
+                    'deemed_attendance_days' => $assessment->deemed_attendance_days,
                     'attendance_rate' => $assessment->attendance_rate,
                     'policy_version' => $assessment->policy_version,
                     'automatic_result' => $assessment->automatic_result,
@@ -173,11 +174,10 @@ class PaidLeaveScheduleController extends Controller
     }
 
     /**
-     * 再判定(依頼書§40「再判定」導線)。`AttendanceRateAssessor`を同一条件で再実行し、
-     * `RunAttendanceRateAssessment`を発行する。対象社員に適用中のルール
-     * (`paid_leave_grant_rules`。無ければ既定値)から`min_attendance_rate`/
-     * `grant_cycle_months`を解決し、判定期間は`[scheduled_on - grant_cycle_months, scheduled_on]`
-     * とする(`GrantScheduledPaidLeaveHandler::meetsAttendanceRate()`と同じ期間の考え方)。
+     * 再判定(依頼書§40「再判定」導線)。判定の内容(期間・みなし出勤・閾値)は
+     * `PaidLeaveScheduleAssessmentPlanner`が決め(docs/changesets/20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md
+     * 論点5・10)、`RunAttendanceRateAssessment`を発行する。まとめて付与する2件(組)は、2行をそれぞれ判定して両方記録する
+     * (1つのトランザクション。片方が失敗したら両方記録しない)。
      */
     #[OA\Post(
         path: '/paid-leave/schedule-entries/{scheduleEntry}/reassess',
@@ -187,43 +187,43 @@ class PaidLeaveScheduleController extends Controller
         parameters: [new OA\Parameter(name: 'scheduleEntry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function reassess(PaidLeaveScheduleEntry $scheduleEntry, CommandBus $commandBus, AttendanceRateAssessor $assessor): JsonResponse
+    public function reassess(PaidLeaveScheduleEntry $scheduleEntry, CommandBus $commandBus, PaidLeaveScheduleAssessmentPlanner $planner): JsonResponse
     {
         $scheduleEntry->loadMissing('user');
         $user = $scheduleEntry->user;
 
-        [$minAttendanceRate, $grantCycleMonths] = $this->resolveAssessmentParameters($user->id);
+        $partnerId = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($user->id))
+            ->forUser($user->id)
+            ->pairedEntryId($scheduleEntry->id);
 
-        $periodEnd = $scheduleEntry->scheduled_on->copy();
-        $periodStart = $periodEnd->copy()->subMonths($grantCycleMonths);
+        $targets = collect([$scheduleEntry]);
+        if ($partnerId !== null) {
+            $partner = PaidLeaveScheduleEntry::query()->find($partnerId);
+            if ($partner !== null) {
+                $targets->push($partner);
+            }
+        }
 
-        $hasMigratedLegacyData = PaidLeaveGrant::query()
-            ->where('user_id', $user->id)
-            ->where('source', 'carried_over')
-            ->exists();
+        DB::transaction(function () use ($targets, $user, $planner, $commandBus): void {
+            foreach ($targets as $target) {
+                $plan = $planner->plan($target, $user);
 
-        $result = $assessor->assess(
-            userId: $user->id,
-            periodStart: $periodStart,
-            periodEnd: $periodEnd,
-            minAttendanceRate: $minAttendanceRate,
-            usageStartDate: $user->usage_start_date,
-            hasMigratedLegacyData: $hasMigratedLegacyData,
-        );
-
-        $commandBus->dispatch(new RunAttendanceRateAssessment(
-            userId: $user->id,
-            scheduleEntryId: $scheduleEntry->id,
-            assessmentId: (string) Str::uuid(),
-            periodStart: $periodStart->toDateString(),
-            periodEnd: $periodEnd->toDateString(),
-            denominatorDays: $result->denominatorDays,
-            attendanceDays: $result->attendanceDays,
-            excludedDays: $result->excludedDays,
-            attendanceRate: $result->attendanceRate,
-            policyVersion: AttendanceRateAssessor::POLICY_VERSION,
-            automaticResult: $result->automaticResult,
-        ));
+                $commandBus->dispatch(new RunAttendanceRateAssessment(
+                    userId: $user->id,
+                    scheduleEntryId: $target->id,
+                    assessmentId: (string) Str::uuid(),
+                    periodStart: $plan->periodStart,
+                    periodEnd: $plan->periodEnd,
+                    denominatorDays: $plan->denominatorDays,
+                    attendanceDays: $plan->attendanceDays,
+                    excludedDays: $plan->excludedDays,
+                    attendanceRate: $plan->attendanceRate,
+                    policyVersion: AttendanceRateAssessor::POLICY_VERSION,
+                    automaticResult: $plan->automaticResult,
+                    deemedAttendanceDays: $plan->deemedAttendanceDays,
+                ));
+            }
+        });
 
         return response()->json(['data' => $this->summarize($scheduleEntry->refresh()->load('user', 'assessments'))]);
     }
@@ -327,7 +327,7 @@ class PaidLeaveScheduleController extends Controller
         summary: '選択したScheduleエントリを一括付与する',
         tags: ['有給休暇付与予定'],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['schedule_entry_ids'], properties: [new OA\Property(property: 'schedule_entry_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))])),
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error(まとめて付与する2件の片方だけが指定された場合を含む)')],
     )]
     public function bulkGrant(Request $request, CommandBus $commandBus): JsonResponse
     {
@@ -340,6 +340,22 @@ class PaidLeaveScheduleController extends Controller
             ->whereIn('id', $data['schedule_entry_ids'])
             ->get()
             ->groupBy('user_id');
+
+        // まとめて付与する2件(組)は片方だけ付与できない(docs/changesets/20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md 論点10)。
+        foreach ($entries as $userId => $userEntries) {
+            $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor((string) $userId))->forUser((string) $userId);
+            $selectedIds = $userEntries->pluck('id')->all();
+
+            foreach ($selectedIds as $selectedId) {
+                $partnerId = $aggregate->pairedEntryId($selectedId);
+
+                if ($partnerId !== null && ! in_array($partnerId, $selectedIds, true)) {
+                    throw ValidationException::withMessages([
+                        'schedule_entry_ids' => ['まとめて付与する2件は、同時に選んでください。'],
+                    ]);
+                }
+            }
+        }
 
         $results = [];
         $successCount = 0;
@@ -401,38 +417,6 @@ class PaidLeaveScheduleController extends Controller
             'attendance_rate' => $entry->relationLoaded('assessments')
                 ? $entry->assessments->last()?->attendance_rate
                 : null,
-        ];
-    }
-
-    /**
-     * 対象社員の現在の`WorkStyle`割当に一致する`paid_leave_grant_rules`
-     * (`is_active=true`)から`min_attendance_rate`/`grant_cycle_months`を解決する
-     * (`ScheduleCandidateGenerator::currentWorkStyleFor()`と同じ「現在時点で有効な
-     * user_work_style_monthly_assignments」を採用する考え方)。該当ルールが無ければ
-     * 既定値(80%・12ヶ月、現行`GrantScheduledPaidLeaveHandler`の既定と同じ)を使う。
-     *
-     * @return array{0: int, 1: int} [minAttendanceRate, grantCycleMonths]
-     */
-    private function resolveAssessmentParameters(string $userId): array
-    {
-        $currentYearMonth = Carbon::today()->format('Y-m');
-
-        $assignment = UserWorkStyleMonthlyAssignment::query()
-            ->where('user_id', $userId)
-            ->where('year_month', '<=', $currentYearMonth)
-            ->orderByDesc('year_month')
-            ->first();
-
-        $rule = $assignment !== null
-            ? PaidLeaveGrantRule::query()
-                ->where('work_style_id', $assignment->work_style_id)
-                ->where('is_active', true)
-                ->first()
-            : null;
-
-        return [
-            (int) ($rule->min_attendance_rate ?? 80),
-            max(1, (int) ($rule->grant_cycle_months ?? 12)),
         ];
     }
 }

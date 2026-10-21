@@ -28,6 +28,7 @@ class RunAttendanceRateAssessmentHandler implements CommandHandler
                 attendanceRate: $command->attendanceRate,
                 policyVersion: $command->policyVersion,
                 automaticResult: $command->automaticResult,
+                deemedAttendanceDays: $command->deemedAttendanceDays,
             )
             ->persist();
 

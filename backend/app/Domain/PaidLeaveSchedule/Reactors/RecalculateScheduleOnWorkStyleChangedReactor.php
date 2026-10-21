@@ -9,7 +9,7 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Support\ScheduleCandidateGenerator;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use App\Support\BusinessDate;
 use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
 
 /**
@@ -69,7 +69,7 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
             return;
         }
 
-        $userIds = $this->generator->userIdsCurrentlyOn($event->aggregateRootUuid(), Carbon::today());
+        $userIds = $this->generator->userIdsCurrentlyOn($event->aggregateRootUuid(), BusinessDate::today());
 
         foreach ($userIds as $userId) {
             $this->recalculate($userId, 'WorkStyleの区分判定関連列の変更');
@@ -84,7 +84,7 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
             return;
         }
 
-        $from = Carbon::today();
+        $from = BusinessDate::today();
         $candidates = $this->generator->candidatesFor($user, $from, $from->copy()->addYear());
 
         $this->commandBus->dispatch(new RecalculateFutureSchedule(

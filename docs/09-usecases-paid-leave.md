@@ -121,13 +121,49 @@ UC-P011の`paid-leave:roll-schedules`に置換される。
    該当行が無い場合は、いずれも「候補日数が確定できない」として扱い、エントリを
    `Scheduled`ではなく`NeedsReview`状態で作成する(候補日数0で黙って`Scheduled`
    扱いにしていた不具合を修正済み)。
-3. 出勤率(`min_attendance_rate`)は、直近`grant_cycle_months`か月間の
+3. 出勤率(`min_attendance_rate`)は、判定期間(下記)の
    `employee_calendar_entries`(勤務予定日)を分母、勤怠が退勤済みの日または有給の
    休暇(全休・半休・時間休)の日を分子として計算する(有給取得日は出勤したものとして扱う)。
    分子の入力は有給の出勤率ビュー(`leave_attendance_rate_days`・`leave_attendance_rate_leaves`。
    勤怠のイベントと休暇申請のイベントから作る。変更セット`20261009-keep-leave-work-type-on-edit`
    の論点9)で、勤怠日の`work_type`は読まない。差し戻された有給は休暇から外れるため出勤扱いにならない。
    期間中に勤務予定日が1件も無い場合は判定不能として扱う。
+   閾値・判定周期は、社員の勤務形態のルール→全社ルールの順(`PaidLeaveGrantRuleResolver`)で選んだルールの値を使う。
+
+#### 判定期間とみなし出勤(社労士の確認が前提)
+
+判定の内容は`PaidLeaveScheduleAssessmentPlanner`が決める(再判定APIと自動判定の両方)。
+docs/changesets/20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md 論点5・10。
+
+- 行の位置づけ(同じ社員の付与予定のうち、取消を除く): **初回**は、付与予定日が「入社日+`first_grant_after_months`」以前で、
+  それより前の行が無い行。**前回**は、付与予定日が対象の行より前の行のうち最も遅い行。
+- 期間: 終わりは付与予定日の**前日**。始まりは、初回なら入社日、2回目以降なら前回の付与予定日。初回でも前回も無い行
+  (利用開始日の都合で前の行が作られていない)は「付与予定日−`grant_cycle_months`」。
+- 前倒しの短縮期間(みなし出勤): 本来の基準日は、初回なら「入社日+`first_grant_after_months`」、2回目以降なら
+  「前回の付与予定日+`grant_cycle_months`」。付与予定日が本来の基準日より前なら、付与予定日から基準日の前日までを短縮期間とし、
+  短縮期間は全出勤とみなす(平6.1.4基発1号の考え方)。みなし日数は暦日で按分して推計する:
+  round(実期間の所定労働日数 × 短縮期間の暦日数 ÷ 実期間の暦日数)。
+  出勤率 = (出勤日数 + みなし日数) ÷ (所定労働日数 + みなし日数)。
+  - 例: 入社2026-01-10、年度開始4/1、初回6か月。実期間1/10〜3/31(81日)、短縮期間4/1〜7/9(100日)。所定55日・出勤50日なら、
+    みなし日数=round(55×100/81)=68、出勤率=(50+68)/(55+68)=95.9%で付与対象。
+  - 記録: `paid_leave_schedule_assessments.deemed_attendance_days`(古い行・みなしの無い行は0)。`denominator_days`/
+    `attendance_days`にはみなし日数を含めない(記録から出勤率を計算し直せる)。`policy_version`は`v2`。
+- **まとめて付与する2件の2件目**(同じ付与予定日で名目が「初回の月数+12」、同じ日に名目が初回の月数の行がある): 判定の期間は
+  すべて前倒しで短縮された期間に当たるので、1件目の判定とは共有せず、全出勤とみなして付与対象にする(初回が対象外でも付与対象)。
+  期間は付与予定日から本来の基準日(入社日+初回の月数+12か月)の前日まで、日数は持たず(0)出勤率は100%と記録する。
+- 利用開始日の規則: 期間の始まりが`usage_start_date`より前で、移行データ(`source=carried_over`の付与)が無い場合は、
+  どの行でも要確認(導入1年目は、移行データの無い社員はほぼ全員が要確認になる)。移行データの有無は有給口座の読み取りビュー
+  (`PaidLeaveGrant`)を直接読んで確かめる(原則15の既存の例外)。
+- **みなし出勤の取り扱いは社労士の確認が前提**(最終設定は社労士確認が前提。原則8)。画面の判定内訳にもその注記を出す。
+
+#### まとめて付与する2件(組)の規則
+
+同じ社員・同じ付与予定日で、名目の継続勤務月数が初回とその+12か月の2行は、常に組で扱う(`PaidLeaveScheduleAggregate::pairedEntryId`)。
+- 判定の上書き・個別修正・置き換え(再計算でのSuperseded)・取消は、組の2行に同じ操作が記録される。
+- 再判定は、Plannerで各行を判定して両方記録する(組の2行は別々に判定する)。
+- 一括付与は、組の片方だけを選べない(APIは422「まとめて付与する2件は、同時に選んでください」。画面は片方を選ぶともう片方も選ぶ)。
+  付与は1回の`ApplyScheduledGrants`で2件を続けて行い、有給口座には2件を1回のpersist(`GrantPaidLeaves`)で記録する。
+  片方の付与に失敗したら、もう片方も付与しない。
 
 ### 法定付与日数の設定
 
@@ -560,8 +596,10 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 3. 社員ごとに`RecalculateFutureSchedule` Commandを発行する。候補は今日から1年先まで
    (`ScheduleCandidateGenerator`。通常付与/比例付与/シフト勤務の各区分。判定不能な場合は
    `NeedsReview`)、`fromDate`は明日、`overrideManualEdits=false`。候補が無い社員にも発行する
-4. 判定(出勤率Assessment、UC-P012)はこのコマンドでは実行しない。判定は付与予定画面からの
-   操作で行う
+4. 判定(出勤率Assessment、UC-P012)はこのコマンドでは実行しない(作成のみ)。判定は
+   `paid-leave:assess-schedules`(毎月1日の自動判定と手動の実行)が行う
+5. 「今日」は`system_settings.default_timezone`の日付(`App\Support\BusinessDate`)。再計算のReactor・
+   `ReapplyPaidLeaveSchedulePolicyJob`・勤務形態の現在の割当の判定でも同じ
 
 旧`paid-leave:grant-scheduled`(UC-P002、`GrantScheduledPaidLeaveHandler`による日次全件
 評価)を置換するバッチで、`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`
@@ -619,24 +657,41 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 
 ## UC-P012: 出勤率Assessmentを実行する
 
-1. `RunAttendanceRateAssessment` Commandにより、対象エントリの直近期間の勤務予定日数
-   (分母)・出勤日数(分子)を`attendance_days`等から算出し、出勤率を求める
-2. `paid_leave_grant_policies`(通常付与)/`paid_leave_proportional_grant_policies`
-   (比例付与)の現在有効な版(`version`最大)を判定根拠として記録する
-   (`paid_leave_schedule_assessments.policy_version`)
-3. 出勤率に基づく自動判定結果(`Eligible` / `NotEligible`)を算出し、
-   `PaidLeaveScheduleAssessmentRecorded`イベントを記録する。判定結果は
-   `paid_leave_schedule_assessments`(Assessmentの版履歴。1つの付与予定に複数行)に、
-   `period_start`/`period_end`/`denominator_days`/`attendance_days`/`excluded_days`/
-   `attendance_rate`/`policy_version`/`automatic_result`/`final_result`/`override_reason`として
-   保存し、`paid_leave_schedule_entries.latest_assessment_id`が最新の版を指す
-4. 既にUC-P014のOverrideが行われている場合でもこのイベント自体は発行されるが、
+自動判定(毎月1日)と、画面からの手動の実行、1行ずつの再判定の3つの経路がある。判定の内容(期間・みなし出勤・閾値)は
+どの経路でも`PaidLeaveScheduleAssessmentPlanner`が決める(UC-P002の「判定期間とみなし出勤」参照。社労士の確認が前提)。
+
+1. `paid-leave:assess-schedules`コマンドが、状態が`Scheduled`(予定)で付与予定日が今日以前(`system_settings.default_timezone`
+   の日付)の行を、社員ごとにPlannerで判定し、`RunAttendanceRateAssessment` Commandを発行する(1社員の判定は1トランザクション)。
+   1社員の失敗で全体は止めず、失敗した社員と理由を出力に並べる。1件でも失敗があれば終了コード1。
+2. 実行の経路は、キュー(`queue:work`は既定60秒で打ち切られる)を使わず、スケジューラー(`routes/console.php`)から直接動かす。
+   - 定期: `paid-leave:assess-schedules --trigger=schedule`を**毎月1日03:00**(既定のタイムゾーン)に実行する。
+     cron式は`ScheduleAssessmentRunService::SCHEDULE_CRON`で、画面に出す次回実行日時の計算と共有する。
+   - 手動: 付与予定画面の「今すぐ判定する」(確認ダイアログあり)が`POST /paid-leave/schedule-assessment-runs`で記録
+     (`status=queued`、`trigger=manual`)を作るだけにし(202。実行中・待機中があれば409)、
+     `paid-leave:assess-schedules --pending`(毎分)が待っている記録を1件拾って実行する。
+   - 運用コマンド画面からは実行させない(`#[AdminExecutable]`を付けない。経路を1つにするため)。
+3. 実行の記録は`admin_command_runs`(運用の記録。イベントにしない)。コマンド自身が`running`→`succeeded`/`failed`に更新し、
+   集計`summary`(`targets`/`assessed`/`eligible`/`not_eligible`/`needs_review`/`failed`)を書く。一部失敗は
+   `status=failed`、`error_message`は「N件の判定に失敗しました」。定期の実行は`requested_by_user_id`がnull。
+4. 二重実行の防止: 記録の作成・取り出しは`Cache::lock('paid-leave-assessment-run')`の中で行い、`queued`/`running`の記録があれば
+   手動の受付は409、定期の実行は記録を作らずに終える。`running`のまま`started_at`から2時間を超えた記録、`queued`のまま
+   30分を超えた記録は、状態の取得・次の実行・受付のときに`failed`(「応答がないため失敗とみなしました」)にする。
+5. 実行状況: `GET /paid-leave/schedule-assessment-runs/status`(`leave.manage`)が
+   `{ next_run_at, latest_run: { id, status, trigger, requested_by_name, started_at, finished_at, summary, error_message } | null }`
+   を返す。付与予定画面の上部の「自動判定」カードに、次回の予定・実行中・前回の結果を出す。
+6. **判定が付与予定日より遅れることがある**: 判定は毎月1日(または手動)なので、付与予定日が月の途中の行(年度開始が1日以外、
+   入社日基準のルール)は、判定と付与が最大で約1か月遅れる。付与日は付与予定日にさかのぼって記録されるが、判定と付与までの間、
+   その日数は使えない。
+7. 判定結果は`PaidLeaveScheduleAssessmentRecorded`イベントとして記録され、`paid_leave_schedule_assessments`
+   (Assessmentの版履歴。1つの付与予定に複数行)に`period_start`/`period_end`/`denominator_days`/`attendance_days`/
+   `excluded_days`/`deemed_attendance_days`/`attendance_rate`/`policy_version`/`automatic_result`/`final_result`/
+   `override_reason`として保存し、`paid_leave_schedule_entries.latest_assessment_id`が最新の版を指す
+8. 既にUC-P014のOverrideが行われている場合でもこのイベント自体は発行されるが、
    エントリの導出ステータスはOverride結果(`paid_leave_schedule_assessments.final_result`)を
    優先し、自動判定に上書きされない
 
-`POST /paid-leave/schedule-entries/{entry}/reassess`(「再判定」ボタン)でも同一条件で
-手動再実行できる。UC-P011のバッチから`scheduled_on`到来時に自動実行される他、勤怠データが
-事後修正された場合に手動で再判定する用途を想定する。
+`POST /paid-leave/schedule-entries/{entry}/reassess`(「再判定」ボタン)では、1行を同じPlannerの条件で手動再実行できる
+(まとめて付与する2件の行を指定したときは、組の2行を判定して両方記録する)。勤怠データが事後修正された場合に手動で再判定する用途を想定する。
 
 ## UC-P013: 付与予定一覧を確認する
 
@@ -713,6 +768,11 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 名目の月数の小さい順に付与される)。有給口座の付与IDは、付与予定の行のIDから決めたUUIDv5
 (名前は`paid_leave_schedule_grant:{行ID}`。名前空間は`UserManagementStreamId`と同じ方式)にする。
 同じ行をもう一度付与しようとしても、有給口座が同じ付与IDを拒否するので二重には付与されない。
+
+まとめて付与する2件(組。UC-P002の「まとめて付与する2件(組)の規則」)は、片方だけを選べない。APIは、組の片方だけが
+指定されたら422(「まとめて付与する2件は、同時に選んでください。」)を返し、何も付与しない。付与は1回の`ApplyScheduledGrants`で
+2件を続けて行い、有給口座の付与は2件のイベントを1回のpersist(`GrantPaidLeaves`)で記録する。片方の付与に失敗したら、
+もう片方も付与しない(2行とも失敗として返す)。
 
 `Eligible`以外のエントリが選択に混入していた場合や、1件のAggregate例外が他のエントリの
 処理を止めないよう、エントリ単位で成功/失敗を収集し、レスポンスに部分失敗を含めて返す

@@ -1015,6 +1015,8 @@ export interface PaidLeaveScheduleAssessment {
   period_end: string | null;
   denominator_days: number | null;
   attendance_days: number | null;
+  /** 前倒し付与で短縮された期間を全出勤とみなした日数(0のときは表示しない。社労士確認が前提)。 */
+  deemed_attendance_days: number;
   excluded_days: number | null;
   attendance_rate: number | null;
   policy_version: string | null;
@@ -1031,6 +1033,42 @@ export interface PaidLeaveScheduleEntryDetail extends PaidLeaveScheduleEntry {
   cancelled_reason: string | null;
   grant_id: string | null;
   assessments: PaidLeaveScheduleAssessment[];
+}
+
+/** 自動判定(`paid-leave:assess-schedules`)の実行記録の状態。 */
+export type PaidLeaveScheduleAssessmentRunStatusValue = "queued" | "running" | "succeeded" | "failed";
+
+/** 自動判定の実行の契機。定期(毎月1日)か、画面の「今すぐ判定する」か。 */
+export type PaidLeaveScheduleAssessmentRunTrigger = "schedule" | "manual";
+
+/** 自動判定の実行の集計(件数)。 */
+export interface PaidLeaveScheduleAssessmentRunSummary {
+  targets: number;
+  assessed: number;
+  eligible: number;
+  not_eligible: number;
+  needs_review: number;
+  failed: number;
+}
+
+/** 自動判定の直近の実行記録。 */
+export interface PaidLeaveScheduleAssessmentRun {
+  id: string;
+  status: PaidLeaveScheduleAssessmentRunStatusValue;
+  trigger: PaidLeaveScheduleAssessmentRunTrigger;
+  /** 手動の実行の依頼者名。定期の実行では null。 */
+  requested_by_name: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  summary: PaidLeaveScheduleAssessmentRunSummary | null;
+  error_message: string | null;
+}
+
+/** 自動判定の実行状況(`GET /paid-leave/schedule-assessment-runs/status`)。 */
+export interface PaidLeaveScheduleAssessmentRunStatus {
+  /** 次回の定期実行の日時(ISO8601)。 */
+  next_run_at: string;
+  latest_run: PaidLeaveScheduleAssessmentRun | null;
 }
 
 /** 一括付与1件分の結果。 */
@@ -1854,8 +1892,9 @@ export interface AdminCommandRun {
   command_name: string;
   parameters: Record<string, unknown>;
   status: "queued" | "running" | "succeeded" | "failed";
-  requested_by_user_id: string;
-  requested_by_user?: Pick<User, "id" | "name">;
+  /** 依頼者。定期の実行(システムの実行)では null。 */
+  requested_by_user_id: string | null;
+  requested_by_user?: Pick<User, "id" | "name"> | null;
   started_at: string | null;
   finished_at: string | null;
   exit_code: number | null;

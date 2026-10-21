@@ -1,6 +1,6 @@
 # 有給の年度はじめ一斉付与を初期値にし、出勤率の自動判定を戻す
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > (自動判定を戻す変更セットと、PR#109の機能の突き合わせを)お願いします。加えて今の会社では年度はじめに
@@ -587,5 +587,58 @@
     - 1件目: すでに削除した`paid-leave:grant-scheduled`を呼んでいる。
     - 2件目: 付与済みの社員に、それより前の日付で付与しようとしている。
 - 未検証: MySQLでのmigration(uniqueの付け替え)。リリースの前に、本番と同じMySQLで確かめる。
-### 段階2
-未着手
+### 段階2(コミット済み)
+- backend
+  - Planner: `PaidLeaveScheduleAssessmentPlanner`(判定期間・短縮期間・みなし日数・閾値)。
+    - Controllerの`reassess`と自動判定から使う。
+    - `AttendanceRateAssessor::POLICY_VERSION=v2`。
+  - 判定の記録: `deemedAttendanceDays`をイベント・Projection(`deemed_attendance_days`)に足した。
+  - 組の規則: 集約の`pairedEntryId`。判定の上書き・個別修正・取消・置き換えを、組の2行に同じように行う。
+  - 組の付与
+    - 有給口座の`grantMany`(`GrantPaidLeaves`)で、2件を1回のpersistで付与する。
+    - 一括付与で組の片方だけを選ぶと422。
+  - 自動判定
+    - `paid-leave:assess-schedules`(`--trigger`・`--pending`)。
+    - `ScheduleAssessmentRunService`。
+    - API: `GET /paid-leave/schedule-assessment-runs/status`、`POST /paid-leave/schedule-assessment-runs`。
+  - スケジュール: 毎月1日3:00(既定のタイムゾーン)と、毎分の`--pending`。
+  - 「今日」の統一: `App\Support\BusinessDate::today()`。
+    - 対象はReactor 2本、`roll-schedules`、`currentWorkStyleFor`、`ReapplyPaidLeaveSchedulePolicyJob`、超過の絞り込み。
+  - migration 2本: `deemed_attendance_days`、`admin_command_runs`(依頼者のnullable、`summary`)。
+  - docs: 09・16・17、`scenario-tests.md` §18。
+- frontend
+  - 自動判定のカード(`PaidLeaveScheduleAssessmentRunCard`)。
+  - 判定内訳のみなし日数と注記。
+  - 一括付与で組をまとめて選ぶ。
+  - 運用コマンドの履歴の「システム」。
+  - e2e: `scenario-15`に「今すぐ判定する」。
+- 実装時の判断
+  - まとめた2件目の判定の記録
+    - 期間は「付与予定日〜(入社日+初回の月数+12か月)の前日」。
+    - 分母・分子・みなしは0、出勤率は100%。
+  - cronは`'0 3 1 * *'`を定数で共有する(`monthlyOn(1, '03:00')`と同じ)。
+  - 超過の絞り込みの「今日」も既定のタイムゾーンにした。
+  - `admin_command_runs`の依頼者のNOT NULLへの戻し(down)はしない。
+- 不具合の修正
+  - 自動判定の状態のAPIは`{ data: ... }`で返す。frontendが包みを外していなかったため、画面に「NaN月NaN日」と出ていた。
+    e2eで発見し、frontendを直した。
+  - 原因: specにAPIの形を書いたとき、`data`の包みを明記していなかった(委譲元の指示の漏れ)。
+- 検証(委譲元で実行)
+  - backend全件: 2114件PASS
+  - frontend: tsc OK、unit 1060件PASS
+  - e2e: `scenario-00`・`03`・`15`で14件PASS
+- 未検証(リリースの前に確かめる)
+  - MySQLでのmigration
+    - 段階1のuniqueの付け替え
+    - 段階2の`foreignUuid(...)->nullable()->change()`
+  - 本番のキャッシュのロック: `CACHE_STORE=database`で、`cache_locks`の表は既存のmigrationにある。
+### 受け入れ条件
+- 新規の環境で年度はじめの一斉付与、法定の通常表・比例表: 段階1のUnit・migrationのテスト。
+- 既存の環境(migrationと`paid-leave:schedule:reapply-policy`): 段階1のFeature。
+- 付与方式と区分ごとの付与日数の画面: 段階1のfrontendのテスト、e2eの`scenario-00`。
+- 年度開始日の変更への追従、名前だけの変更では作り直さない: `FiscalYearStartChangeScenarioTest`。
+- 毎月1日と「今すぐ判定する」: `AssessPaidLeaveSchedulesCommandTest`、`ScheduleAssessmentRunApiTest`、e2eの`scenario-15`。
+- 前倒しの初回のみなし出勤と、判定内訳の表示: Plannerのテスト、frontendのテスト。
+- 実行状況の表示、二重の実行の防止、固まった記録: API・コマンドのテスト、カードのテスト。
+- 2件まとめの日付と組の扱い: Generatorのテスト、`PaidLeaveScheduleAggregatePairTest`、`PaidLeaveBundledGrantScenarioTest`。
+- docs: 08・09・16・17・27、`scenario-tests.md`。

@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import {
   adminCancelPaidLeaveRequest,
   bulkGrantPaidLeaveScheduleEntries,
@@ -17,6 +18,7 @@ import {
   fetchPaidLeaveGrantRuleTargetUsers,
   fetchPaidLeaveGrantsForUser,
   fetchPaidLeaveHistoryForUser,
+  fetchPaidLeaveScheduleAssessmentRunStatus,
   fetchPaidLeaveScheduleEntries,
   fetchPaidLeaveScheduleEntry,
   fetchPaidLeaveUsagesForUser,
@@ -24,6 +26,7 @@ import {
   overridePaidLeaveScheduleAssessment,
   reassessPaidLeaveScheduleEntry,
   revokePaidLeaveGrant,
+  startPaidLeaveScheduleAssessmentRun,
   updatePaidLeaveGrantRule,
   type CreatePaidLeaveGrantRuleInput,
   type CreatePaidLeaveRequestInput,
@@ -32,7 +35,15 @@ import {
   type OverridePaidLeaveScheduleAssessmentInput,
   type PaidLeaveScheduleEntriesParams,
 } from '../api/paidLeave'
-import type { PaidLeaveGrantPolicyStep, PaidLeaveProportionalGrantPolicyStep } from '../api/types'
+import type { PaidLeaveGrantPolicyStep, PaidLeaveProportionalGrantPolicyStep, PaidLeaveScheduleAssessmentRun } from '../api/types'
+
+/** 実行中の自動判定の状態を取り直す間隔(ms)。実行中のときだけポーリングする。 */
+export const SCHEDULE_ASSESSMENT_RUN_POLL_INTERVAL_MS = 5000
+const SCHEDULE_ASSESSMENT_RUN_STATUS_KEY = ['paid-leave', 'schedule-assessment-runs', 'status']
+
+function isActiveAssessmentRun(run: PaidLeaveScheduleAssessmentRun | null | undefined): boolean {
+  return run?.status === 'queued' || run?.status === 'running'
+}
 
 const RULES_KEY = ['paid-leave', 'grant-rules']
 const GRANT_POLICIES_KEY = ['paid-leave', 'grant-policies']
@@ -324,5 +335,40 @@ export function useBulkGrantPaidLeaveScheduleEntries() {
       void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'history'] })
       void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'usages'] })
     },
+  })
+}
+
+/**
+ * 自動判定の実行状況(付与予定画面の「自動判定」カード)。実行中(queued/running)の間だけ5秒ごとに取り直す。
+ * 実行中から終わったら、付与予定の一覧・詳細と超過件数(一覧のキャッシュ)を取り直す。
+ */
+export function usePaidLeaveScheduleAssessmentRunStatus() {
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: SCHEDULE_ASSESSMENT_RUN_STATUS_KEY,
+    queryFn: fetchPaidLeaveScheduleAssessmentRunStatus,
+    refetchInterval: (current) =>
+      isActiveAssessmentRun(current.state.data?.latest_run) ? SCHEDULE_ASSESSMENT_RUN_POLL_INTERVAL_MS : false,
+  })
+
+  const isActive = isActiveAssessmentRun(query.data?.latest_run)
+  const wasActive = useRef(false)
+  useEffect(() => {
+    if (wasActive.current && !isActive) {
+      void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'schedule-entries'] })
+    }
+    wasActive.current = isActive
+  }, [isActive, queryClient])
+
+  return query
+}
+
+/** 「今すぐ判定する」。受付後(成功・失敗のどちらでも)に実行状況を取り直す。実行中のときの409もここで状態を取り直す。 */
+export function useStartPaidLeaveScheduleAssessmentRun() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => startPaidLeaveScheduleAssessmentRun(),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: SCHEDULE_ASSESSMENT_RUN_STATUS_KEY }),
   })
 }

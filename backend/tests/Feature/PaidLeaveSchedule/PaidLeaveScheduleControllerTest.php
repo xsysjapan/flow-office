@@ -281,9 +281,10 @@ class PaidLeaveScheduleControllerTest extends TestCase
     public function test_granting_the_same_entry_again_is_rejected_by_the_account(): void
     {
         $user = User::factory()->create();
-        [$id6] = $this->createSameDayEligibleEntries($user);
+        [$id6, $id18] = $this->createSameDayEligibleEntries($user);
 
-        $this->bus()->dispatch(new ApplyScheduledGrants(userId: $user->id, scheduleEntryIds: [$id6], operatorUserId: $user->id));
+        // まとめて付与する2件は組で付与する(片方だけは付与しない)。
+        $this->bus()->dispatch(new ApplyScheduledGrants(userId: $user->id, scheduleEntryIds: [$id6, $id18], operatorUserId: $user->id));
 
         // 予定の行の更新に失敗した想定で、行を再度Eligibleにはできないが、同じ付与IDでの付与は口座が拒否する。
         $this->expectException(DomainRuleException::class);

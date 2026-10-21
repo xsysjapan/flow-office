@@ -729,7 +729,7 @@ class PaidLeaveScheduleAggregateTest extends TestCase
             ->assertNothingRecorded();
     }
 
-    public function test_recalculation_supersedes_only_the_row_whose_content_changed_and_keeps_previous_nominal_months(): void
+    public function test_recalculation_supersedes_both_rows_of_a_same_day_pair_when_one_changes_and_keeps_previous_nominal_months(): void
     {
         PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
@@ -742,7 +742,10 @@ class PaidLeaveScheduleAggregateTest extends TestCase
                     ['entryId' => 'n18', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 12.0, 'nominalServiceMonths' => 18],
                 ], '付与ルール変更');
             })
+            // 同じ日の2件は組なので、18か月側だけが変わっても6か月側も置き換える(論点10。変わらない行も組で置き換える)。
             ->assertRecorded([
+                new PaidLeaveScheduleEntrySuperseded(self::USER, 'e6', '付与ルール変更', '2026-04-01', 'normal', 10.0, 6),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'n6', '2026-04-01', 'normal', 10.0, true, 6),
                 new PaidLeaveScheduleEntrySuperseded(self::USER, 'e18', '付与ルール変更', '2026-04-01', 'normal', 11.0, 18),
                 new PaidLeaveScheduleEntryCreated(self::USER, 'n18', '2026-04-01', 'normal', 12.0, true, 18),
             ]);

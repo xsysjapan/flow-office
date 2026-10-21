@@ -413,8 +413,10 @@ docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
   (置き換え前の内容も監査用に保持)。
 - `paid_leave_schedule.assessment_recorded` → `PaidLeaveScheduleAssessmentRecorded`
   (userId, scheduleEntryId, assessmentId, periodStart, periodEnd, denominatorDays, attendanceDays,
-  excludedDays, attendanceRate, policyVersion, automaticResult)。出勤率Assessment結果を記録し、
-  エントリの状態を`automaticResult`(Eligible/NotEligible/NeedsReview)へ遷移させる。
+  excludedDays, attendanceRate, policyVersion, automaticResult, deemedAttendanceDays)。出勤率Assessment結果を記録し、
+  エントリの状態を`automaticResult`(Eligible/NotEligible/NeedsReview)へ遷移させる。`deemedAttendanceDays`は
+  前倒しで短縮された期間のみなし出勤日数(既定0。古いイベントには無く、0として読む)で、`denominatorDays`/`attendanceDays`には
+  含めない。`policyVersion`は`v2`(判定期間を前回(初回は入社日)から付与予定日の前日までにし、みなし出勤を加えた)。
 - `paid_leave_schedule.assessment_overridden` → `PaidLeaveScheduleAssessmentOverridden`
   (userId, scheduleEntryId, assessmentId, finalResult, reason, operatorUserId)。管理者による判定結果の
   上書き(理由必須)。
