@@ -117,7 +117,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
      * (依頼書§28)、`$overrideManualEdits`が`true`の場合はこの保護を無視する
      * (法定付与ポリシー・付与ルール自体が変更された場合。未確定の予定は個別修正の有無に
      * 関わらず新しい内容に追従させる、docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md)。
-     * `$fromDate`(Y-m-d。候補を作るときの`from`)を渡した場合、`scheduledOn < $fromDate`のエントリは状態・
+     * `$fromDate`(Y-m-d。候補を作るときの`from`)を渡した場合、`scheduledOn < $fromDate`の候補は作らず、`scheduledOn < $fromDate`のエントリは状態・
      * `$includeGrantedEntries`に関わらず取消も置換もしない(過去日付の予定は再計算の対象外、
      * docs/changesets/20261021-paid-leave-schedule-reactor-tests/spec.md 論点4)。`$includeGrantedEntries=false`で
      * 読み飛ばす`Granted`エントリと同じ付与予定日の候補は消費し、付与済みの日付に予定を重ねて作らない
@@ -129,6 +129,12 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
     {
         $desiredByScheduledOn = [];
         foreach ($candidates as $candidate) {
+            // fromDateより前の候補は作らない(その日付の行は再計算の対象外。当日の行を
+            // 日次の再計算で二重に作らないため)。
+            if ($fromDate !== null && $candidate['scheduledOn'] < $fromDate) {
+                continue;
+            }
+
             $desiredByScheduledOn[$candidate['scheduledOn']] = $candidate;
         }
 

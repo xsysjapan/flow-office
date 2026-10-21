@@ -37,10 +37,10 @@ UC-P011の`paid-leave:roll-schedules`に置換される。
 > (`docs/changesets/20260906-paid-leave-schedule-assessment/spec.md`参照)。
 
 1. `paid-leave:roll-schedules`コマンド(cron、日次実行、`routes/console.php`)が
-   `ScheduleCandidateGenerator`を使い、対象社員それぞれについて将来1年分の
-   付与予定日候補(`scheduledOn`・区分・候補日数)を算出し、`paid_leave_schedule_entries`
-   へエントリとして保存する(`App\Domain\PaidLeaveSchedule\Aggregates\
-   PaidLeaveScheduleAggregate`のイベントソーシング経由)。
+   `ScheduleCandidateGenerator`を使い、対象社員それぞれについて今日から1年先までの
+   付与予定日候補(`scheduledOn`・区分・候補日数)を算出し、明日以降の付与予定を再計算して
+   `paid_leave_schedule_entries`へ反映する(`App\Domain\PaidLeaveSchedule\Aggregates\
+   PaidLeaveScheduleAggregate`のイベントソーシング経由。変化が無い行には何も記録しない)。
 2. 人事担当者は「有給休暇」画面(`/admin/paid-leave`)の「付与ルール」カードにある
    「付与予定を確認」ボタンから付与予定画面(`/admin/paid-leave/schedule`)を開き、これから付与予定の
    社員一覧・出勤率Assessment結果を事前に確認できる。付与予定日を過ぎて未付与の付与予定がある場合は、
@@ -107,8 +107,9 @@ Schedule/Assessment化の対象外。今後の課題)。
 
 ### 過去の付与予定Scheduleエントリを再作成する(データ是正用)
 
-付与ルール・法定付与ポリシーの変更時に、`paid-leave:roll-schedules`コマンド(日次cron)により
-未来分のScheduleエントリ自動再計算が行われる一方、**過去日付のエントリについては自動再計算
+付与ルール・法定付与ポリシーの変更時は`ReapplyPaidLeaveSchedulePolicyJob`により未来分の
+Scheduleエントリが再計算され、その後も毎日の`paid-leave:roll-schedules`(今日から1年先までの
+再計算、`fromDate`は明日)で追従する。いずれも、**過去日付・当日のエントリについては自動再計算
 の対象外**である(既存エントリの変更は避け、新規トラブル時のリスクを最小化する設計)。
 
 過去分のScheduleエントリにデータ不整合(ルール変更の取り込みミス、移行エラーなど)が見つかった
@@ -506,13 +507,12 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 ## UC-P011: 付与予定(Schedule)をローリング生成する
 
 1. `paid-leave:roll-schedules`コマンドがcronから毎日実行される
-2. `hire_date`設定済み・`paid_leave_auto_grant_enabled=true`・`usage_start_date`未設定
-   または到来済みの社員を対象に抽出する
-3. 社員ごとに`EnsureFutureScheduleGenerated` Commandを発行し、現在から1年先までの
-   `paid_leave_schedule_entries`(通常付与/比例付与/シフト勤務の各区分。判定不能な場合は
-   `NeedsReview`)の存在を保証する
-4. `scheduled_on`が到来済み(社員本人のタイムゾーン基準の「今日」以前)かつ`Scheduled`の
-   ままのエントリについて、続けてUC-P012の出勤率Assessmentを実行する
+2. `hire_date`設定済み・`paid_leave_auto_grant_enabled=true`の在籍社員を対象に抽出する
+3. 社員ごとに`RecalculateFutureSchedule` Commandを発行する。候補は今日から1年先まで
+   (`ScheduleCandidateGenerator`。通常付与/比例付与/シフト勤務の各区分。判定不能な場合は
+   `NeedsReview`)、`fromDate`は明日、`overrideManualEdits=false`。候補が無い社員にも発行する
+4. 判定(出勤率Assessment、UC-P012)はこのコマンドでは実行しない。判定は付与予定画面からの
+   操作で行う
 
 旧`paid-leave:grant-scheduled`(UC-P002、`GrantScheduledPaidLeaveHandler`による日次全件
 評価)を置換するバッチで、`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`
@@ -522,9 +522,20 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 収集して継続する(部分失敗許容)。既存の`paid_leave_grant_rules`ベースのバッチ判定
 (UC-P001/UC-P002)とは独立した別ドメインであり、両者は共存しない(cutover的な置換)。
 
-入社日・利用開始日・自動付与・勤務形態の変更では、`RecalculateFutureSchedule`による未来分の再計算が走る。
-再計算は、候補を作る期間の始まり(今日)より前の付与予定日の行には、状態に関わらず触れない(取消も置換もしない)。
+入社日・利用開始日・自動付与・勤務形態の変更(勤務形態の割当の登録・削除、勤務形態の区分判定に関わる列の変更)では、
+`RecalculateFutureSchedule`による未来分の再計算が走る。割当の登録・削除は、削除の対象月が当月より後でも
+再計算を行う(結果が変わらなければイベントは増えない)。毎日の`roll-schedules`は、先の月に登録した割当が
+有効になった日(月替わり)の再計算のきっかけになる。
+再計算は、候補を作る期間の始まりより前の付与予定日の行には、状態に関わらず触れない(取消も置換もしない)。
+当日・過去の行は`roll-schedules`(`fromDate`=明日)では変わらない。
 また、付与済みの行と同じ付与予定日の予定は作らない(取消済みの行と同じ日付は作り直せる)。
+
+**毎日の再計算で取り消されるもの**(再計算の結果、候補に無い未確定の行は取り消される):
+- 付与ルールを無効にした・対象のルールが無くなった社員の、明日以降の未確定の行(自動付与は有効のまま)。
+- `paid-leave:schedule:rebuild --to`で作った、1年より先の未確定の行(候補は1年先までのため)。
+
+**毎日の再計算で守られるもの**: 個別修正済みの行(`overrideManualEdits=false`)、付与済み(`Granted`)の行、
+取消済みの行、当日以前の行。
 
 ## UC-P011b: 法定付与ポリシー・付与ルール変更時に付与予定を再作成する
 

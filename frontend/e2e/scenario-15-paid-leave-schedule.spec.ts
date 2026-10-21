@@ -41,9 +41,9 @@ test.describe.configure({ mode: 'serial' })
 
 test.describe('シナリオ18: 付与予定の確認から一括付与まで', () => {
   test.beforeAll(() => {
-    // UC-P011: 付与予定(Schedule)をローリング生成する(scenario-08と同じく、artisanを直接実行する)。
+    // UC-P011: 付与予定(Schedule)を1年先まで再計算する(scenario-08と同じく、artisanを直接実行する)。
     const output = execSync('php artisan paid-leave:roll-schedules', { cwd: BACKEND_DIR, encoding: 'utf-8' })
-    expect(output).toContain('Scheduleエントリ候補')
+    expect(output).toContain('付与予定を再計算しました')
   })
 
   test('有給休暇画面の「付与予定を確認」から付与予定画面を開き、対象社員の行が見える', async ({ page }) => {

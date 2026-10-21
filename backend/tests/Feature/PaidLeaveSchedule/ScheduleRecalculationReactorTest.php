@@ -4,10 +4,12 @@ namespace Tests\Feature\PaidLeaveSchedule;
 
 use App\Domain\Attendance\Commands\AssignUserWorkStyleForMonth;
 use App\Domain\Attendance\Commands\CreateWorkStyle;
+use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
 use App\Domain\Attendance\Commands\UpdateWorkStyle;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
+use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
 use App\Domain\PaidLeaveSchedule\Projectors\PaidLeaveScheduleProjector;
 use App\Domain\PaidLeaveSchedule\Support\GrantCategoryClassifier;
@@ -15,9 +17,11 @@ use App\Domain\UserManagement\Commands\SetPaidLeaveAutoGrantEnabled;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Domain\UserManagement\Commands\SetUserUsageStartDate;
 use App\Models\PaidLeaveGrantRule;
+use App\Models\PaidLeaveGrantRuleStep;
 use App\Models\PaidLeaveScheduleAssessment;
 use App\Models\PaidLeaveScheduleEntry;
 use App\Models\User;
+use App\Models\UserWorkStyleMonthlyAssignment;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -29,8 +33,9 @@ use Tests\TestCase;
 
 /**
  * 付与予定の再計算Reactor 2本(`RecalculateScheduleOnUserConditionChangedReactor`・
- * `RecalculateScheduleOnWorkStyleChangedReactor`)を、Commandの発行から付与予定の状態までを通して確かめる
- * シナリオテスト(docs/changesets/20261021-paid-leave-schedule-reactor-tests/spec.md 論点1)。
+ * `RecalculateScheduleOnWorkStyleChangedReactor`)と、日次の`paid-leave:roll-schedules`を、Commandの発行から
+ * 付与予定の状態までを通して確かめるシナリオテスト(docs/changesets/20261021-paid-leave-schedule-reactor-tests/spec.md 論点1、
+ * docs/changesets/20261021-paid-leave-schedule-recalc-on-assignment-change/spec.md)。
  *
  * 前提: 今日=2026-10-21、入社日2024-01-01。勤務形態ごとの付与ルール(入社日基準)で、付与予定は
  * 2027-07-01(継続42か月)の1行になる(週5日=14日・通常、週3日=8日・比例)。
@@ -500,5 +505,157 @@ class ScheduleRecalculationReactorTest extends TestCase
         $this->assertEntry($this->onlyActiveEntry($user), '2027-07-01', GrantCategoryClassifier::CATEGORY_NORMAL, 8.0);
 
         $this->assertProjectionRebuildsToSameState();
+    }
+
+    // ---- 勤務形態の割当の削除・月替わり(roll-schedules) ----
+
+    private function assignWorkStyleForMonth(User $user, WorkStyle $workStyle, string $yearMonth): UserWorkStyleMonthlyAssignment
+    {
+        return $this->bus()->dispatch(new AssignUserWorkStyleForMonth(
+            userId: $user->id,
+            yearMonth: $yearMonth,
+            workStyleId: $workStyle->id,
+            assignedByUserId: $this->admin->id,
+        ));
+    }
+
+    private function removeAssignment(UserWorkStyleMonthlyAssignment $assignment): void
+    {
+        $this->bus()->dispatch(new RemoveUserWorkStyleMonthlyAssignment(
+            assignmentId: $assignment->id,
+            removedByUserId: $this->admin->id,
+        ));
+    }
+
+    public function test_removing_current_month_assignment_recalculates_to_previous_month_work_style(): void
+    {
+        $five = $this->fiveDayWorkStyle();
+        $three = $this->threeDayWorkStyle();
+        $user = $this->userOn($three, '2026-09');
+        $current = $this->assignWorkStyleForMonth($user, $five, '2026-10');
+        $this->assertEntry($this->onlyActiveEntry($user), '2027-07-01', GrantCategoryClassifier::CATEGORY_NORMAL, 14.0);
+
+        // 当月(2026-10)の割当を削除すると、前月(2026-09)の週3日が有効になる。
+        $this->removeAssignment($current);
+
+        $this->assertEntry($this->onlyActiveEntry($user), '2027-07-01', GrantCategoryClassifier::CATEGORY_PROPORTIONAL, 8.0);
+        $this->assertProjectionRebuildsToSameState();
+    }
+
+    public function test_removing_future_month_assignment_records_no_schedule_events(): void
+    {
+        $five = $this->fiveDayWorkStyle();
+        $three = $this->threeDayWorkStyle();
+        $user = $this->userOn($three, '2026-09');
+        $future = $this->assignWorkStyleForMonth($user, $five, '2026-12');
+        $baseline = $this->scheduleEventCount();
+
+        // 当月より後の割当は今の計算の結果を変えないため、再計算しても予定は変わらず、イベントも増えない。
+        $this->removeAssignment($future);
+
+        $this->assertSame($baseline, $this->scheduleEventCount());
+        $this->assertEntry($this->onlyActiveEntry($user), '2027-07-01', GrantCategoryClassifier::CATEGORY_PROPORTIONAL, 8.0);
+    }
+
+    public function test_roll_applies_next_month_assignment_when_it_takes_effect(): void
+    {
+        $five = $this->fiveDayWorkStyle();
+        $three = $this->threeDayWorkStyle();
+        $user = $this->userOn($three, '2026-10');
+        // 先の月(2026-11)の週5日は、10月の時点ではまだ有効でない。
+        $this->assignWorkStyleForMonth($user, $five, '2026-11');
+        $this->assertEntry($this->onlyActiveEntry($user), '2027-07-01', GrantCategoryClassifier::CATEGORY_PROPORTIONAL, 8.0);
+
+        Carbon::setTestNow('2026-11-01');
+        $this->artisan('paid-leave:roll-schedules')->assertSuccessful();
+
+        $this->assertEntry($this->onlyActiveEntry($user), '2027-07-01', GrantCategoryClassifier::CATEGORY_NORMAL, 14.0);
+        $this->assertProjectionRebuildsToSameState();
+    }
+
+    public function test_roll_without_any_change_records_no_schedule_events(): void
+    {
+        $user = $this->userOn($this->fiveDayWorkStyle());
+        $entry = $this->onlyActiveEntry($user);
+        $baseline = $this->scheduleEventCount();
+
+        Carbon::setTestNow('2026-10-22');
+        $this->artisan('paid-leave:roll-schedules')->assertSuccessful();
+
+        $this->assertSame($baseline, $this->scheduleEventCount());
+        $this->assertSame($entry->id, $this->onlyActiveEntry($user)->id);
+    }
+
+    public function test_roll_keeps_manually_edited_entry(): void
+    {
+        $three = $this->threeDayWorkStyle();
+        $five = $this->fiveDayWorkStyle();
+        $user = $this->userOn($three, '2026-10');
+        $entry = $this->onlyActiveEntry($user);
+        $this->bus()->dispatch(new ManuallyEditScheduleEntry(
+            userId: $user->id,
+            scheduleEntryId: $entry->id,
+            changes: ['candidateGrantDays' => 9.0],
+            reason: '個別事情による調整',
+            operatorUserId: $this->admin->id,
+        ));
+        $this->assignWorkStyleForMonth($user, $five, '2026-11');
+
+        // 再計算すると通常・14日になるはずの行だが、個別修正の行は残る。
+        Carbon::setTestNow('2026-11-01');
+        $this->artisan('paid-leave:roll-schedules')->assertSuccessful();
+
+        $kept = $this->onlyActiveEntry($user);
+        $this->assertSame($entry->id, $kept->id);
+        $this->assertEntry($kept, '2027-07-01', GrantCategoryClassifier::CATEGORY_PROPORTIONAL, 9.0);
+    }
+
+    public function test_roll_does_not_change_entry_scheduled_today(): void
+    {
+        $three = $this->threeDayWorkStyle();
+        // 入社日2024-04-21なら、今日(2026-10-21)が30か月目の付与予定日になる。
+        $user = $this->userOn($three, '2026-10');
+        $this->setHireDate($user, '2024-04-21');
+        $today = $this->entryOn($user, '2026-10-21');
+        $this->assertNotNull($today);
+        $this->assertSame(6.0, $today->candidate_grant_days);
+
+        // 付与ルールの30か月の日数を9日に変える(今日の行の候補は9日になるが、今日の行は変えない。
+        // 1年先(2027-10-21)の行は42か月の日数を10日に変えて、再計算が行われたことを確かめる)。
+        $ruleId = PaidLeaveGrantRule::query()->where('work_style_id', $three->id)->value('id');
+        PaidLeaveGrantRuleStep::query()->where('rule_id', $ruleId)->where('continuous_service_months', 30)->update(['grant_days' => 9]);
+        PaidLeaveGrantRuleStep::query()->where('rule_id', $ruleId)->where('continuous_service_months', 42)->update(['grant_days' => 10]);
+
+        Carbon::setTestNow('2026-10-21');
+        $this->artisan('paid-leave:roll-schedules')->assertSuccessful();
+
+        $todayAfter = $this->activeEntries($user)[0];
+        $this->assertSame($today->id, $todayAfter->id);
+        $this->assertSame(6.0, $todayAfter->candidate_grant_days);
+        $this->assertSame(
+            1,
+            PaidLeaveScheduleEntry::query()
+                ->where('user_id', $user->id)
+                ->whereDate('scheduled_on', '2026-10-21')
+                ->where('status', '!=', PaidLeaveScheduleEntry::STATUS_CANCELLED)
+                ->count(),
+        );
+        $this->assertSame(10.0, $this->entryOn($user, '2027-10-21')->candidate_grant_days);
+    }
+
+    public function test_roll_cancels_unconfirmed_entry_when_no_rule_matches_any_more(): void
+    {
+        $five = $this->fiveDayWorkStyle();
+        $user = $this->userOn($five);
+        $entry = $this->onlyActiveEntry($user);
+
+        // 勤務形態のルールと全社共通ルールを無効にする。自動付与は有効のまま。
+        PaidLeaveGrantRule::query()->update(['is_active' => false]);
+
+        Carbon::setTestNow('2026-10-22');
+        $this->artisan('paid-leave:roll-schedules')->assertSuccessful();
+
+        $this->assertSame(PaidLeaveScheduleEntry::STATUS_CANCELLED, $entry->fresh()->status);
+        $this->assertSame([], $this->activeEntries($user));
     }
 }

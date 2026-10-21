@@ -440,8 +440,8 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
 
     1. 前提として対象社員のWorkStyleに所定労働日数(`weekly_scheduled_days`)が設定済み
        であることを確認する。
-    2. `paid-leave:roll-schedules`を実行し、Schedule生成(1年先までのローリング生成)を
-       確認する。
+    2. `paid-leave:roll-schedules`を実行し、Schedule生成(今日から1年先までの再計算。
+       `fromDate`は明日)を確認する。
     3. 「有給休暇」画面(`/admin/paid-leave`)の「付与ルール」カードにある「付与予定を
        確認」ボタンから`/admin/paid-leave/schedule`(付与予定一覧)を開き、対象社員の行を
        確認する。

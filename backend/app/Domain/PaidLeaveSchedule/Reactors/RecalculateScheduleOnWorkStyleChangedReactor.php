@@ -3,6 +3,7 @@
 namespace App\Domain\PaidLeaveSchedule\Reactors;
 
 use App\Domain\Attendance\Events\UserWorkStyleAssignedForMonth;
+use App\Domain\Attendance\Events\UserWorkStyleMonthlyAssignmentRemoved;
 use App\Domain\Attendance\Events\WorkStyleUpdated;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
@@ -47,6 +48,16 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
     public function onUserWorkStyleAssignedForMonth(UserWorkStyleAssignedForMonth $event): void
     {
         $this->recalculate($event->userId, 'work_style_id割当の変更');
+    }
+
+    /**
+     * 割当の削除で社員の勤務形態が変わったとき(削除後の状態は、Projectorが先に行を消しているので
+     * `currentWorkStyleFor`に反映済み)。削除の対象月が当月より後でも、再計算の結果は変わらない
+     * (冪等。変化が無ければイベントは増えない)ため、条件は付けない。
+     */
+    public function onUserWorkStyleMonthlyAssignmentRemoved(UserWorkStyleMonthlyAssignmentRemoved $event): void
+    {
+        $this->recalculate($event->userId, '勤務形態の割当の削除');
     }
 
     public function onWorkStyleUpdated(WorkStyleUpdated $event): void

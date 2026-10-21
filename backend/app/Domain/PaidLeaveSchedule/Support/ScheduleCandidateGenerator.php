@@ -113,6 +113,9 @@ class ScheduleCandidateGenerator
      * `work_style_id`がnullの全社共通ルールをフォールバックとして採用する。
      * 外部(RebuildPaidLeaveScheduleCommand等)から「ある社員が現在どのルールにマッチするか」
      * を解決する用途で使用される(docs/changesets/20260919-paid-leave-schedule-rebuild/spec.md)。
+     * 同じ種類(勤務形態固有・全社共通)のルールが複数あるときは、`created_at`→`id`の順で古い方を選ぶ
+     * (毎日の再計算で選ばれるルールが日によって変わり、置き換えが出続けるのを防ぐ。
+     * docs/changesets/20261021-paid-leave-schedule-recalc-on-assignment-change/spec.md 論点4)。
      */
     public function matchingRuleFor(?WorkStyle $workStyle): ?PaidLeaveGrantRule
     {
@@ -120,6 +123,8 @@ class ScheduleCandidateGenerator
             $specific = PaidLeaveGrantRule::query()
                 ->where('work_style_id', $workStyle->id)
                 ->where('is_active', true)
+                ->orderBy('created_at')
+                ->orderBy('id')
                 ->with('steps')
                 ->first();
 
@@ -131,6 +136,8 @@ class ScheduleCandidateGenerator
         return PaidLeaveGrantRule::query()
             ->whereNull('work_style_id')
             ->where('is_active', true)
+            ->orderBy('created_at')
+            ->orderBy('id')
             ->with('steps')
             ->first();
     }

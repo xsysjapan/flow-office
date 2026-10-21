@@ -1,6 +1,6 @@
 # 勤務形態の割当の削除・月替わりで付与予定を再計算する
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > このタスクをここで実行してください:「勤務形態の割当の削除・月替わりで付与予定を再計算する」
@@ -162,4 +162,24 @@
   - ドキュメントへの影響を足した: docs/09:39-43,110,513-515、`docs/testing/scenario-tests.md:434-443`、`RollPaidLeaveSchedulesCommand`のdocblock。
 
 ## 実装結果
-未着手
+### 変更
+- 割当の削除のReactor(条件なし)。
+- `roll-schedules`を再計算にした(`fromDate`=明日、候補が無い社員にも出す)。
+- ルールの選択の順(`created_at`→`id`)。
+- docs/09・scenario-tests・console.phpのコメント。
+- e2eの`scenario-15`の、`roll-schedules`の出力の期待値。
+### 実装時の判断
+- `EnsureFutureScheduleGenerated`は消さなかった。本体の利用は無くなったが、テストのデータの用意に多く使われていて、再計算に
+  置き換えると先の行が取り消されるため。
+  - `20261021-paid-leave-same-day-grants`の論点6にある`findEntryIdByScheduledOn`の扱いは、残ることを前提に直す。
+- 再計算で、`fromDate`より前の候補を作らないようにした(翌日以降だけを再計算するときに、当日の行が二重に作られないため)。
+### テスト
+- 追加: `ScheduleRecalculationReactorTest`に8件、`ScheduleCandidateGeneratorTest`に2件。
+- `RollPaidLeaveSchedulesCommandTest`の既存の7件は、期待値を変えずに通った。
+### 検証(委譲元で実行)
+- `--filter=PaidLeaveSchedule`: 171件PASS
+- backend全件: 1933件PASS
+- e2e: 13件PASS
+### 受け入れ条件
+- 削除の再計算・月替わり・冪等・個別修正の保護: 上のテスト。
+- docs: 更新した。

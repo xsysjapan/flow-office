@@ -11,6 +11,7 @@ use App\Models\UserWorkStyleMonthlyAssignment;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -335,5 +336,65 @@ class ScheduleCandidateGeneratorTest extends TestCase
         $this->assignWorkStyle($user, $workStyle, '2026-11');
 
         $this->assertSame([], $this->generator()->userIdsCurrentlyOn($workStyle->id, Carbon::parse('2026-10-21')));
+    }
+
+    /**
+     * created_atはEloquentの自動設定を避けるため、作成後にDBで直接設定する(並び順の検証用)。
+     */
+    private function createGlobalRule(string $name, string $createdAt): PaidLeaveGrantRule
+    {
+        $rule = PaidLeaveGrantRule::query()->create([
+            'name' => $name,
+            'work_style_id' => null,
+            'min_attendance_rate' => 80,
+            'first_grant_after_months' => 6,
+            'grant_cycle_months' => 12,
+            'grant_cycle_type' => PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY,
+            'is_active' => true,
+        ]);
+        DB::table('paid_leave_grant_rules')->where('id', $rule->id)->update(['created_at' => $createdAt]);
+
+        return $rule;
+    }
+
+    /**
+     * マイグレーションの全社共通ルールを無効化する(このテストの対象の件数を明確にするため)。
+     */
+    private function deactivateSeededGlobalRules(): void
+    {
+        PaidLeaveGrantRule::query()->whereNull('work_style_id')->update(['is_active' => false]);
+    }
+
+    public function test_matching_rule_picks_the_oldest_global_rule_when_there_are_several(): void
+    {
+        $this->deactivateSeededGlobalRules();
+
+        // 新しい方を先に作っても、created_atが古い方が選ばれる。
+        $newer = $this->createGlobalRule('新しい全社ルール', '2026-02-01 00:00:00');
+        $older = $this->createGlobalRule('古い全社ルール', '2026-01-01 00:00:00');
+
+        $this->assertSame($older->id, $this->generator()->matchingRuleFor(null)?->id);
+        $this->assertNotSame($newer->id, $this->generator()->matchingRuleFor(null)?->id);
+    }
+
+    public function test_matching_rule_prefers_work_style_rule_over_global_rule(): void
+    {
+        $this->deactivateSeededGlobalRules();
+        $workStyle = $this->createWorkStyle();
+        $global = $this->createGlobalRule('全社ルール', '2026-01-01 00:00:00');
+        $specific = PaidLeaveGrantRule::query()->create([
+            'name' => '勤務形態ルール',
+            'work_style_id' => $workStyle->id,
+            'min_attendance_rate' => 80,
+            'first_grant_after_months' => 6,
+            'grant_cycle_months' => 12,
+            'grant_cycle_type' => PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY,
+            'is_active' => true,
+        ]);
+        // 勤務形態ルールは全社ルールより新しい作成日時でも優先されることを確かめる。
+        DB::table('paid_leave_grant_rules')->where('id', $specific->id)->update(['created_at' => '2026-03-01 00:00:00']);
+
+        $this->assertSame($specific->id, $this->generator()->matchingRuleFor($workStyle)?->id);
+        $this->assertSame($global->id, $this->generator()->matchingRuleFor(null)?->id);
     }
 }

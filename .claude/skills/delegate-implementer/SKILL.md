@@ -83,6 +83,10 @@ implementerは指示に書かれていないことを推測で埋めるか、気
       こと、対象はAPIで条件に合う行を探して選ぶことを書いたか。
 - [ ] frontendの型チェックは`npx tsc -p tsconfig.app.json --noEmit`を指定したか(ルートの`tsconfig.json`は
       参照だけなので、`npx tsc --noEmit`では何も検査されない)。
+- [ ] コマンドの出力や画面の文言を変える作業では、その文言を期待しているテストとe2eを`grep`で探して直すことを書いたか
+      (roll-schedulesの出力を変えて、e2eの期待値が古いまま残った)。
+- [ ] backendのテストは`./vendor/bin/phpunit`で実行させる。`backend/.env`があると`php artisan test`は開発用のDBに対して動き、
+      DBを壊すことがある。e2eのために`.env`を作ったら、検証の後に消す。
 - [ ] テストを実行させるか、させるならコマンドと対象(例: `cd backend && php artisan test tests/Unit/...`)を
       書いたか。実行させない場合は委譲元で実行する。
 

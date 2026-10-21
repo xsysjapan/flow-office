@@ -144,8 +144,8 @@
   - `nominal_service_months`列はnullableにする。
   - 付与予定の一覧APIの並びに、名目の月数を第2キーとして足す。
   - Supersededのイベントに、置き換える前の名目の月数(`previousNominalServiceMonths`)を足す。
-  - `findEntryIdByScheduledOn`は`ensureFutureScheduleGenerated`専用。割当の再計算の変更セットで`Ensure`を消すなら、
-    一緒に消す(実装の順で先に消えていれば、この変更は不要)。
+  - `findEntryIdByScheduledOn`は`ensureFutureScheduleGenerated`専用。割当の再計算の変更セットでは`Ensure`を消さずに残した
+    (テストのデータの用意に使う)。そのため、この関数も(付与予定日, 名目の月数)の組で見分けるように直す。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
