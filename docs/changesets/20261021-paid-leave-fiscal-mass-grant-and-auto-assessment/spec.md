@@ -7,7 +7,7 @@
 > 一括付与される運用です。有給は所定の基準より前に付与することを認めていますので、できるはずですが、
 > 本システムの初期値を年度はじめに一括付与としてください。
 
-確認への回答(2026-10-21):
+確認への回答(2026-10-21)
 - 出勤率の判定時期: 「毎月1日もしくは手動タイミングで判定をしてください。自動判定の実行状況(次回実行予定や、
   実行中など)を画面に表示してください。」
 - 前倒しで短縮された期間の出勤率: 希望なし(推奨案で進める)
@@ -16,412 +16,468 @@
 - 比例付与の社員の日数: 「初期設定でルールを作成する(細かくルール設定できるようにする)」
 
 ## 背景・目的
-会社の運用は「年度はじめに全社員へ一斉付与(法定の基準日より前倒し可)」。本システムにも一斉付与の
-仕組み(`grant_cycle_type=mass_grant_month`)はあるが、次の理由で、初期状態のままでは使えない。
+会社の運用は「年度はじめに全社員へ一斉付与(法定の基準日より前倒し可)」。本システムにも一斉付与の仕組み
+(`grant_cycle_type=mass_grant_month`)はあるが、初期状態のままでは次の理由で使えない。
 - 初期の全社ルールに付与日数の表が無く、全社員が「要確認・0日」になる。
 - 管理画面から付与方式を設定できない。
-- 一斉付与の月が会社の年度と連動していない。
-- 出勤率の判定が自動で行われない。判定は9/14の競合解消(`ff64862`)で失われた。
+- 一斉付与の月が、会社の年度と連動していない。
+- 出勤率の判定が自動で行われない。9/14の競合解消(`ff64862`)で失われた。
 
-本変更で、導入直後から「年度はじめ一斉付与」で予定が作られ、毎月1日に自動で判定され、管理者が付与予定画面で
-確認して一括付与できる状態にする。
+本変更で、導入直後から次の流れで使えるようにする。
+1. 「年度はじめ一斉付与」で付与予定が作られる。
+2. 毎月1日に自動で判定される。
+3. 管理者が付与予定画面で確認し、一括付与する。
 
 ## 現状(As-Is)
 - 付与ルール(`paid_leave_grant_rules`)
   - 付与方式は`grant_cycle_type`(`anniversary`/`mass_grant_month`)と`mass_grant_month`(1-12)で持つ
-    (`2026_09_14_000000`)。既定値は`anniversary`で、`PaidLeaveController::storeRule:96`も同じ。
-  - 管理画面(`PaidLeavePolicyPage.tsx:413-446`、`PaidLeaveGrantRuleEditPage.tsx:83-87`)には付与方式の
-    入力欄が無く、APIからしか設定できない。
-  - 初期の全社ルール「全社共通(4月一斉付与)」(`2026_09_14_000001`)は`mass_grant_month=4`で、付与日数の
-    表(steps)が無い。そのため`ScheduleCandidateGenerator::resolveGrantDays:251-267`で日数が決まらず、
-    要確認・0日になる。
-  - 付与日数の表(`paid_leave_grant_rule_steps`: rule_id / continuous_service_months / grant_days)には区分の
-    次元が無い。表は区分(通常・比例・シフト)に関係なく全員に使われる。一方、作成時の法定最低日数の照合
-    (`PaidLeaveController:860-873,884-`)は、全社ルールなら通常表、勤務形態のルールならその区分の表で行う。
-    照合に使う表と、実際に適用する表がずれている。
-  - ルールの選択(`ScheduleCandidateGenerator::matchingRuleFor:116-135`)は勤務形態のルール→全社ルールの順。
-    `first()`に並び順の指定が無く、全社ルールが複数あると選ばれ方が決まらない(`ScenarioSeeder:207-218`が
-    2件目を作る)。
-- 一斉付与の日付(`ScheduleCandidateGenerator::massGrantScheduledDates:189-221`)
-  - 初回は「入社後最初の一斉付与月1日」と「入社+`first_grant_after_months`」の早い方。2回目以降は毎年の
-    一斉付与月1日。
-  - 会社カレンダーの年度開始(`company_calendars.fiscal_year_start_month/day`、既定4/1、`is_default`は
-    高々1件)とは連動していない。
+    (`2026_09_14_000000`)。既定は`anniversary`(`PaidLeaveController::storeRule:96`も同じ)。
+  - 管理画面(`PaidLeavePolicyPage.tsx:413-446`、`PaidLeaveGrantRuleEditPage.tsx:83-87`、プレビュー
+    `PaidLeaveGrantRulePreview.tsx`)には付与方式の入力が無い。
+  - 初期の全社ルール「全社共通(4月一斉付与)」(`2026_09_14_000001`)には表(steps)が無い。
+    `resolveGrantDays:251-267`で要確認・0日になる。
+  - 表(`paid_leave_grant_rule_steps`: rule_id / continuous_service_months / grant_days、unique(rule_id, months)で、
+    rule_idの外部キーがこのuniqueを索引に使う)には区分が無い。表は区分に関係なく全員に使われる。
+    - 一方、作成時の法定照合(`PaidLeaveController:860-918`)は、全社ルールなら通常表、勤務形態のルールなら
+      その区分の表で行う。
+  - ルールの選択(`ScheduleCandidateGenerator::matchingRuleFor:116-135`)は、勤務形態のルール→全社ルールの順。
+    `first()`に並び順の指定が無い。
+- 一斉付与の日付(`massGrantScheduledDates:189-221`)
+  - `hire_date`から、毎年の一斉付与月1日を並べる。付与済みの履歴は見ない。
+  - 名目の継続勤務月数は、初回6か月、以後+12か月。
+  - 会社カレンダー(`company_calendars.fiscal_year_start_month/day`、既定4/1、`is_default`は高々1件)とは
+    連動していない。
+  - 会社カレンダーの変更はイベントになっている(`CompanyCalendarUpdated`は変更後の全項目だけを持つ。
+    `CompanyCalendarDefaultChanged`は作成時にも出る)。
+  - 年度の計算は`GenerateCompanyCalendarYearsHandler::fiscalYearFor:106-114`。
+  - `CompanyCalendarController:91-92,147-148`は、月日の組み合わせ(4/31、2/29など)を確かめていない。
 - 出勤率の判定
-  - 実行するのは`PaidLeaveScheduleController::reassess:190-229`(1行ずつの手動操作)だけ。毎日のcron
-    `paid-leave:roll-schedules`(`RollPaidLeaveSchedulesCommand`)は付与予定を作るだけ。
-  - `docs/09` UC-P011/P012と`routes/console.php:27-31`は「付与予定日に自動判定」と書いていて、実装と違う。
-  - PR#109版(`f860060:backend/app/Console/Commands/RollPaidLeaveSchedulesCommand.php`)には、自動判定と、
-    1社員の失敗で全体を止めない処理、失敗時の終了コードがあった。
-  - 判定期間は`[scheduled_on − grant_cycle_months, scheduled_on]`で、付与予定日当日と未来日を含む。
-    初回(前倒しを含む)も12か月前から数えるので、入社前の期間が含まれ、必ず「要確認」
-    (`usage_start_date_boundary`等)になる。
-  - 閾値・判定周期(`resolveAssessmentParameters:415-436`)は勤務形態のルールしか見ず、全社ルールを無視する。
-    これらの解決処理がControllerの中にあり、cronから再利用できない(原則9・16)。
-  - 判定は`AttendanceRateAssessor`が`leave_attendance_rate_days`を読んで行う。
-- バッチの実行状況
-  - 「次回実行予定」「実行中」を記録・表示する仕組みは無い。
-  - 管理画面の運用コマンド(`admin_command_runs`、`RunAdminCommandJob`、`AdminCommandsPage`)は、手動実行の
-    履歴(queued/running/succeeded/failed、出力、終了コード)を持つ。
-  - `admin_command_runs.requested_by_user_id`はNOT NULLで、システムによる実行を記録できない。
-  - cronは`schedule:run`だけで、キューは`queue:work --stop-when-empty`を毎分起動する(`routes/console.php:19-21`)。
-- 法定付与日数マスタ: `paid_leave_grant_policies`(通常)、`paid_leave_proportional_grant_policies`
-  (比例。`weekly_scheduled_days_category`='4'/'3'/'2'/'1')。値は`PaidLeaveGrantPolicySeeder`のとおり。
+  - 実行するのは`PaidLeaveScheduleController::reassess:190-229`(1行ずつ)だけ。
+  - `paid-leave:roll-schedules`は付与予定を作るだけ。`docs/09` UC-P011/P012と`routes/console.php:27-31`は
+    「付与予定日に自動判定」と書いていて、実装と違う。
+  - 判定期間は`[scheduled_on − grant_cycle_months, scheduled_on]`で、当日と未来日を含む。初回も12か月前から
+    数えるので、入社前の期間を含んで必ず要確認になる。
+  - 閾値・判定周期(`resolveAssessmentParameters:415-436`)は勤務形態のルールしか見ない。この処理がControllerの
+    中にある。
+  - 判定は`AttendanceRateAssessor`(`POLICY_VERSION`あり)が`leave_attendance_rate_days`を読んで行う。移行データ
+    (`PaidLeaveGrant`の`source=carried_over`)の有無も見る(`Controller:200-203`)。
+- 実行の基盤
+  - cronは`schedule:run`だけ。キューは`queue:work --stop-when-empty --max-time=50`を毎分起動する
+    (`--timeout`は既定の60秒、`routes/console.php:19-21`)。
+  - `config/app.php`のタイムゾーンはUTC。業務日付は`system_settings.default_timezone`(Asia/Tokyo)を使うのが
+    既存の流儀(`DailyBatchTimezoneGroups`など)。
+  - 運用コマンドの記録`admin_command_runs`(`RunAdminCommandJob`が更新)
+    - `requested_by_user_id`はNOT NULL。
+    - 出力は先頭の100000文字だけを残す。
+- 法定付与日数マスタ: `paid_leave_grant_policies`(通常)、`paid_leave_proportional_grant_policies`(比例。週の
+  区分'4'/'3'/'2'/'1')。値は`PaidLeaveGrantPolicySeeder`のとおり。
+- 関連する変更セット(実装の順序の前提)
+  - `20261021-paid-leave-schedule-reactor-tests`: 再計算で過去日付の行に触れない、付与済みの行と同じ日付を
+    作らない、を直す。
+  - `20261021-paid-leave-aggregate-stream-id`: 付与予定・有給口座の集約IDを分離する。
+  - 本変更は、この2つの後に実装する。
 
 ## 設計前提の検証
 - 正データと派生データ
-  - 付与ルール・付与日数の表・会社カレンダーはマスタ(管理APIで直接更新する正データ)。付与予定・判定は
-    `PaidLeaveScheduleAggregate`のイベントが正で、`paid_leave_schedule_entries`/`_assessments`は派生。
-  - 本変更では、付与予定・判定の状態を直接書く経路を作らない。自動判定も、既存の`RunAttendanceRateAssessment`
-    Commandを発行する(原則1・2・9)。
-  - バッチの実行状況は運用の記録で、業務状態ではない。既存の`admin_command_runs`(通常のテーブル)に記録し、
-    イベントにはしない(前例: 運用コマンドの履歴)。
+  - 付与ルール・付与日数の表はマスタ(管理APIで直接更新する正データ)。付与予定・判定は
+    `PaidLeaveScheduleAggregate`のイベントが正。
+  - 会社カレンダーは他の文脈(勤怠)の正データ。本変更では、付与予定の文脈に自分の読み取りビューを作り、
+    イベントから写す(原則15)。
+  - 付与予定のイベントは、付与予定日・日数を確定した値として持つ。マスタを読むのはCommandを出す時点だけなので、
+    Projectionを作り直しても結果は変わらない(原則2)。
+  - バッチの実行状況は運用の記録で、業務の状態ではない。既存の`admin_command_runs`に記録し、イベントにはしない
+    (前例: 運用コマンドの履歴)。
 - 定義と実態
-  - 「一斉付与月」は付与ルールの値として持っているが、ユーザーの要望は「会社の年度に連動」。年度の正は会社
-    カレンダーなので、付与ルールに月を二重に持たない(論点3)。
-  - 付与日数の表に区分が無いため、全社ルールに法定の写しを入れると比例付与の社員にも通常の日数が付く。表に
-    区分の次元を足す(論点2)。
-  - ドキュメントと実装のずれ(自動判定)は、`ff64862`で機能が失われたもの(前の変更セット
-    `20261020-paid-leave-schedule-page-restore`で特定済み)。
+  - 「一斉付与月」を付与ルールにも持つと、会社の年度と二重になる。正は会社カレンダー(論点3)。
+  - 表に区分が無いため、照合の表と適用の表がずれている(論点2)。
+  - 一斉付与の日付を入社日だけから並べると、年度開始日を変えたときに付与済みの履歴と食い違う(論点3)。
 - 原因の分類
   - 自動判定の欠落は競合解消の誤り。
-  - 初回判定が必ず要確認になる、全社ルールの閾値が無視される、ルールの選ばれ方が決まらない、の3つは
-    実装のミス。
-  - 照合の表と適用の表のずれ、一斉付与月の二重管理は設計の誤り。
-  - 対症療法(初回だけ閾値を下げる等)は採らず、判定期間と日数の表の設計を直す。
+  - 初回の判定期間、全社ルールの閾値の無視、ルールの選択の不定は実装のミス。
+  - 表の区分の欠落、一斉付与月の二重管理は設計の誤り。対症療法(初回だけ閾値を下げる等)は採らない。
 
 ## 仕様検討
 
 ### 論点1: 付与方式の初期値と、画面からの設定
 - 選択肢:
-  - A. DBの既定値・作成APIの既定値・画面の初期選択を、すべて「年度はじめに一斉付与」にする。画面に付与方式の
-    入力欄を足す。
-  - B. 既定値は変えず、初期の全社ルールだけ一斉付与にする。
+  - A. DBの既定値・作成APIの既定値・画面の初期選択を、すべて年度はじめにする。画面に付与方式の入力を足す。
+  - B. 初期の全社ルールだけ年度はじめにする。
 - 決定: A。
-  - 付与方式の値は`mass_grant_month`(年度はじめに一斉付与)/`anniversary`(入社日を基準に付与)のまま
-    使う。画面の表示名は「年度はじめに一斉付与」「入社日を基準に付与」にする。
-  - `grant_cycle_type`の列の既定値を`mass_grant_month`に変える(新規migration)。`storeRule`で未指定時の
-    既定値も同じにする。
-  - 画面: ルールの作成フォーム・編集画面に、付与方式のラジオボタンを足す。初期選択は年度はじめ。
-    年度はじめを選んだときは「会社カレンダー(既定)の年度開始日: M月D日」を併記する。
-- 理由: 「本システムの初期値を年度はじめに一括付与」という要望を、新規導入・新規ルール作成のどちらでも
-  満たす。画面から設定できないと、初期値を変えたあとに戻すこともできない。
+  - 値は`mass_grant_month`(表示名「年度はじめに一斉付与」)/`anniversary`(「入社日を基準に付与」)のまま。
+  - 列の既定値を`mass_grant_month`にし、`storeRule`で未指定のときの既定値も同じにする。
+  - 作成・編集の画面にラジオボタンを置く(初期選択は年度はじめ)。年度はじめのときは「既定の会社カレンダーの
+    年度開始日: M月D日」を併記する。
+  - プレビュー(`PaidLeaveGrantRulePreview`)の文言を、付与方式ごとに直す。
+  - 初期の全社ルールの名前を「全社共通(年度はじめ一斉付与)」に変える。
+- 理由: 新規導入でも新規のルール作成でも、要望を満たす。画面から設定できないと、初期値から戻せない。
 - 未確定・要確認事項: なし
 
-### 論点2: 付与日数の表を区分ごとに持つ(初期ルールに法定の写しを入れる)
+### 論点2: 付与日数の表を区分ごとに持つ
 - 選択肢:
-  - A. `paid_leave_grant_rule_steps`に区分の列を足し、通常と比例(週4/3/2/1日)の表を1つのルールで持つ。
-    初期の全社ルールには、法定の通常表と比例表をすべて写す。
-  - B. 比例付与用の全社ルールを、週日数ごとに別ルールとして作る(ルールの選び方に週日数の条件が要る)。
-  - C. 表は区分なしのまま、比例付与の社員は法定表を使う(ユーザーは「細かくルール設定できるように」を選んだ)。
+  - A. 表に区分の列を足す。1つのルールで、通常と比例(週4/3/2/1日)の表を持つ。
+  - B. 比例付与用の全社ルールを、週日数ごとに作る。
+  - C. 表は区分なしのまま、比例付与は法定表を使う(ユーザーは「細かく設定できるように」を選んだ)。
 - 決定: A。
-  - `paid_leave_grant_rule_steps`に`grant_category`(string, NOT NULL, 既定`'normal'`)を足す。値は
-    `normal`/`proportional_4`/`proportional_3`/`proportional_2`/`proportional_1`。unique制約を
-    (rule_id, grant_category, continuous_service_months)に変える。既存の行は`normal`になる。
-  - 日数の決め方(`resolveGrantDays`)
-    - 区分`normal`の社員: ルールの`normal`の表を使う。
-    - 区分`proportional`の社員: 勤務形態の週所定日数(1〜4)に対応する`proportional_N`の表を使う。
-    - 区分`shift`の社員: 今の動きどおり`normal`の表を使う(年間所定日数による判定はしない)。
-    - 該当する区分の表が無い、または継続勤務月数に合う段が無い場合は、今と同じく「要確認・日数未定」にする。
-      法定表へは自動で切り替えない(ルールの指定を優先し、不足を見えるようにする)。
-  - 法定最低日数の照合(`validateStepsAgainstStatutoryMinimum`)は、行ごとの`grant_category`に対応する
-    法定表で行う。`normal`は通常表、`proportional_N`は比例表の週N日。
-  - 初期の全社ルールの表(新規migration。全社ルールが表を1行も持たない場合だけ入れる)
-    - 写す元は、`paid_leave_grant_policies`と`paid_leave_proportional_grant_policies`のうち、現在有効な版。
-      シーダがまだ入っていない環境では、`PaidLeaveGrantPolicySeeder`と同じ値を使う。
+  - `paid_leave_grant_rule_steps`に`grant_category`(string, NOT NULL, 既定`'normal'`)を足す。値は`normal`/
+    `proportional_4`/`proportional_3`/`proportional_2`/`proportional_1`。
+  - uniqueを(rule_id, grant_category, continuous_service_months)にする。MySQLでは外部キーがuniqueを索引に
+    使うので、新しいuniqueを追加してから古いものを消す。
+  - 区分の決め方(`resolveGrantDays`)
+    - 通常の社員: `normal`の表。
+    - 比例の社員: 週所定日数(`weekly_scheduled_days`)が1〜4なら`proportional_N`。週所定日数が無ければ、
+      年間所定日数(`annual_scheduled_days`)で決める(労基則24条の3: 169〜216→4、121〜168→3、73〜120→2、48〜72→1)。
+      週0日、または年間48日未満は、要確認(日数未定)。
+    - シフトの社員: `normal`の表(今の動き。勤務形態のルールが無い場合、今の目安の比例表より日数が増えることがある)。
+    - 該当する区分の表が無い、または継続勤務月数に合う段が無い: 要確認(今どおり。法定表へは自動で切り替えない)。
+  - 法定の照合は、行の`grant_category`に対応する法定表で行う。
+  - 初期の全社ルールに入れる表(現在有効な法定マスタの版から写す。マスタが無ければシーダと同じ値)
     - 通常: 6→10, 18→11, 30→12, 42→14, 54→16, 66→18, 78→20
     - 週4: 6→7, 18→8, 30→9, 42→10, 54→12, 66→13, 78→15
     - 週3: 6→5, 18→6, 30→6, 42→8, 54→9, 66→10, 78→11
     - 週2: 6→3, 18→4, 30→4, 42→5, 54→6, 66→6, 78→7
     - 週1: 6→1, 18→2, 30→2, 42→2, 54→3, 66→3, 78→3
-  - 画面: ルールの作成・編集の「付与日数」を区分ごとのタブにする(通常/週4日/週3日/週2日/週1日)。新規作成
-    フォームの初期値は、法定表の写し(全区分)にする。
-- 理由: ユーザー指定(初期ルールに法定の写し、比例付与も細かく設定できる)を、ルールの選び方を変えずに
-  満たせる。区分ごとに照合すれば、照合の表と適用の表のずれも解消する。
+  - 既存の勤務形態のルールの移行: 勤務形態が比例に分類されるルールは、既存の表を`proportional_{N}`に移す
+    (今の照合と同じ区分。Nは上の決め方)。それ以外は`normal`のまま。
+  - 画面: 作成・編集の「付与日数」を区分ごとのタブにする。新規作成の初期値は法定の写し(法定マスタのAPIから取る)。
+- 理由: ユーザー指定(法定の写し、比例も細かく設定)を、ルールの選択を変えずに満たす。照合と適用のずれも解消する。
+  既存の比例のルールを移すのは、移行の後に要確認へ後退させないため。
 - 未確定・要確認事項: なし
 
 ### 論点3: 一斉付与の日付を会社カレンダーの年度に連動させる
 - 選択肢:
-  - A. 既定の会社カレンダー(`is_default=true`)の年度開始月日を、全社の一斉付与日にする。
-  - B. 社員の勤務形態に紐づく会社カレンダーの年度開始月日を使う(社員ごとに違いうる)。
-  - C. 付与ルールに月を持ち続ける(連動しない)。
+  - A. 既定の会社カレンダーの年度開始月日を、全社の一斉付与日にする。
+  - B. 社員の勤務形態に紐づくカレンダーの年度開始月日を使う。
+  - C. 付与ルールに月を持ち続ける。
 - 決定: A。
-  - `mass_grant_month`方式の付与日は「既定の会社カレンダーの`fiscal_year_start_month`/`fiscal_year_start_day`」
-    にする。既定のカレンダーが無ければ4月1日を使う(`CompanyCalendarController`の既定値と同じ)。
-  - 規則は今の`massGrantScheduledDates`のまま、月の1日を「年度開始月日」に置き換える。
-    - 初回: 「入社日より後で最初の年度開始日」と「入社日+`first_grant_after_months`」の早い方
-      (前倒しは可、遅らせない)。
-    - 2回目以降: 前回より後の、毎年の年度開始日。
-  - `paid_leave_grant_rules.mass_grant_month`列は使わなくなるので、migrationで削除する。API・画面・型からも
-    外す。
-  - 既定のカレンダーの年度開始月日が変わったとき、または既定のカレンダーが切り替わったときは、
-    PaidLeaveSchedule側のReactorで`ReapplyPaidLeaveSchedulePolicyJob`を発行する。未確定の予定を
-    作り直す(既存の「ルール変更時の作り直し」と同じ扱い。原則15)。
-    - 対象のイベントは、会社カレンダーの更新・既定の切替のイベントのうち、年度開始月日または`is_default`が
-      変わったもの。実装時にイベント名を確定する。
-    - 更新がイベントになっていない場合は、そのことを報告して止める。
-- 理由: 年度の正は会社カレンダーで、二重に持つとずれる。docs/08では複数のカレンダーは祝日の違いのためのもので、
-  年度は全社で1つとみるのが自然。そこで、社員ごとに変わるB案より、既定のカレンダーを使うA案にする。
+  - 読み取りビュー(付与予定の文脈)
+    - `paid_leave_fiscal_year_settings`(1行)を、Projector(`PaidLeaveFiscalYearSettingsProjector`)で作る。
+      - 列: `company_calendar_id`、`fiscal_year_start_month`、`fiscal_year_start_day`、`last_changed_event_id`。
+      - 写す元のイベント: `CompanyCalendarCreated`・`CompanyCalendarUpdated`・`CompanyCalendarDefaultChanged`・
+        `CompanyCalendarDeleted`。
+    - 年度開始月日、または既定のカレンダーが実際に変わったときだけ、`last_changed_event_id`をそのイベントのidにする。
+    - `FiscalYearStartResolver`はこのビューを読む。行が無ければ4月1日。
+  - 作り直しのきっかけ: Reactor(`ReapplyScheduleOnFiscalYearStartChangedReactor`)が同じイベントで動き、
+    ビューの`last_changed_event_id`がそのイベントのidと一致したときだけ、`ReapplyPaidLeaveSchedulePolicyJob`を
+    発行する。
+    - Projectorは同じイベントでReactorより先に動く(既存の前提)。
+    - 名前の変更など、年度開始と関係の無い更新では発火しない。
+  - 日付の規則(`massGrantScheduledDates`を置き換える)
+    - 年度開始日の求め方は`GenerateCompanyCalendarYearsHandler::fiscalYearFor`と同じ規則にする(共通の関数に
+      切り出して使う)。
+    - 付与済みの行が無い社員
+      - 初回は「入社日より後で最初の年度開始日」と「入社日+`first_grant_after_months`」の早い方
+        (前倒しは可、遅らせない)。名目は6か月。
+      - 2回目以降は、前回より後の毎年の年度開始日。名目は+12か月ずつ。
+    - 付与済みの行がある社員
+      - 起点を「最後の付与済みの付与予定日と、その名目の継続勤務月数」にする。
+      - 次回は、起点より後で最初の年度開始日。名目は+12か月。以後は毎年。
+      - 年度開始日を変えた年は、前回から1年以内(短い間隔)で次の付与が来る。前回から1年を超えて遅らせられない
+        ためで、前倒しの扱いになる。
+      - 付与済みの行の情報(日付と名目の月数)は、付与予定の文脈のProjectionから読む。名目の月数が行に無ければ、
+        付与予定のイベントに足す(実装時に確かめる)。
+  - `paid_leave_grant_rules.mass_grant_month`列は使わなくなるので削除する。API・画面・型からも外す。
+    - migrationで、既定のカレンダーの年度開始月と違う`mass_grant_month`を持つルールがあれば、ルール名と月を
+      出力に出す(付与日が変わるため)。
+  - 会社カレンダーの入力の検証
+    - `CompanyCalendarController`で、存在しない月日(4/31、2/29など)を422にする。
+    - 2/29は閏年にしか無いので、年度開始日には使えない。
+- 理由: 年度の正は会社カレンダーで、二重に持つとずれる。docs/08では、カレンダーを複数作るのは祝日の違いのため
+  なので、年度は全社で1つとみる(A)。付与済みを起点にするのは、年度開始日を変えたときに二重付与・付与漏れの
+  日付を作らないため。
 - 未確定・要確認事項: なし
 
-### 論点4: ルールの選ばれ方を決まるようにする
-- 選択肢:
-  - A. 並び順を指定する(勤務形態のルール→全社ルール。同じ種類が複数あれば作成日時が古い順→id)。
-  - B. 有効な全社ルールを1件に制限する(作成・有効化のAPIで422)。
-- 決定: A。あわせて、判定(論点6)・日数・日付で同じルール選択を使う(共通の`PaidLeaveGrantRuleResolver`)。
-- 理由: Bは既存のAPIの振る舞いと`ScenarioSeeder`を変える必要があり、範囲が広い。Aで結果は決まる。
+### 論点4: ルールの選択を決まった順にする
+- 決定: `PaidLeaveGrantRuleResolver`で、勤務形態のルール→全社ルールの順、同じ種類は`created_at`→`id`の順。
+  付与予定の日付・日数と、判定(論点5)で共通に使う。
+- 理由: 全社ルールが複数あっても結果が決まる。全社ルールを1件に制限すると、既存のAPIとシーダの振る舞いが変わり、
+  範囲が広がる。
 - 未確定・要確認事項: なし
 
-### 論点5: 出勤率の判定期間(初回・前倒し)
+### 論点5: 出勤率の判定期間と、前倒しのみなし出勤
 - 選択肢:
   - A. 今のまま(付与予定日の12か月前から当日まで)。
-  - B. 判定期間を「前回の付与日(初回は入社日)から、付与予定日の前日まで」にする。前倒しで短くなった分は
-    全出勤とみなす(行政通達 平6.1.4基発1号の考え方)。
-  - C. Bのうち、みなし出勤を足さない(実際の在籍期間だけで判定)。
-- 決定: B(ユーザーは希望なし。推奨案で進める)。
-  - 期間の終わり: 付与予定日の前日(当日と未来日を含めない)。
-  - 期間の始まり
-    - 初回: 入社日。
-    - 2回目以降: 前回の付与予定日。同じ社員の前の付与予定(取消を除く)の`scheduled_on`を使う。
-      無ければ「付与予定日 − `grant_cycle_months`」。
-  - 前倒しの判定: 初回で、付与予定日が「入社日+`first_grant_after_months`」より前の場合。
-    - 短縮された期間は、付与予定日から本来の基準日の前日まで。
-    - この期間の所定労働日数は暦日で按分して推計する: 所定労働日の推計 = 実期間の所定労働日数 ×
-      短縮期間の暦日数 ÷ 実期間の暦日数(四捨五入)。推計した日数を、分母・分子の両方に足す。
-    - 2回目以降の一斉付与で期間が12か月より短い場合も、同じ扱いにする。
-  - 既存の`usage_start_date`による要確認の規則は残す。ただし判定するのは、上の期間の始まりより後の部分。
-  - 判定の結果には、実際の分母・分子に加えて、みなし出勤の日数を残す。Assessmentのイベントにみなし日数の
-    項目を足すか、既存の除外日数の項目で表すかは、実装時に既存のpayloadを確かめて決める。payloadを変えるなら
-    `docs/17`も直す。
-  - 判定の業務ルール(期間・みなし日数・閾値の解決)は、`PaidLeaveScheduleAssessmentPlanner`(Support)に
-    置く。Controllerの`reassess`と自動判定の両方から使う(原則9・16)。
-- 理由: 今は初回が必ず要確認になり、年度はじめの一斉付与が成り立たない。通達の考え方に沿うBにする。
-  按分による推計は、将来の勤務予定がまだ作られていなくても決まる。
+  - B. 「前回の付与日(初回は入社日)から、付与予定日の前日まで」で判定する。前倒しで短くなった分は全出勤と
+    みなす(平6.1.4基発1号の考え方)。
+  - C. Bから、みなし出勤を除く。
+- 決定: B(ユーザーは希望なし。推奨案)。
+  - 対象の行の位置づけ(同じ社員の付与予定のうち、取消を除く)
+    - 初回: 付与予定日が「入社日+`first_grant_after_months`」以前で、それより前の行が無い行。
+    - 前回: 付与予定日が対象の行より前の行のうち、最も遅い行。
+  - 期間
+    - 終わりは、付与予定日の前日。
+    - 始まりは、初回なら入社日、2回目以降は前回の付与予定日。初回でも前回も無い行(利用開始日の都合で前の行が
+      作られていない)は、「付与予定日−`grant_cycle_months`」。
+  - 短縮期間(みなし出勤)
+    - 本来の基準日は、初回なら「入社日+`first_grant_after_months`」、2回目以降なら「前回の付与予定日+
+      `grant_cycle_months`」。
+    - 付与予定日が本来の基準日より前なら、付与予定日から本来の基準日の前日までを短縮期間とする。
+    - 短縮期間の所定労働日数は、暦日で按分して推計する: round(実期間の所定労働日数 × 短縮期間の暦日数 ÷
+      実期間の暦日数)。
+  - 出勤率 = (出勤日数 + みなし日数) ÷ (所定労働日数 + みなし日数)。閾値はルールの`min_attendance_rate`
+    (論点4のルール)。
+  - 記録
+    - 判定のイベント(`PaidLeaveScheduleAssessmentRecorded`)に`deemedAttendanceDays`(既定0。古いイベントは0として
+      読む)を足す。
+    - `denominatorDays`/`attendanceDays`には、みなし日数を含めない(記録から出勤率を計算し直せるようにする)。
+    - `paid_leave_schedule_assessments`に`deemed_attendance_days`列を足す。
+    - `AttendanceRateAssessor::POLICY_VERSION`を`v2`に上げる。
+  - 利用開始日の規則(今のまま): 期間の始まりが`usage_start_date`より前で、移行データ(`carried_over`の付与)が無い場合は
+    要確認。
+  - 業務ルールの置き場所: `PaidLeaveScheduleAssessmentPlanner`(付与予定の文脈のSupport)。Controllerの`reassess`と
+    自動判定の両方から使う。
+    - 移行データの有無の確認は、今と同じく`PaidLeaveGrant`を読む。原則15の既存の例外として、Plannerのdocblockに
+      明記する。
+- 理由: 今は初回が必ず要確認で、年度はじめの一斉付与が成り立たない。按分による推計は、未来の勤務予定が
+  無くても決まる。
 - 未確定・要確認事項: なし(社労士確認が前提であることを、docs/09と画面の判定内訳に明記する)
 
-### 論点6: 自動判定の実行時期と対象
+### 論点6: 自動判定の実行時期・経路
 - 選択肢:
   - A. 毎日、付与予定日が来た行を判定する(PR#109と同じ)。
-  - B. 毎月1日に、付与予定日が来た行を判定する。手動でも一括で実行できる(ユーザー指定)。
+  - B. 毎月1日と、手動での一括実行(ユーザー指定)。
 - 決定: B。
-  - 新しいコマンド`paid-leave:assess-schedules`を作る(`#[AdminExecutable]`)。
-  - 対象は、状態が「予定」(Scheduled)で、付与予定日が今日以前(アプリのタイムゾーン)の行。社員ごとに
-    `PaidLeaveScheduleAssessmentPlanner`で期間・閾値を決め、`RunAttendanceRateAssessment`を発行する。
-  - 1社員の失敗で全体を止めない。失敗した社員と理由を出力に並べ、1件でも失敗があれば終了コード1にする
-    (PR#109と同じ)。
-  - 出力の最後の行に、集計をJSONで出す: `SUMMARY {"targets":N,"assessed":N,"eligible":N,"not_eligible":N,"needs_review":N,"failed":N}`。
-  - 毎月1日03:00(アプリのタイムゾーン)に起動する。起動はcronから直接ではなく、`admin_command_runs`に
-    実行記録を作り、`RunAdminCommandJob`をキューに入れる形にする。手動実行と同じ経路で記録が残る。
-    - `routes/console.php`に`->monthlyOn(1, '03:00')->withoutOverlapping()`のクロージャを置く。
-    - `admin_command_runs.requested_by_user_id`をnullableにする(migration)。システムによる実行はnull。
-  - 手動実行: 付与予定画面の「今すぐ判定する」から実行する(下記の論点7)。
-  - 同時実行の防止: 状態が`queued`/`running`の記録があるときは、新しい実行を受け付けない(409)。cronの側も
-    記録を作らずに終える。`RunAdminCommandJob`の既存のロックも併用する。
-  - 「付与予定日を過ぎても予定のまま」の行は、次の1日まで「付与予定日超過」に出る(現行の絞り込みのまま)。
-- 理由: ユーザー指定。月1回にすると、前月末までの勤怠の入力・修正を反映しやすい。
+  - コマンド`paid-leave:assess-schedules`
+    - 対象は、状態が「予定」で、付与予定日が今日以前の行。「今日」は`system_settings.default_timezone`の日付。
+    - 社員ごとにPlannerで判定の内容を決め、`RunAttendanceRateAssessment`を発行する。
+    - 1社員の失敗で全体を止めない。失敗した社員と理由を出力に並べる。1件でも失敗があれば終了コード1。
+  - 実行の経路: キュー(既定の60秒で打ち切られる)を使わず、スケジューラーから直接動かす。
+    - 定期: `Schedule::command('paid-leave:assess-schedules --trigger=schedule')->monthlyOn(1, '03:00')->timezone(既定のタイムゾーン)->withoutOverlapping(180)->runInBackground()`。
+    - 手動: 画面の操作で、記録(`status=queued`、`trigger=manual`)を作るだけにする。
+      `Schedule::command('paid-leave:assess-schedules --pending')->everyMinute()->withoutOverlapping(180)->runInBackground()`が、
+      待っている記録を1件取り出して実行する。
+    - コマンドは自分で記録を`running`→`succeeded`/`failed`に更新する。
+    - 運用コマンド画面からは実行させない(`#[AdminExecutable]`を付けない)。経路を1つにするため。
+  - 記録(`admin_command_runs`)
+    - `requested_by_user_id`をnullableにする(定期の実行はnull)。
+    - 集計を入れる`summary`(json、nullable)列を足す。
+      `{targets, assessed, eligible, not_eligible, needs_review, failed}`の件数で、コマンドが書く。
+      出力の切り詰めに左右されない。
+    - 一部失敗のときは`status=failed`、`error_message`に「N件の判定に失敗しました」と書く。
+  - 二重実行の防止
+    - 記録の作成と確認は、`Cache::lock('paid-leave-assessment-run')`の中で行う。
+    - `queued`/`running`の記録があれば、手動の受付は409。定期の実行は記録を作らずに終える。
+  - 固まった記録の扱い: `running`のまま`started_at`から2時間を超えた記録、または`queued`のまま30分を超えた記録は、
+    状態の取得や次の実行のときに`failed`(「応答がないため失敗とみなしました」)にする。
+  - 判定が付与予定日より最大で約1か月遅れることがある(年度開始が1日以外、入社日基準のルール)。付与日は付与予定日に
+    さかのぼって記録されるが、判定と付与までの間、その日数は使えない。このことをdocs/09に書く。
+- 理由: ユーザー指定。キューの60秒の打ち切りや、運用コマンドとの二重の経路で、記録が「実行中」のまま固まるのを避ける。
 - 未確定・要確認事項: なし
 
 ### 論点7: 自動判定の実行状況の表示
-- 選択肢:
-  - A. 付与予定画面の上部に「自動判定」カードを置く。次回の実行予定、今の状態(待機中/実行中)、前回の結果、
-    「今すぐ判定する」ボタンを出す。
-  - B. 運用コマンド画面(`/admin/commands`)の履歴だけで見せる。
-- 決定: A。
-  - API
-    - `GET /paid-leave/schedule-assessment-runs/status`(`leave.manage`)。返り値:
-      `{ next_run_at, latest_run: { id, status, trigger: 'schedule'|'manual', requested_by_name, started_at, finished_at, summary, error_message } | null }`。
-    - `next_run_at`は、次の毎月1日03:00をサーバーで計算した値。
-    - `summary`は、出力のSUMMARY行を解析した値。行が無ければnull。
-  - `POST /paid-leave/schedule-assessment-runs`(`leave.manage`)。実行記録を作ってキューに入れ、202を返す。
-    実行中なら409。
-  - 画面
+- 決定
+  - API(`leave.manage`)
+    - `GET /paid-leave/schedule-assessment-runs/status`
+      - 返り値は`{ next_run_at, latest_run: { id, status, trigger, requested_by_name, started_at, finished_at, summary, error_message } | null }`。
+      - `next_run_at`は、スケジュールの定義と同じcron式(定数で共有する)と既定のタイムゾーンから計算する。
+    - `POST /paid-leave/schedule-assessment-runs`: 202を返す。実行中なら409。
+  - 画面: 付与予定画面の上部に「自動判定」カードを置く。
     - 待機中: 「次回の自動判定: 11月1日 3:00」。
     - 前回の結果: 「前回: 10月1日 3:02 完了(対象12件 / 付与対象10件 / 対象外1件 / 要確認1件 / 失敗0件)」。
-      失敗時はエラーの要旨。
-    - 実行中(queued/running): 「判定を実行中です」と表示し、5秒ごとに状態を取り直す(運用コマンド画面の
-      既存のポーリングと同じ)。
-    - 終わったら、付与予定の一覧と超過件数を取り直す。
-    - 「今すぐ判定する」は確認ダイアログを経て実行する。本文は「付与予定日を過ぎた『予定』の行を、今すぐ判定
-      します。」。実行中はボタンを無効にする。
-- 理由: ユーザー指定(次回実行予定や実行中を画面に表示)。人事が使う付与予定画面で完結させる。既存の運用記録を
-  使えば、新しいテーブルが要らない。
+      失敗のときは`error_message`を表示する。
+    - 実行中(queued/running): 「判定を実行中です」と表示し、5秒ごとに状態を取り直す。終わったら一覧と超過の件数を
+      取り直す。
+    - 「今すぐ判定する」は確認ダイアログを出してから実行する(本文「付与予定日を過ぎた『予定』の行を、今すぐ判定
+      します。」)。実行中は押せない。
+  - 置き場所: 実行の記録の作成・取得・固まった記録の扱いは、`App\Services\PaidLeave\ScheduleAssessmentRunService`に置く。
+    運用の基盤に依存するので、アプリケーション層に置く。
+  - 運用コマンド画面の履歴は、依頼者がnullなら「システム」と表示する。型の`requested_by_user_id`をnullableにする。
+- 理由: ユーザー指定。人事が使う画面で完結させる。
 - 未確定・要確認事項: なし
 
 ### 論点8: 既存の環境のデータの扱い
-- 選択肢:
-  - A. migrationで、初期の全社ルール(表が空)に法定の写しを入れ、付与予定の作り直しをキューに入れる。
-  - B. 新規の環境だけ対象にし、既存の環境は管理者が手で設定する。
-- 決定: A。
-  - 表を入れる対象は、有効な全社ルールのうち表が1行も無いもの。
-  - migrationの最後に`ReapplyPaidLeaveSchedulePolicyJob`をdispatchする。
-  - `mass_grant_month`列の削除で、既存の`anniversary`のルールは影響を受けない。既存の`mass_grant_month`の
-    ルールは、年度開始月日に連動するようになる。既定のカレンダーが4/1なら、今と同じ結果になる。
-- 理由: 既存の環境でも、今は全社員が「要確認・0日」で使えない。直さない理由が無い。
+- 決定
+  - migrationは、マスタの変更(列の追加・削除、既定値、全社ルールへの法定の写し、比例のルールの表の移行、名前の
+    変更)だけを行う。Jobはdispatchしない。
+  - 付与予定の作り直しは、新しい運用コマンド`paid-leave:schedule:reapply-policy`(`#[AdminExecutable]`。中身は
+    `ReapplyPaidLeaveSchedulePolicyJob`と同じ)で、デプロイの後に実行する。
+    - 出力には、作り直した社員の数と、付与予定日・日数が変わった行の数を出す。
+    - 手順を`docs/27`に書く。
+  - 導入1年目は、移行データ(`carried_over`の付与)が無い既存の社員の判定は、ほぼ全員が要確認になる(利用開始日の
+    規則)。受け入れ条件の注記に書く。
+- 理由: migrationの途中で業務の処理を動かすと、テスト(`QUEUE_CONNECTION=sync`)や、後のmigrationとの順序で
+  壊れやすい。変わった件数を運用者が確かめられるようにする。
 - 未確定・要確認事項: なし
 
 ### 論点9: 今回の範囲外にする、消えていたPR#109の機能
-- 決定: 以下は今回扱わない(対象外に記載する)。
-  - AggregateIdの分離: 別のタスクとして提案済み。
-  - 再計算Reactorのテスト: 別のタスクとして提案済み。
-  - 個別修正と再計算の食い違いを要確認にする仕組み、社員ごとのタイムゾーン、30日超の警告ログ: ユーザーの判断待ち。
-- 理由: いずれも年度はじめ一斉付与・自動判定とは独立に直せる。範囲を広げない。
+- 決定: 次は扱わない(対象外に書く)。
+  - 個別修正と再計算の食い違いを要確認にする仕組み
+  - 社員ごとのタイムゾーン
+  - 30日を超えた付与対象の警告ログ
+- 理由: 年度はじめ一斉付与・自動判定とは独立に直せる。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
+各論点の決定を正とする。実装は次の2段階に分ける。
 
 ### 段階1: 付与方式・日数の表・年度連動
-- backend
-  - migration
-    1. `paid_leave_grant_rules.grant_cycle_type`の既定値を`mass_grant_month`にする。`mass_grant_month`列を
-       削除する。
-    2. `paid_leave_grant_rule_steps`に`grant_category`(string, default `'normal'`)を足し、unique制約を
-       (rule_id, grant_category, continuous_service_months)にする。
-    3. 有効な全社ルールのうち表が空のものに法定の写し(論点2の値)を入れ、`ReapplyPaidLeaveSchedulePolicyJob`を
-       dispatchする。
-  - `PaidLeaveGrantRuleResolver`(`App\Domain\PaidLeaveSchedule\Support`): 社員と基準日から、適用するルールを
-    決まった順で返す。勤務形態のルール→全社ルール、それぞれ`created_at`→`id`の順。
-    `ScheduleCandidateGenerator`・判定(段階2)・`resolveAssessmentParameters`の代わりに使う。
-  - `FiscalYearStartResolver`(同Support): 既定の会社カレンダーの年度開始月日を返す。無ければ4/1。
-  - `ScheduleCandidateGenerator`
-    - `massGrantScheduledDates`の「一斉付与月1日」を、年度開始月日に置き換える。
-    - `resolveGrantDays`は、区分と週所定日数から`grant_category`を決めて、その表を引く(論点2)。
-  - `PaidLeaveController`
-    - store/update/resource から`mass_grant_month`を外す。`grant_cycle_type`の既定値を`mass_grant_month`にする。
-    - steps の入力を`[{grant_category, continuous_service_months, grant_days}]`にする。`grant_category`を
-      省略したら`normal`。
-    - 法定最低日数の照合は区分ごとに行う。
-  - Reactor(PaidLeaveSchedule側): 既定のカレンダーの年度開始月日、または既定の切替が変わったら、
-    `ReapplyPaidLeaveSchedulePolicyJob`を発行する(論点3)。
-- frontend
-  - 型・API: `PaidLeaveGrantRule`に`grant_cycle_type`を足し、steps に`grant_category`を足す。
-    `mass_grant_month`は外す。
-  - ルールの作成フォーム(`PaidLeavePolicyPage`)と編集画面(`PaidLeaveGrantRuleEditPage`)
-    - 付与方式のラジオボタンを置く。初期選択は年度はじめ。年度開始日を併記する。年度開始日は、既定の会社
-      カレンダーを取得する既存のAPIから読む。無ければ「4月1日(既定)」。
-    - 付与日数は区分ごとのタブにする。新規作成の初期値は、法定の写し(法定付与日数マスタのAPIから取得)。
-  - ルール一覧に付与方式を表示する。
+- migration
+  1. 付与方式の既定値の変更、`mass_grant_month`列の削除(違う月のルールを出力に出す)。
+  2. `grant_category`の追加と、uniqueの付け替え(追加してから削除)。
+  3. 比例のルールの表の移行、全社ルールへの法定の写し、全社ルールの名前の変更。
+  4. `paid_leave_fiscal_year_settings`の作成。今の既定のカレンダーから初期値を入れる。
+- Support: `PaidLeaveGrantRuleResolver`、`FiscalYearStartResolver`、年度開始日の共通の関数。
+  `ScheduleCandidateGenerator`の日付と日数の変更。
+- Projector・Reactor: `PaidLeaveFiscalYearSettingsProjector`、`ReapplyScheduleOnFiscalYearStartChangedReactor`。
+- API: `PaidLeaveController`(付与方式、区分ごとの表と照合)、`CompanyCalendarController`(月日の検証)。
+- 運用コマンド: `paid-leave:schedule:reapply-policy`。
+- frontend: ルールの作成・編集・プレビュー・一覧(付与方式と区分ごとの表)。型の変更。
 - テスト
   - Unit
-    - `ScheduleCandidateGenerator`: 年度開始が4/1と10/1の両方で、前倒し・6か月目の分岐、2回目以降の毎年の
-      日付が正しい。既定のカレンダーが無いと4/1。比例付与(週3日)の社員には`proportional_3`の表の日数が付く。
-      区分の表が無ければ要確認。
-    - `PaidLeaveGrantRuleResolver`: 全社ルールが2件あると古い方が選ばれる。勤務形態のルールが優先される。
+    - 日付: 年度開始が4/1・10/1・4/16のそれぞれ。前倒しと6か月の分岐。付与済みを起点にした次回
+      (4/1付与済み→年度開始を10/1に→同じ年の10/1、名目+12)。
+    - 日数: 比例の週3日と、年間日数による区分。週0日は要確認。区分の表が無いと要確認。
+    - ルールの選択の順。
   - Feature
-    - ルールのAPI: 付与方式を省略すると年度はじめになる。区分ごとの法定最低日数で422になる。
-    - migration後に全社ルールへ法定の写しが入る。
-    - 既定のカレンダーの年度開始を変えると、未確定の付与予定が作り直される(シナリオ)。
+    - ルールのAPI: 既定は年度はじめ。区分ごとの照合で422。
+    - migrationの結果(写し、比例の移行、名前)。
+    - カレンダーの年度開始の変更→作り直し(シナリオ)。名前だけの変更では作り直さない。
+    - 月日の検証。
+  - 期待値が変わる既存のテストの一覧(実装者が直す)
+    - `RollPaidLeaveSchedulesCommandTest`、`ScheduleCandidateGeneratorTest`(mass_grant_monthの前提)、
+      `PaidLeaveGrantRuleAdminTest`(mass_grant_month)
+    - `grant_cycle_type`を指定していないルールを作るテスト(既定値の変更で年度はじめになる)
+    - `ScenarioSeeder`のルール(付与方式を`anniversary`と明示する)
 
-### 段階2: 判定期間・自動判定・実行状況の表示
-- backend
-  - `PaidLeaveScheduleAssessmentPlanner`(Support): 付与予定1行に対して、期間・みなし日数・閾値を決める
-    (論点5)。`AttendanceRateAssessor`の呼び出しまでを含め、Controllerの`reassess`はこれを使うだけにする。
-  - `paid-leave:assess-schedules`コマンド(論点6)。SUMMARY行を出す。
-  - `routes/console.php`
-    - 毎月1日03:00のクロージャで、実行記録を作ってキューに入れる。
-    - `paid-leave:roll-schedules`のコメントを実態に合わせる(判定はしない)。
-  - migration: `admin_command_runs.requested_by_user_id`をnullableにする。
-  - 実行記録の作成・状態取得の処理は、`App\Domain\PaidLeaveSchedule\Support\AssessmentRunService`に置く。
-    cronとAPIの両方から使う。
-  - API: `GET /paid-leave/schedule-assessment-runs/status`、`POST /paid-leave/schedule-assessment-runs`
-    (論点7。`leave.manage`)。
-  - `AdminCommandsPage`の履歴で依頼者がnullのときは「システム」と表示する(frontend)。
-- frontend
-  - 付与予定画面の上部に「自動判定」カードを置く(論点7)。
-  - 詳細パネルの「勤怠データを確認」に、みなし出勤の日数と注記「前倒し付与で短縮された期間は全出勤とみなして
-    います(社労士確認が前提)」を出す。
+### 段階2: 判定期間・自動判定・実行状況
+- `PaidLeaveScheduleAssessmentPlanner`(論点5)。`reassess`をこれに置き換える。
+- イベントの`deemedAttendanceDays`、`paid_leave_schedule_assessments.deemed_attendance_days`、`POLICY_VERSION=v2`。
+- `paid-leave:assess-schedules`と、`routes/console.php`の2つのスケジュール(論点6)。`roll-schedules`の
+  コメントを実態に合わせる。
+- migration: `admin_command_runs`の`requested_by_user_id`をnullableにし、`summary`を足す。
+- `ScheduleAssessmentRunService`と、API 2本(論点7)。
+- frontend: 自動判定のカード、判定内訳のみなし日数と注記、運用コマンドの履歴の「システム」。
 - テスト
-  - Unit(Planner)
-    - 初回・前倒し: 入社1/10、年度開始4/1、`first_grant_after_months=6`の場合。期間は1/10〜3/31(81日)、短縮
-      期間は4/1〜7/9(100日)。実期間の所定労働日を55日、出勤50日とすると、みなし日数は
-      round(55×100/81)=68日。出勤率は(50+68)/(55+68)=95.9%で付与対象になる。
-    - 前倒しでない初回: みなし0日。
-    - 2回目以降: 期間の始まりが前回の付与予定日になる。
-    - 全社ルールの`min_attendance_rate`が使われる。
-    - 期間の終わりが付与予定日の前日になる。
+  - Unit(Planner)。年を固定して、2026年の前提で書く。
+    - 前倒しの初回: 入社2026-01-10、年度開始4/1、`first_grant_after_months=6`。期間は1/10〜3/31(81日)、
+      短縮期間は4/1〜7/9(100日)。所定55日・出勤50日なら、みなし日数=round(55×100/81)=68、
+      出勤率=(50+68)/(55+68)=95.9%で付与対象。
+    - 前倒しでない初回は、みなし0日。
+    - 2回目以降の期間の始まりと短縮期間。
+    - 全社ルールの閾値を使う。
+    - 期間の終わりは前日。
+    - 初回でも前回も無い行。
   - Feature
-    - コマンド: 付与予定日が来た「予定」だけを判定し、未来の行は「予定」のまま残る。1社員が失敗しても他は
-      判定され、終了コードは1。SUMMARY行の内容。
-    - API: 状態の取得(記録なし/実行中/完了)、実行の受付(202)、実行中なら409、`leave.manage`が無ければ403。
-    - cronのクロージャ: 記録を作ってJobをキューに入れる。実行中なら作らない。
-  - frontend: 自動判定カードの各状態(次回予定、実行中のポーリング、前回の結果、失敗、ボタンと確認ダイアログ)。
+    - コマンド: 来た「予定」だけを判定する。1社員の失敗で他は止まらず、終了コード1。summaryを記録する。
+      タイムゾーンの境界(UTCの前日、JSTの当日)。
+    - スケジュール: 手動の記録を拾って実行する。固まった記録を失敗にする。二重の受付は409。
+    - API: 状態の取得(記録なし/実行中/完了/失敗)、202、409、403。
+  - frontend: カードの各状態と、ボタン・確認ダイアログ。
   - e2e(scenario-15): 「今すぐ判定する」で実行され、結果が表示される。
 
 ## 受け入れ条件
-- 新規の環境で、付与ルールを触らずに付与予定を作ると、全社員の付与予定が既定のカレンダーの年度開始日
-  (既定4/1)の一斉付与で作られる。日数は、通常の社員は法定の通常表、比例付与の社員は週日数に応じた比例表になる
-  (「要確認・0日」にならない)。
-- 既存の環境でも、migration後に全社ルールへ法定の写しが入り、付与予定が作り直される。
-- ルールの作成・編集画面で、付与方式(初期選択は年度はじめ)と区分ごとの付与日数を設定できる。法定を下回ると
+- 新規の環境で、付与ルールを触らずに付与予定を作ると、既定のカレンダーの年度開始日(既定4/1)の一斉付与になる。
+  日数は、通常の社員は法定の通常表、比例の社員は週日数に応じた比例表になる。
+- 既存の環境では、migrationと`paid-leave:schedule:reapply-policy`の後に同じ状態になる。既存の比例のルールは
+  要確認に後退しない。
+- ルールの作成・編集画面で、付与方式(初期選択は年度はじめ)と区分ごとの付与日数を設定できる。法定を下回ると、
   区分ごとにエラーになる。
-- 既定のカレンダーの年度開始日を変えると、未確定の付与予定の日付がそれに追従する。
-- 毎月1日03:00に自動判定が動く。「今すぐ判定する」でも同じ判定が動く。付与予定日が来た「予定」の行が
-  付与対象/対象外/要確認になる。
-- 前倒しの初回付与が、入社前の期間を理由に「要確認」にならない。短縮期間のみなし出勤が判定内訳に表示される。
-- 付与予定画面に、次回の自動判定の予定、実行中の表示、前回の結果が出る。実行中は二重に実行できない。
-- 業務ルール(日付・日数・期間・みなし日数・ルール選択)のUnitテスト、文脈間の連鎖(カレンダー変更→作り直し、
-  コマンド→判定→付与対象)のシナリオテスト、frontendのunit/story、e2eがPASSする。既存のテストに退行が無い。
-- `docs/09`・`docs/16`・`docs/17`(payloadを変える場合)・`docs/testing/scenario-tests.md`・
-  `routes/console.php`のコメントが実装と一致している。
+- 既定のカレンダーの年度開始日を変えると、未確定の付与予定の日付が追従する。付与済みの社員は、最後の付与から
+  1年以内の日付になる。名前だけの変更では作り直さない。
+- 毎月1日03:00(既定のタイムゾーン)と「今すぐ判定する」で判定が動く。付与予定日が来た「予定」の行が、付与対象/
+  対象外/要確認になる。
+- 前倒しの初回付与が、入社前の期間のせいで要確認にならない。判定内訳にみなし日数が出る。ただし導入1年目で
+  移行データの無い社員は、利用開始日の規則により要確認になる。
+- 付与予定画面に、次回の予定・実行中・前回の結果が出る。二重に実行できない。固まった記録は2時間で失敗になる。
+- 業務ルールのUnitテスト、文脈の連鎖のシナリオテスト、frontendのunit/story、e2eがPASSする。期待値を変えた既存の
+  テストは、一覧のとおり。
+- docs(下記)とコードのコメントが、実装と一致する。
 
 ## 対象外
-- AggregateIdの分離(別のタスクとして提案済み)。
-- 再計算Reactorのテストの復元(別のタスクとして提案済み)。
-- 個別修正と再計算の食い違いを要確認にする仕組み、社員ごとのタイムゾーン、30日超の警告ログ(PR#109にあった。
-  必要かはユーザーの判断待ち)。
-- 自動付与(判定のあと、付与まで自動で行うこと)。付与は今どおり管理者の一括付与。
-- 付与方式を勤務形態のカレンダーごとに変えること(論点3のB案)。
-- シフト区分の社員の年間所定日数による比例判定(今どおり通常の表を使う)。
-- 有効な全社ルールを1件に制限すること(論点4のB案)。
+- AggregateIdの分離・Reactorのテスト(別の変更セット。本変更より先に実装する)
+- 個別修正と再計算の食い違いの要確認、社員ごとのタイムゾーン、30日超の警告ログ
+- 自動付与(付与は今どおり管理者の一括付与)
+- 付与方式を勤務形態のカレンダーごとに変えること
+- シフトの社員の、年間所定日数による比例の判定
+- 有効な全社ルールを1件に制限すること
+- 個別の年度を`CompanyCalendarYearFiscalYearCorrected`で補正した場合(年度開始日には本体の月日を使う)
+- 年度開始日を変えた後に`RebuildPaidLeaveScheduleCommand`(過去分の作り直し)を使うと、過去も今の年度開始日で
+  計算し直されること(docs/09に注記するだけ)
+- 古いmigration(`2026_08_10_020900`)がイベントなしで`is_default`を立てているため、Projectionを作り直すと既定の
+  カレンダーが失われうること(`paid_leave_fiscal_year_settings`はmigrationで初期値を入れるので、付与日には影響しない)
 
 ## ドキュメントへの影響
 - `docs/09-usecases-paid-leave.md`
-  - 付与方式(年度はじめ一斉付与が初期値、既定のカレンダーの年度開始日に連動)。
-  - 付与日数の表の区分。初期の全社ルール(法定の写し)。
-  - 判定期間・前倒し時のみなし出勤(社労士確認が前提)。
-  - UC-P011(作成のみ)、UC-P012(毎月1日の自動判定・手動の一括判定・実行状況の表示)。
-- `docs/16-database-schema.md`: `paid_leave_grant_rules`(`mass_grant_month`の削除、既定値)、
-  `paid_leave_grant_rule_steps.grant_category`、`admin_command_runs.requested_by_user_id`のnullable。
-- `docs/17-events.md`: Assessmentのpayloadを変える場合のみ。
-- `docs/08-usecases-calendar-shift.md`: 既定のカレンダーの年度開始日が、有給の一斉付与日にも使われる旨を
-  UC-C009に1行足す。
-- `docs/testing/scenario-tests.md` §18: 自動判定(今すぐ判定する)の手順。
-- `docs/changesets/README.md`: 一覧に追加する。
+  - 付与方式: 年度はじめが初期値、既定のカレンダーの年度開始日に連動、付与済みを起点にする規則。
+  - 付与日数の表の区分と、初期の全社ルール。
+  - 判定期間・みなし出勤(社労士確認が前提)。
+  - UC-P011(作成のみ)と、UC-P012(毎月1日の自動判定・手動・実行状況・最大1か月の遅れ)。
+  - 過去分の作り直しの注記。
+- `docs/16-database-schema.md`
+  - `paid_leave_grant_rules`、`paid_leave_grant_rule_steps.grant_category`、`paid_leave_schedule_assessments.deemed_attendance_days`、
+    `paid_leave_fiscal_year_settings`(新規)
+  - `admin_command_runs`(表の定義が無いので足す)
+- `docs/17-events.md`: `paid_leave_schedule.assessment_recorded`の`deemedAttendanceDays`。
+- `docs/08-usecases-calendar-shift.md`: UC-C009に、既定のカレンダーの年度開始日が有給の一斉付与日にも使われることと、
+  月日の検証を足す。
+- `docs/27-release-runbook.md`: デプロイの後に`paid-leave:schedule:reapply-policy`を実行する。
+- `docs/testing/scenario-tests.md` §18: 自動判定の手順。
+- `docs/changesets/README.md`
 
 ## モック・アセット
 なし
 
 ### 実装前メモ(ui-interaction-patterns §3.3)
-- 自動判定カード: 状態表示+操作1つ(確認ダイアログあり)。状態は、記録なし / 待機中 / 実行中
-  (ポーリング) / 完了 / 失敗 / 取得エラー。
-- ルールのフォーム: 既存のフォームに入力を足す。付与日数のタブは区分ごと。未保存の確認は既存のまま。
+- 自動判定のカード: 状態の表示と、操作1つ(確認ダイアログあり)。状態は、記録なし/待機中/実行中(ポーリング)/
+  完了/失敗/取得エラー。
+- ルールのフォーム: 既存のフォームに入力を足す。付与日数は区分ごとのタブ。未保存の確認は今のまま。
 
 ## 実装対象
 - backend
-  - `database/migrations/`(4本)
-  - `app/Domain/PaidLeaveSchedule/Support/`(`PaidLeaveGrantRuleResolver`、`FiscalYearStartResolver`、
-    `PaidLeaveScheduleAssessmentPlanner`、`AssessmentRunService`、`ScheduleCandidateGenerator`の変更)
-  - `app/Domain/PaidLeaveSchedule/Reactors/`(カレンダー変更)
-  - `app/Console/Commands/AssessPaidLeaveSchedulesCommand.php`
+  - `database/migrations/`(段階1で4本、段階2で2本)
+  - `app/Domain/PaidLeaveSchedule/`(Support、Projectors、Reactors、Events、Aggregates)
+  - `app/Services/PaidLeave/ScheduleAssessmentRunService.php`
+  - `app/Console/Commands/`(`AssessPaidLeaveSchedulesCommand`、`ReapplyPaidLeaveSchedulePolicyCommand`)
   - `routes/console.php`、`routes/api.php`
-  - `app/Http/Controllers/Api/PaidLeaveController.php`、`PaidLeaveScheduleController.php`、
-    新しい`PaidLeaveScheduleAssessmentRunController.php`
-  - `app/Http/Resources/PaidLeaveGrantRuleResource.php`、`app/Models/PaidLeaveGrantRule*.php`
-  - `tests/Unit/PaidLeaveSchedule/`、`tests/Feature/PaidLeaveSchedule/`、`tests/Feature/PaidLeaveAccount/`
+  - `app/Http/Controllers/Api/`(`PaidLeaveController`、`PaidLeaveScheduleController`、
+    `PaidLeaveScheduleAssessmentRunController`(新規)、`CompanyCalendarController`)
+  - `app/Http/Resources/PaidLeaveGrantRuleResource.php`、`app/Models/`、`database/seeders/ScenarioSeeder.php`
+  - `tests/`
 - frontend
-  - `src/pages/paidLeave/`(`PaidLeavePolicyPage`、`PaidLeaveGrantRuleEditPage`、`PaidLeaveSchedulePage`)
-  - 自動判定カードのコンポーネント(新規)
-  - `src/api/`、`src/hooks/`、`src/pages/admin/AdminCommandsPage.tsx`(依頼者がnullのとき「システム」)
-  - `e2e/scenario-15-paid-leave-schedule.spec.ts`、必要なら`scenario-00`
-- docs: 上記「ドキュメントへの影響」
+  - `src/pages/paidLeave/`、`src/components/PaidLeaveGrantRulePreview/`
+  - 自動判定のカード(新規)
+  - `src/api/`、`src/hooks/`、`src/pages/admin/AdminCommandsPage.tsx`
+  - `e2e/scenario-15-paid-leave-schedule.spec.ts`
+- docs: 上記
 
 ## 検証方法
-- backend: `php artisan test --filter='PaidLeave'`、および全件(既知の`ReadModelFingerprintCommandTest`の失敗を除く)
+- backend: `php artisan test --filter='PaidLeave|CompanyCalendar|AdminCommand'`と、全件(既知の
+  `ReadModelFingerprintCommandTest`の失敗を除く)。MySQLでのmigrationの確認(uniqueの付け替え)。
 - frontend: `npx tsc -p tsconfig.app.json --noEmit`、`npm run lint`、`npx vitest run --project=unit`、
-  `npx vitest run --project=storybook`(関連範囲)
+  `npx vitest run --project=storybook`(関連の範囲)。
 - e2e: `npm run test:e2e -- scenario-00-master-data scenario-03-paid-leave scenario-15-paid-leave-schedule`
 
 ## レビュー履歴
-初版(2026-10-21)
+- 初版(2026-10-21)
+- 2026-10-21 独立設計レビュー(同等モデル)の指摘を反映して、全体を書き直した。設計前提の「定義と実態」に
+  付与済みの履歴との食い違いを足した。
+  - 要修正
+    - 年度開始日を変えると二重付与の日付になる→付与済みを起点にする(論点3)。
+    - カレンダーのイベントから変化を判定できない→自分の読み取りビューと`last_changed_event_id`(論点3)。
+    - タイムゾーンがUTCになる→既定のタイムゾーン(論点6)。
+    - 比例のルールが要確認に後退する→表を移す(論点2)。
+    - キューの打ち切りで「実行中」のまま固まる→スケジューラーで直接動かし、固まった記録の扱いを決めた(論点6)。
+    - SUMMARY行が切り詰めで消える→`summary`列(論点6)。
+    - 初回の定義が無い→初回・前回・本来の基準日を定義した(論点5)。
+  - 推奨
+    - uniqueの付け替えの順。
+    - migrationからJobを出さない→運用コマンド。
+    - 違う月のルールを出力に出す。
+    - 月日の検証。
+    - 年間日数による区分。
+    - 期待値が変わるテストの一覧。
+    - プレビュー・型。
+    - 受付の競合→ロック。運用コマンド画面からは実行させない。
+    - cron式を共有する。
+    - アプリケーション層に置く。
+    - 判定のイベントの項目・`POLICY_VERSION`。
+    - 最大1か月の遅れの明記。
+  - 軽微
+    - Unitテストの年を固定した。
+    - `admin_command_runs`の表の定義を足す。
+    - 利用開始日の規則の書き方を直した。
+    - 導入1年目の注記。
+    - 過去分の作り直しの注記。
+    - 古いmigrationの注記。
 
 ## 実装結果
 未着手

@@ -7,7 +7,8 @@
 
 確認への回答(2026-10-21):
 - 分離の範囲: 「付与予定と有給口座の両方」
-- 本番のイベント履歴の作り直し(`leave:rebuild-event-store`の`--apply`/`--swap`): 「まだ実行していない」
+- 本番のイベント履歴の作り直し(`leave:rebuild-event-store`の`--apply`/`--swap`): 最初は「まだ実行していない」と
+  回答があり、その後「実行済みでした」と訂正があった(2026-10-21)
 
 ## 背景・目的
 社員(`UserAggregate`)・有給口座(`PaidLeaveAccountAggregate`)・付与予定(`PaidLeaveScheduleAggregate`)の
@@ -18,8 +19,8 @@
 今は一括付与(`ApplyScheduledGrantsHandler`)だけが、集約を読み直す応急処置で回避している。PR#109(`d256bd7`)では
 付与予定のIDを分離していたが、9/14の競合解消(`ff64862`)で失われた。
 
-代休・特別休暇の口座と同じ方式で、付与予定と有給口座のIDを分離する。過去のイベントは、まだ本番で実行していない
-イベント履歴の作り直しの中で付け替える(`data-correction`の方法2)。
+代休・特別休暇の口座と同じ方式で、付与予定と有給口座のIDを分離する。過去のイベントは、`data-correction`の方法2に
+従って履歴を作り直して付け替える。本番では作り直しを実行済みなので、付け替えのために作り直しをもう一度行う。
 
 ## 現状(As-Is)
 - 同じ社員IDを共有している集約
@@ -49,8 +50,8 @@
   - 今の形のイベントは`EventStoreRebuilder:149-152`(passThrough)でそのまま写す。
   - `renumber`(600-660付近)は、集約ごとに版を連番で振り直す。
   - `verify`(`EventStoreRebuildWriter:312-345`)は、IDの付け方を検査していない。
-- 本番では、作り直しはまだ実行していない(ユーザー回答)。手順は`docs/27-release-runbook.md:114-148`、
-  `docs/32-stored-event-history-normalization.md`。
+- 本番では、作り直しを実行済み(ユーザー回答)。本番の履歴は、作り直しの後の形(今の形のイベント)になっている。
+  手順は`docs/27-release-runbook.md:114-148`、`docs/32-stored-event-history-normalization.md`。
 
 ## 設計前提の検証
 - 正データと派生データ
@@ -89,23 +90,35 @@
 - 未確定・要確認事項: なし
 
 ### 論点3: 過去のイベントの付け替え
+- 前提: 本番では作り直しを実行済みで、履歴は今の形のイベントになっている。
 - 選択肢:
-  - A. 未実行の作り直し(`leave:rebuild-event-store`)の中で付け替える。
-  - B. 付け替え専用のコマンドを新しく作る。
+  - A. 既存の作り直しの仕組み(`EventStoreRebuilder`・`EventStoreRebuildWriter`の試し実行・別表への書き込み・`verify`・
+    `swap`)に、有給口座・付与予定のストリームの付け替えを足す。作り直し済みの本番の履歴に対して、もう一度実行する。
+  - B. stored_eventsをその場でUPDATEする、付け替え専用のコマンドを作る。
 - 決定: A。
-  - `PaidLeaveGrantRebuilder`・`UnallocatedUsageAllocator`・`PaidLeaveScheduleRebuilder`が書くイベントのaggregate_uuidを、
-    新しいストリームIDにする。payloadに`userId`を入れる。
-  - 今の形の`paid_leave_account.*`・`paid_leave_schedule.*`の行は、passThroughではなく変換対象にする。
-    aggregate_uuid(=社員ID)を`userId`としてpayloadに入れ、aggregate_uuidを新しいストリームIDに替える。
-    metaの`aggregate-root-uuid`も替える。
-  - 版の振り直しは、既存の`renumber`に任せる(ストリームが分かれるので、社員の集約側の版も詰め直される)。
-  - `verify`に、次の検査を足す。
+  - 変換: 今の形の`paid_leave_account.*`・`paid_leave_schedule.*`の行を、passThroughではなく変換対象にする。
+    - payloadに`userId`(=元のaggregate_uuid)を入れる。
+    - aggregate_uuidとmetaの`aggregate-root-uuid`を、新しいストリームID(論点1)に替える。
+    - すでに新しいIDになっている行(payloadの`userId`から導出したIDとaggregate_uuidが一致する行)は、そのまま写す。
+      2回実行しても結果が同じになる。
+  - 旧い形のイベントを変換する3つのRebuilder(`PaidLeaveGrantRebuilder`・`UnallocatedUsageAllocator`・
+    `PaidLeaveScheduleRebuilder`)の出力も、新しいIDと`userId`入りにする(古いバックアップから作り直す場合に備える)。
+  - 版の振り直しは既存の`renumber`に任せる。ストリームが分かれると、社員の集約の版も詰め直される。
+  - `verify`に足す検査
     - `paid_leave_account.*`・`paid_leave_schedule.*`の行で、aggregate_uuidが`users.id`と同じものが無いこと。
-    - payloadの`userId`から導出したストリームIDが、aggregate_uuidと一致すること。
-- 理由: ユーザー回答によると、作り直しはまだ本番で実行していない。同じ作り直しに組み込めば、本番の作業は
-  1回で済む。
-- 制約: このコードは、作り直しと同じリリースで本番に出す必要がある。作り直しの前に出すと、新しいIDで読むコードが、
-  付け替え前の履歴を読めない。`docs/27-release-runbook.md`の手順に、この依存を明記する。
+    - payloadの`userId`から導出したIDが、aggregate_uuidと一致すること。
+  - 作り直し済みの履歴に、作り直しの仕組みをもう一度かけられるかを、実装の最初に確かめる。
+    - 他の種類のイベントが変わらずに写ること(2回目の試し実行で、有給口座・付与予定以外の差分が0件)を確かめる。
+    - かけられない場合は、変換の部分だけを使う専用の実行口(同じ書き込み・`verify`・`swap`を使う)を作る。
+      どちらにしたかを実装結果に残す。
+  - リリースの手順(`docs/27`に書く)
+    - このコードを出すときは、メンテナンスの時間を取る。
+    - 次の順で行う: バックアップ→作り直しの試し実行(件数の確認)→`--apply`→`--verify`→`--swap`
+      →Projectionの作り直し→確認。
+    - コードを出してから付け替えが終わるまでの間は、有給の操作を止める。新しいIDで読むコードは、付け替え前の
+      履歴を読めないため。
+- 理由: 履歴そのものを直すのが`data-correction`の第一の方法で、作り直しの仕組みには試し実行・検証・切り替えの安全手順が
+  そろっている。Bはその場の書き換えで、戻せない。
 - 未確定・要確認事項: なし
 
 ### 論点4: aggregate_uuid=社員IDを前提に読んでいる箇所
@@ -172,7 +185,7 @@
 
 ## 対象外
 - 社員の集約(UserAggregate)のIDの変更。
-- 本番での作り直しの実行そのもの(リリース時に`docs/27`の手順で利用者が行う)。
+- 本番での付け替えの実行そのもの(リリース時に`docs/27`の手順で利用者が行う)。
 - 年度はじめ一斉付与・自動判定(`20261021-paid-leave-fiscal-mass-grant-and-auto-assessment`)、Reactorのテスト
   (`20261021-paid-leave-schedule-reactor-tests`)。
 
@@ -180,7 +193,7 @@
 - `docs/09-usecases-paid-leave.md`: UC-P011のAggregateIdの記述を、導出したストリームIDに直す。
 - `docs/17-events.md`: `paid_leave_account.*`・`paid_leave_schedule.*`に`userId`を足す。
 - `docs/32-stored-event-history-normalization.md`: 作り直しでの付け替えと、`verify`の検査。
-- `docs/27-release-runbook.md`: このコードは作り直しと同じリリースで出すこと。
+- `docs/27-release-runbook.md`: このコードのリリース手順(メンテナンスの時間、付け替えの実行順、終わるまで有給の操作を止める)。
 - `docs/changesets/20260906-paid-leave-schedule-assessment/spec.md`の論点14は、過去の記録なので書き換えない。
 - `docs/changesets/README.md`: 一覧に追加する。
 
@@ -205,6 +218,9 @@
 
 ## レビュー履歴
 初版(2026-10-21)
+
+- 2026-10-21 ユーザーの訂正(本番の作り直しは実行済み)で、論点3の前提が覆った。論点3を作り直した:
+  未実行の作り直しに組み込む案から、作り直し済みの履歴に付け替えをかける案に変えた。リリース手順を足した。
 
 ## 実装結果
 未着手
