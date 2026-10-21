@@ -401,13 +401,15 @@ AggregateIdは特別休暇の口座と同じく種類ごとの派生IDを使う�
 docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
 
 - `paid_leave_schedule.entry_created` → `PaidLeaveScheduleEntryCreated`
-  (userId, scheduleEntryId, scheduledOn, category, candidateGrantDays, isDeterminate)。新規Schedule
+  (userId, scheduleEntryId, scheduledOn, category, candidateGrantDays, isDeterminate, nominalServiceMonths)。
+  `nominalServiceMonths`は名目の継続勤務月数(?int。古いイベントには無くnull)。行は(scheduledOn, nominalServiceMonths)の
+  組で見分ける。新規Schedule
   エントリ作成(新入社員展開・月次ローリング生成・再計算での再作成のいずれからも発行される)。
   `isDeterminate=false`の場合、エントリは`Scheduled`ではなく`NeedsReview`状態で作成される
   (候補日数を確定できない場合。`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
 - `paid_leave_schedule.entry_superseded` → `PaidLeaveScheduleEntrySuperseded`
   (userId, scheduleEntryId, reason, previousScheduledOn, previousCategory,
-  previousCandidateGrantDays)。再計算により既存エントリが置き換えられたことを記録する
+  previousCandidateGrantDays, previousNominalServiceMonths)。再計算により既存エントリが置き換えられたことを記録する
   (置き換え前の内容も監査用に保持)。
 - `paid_leave_schedule.assessment_recorded` → `PaidLeaveScheduleAssessmentRecorded`
   (userId, scheduleEntryId, assessmentId, periodStart, periodEnd, denominatorDays, attendanceDays,

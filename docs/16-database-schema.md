@@ -1053,7 +1053,8 @@ Schedule候補は生成されない(`docs/changesets/20260914-port-to-pr112/spec
 ## paid_leave_schedule_entries(将来の付与予定のProjection)
 
 `App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId =
-`userId`)のイベントから再構築するProjection。`ScheduleCandidateGenerator`
+`PaidLeaveScheduleAggregate::streamIdFor(userId)`。`UserManagementStreamId::for('paid_leave_schedule', userId)`の派生ID)
+のイベントから再構築するProjection。`ScheduleCandidateGenerator`
 (`backend/app/Domain/PaidLeaveSchedule/Support/`)が対象社員の`paid_leave_grant_rules`・
 `WorkStyle`から将来の候補日・区分・候補日数を算出し、`RollPaidLeaveSchedulesCommand`
 (cron)がCommandを発行してエントリを作成する。
@@ -1064,6 +1065,8 @@ Schedule候補は生成されない(`docs/changesets/20260914-port-to-pr112/spec
 - category(区分。`GrantCategoryClassifier`の定数: `normal`(通常付与)/`proportional`(比例付与)/
   `shift`(シフト勤務)/`needs_review`(区分を判定できない・要確認))
 - candidate_grant_days(付与候補日数。区分・日数が確定できない場合は0)
+- nominal_service_months(名目の継続勤務月数。何回目の付与か。unsigned small int、nullable。古いイベントには無い。
+  行は(scheduled_on, nominal_service_months)の組で見分け、同じ日に月数の違う行を持てる)
 - status(`Scheduled` / `AssessmentPending` / `Eligible` / `NotEligible` / `NeedsReview` /
   `Granted` / `Cancelled`。対象ルールのsteps/法定Policyに該当する行が無く候補日数を
   確定できない場合は`Scheduled`ではなく`NeedsReview`で作成される。
@@ -1135,7 +1138,7 @@ Assessment/Grantの根拠を変えずに新版を追加できるようにする�
 
 ## paid_leave_grants (有給付与の正のProjection)
 
-`App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`(AggregateId = `userId`)の
+`App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`(AggregateId = `PaidLeaveAccountAggregate::streamIdFor(userId)`)の
 Grant系イベント(`PaidLeaveGrantCreated`等)から`PaidLeaveUsageAllocationProjector`が
 再構築する。行自体はProjection(表示専用)であり、業務判定はCommandHandlerが
 Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesign/spec.md参照)。

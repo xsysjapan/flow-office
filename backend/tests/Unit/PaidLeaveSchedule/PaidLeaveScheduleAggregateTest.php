@@ -671,4 +671,130 @@ class PaidLeaveScheduleAggregateTest extends TestCase
         $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $capturedEntry['assessments']['a1']['finalResult']);
         $this->assertSame(PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE, $capturedEntry['assessments']['a1']['automaticResult']);
     }
+
+    // ---- 同じ日に名目の継続勤務月数の違う行を持つ(docs/changesets/20261021-paid-leave-same-day-grants/spec.md 論点4) ----
+
+    public function test_ensure_creates_two_entries_on_the_same_day_with_different_nominal_months(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->ensureFutureScheduleGenerated([
+                    ['entryId' => 'e6', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 10.0, 'nominalServiceMonths' => 6],
+                    ['entryId' => 'e18', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 11.0, 'nominalServiceMonths' => 18],
+                ]);
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e6', '2026-04-01', 'normal', 10.0, true, 6),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e18', '2026-04-01', 'normal', 11.0, true, 18),
+            ]);
+    }
+
+    public function test_ensure_is_idempotent_for_the_same_day_and_nominal_months(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e6', '2026-04-01', 'normal', 10.0, true, 6),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e18', '2026-04-01', 'normal', 11.0, true, 18),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->ensureFutureScheduleGenerated([
+                    ['entryId' => 'x6', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 10.0, 'nominalServiceMonths' => 6],
+                    ['entryId' => 'x18', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 11.0, 'nominalServiceMonths' => 18],
+                ]);
+            })
+            ->assertNothingRecorded();
+    }
+
+    public function test_recalculation_creates_two_entries_on_the_same_day_and_is_idempotent(): void
+    {
+        $candidates = [
+            ['entryId' => 'e6', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 10.0, 'nominalServiceMonths' => 6],
+            ['entryId' => 'e18', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 11.0, 'nominalServiceMonths' => 18],
+        ];
+
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
+            ->when(fn (PaidLeaveScheduleAggregate $aggregate) => $aggregate->recalculateFutureSchedule($candidates, '条件変更'))
+            ->assertRecorded([
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e6', '2026-04-01', 'normal', 10.0, true, 6),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e18', '2026-04-01', 'normal', 11.0, true, 18),
+            ]);
+
+        $again = array_map(fn (array $c) => ['entryId' => 'again-'.$c['entryId']] + $c, $candidates);
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e6', '2026-04-01', 'normal', 10.0, true, 6),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e18', '2026-04-01', 'normal', 11.0, true, 18),
+            ])
+            ->when(fn (PaidLeaveScheduleAggregate $aggregate) => $aggregate->recalculateFutureSchedule($again, '条件変更'))
+            ->assertNothingRecorded();
+    }
+
+    public function test_recalculation_supersedes_only_the_row_whose_content_changed_and_keeps_previous_nominal_months(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e6', '2026-04-01', 'normal', 10.0, true, 6),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e18', '2026-04-01', 'normal', 11.0, true, 18),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule([
+                    ['entryId' => 'n6', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 10.0, 'nominalServiceMonths' => 6],
+                    ['entryId' => 'n18', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 12.0, 'nominalServiceMonths' => 18],
+                ], '付与ルール変更');
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntrySuperseded(self::USER, 'e18', '付与ルール変更', '2026-04-01', 'normal', 11.0, 18),
+                new PaidLeaveScheduleEntryCreated(self::USER, 'n18', '2026-04-01', 'normal', 12.0, true, 18),
+            ]);
+    }
+
+    public function test_granted_entry_consumption_is_done_per_day_and_nominal_months_pair(): void
+    {
+        // 同じ日の名目6が付与済みでも、名目18の候補は作られる。名目6の候補だけが消費される。
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated(self::USER, 'e6', '2026-04-01', 'normal', 10.0, true, 6),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'e6', 'grant-1', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule([
+                    ['entryId' => 'n6', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 10.0, 'nominalServiceMonths' => 6],
+                    ['entryId' => 'n18', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 11.0, 'nominalServiceMonths' => 18],
+                ], '再計算');
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntryCreated(self::USER, 'n18', '2026-04-01', 'normal', 11.0, true, 18),
+            ]);
+    }
+
+    public function test_entries_without_nominal_months_are_identified_by_date_only(): void
+    {
+        // 古いイベント(名目の月数なし)の行は、候補に月数があっても日付だけで同じ行とみなす。
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated(self::USER, 'old', '2026-04-01', 'normal', 10.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->ensureFutureScheduleGenerated([
+                    ['entryId' => 'n6', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 10.0, 'nominalServiceMonths' => 6],
+                ]);
+                $aggregate->recalculateFutureSchedule([
+                    ['entryId' => 'n6', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 10.0, 'nominalServiceMonths' => 6],
+                ], '再計算');
+            })
+            ->assertNothingRecorded();
+
+        // 付与済みの古い行は、同じ日の月数ありの候補を消費する。
+        PaidLeaveScheduleAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated(self::USER, 'old', '2026-04-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryGranted(self::USER, 'old', 'grant-1', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule([
+                    ['entryId' => 'n6', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 10.0, 'nominalServiceMonths' => 6],
+                ], '再計算');
+            })
+            ->assertNothingRecorded();
+    }
 }

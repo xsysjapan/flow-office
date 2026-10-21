@@ -14,6 +14,7 @@ const eligibleEntry: PaidLeaveScheduleEntry = {
   scheduled_on: '2026-10-01',
   category: 'normal',
   candidate_grant_days: 11,
+  nominal_service_months: null,
   status: 'Eligible',
   latest_assessment_id: 'assessment-1',
   is_manually_overridden: false,
@@ -27,6 +28,7 @@ const needsReviewEntry: PaidLeaveScheduleEntry = {
   scheduled_on: '2026-10-10',
   category: 'needs_review',
   candidate_grant_days: null,
+  nominal_service_months: null,
   status: 'NeedsReview',
   latest_assessment_id: null,
   is_manually_overridden: false,
@@ -41,6 +43,7 @@ const futureEntry: PaidLeaveScheduleEntry = {
   scheduled_on: '2026-10-25',
   category: 'normal',
   candidate_grant_days: 5,
+  nominal_service_months: null,
   status: 'Eligible',
   latest_assessment_id: 'assessment-5',
   is_manually_overridden: false,
@@ -140,6 +143,18 @@ describe('PaidLeaveSchedulePage', () => {
     expect(screen.getByText('通常')).toBeInTheDocument()
     expect(screen.getByText('92%')).toBeInTheDocument()
     expect(screen.getByRole('status', { name: '付与対象' })).toBeInTheDocument()
+  })
+
+  it('shows the nominal service months of same-day rows in the order the API returns them', async () => {
+    const sameDay6 = { ...eligibleEntry, id: 'e6', user_name: '佐藤三郎', scheduled_on: '2026-04-01', candidate_grant_days: 10, nominal_service_months: 6 }
+    const sameDay18 = { ...sameDay6, id: 'e18', candidate_grant_days: 11, nominal_service_months: 18 }
+    renderPage({ entries: [sameDay6, sameDay18, needsReviewEntry] })
+
+    const first = await screen.findByText('継続6か月分')
+    const second = screen.getByText('継続18か月分')
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // 名目の月数が無い行には表示しない。
+    expect(screen.getAllByText(/継続\d+か月分/)).toHaveLength(2)
   })
 
   it('shows a WorkStyle settings link only for NeedsReview rows, and no checkbox for them', async () => {

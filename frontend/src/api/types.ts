@@ -991,6 +991,8 @@ export interface PaidLeaveScheduleEntry {
   scheduled_on: string;
   category: PaidLeaveScheduleCategory;
   candidate_grant_days: number | null;
+  /** 名目の継続勤務月数(何回目の付与か)。古い付与予定には無い(null)。同じ日の行はこの順に並ぶ。 */
+  nominal_service_months: number | null;
   status: PaidLeaveScheduleStatus;
   latest_assessment_id: string | null;
   is_manually_overridden: boolean;

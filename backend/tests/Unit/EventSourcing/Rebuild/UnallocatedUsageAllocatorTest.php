@@ -110,6 +110,31 @@ class UnallocatedUsageAllocatorTest extends TestCase
         $this->assertSame(0, $result['report']['unallocated_usages']);
     }
 
+    public function test_confirmation_allocates_from_the_same_day_grant_recorded_first(): void
+    {
+        // Step 1の同点(有効期限・付与日が同じ)は、先に記録したG1(10日)から充当する。
+        $g1 = $this->grant(1, 0, 'G1', '2026-04-01', '2028-03-31', 10.0);
+        $g2 = $this->grant(2, 0, 'G2', '2026-04-01', '2028-03-31', 11.0);
+        $result = $this->allocator->allocate([$g1, $g2, ...$this->usage('U1', '2026-07-10', 3.0, 5)]);
+
+        $this->assertSame([['usageId' => 'U1', 'grantId' => 'G1', 'allocatedDays' => 3.0]], array_map(fn (RebuiltEvent $e) => $e->payload, $result['events']));
+    }
+
+    public function test_confirmation_continues_to_the_next_same_day_grant_in_the_nearest_future_date(): void
+    {
+        // 使用日2026-05-01に有効な付与は無い。最も近い将来の付与日2026-06-01のG1(3日)→G2(10日)の順に5日を充当し、
+        // 付与日の遠いG3(2026-07-01)へは進まない。
+        $g1 = $this->grant(1, 0, 'G1', '2026-06-01', '2028-05-31', 3.0);
+        $g2 = $this->grant(2, 0, 'G2', '2026-06-01', '2028-05-31', 10.0);
+        $g3 = $this->grant(3, 0, 'G3', '2026-07-01', '2028-06-30', 10.0);
+        $result = $this->allocator->allocate([$g1, $g2, $g3, ...$this->usage('U1', '2026-05-01', 5.0, 5)]);
+
+        $this->assertSame([
+            ['usageId' => 'U1', 'grantId' => 'G1', 'allocatedDays' => 3.0],
+            ['usageId' => 'U1', 'grantId' => 'G2', 'allocatedDays' => 2.0],
+        ], array_map(fn (RebuiltEvent $e) => $e->payload, $result['events']));
+    }
+
     public function test_confirmation_uses_the_grant_expiry_as_changed_before_the_confirmation(): void
     {
         // 確定の時点の期限(延長後)で有効かどうかを判定する。

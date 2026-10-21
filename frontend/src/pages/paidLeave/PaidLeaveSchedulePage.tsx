@@ -352,6 +352,9 @@ export function PaidLeaveSchedulePage() {
                     <TableCell className="text-muted-foreground">{entry.scheduled_on}</TableCell>
                     <TableCell>
                       <Badge tone="neutral">{paidLeaveScheduleCategoryLabel(entry.category)}</Badge>
+                      {entry.nominal_service_months !== null && (
+                        <div className="mt-1 text-xs text-muted-foreground">継続{entry.nominal_service_months}か月分</div>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{entry.candidate_grant_days ?? '-'}</TableCell>
                     <TableCell className="text-muted-foreground">

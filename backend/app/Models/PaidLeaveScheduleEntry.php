@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * (spec.md 実装対象Phase B)。主キーはCommandHandler側で発番されるUUID
  * (scheduleEntryId)であり、行の新規作成自体もProjector経由で行う。
  */
-#[Fillable(['id', 'user_id', 'scheduled_on', 'category', 'candidate_grant_days', 'status', 'latest_assessment_id', 'is_manually_overridden', 'manual_override_reason', 'manual_override_by_user_id', 'manual_override_at', 'grant_id', 'cancelled_reason'])]
+#[Fillable(['id', 'user_id', 'scheduled_on', 'category', 'candidate_grant_days', 'nominal_service_months', 'status', 'latest_assessment_id', 'is_manually_overridden', 'manual_override_reason', 'manual_override_by_user_id', 'manual_override_at', 'grant_id', 'cancelled_reason'])]
 class PaidLeaveScheduleEntry extends Model
 {
     use HasUuids;

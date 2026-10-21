@@ -26,8 +26,8 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * docs/changesets/20260906-paid-leave-domain-redesign/spec.md「仕様確定事項」参照。
  *
  * 不変条件:
- * 1. 新規Grantは非取消の現在最新Grantより`grantedOn`が後(同日・過去挿入不可)。
- * 2. Grant変更・取消は現在最新の非取消Grantのみ許可。
+ * 1. 新規Grantは非取消の現在最新Grantより`grantedOn`が前でない(同日は可・過去挿入不可)。既にあるGrant IDは拒否。
+ * 2. Grant変更・取消は現在最新の非取消Grantのみ許可(最新=付与日が最も遅く、その中で記録の順`order`が最大)。
  * 3. Grant減額は`allocated`合計を下回れない。
  * 4. Grant有効期限短縮はAllocation件数0のGrantのみ許可。
  * 5. Grant取消時は当該Grantの全Allocationを解除する(Usage自体は取消しない)。
@@ -38,7 +38,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  *    残数が不足していても承認(`confirmUsage`)は拒否せず、充当できた分だけ充当し残りは未充当のまま残す
  *    (docs/changesets/20261009-keep-leave-work-type-on-edit 論点17の改訂)。
  *
- * @phpstan-type GrantState array{grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source: string, revoked: bool, allocations: array<string, float>}
+ * @phpstan-type GrantState array{grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source: string, revoked: bool, allocations: array<string, float>, order: int}
  * @phpstan-type UsageState array{workflowRequestId: ?string, attendanceDayId: ?string, paidLeaveRequestId: ?string, usedOn: string, usedDays: float, confirmed: bool, cancelled: bool, allocations: array<string, float>, order: int, confirmOrder?: int}
  */
 class PaidLeaveAccountAggregate extends AggregateRoot
@@ -50,6 +50,8 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     private array $usages = [];
 
     private int $usageSequence = 0;
+
+    private int $grantSequence = 0;
 
     private int $confirmSequence = 0;
 
@@ -100,11 +102,15 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         ?string $grantReason,
         string $source = 'manual',
     ): self {
+        if (isset($this->grants[$grantId])) {
+            throw new DomainRuleException("この付与はすでに記録されています(Grant [{$grantId}])。");
+        }
+
         $latest = $this->latestActiveGrant();
 
-        if ($latest !== null && $grantedOn <= $latest['grantedOn']) {
+        if ($latest !== null && $grantedOn < $latest['grantedOn']) {
             throw new DomainRuleException(
-                '新規Grantは現在の最新Grantより後の日付である必要があります(同日・過去日付は不可)。'
+                '新規Grantは現在の最新Grant以降の日付である必要があります(同日は可・過去日付は不可)。'
             );
         }
 
@@ -194,8 +200,8 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
         $previous = $this->latestActiveGrantExcluding($grantId);
 
-        if ($previous !== null && $newGrantedOn <= $previous['grantedOn']) {
-            throw new DomainRuleException('Grant日付はひとつ前のGrantより後である必要があります。');
+        if ($previous !== null && $newGrantedOn < $previous['grantedOn']) {
+            throw new DomainRuleException('Grant日付はひとつ前のGrant以降である必要があります(同日は可)。');
         }
 
         if ($newGrantedOn > $this->grants[$grantId]['expiresOn']) {
@@ -492,7 +498,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
-     * @return array<int, array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocatedTotal: float}>
+     * @return array<int, array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocatedTotal: float, order: int}>
      */
     private function grantsSnapshot(): array
     {
@@ -506,6 +512,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
                 'grantedDays' => $grant['grantedDays'],
                 'revoked' => $grant['revoked'],
                 'allocatedTotal' => array_sum($grant['allocations']),
+                'order' => $grant['order'],
             ];
         }
 
@@ -513,7 +520,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
-     * @return null|array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocations: array<string, float>}
+     * @return null|array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocations: array<string, float>, order: int}
      */
     private function latestActiveGrant(): ?array
     {
@@ -521,7 +528,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
-     * @return null|array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocations: array<string, float>}
+     * @return null|array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocations: array<string, float>, order: int}
      */
     private function latestActiveGrantExcluding(?string $excludedGrantId): ?array
     {
@@ -532,7 +539,10 @@ class PaidLeaveAccountAggregate extends AggregateRoot
                 continue;
             }
 
-            if ($latest === null || $grant['grantedOn'] > $latest['grantedOn']) {
+            // 最新 = 付与日が最も遅く、その中で記録の順(order)が最も大きい付与。
+            if ($latest === null
+                || $grant['grantedOn'] > $latest['grantedOn']
+                || ($grant['grantedOn'] === $latest['grantedOn'] && $grant['order'] > $latest['order'])) {
                 $latest = $grant + ['grantId' => $grantId];
             }
         }
@@ -565,6 +575,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             'source' => $event->source,
             'revoked' => false,
             'allocations' => [],
+            'order' => $this->grantSequence++,
         ];
     }
 

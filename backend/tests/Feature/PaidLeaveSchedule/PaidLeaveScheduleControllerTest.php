@@ -3,12 +3,16 @@
 namespace Tests\Feature\PaidLeaveSchedule;
 
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
 use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
 use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
+use App\Domain\PaidLeaveSchedule\Handlers\ApplyScheduledGrantsHandler;
+use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveScheduleEntry;
 use App\Models\Role;
 use App\Models\User;
@@ -188,6 +192,110 @@ class PaidLeaveScheduleControllerTest extends TestCase
         ]);
         $ok->assertOk();
         $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $ok->json('data.status'));
+    }
+
+    /**
+     * @return array{0: string, 1: string} [名目6の行ID, 名目18の行ID](同じ社員・同じ日、どちらもEligible)
+     */
+    private function createSameDayEligibleEntries(User $user): array
+    {
+        $id6 = (string) Str::uuid();
+        $id18 = (string) Str::uuid();
+        // 18を先に作る(並びが作成順ではなく名目の月数順であることを確かめる)。
+        $this->bus()->dispatch(new EnsureFutureScheduleGenerated(
+            userId: $user->id,
+            candidates: [
+                ['entryId' => $id18, 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 11.0, 'nominalServiceMonths' => 18],
+                ['entryId' => $id6, 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 10.0, 'nominalServiceMonths' => 6],
+            ],
+        ));
+
+        foreach ([$id18, $id6] as $entryId) {
+            $this->bus()->dispatch(new RunAttendanceRateAssessment(
+                userId: $user->id,
+                scheduleEntryId: $entryId,
+                assessmentId: (string) Str::uuid(),
+                periodStart: '2025-04-01',
+                periodEnd: '2026-04-01',
+                denominatorDays: 20,
+                attendanceDays: 18,
+                excludedDays: 0,
+                attendanceRate: 90.0,
+                policyVersion: 'v1',
+                automaticResult: PaidLeaveScheduleAggregate::STATUS_ELIGIBLE,
+            ));
+        }
+
+        return [$id6, $id18];
+    }
+
+    public function test_index_returns_nominal_service_months_and_orders_same_day_rows_by_it(): void
+    {
+        $admin = $this->admin();
+        $user = User::factory()->create();
+        [$id6, $id18] = $this->createSameDayEligibleEntries($user);
+
+        $response = $this->actingAs($admin)->getJson('/api/paid-leave/schedule-entries');
+
+        $response->assertOk();
+        $this->assertSame([$id6, $id18], array_column($response->json('data'), 'id'));
+        $this->assertSame([6, 18], array_column($response->json('data'), 'nominal_service_months'));
+    }
+
+    public function test_bulk_grant_grants_same_day_entries_in_nominal_months_order_with_ids_derived_from_entry_ids(): void
+    {
+        $admin = $this->admin();
+        $user = User::factory()->create();
+        [$id6, $id18] = $this->createSameDayEligibleEntries($user);
+
+        // 名目の大きい方を先に渡しても、名目の小さい順に付与される。
+        $response = $this->actingAs($admin)->postJson('/api/paid-leave/schedule-entries/bulk-grant', [
+            'schedule_entry_ids' => [$id18, $id6],
+        ]);
+
+        $response->assertOk();
+        $this->assertSame(2, $response->json('success_count'));
+
+        $grants = PaidLeaveGrant::query()->where('user_id', $user->id)->get();
+        $this->assertCount(2, $grants);
+        $expected6 = ApplyScheduledGrantsHandler::grantIdFor($id6);
+        $expected18 = ApplyScheduledGrantsHandler::grantIdFor($id18);
+        $this->assertEqualsCanonicalizing([$expected6, $expected18], $grants->pluck('id')->all());
+
+        $stored = DB::table('stored_events')
+            ->where('event_class', 'paid_leave_account.grant_created')
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($row) => json_decode($row->event_properties, true)['grantId'] ?? null)
+            ->all();
+        $this->assertSame([$expected6, $expected18], $stored);
+
+        $this->assertSame($expected6, PaidLeaveScheduleEntry::query()->findOrFail($id6)->grant_id);
+        $this->assertSame($expected18, PaidLeaveScheduleEntry::query()->findOrFail($id18)->grant_id);
+        $this->assertSame(
+            [10.0, 11.0],
+            $grants->sortBy('granted_days')->map(fn ($g) => (float) $g->granted_days)->values()->all(),
+        );
+    }
+
+    public function test_granting_the_same_entry_again_is_rejected_by_the_account(): void
+    {
+        $user = User::factory()->create();
+        [$id6] = $this->createSameDayEligibleEntries($user);
+
+        $this->bus()->dispatch(new ApplyScheduledGrants(userId: $user->id, scheduleEntryIds: [$id6], operatorUserId: $user->id));
+
+        // 予定の行の更新に失敗した想定で、行を再度Eligibleにはできないが、同じ付与IDでの付与は口座が拒否する。
+        $this->expectException(DomainRuleException::class);
+        $this->bus()->dispatch(new GrantPaidLeave(
+            userId: $user->id,
+            grantedOn: '2026-04-01',
+            expiresOn: '2028-04-01',
+            grantedDays: 10.0,
+            grantReason: null,
+            source: 'scheduled_batch',
+            grantId: ApplyScheduledGrantsHandler::grantIdFor($id6),
+        ));
     }
 
     public function test_bulk_grant_reports_per_entry_success_and_failure(): void

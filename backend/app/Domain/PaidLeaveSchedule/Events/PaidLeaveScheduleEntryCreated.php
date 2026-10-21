@@ -13,5 +13,7 @@ class PaidLeaveScheduleEntryCreated extends ShouldBeStored
         public readonly string $category,
         public readonly float $candidateGrantDays,
         public readonly bool $isDeterminate = true,
+        /** 名目の継続勤務月数。古いイベントには無い(null)。 */
+        public readonly ?int $nominalServiceMonths = null,
     ) {}
 }

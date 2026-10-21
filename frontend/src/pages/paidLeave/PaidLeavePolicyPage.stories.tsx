@@ -47,6 +47,7 @@ const overdueEntry: PaidLeaveScheduleEntry = {
   scheduled_on: '2026-09-20',
   category: 'normal',
   candidate_grant_days: 10,
+  nominal_service_months: null,
   status: 'Eligible',
   latest_assessment_id: 'assessment-1',
   is_manually_overridden: false,

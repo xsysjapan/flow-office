@@ -17,7 +17,7 @@ class GrantPaidLeaveHandler implements CommandHandler
     {
         assert($command instanceof GrantPaidLeave);
 
-        $grantId = (string) Str::uuid();
+        $grantId = $command->grantId ?? (string) Str::uuid();
 
         PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId)
             ->grant(

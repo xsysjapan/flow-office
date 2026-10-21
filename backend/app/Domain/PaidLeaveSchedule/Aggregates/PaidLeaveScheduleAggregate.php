@@ -27,7 +27,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * ステートレスにCommandHandler側で行い、この集約はその結果の記録・状態遷移のみを担う。
  *
  * @phpstan-type AssessmentState array{periodStart: string, periodEnd: string, denominatorDays: int, attendanceDays: int, excludedDays: int, attendanceRate: ?float, policyVersion: string, automaticResult: string, finalResult: string, overrideReason: ?string}
- * @phpstan-type EntryState array{scheduledOn: string, category: string, candidateGrantDays: float, status: string, manualOverride: ?array{reason: string, byUserId: string, at: ?string}, assessments: array<string, AssessmentState>, latestAssessmentId: ?string}
+ * @phpstan-type EntryState array{scheduledOn: string, nominalServiceMonths: ?int, category: string, candidateGrantDays: float, status: string, manualOverride: ?array{reason: string, byUserId: string, at: ?string}, assessments: array<string, AssessmentState>, latestAssessmentId: ?string}
  */
 class PaidLeaveScheduleAggregate extends AggregateRoot
 {
@@ -89,15 +89,16 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     /**
      * 対象社員について、1年先までのScheduleエントリ存在を保証する(べき等)。
-     * `scheduledOn`に一致する未取消エントリが既に存在する場合はスキップする
+     * (`scheduledOn`, `nominalServiceMonths`)の組に一致する未取消エントリが既に存在する場合はスキップする
+     * (名目の月数がnullの行・候補は`scheduledOn`だけで見分ける。古いイベントとの互換)
      * (新規社員登録時・日次ロール生成の両方から同じロジックを使う)。
      *
-     * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float}>  $candidates
+     * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, nominalServiceMonths?: ?int}>  $candidates
      */
     public function ensureFutureScheduleGenerated(array $candidates): self
     {
         foreach ($candidates as $candidate) {
-            if ($this->findEntryIdByScheduledOn($candidate['scheduledOn']) !== null) {
+            if ($this->findEntryId($candidate['scheduledOn'], $candidate['nominalServiceMonths'] ?? null) !== null) {
                 continue;
             }
 
@@ -122,12 +123,15 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
      * docs/changesets/20261021-paid-leave-schedule-reactor-tests/spec.md 論点4)。`$includeGrantedEntries=false`で
      * 読み飛ばす`Granted`エントリと同じ付与予定日の候補は消費し、付与済みの日付に予定を重ねて作らない
      * (`Cancelled`は消費しない。取り消した日付に予定を作り直せるようにするため)。
+     * 行・候補は(付与予定日, 名目の継続勤務月数)の組で見分ける(同じ日に名目の月数の違う行を持てる。
+     * どちらかの月数がnullなら付与予定日だけで見分ける。docs/changesets/20261021-paid-leave-same-day-grants/spec.md 論点4)。
      *
-     * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float}>  $candidates
+     * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, nominalServiceMonths?: ?int}>  $candidates
      */
     public function recalculateFutureSchedule(array $candidates, string $reason, bool $overrideManualEdits = false, bool $includeGrantedEntries = false, ?string $fromDate = null): self
     {
-        $desiredByScheduledOn = [];
+        // 候補をキー(付与予定日|名目の月数)で引く。月数が無い候補のキーは付与予定日だけ。
+        $desiredByKey = [];
         foreach ($candidates as $candidate) {
             // fromDateより前の候補は作らない(その日付の行は再計算の対象外。当日の行を
             // 日次の再計算で二重に作らないため)。
@@ -135,7 +139,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
                 continue;
             }
 
-            $desiredByScheduledOn[$candidate['scheduledOn']] = $candidate;
+            $desiredByKey[self::entryKey($candidate['scheduledOn'], $candidate['nominalServiceMonths'] ?? null)] = $candidate;
         }
 
         // 既存の再計算対象エントリを走査する。確定済みの扱いは$includeGrantedEntries次第:
@@ -153,7 +157,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
             if (in_array($entry['status'], $excludedStatuses, true)) {
                 if ($entry['status'] === self::STATUS_GRANTED) {
-                    unset($desiredByScheduledOn[$entry['scheduledOn']]);
+                    $this->consumeDesired($desiredByKey, $entry);
                 }
 
                 continue;
@@ -166,12 +170,13 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
                 // (=一切触らない)ことのみを保証する。
                 // 同じscheduledOnの候補をここで消費しておかないと、下部の「残った候補を
                 // 新規作成する」ループでこのエントリと重複する新規エントリが作られてしまう。
-                unset($desiredByScheduledOn[$entry['scheduledOn']]);
+                $this->consumeDesired($desiredByKey, $entry);
 
                 continue;
             }
 
-            $desired = $desiredByScheduledOn[$entry['scheduledOn']] ?? null;
+            $desiredKey = $this->matchingDesiredKey($desiredByKey, $entry);
+            $desired = $desiredKey !== null ? $desiredByKey[$desiredKey] : null;
 
             if ($desired === null) {
                 // 最新条件ではこの日付にScheduleが不要になった。
@@ -184,7 +189,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
                 continue;
             }
 
-            unset($desiredByScheduledOn[$entry['scheduledOn']]);
+            unset($desiredByKey[$desiredKey]);
 
             if ($desired['category'] === $entry['category']
                 && abs($desired['candidateGrantDays'] - $entry['candidateGrantDays']) < 0.0001) {
@@ -199,13 +204,14 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
                 previousScheduledOn: $entry['scheduledOn'],
                 previousCategory: $entry['category'],
                 previousCandidateGrantDays: $entry['candidateGrantDays'],
+                previousNominalServiceMonths: $entry['nominalServiceMonths'],
             ));
 
             $this->createEntry($desired);
         }
 
         // 残った(既存に一致するものが無かった)候補は新規作成する。
-        foreach ($desiredByScheduledOn as $candidate) {
+        foreach ($desiredByKey as $candidate) {
             $this->createEntry($candidate);
         }
 
@@ -379,7 +385,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
     }
 
     /**
-     * @param  array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, isDeterminate?: bool}  $candidate
+     * @param  array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, isDeterminate?: bool, nominalServiceMonths?: ?int}  $candidate
      */
     private function createEntry(array $candidate): void
     {
@@ -390,18 +396,67 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             category: $candidate['category'],
             candidateGrantDays: $candidate['candidateGrantDays'],
             isDeterminate: $candidate['isDeterminate'] ?? true,
+            nominalServiceMonths: $candidate['nominalServiceMonths'] ?? null,
         ));
     }
 
-    private function findEntryIdByScheduledOn(string $scheduledOn): ?string
+    /**
+     * (付与予定日, 名目の月数)の組に一致する未取消エントリのIDを返す。どちらかの月数がnullなら付与予定日だけで見分ける。
+     */
+    private function findEntryId(string $scheduledOn, ?int $nominalServiceMonths): ?string
     {
         foreach ($this->entries as $entryId => $entry) {
-            if ($entry['scheduledOn'] === $scheduledOn && $entry['status'] !== self::STATUS_CANCELLED) {
+            if ($entry['status'] !== self::STATUS_CANCELLED
+                && self::sameEntryIdentity($entry['scheduledOn'], $entry['nominalServiceMonths'], $scheduledOn, $nominalServiceMonths)) {
                 return $entryId;
             }
         }
 
         return null;
+    }
+
+    private static function sameEntryIdentity(string $onA, ?int $monthsA, string $onB, ?int $monthsB): bool
+    {
+        return $onA === $onB && ($monthsA === null || $monthsB === null || $monthsA === $monthsB);
+    }
+
+    private static function entryKey(string $scheduledOn, ?int $nominalServiceMonths): string
+    {
+        return $scheduledOn.'|'.($nominalServiceMonths ?? '');
+    }
+
+    /**
+     * 既存の行に対応する候補のキーを返す(完全一致を優先し、無ければ月数がnullの側と付与予定日で一致するもの)。
+     *
+     * @param  array<string, array<string, mixed>>  $desiredByKey
+     * @param  EntryState  $entry
+     */
+    private function matchingDesiredKey(array $desiredByKey, array $entry): ?string
+    {
+        $exact = self::entryKey($entry['scheduledOn'], $entry['nominalServiceMonths']);
+        if (isset($desiredByKey[$exact])) {
+            return $exact;
+        }
+
+        foreach ($desiredByKey as $key => $candidate) {
+            if (self::sameEntryIdentity($entry['scheduledOn'], $entry['nominalServiceMonths'], $candidate['scheduledOn'], $candidate['nominalServiceMonths'] ?? null)) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $desiredByKey
+     * @param  EntryState  $entry
+     */
+    private function consumeDesired(array &$desiredByKey, array $entry): void
+    {
+        $key = $this->matchingDesiredKey($desiredByKey, $entry);
+        if ($key !== null) {
+            unset($desiredByKey[$key]);
+        }
     }
 
     /**
@@ -422,6 +477,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
     {
         $this->entries[$event->scheduleEntryId] = [
             'scheduledOn' => $event->scheduledOn,
+            'nominalServiceMonths' => $event->nominalServiceMonths,
             'category' => $event->category,
             'candidateGrantDays' => $event->candidateGrantDays,
             'status' => $event->isDeterminate ? self::STATUS_SCHEDULED : self::STATUS_NEEDS_REVIEW,

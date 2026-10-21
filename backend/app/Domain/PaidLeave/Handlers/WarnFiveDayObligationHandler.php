@@ -9,12 +9,14 @@ use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeaveAccount\Commands\RaisePaidLeaveGrantWarning;
 use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
+use App\Models\PaidLeaveUsage;
 use App\Models\SystemSetting;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
- * UC-P006: 年5日取得義務を警告する。年10日以上付与された付与単位ごとに、取得義務期間
- * (付与日から1年)の終了が近づいても取得日数が5日未満の場合に警告する。「承認者」は
+ * UC-P006: 年5日取得義務を警告する。社員×付与日(基準日)の組ごとに、付与日数の合計が10日以上の組を対象とし、
+ * 取得義務期間(付与日から1年)の終了が近づいても取得日数(期間内の消化の合計)が5日未満の場合に、組に1件警告する。「承認者」は
  * 有給申請ごとに都度指定されるため固定の宛先を持たず、社員本人へ通知する。
  *
  * @implements CommandHandler<WarnFiveDayObligation>
@@ -45,48 +47,72 @@ class WarnFiveDayObligationHandler implements CommandHandler
         $defaultTimezone = SystemSetting::current()->default_timezone;
         $warnedCount = 0;
 
-        $grants = PaidLeaveGrant::query()
-            ->with('user', 'usages')
-            ->where('granted_days', '>=', self::MINIMUM_GRANT_DAYS_FOR_OBLIGATION)
-            ->whereNull('five_day_obligation_warned_at')
-            ->get();
+        // 社員×付与日(基準日)の組ごとに判定する。取消済みの付与は除く。
+        $groups = PaidLeaveGrant::query()
+            ->with('user')
+            ->whereNull('revoked_at')
+            ->get()
+            ->groupBy(fn (PaidLeaveGrant $grant) => $grant->user_id.'|'.$grant->granted_on->toDateString());
 
-        foreach ($grants as $grant) {
-            $today = $asOfToday ?? Carbon::today($grant->user->timezone ?? $defaultTimezone);
+        foreach ($groups as $grants) {
+            /** @var Collection<int, PaidLeaveGrant> $grants */
+            $first = $grants->first();
+
+            // 組の付与日数の合計が10日以上の組だけが義務の対象(比例付与の7日+8日なども対象)。
+            if ((float) $grants->sum('granted_days') < self::MINIMUM_GRANT_DAYS_FOR_OBLIGATION) {
+                continue;
+            }
+
+            // 警告済みの印は組の全付与に付けるため、1件でも警告済みなら組は警告済み。
+            if ($grants->contains(fn (PaidLeaveGrant $grant) => $grant->five_day_obligation_warned_at !== null)) {
+                continue;
+            }
+
+            $today = $asOfToday ?? Carbon::today($first->user->timezone ?? $defaultTimezone);
             // granted_onはDB上UTCのCarbonになる一方、todayは社員のタイムゾーンで生成される。
             // 日付同士の比較なので同じタイムゾーンの0時へ揃え、UTCとの9時間差等で
             // 60日境界が60.375日となって対象外になることを防ぐ。
-            $obligationDeadline = Carbon::parse(
-                $grant->granted_on->toDateString(),
-                $today->getTimezone(),
-            )->addYear()->startOfDay();
+            $baseDate = Carbon::parse($first->granted_on->toDateString(), $today->getTimezone())->startOfDay();
+            $obligationDeadline = $baseDate->copy()->addYear();
             $daysUntilDeadline = $today->diffInDays($obligationDeadline, false);
 
             if ($daysUntilDeadline < 0 || $daysUntilDeadline > self::WARNING_WINDOW_DAYS) {
                 continue;
             }
 
-            $usedDays = (float) $grant->usages->sum('used_days');
+            // 取得日数: 消化記録(paid_leave_usages)のうち、使用日が[基準日, 基準日+1年)の確定済み・未取消・時間単位以外の
+            // used_daysの合計。どの付与から充当したかは問わない(paid_leave_grant_idは使わない)。
+            $usedDays = (float) PaidLeaveUsage::query()
+                ->where('user_id', $first->user_id)
+                ->where('confirmed', true)
+                ->where('cancelled', false)
+                ->where(fn ($query) => $query->whereNull('usage_type')->orWhere('usage_type', '!=', 'hourly'))
+                ->whereDate('used_on', '>=', $baseDate->toDateString())
+                ->whereDate('used_on', '<', $obligationDeadline->toDateString())
+                ->sum('used_days');
+
             if ($usedDays >= self::REQUIRED_USED_DAYS) {
                 continue;
             }
 
-            $message = "{$grant->user->name}さんは年5日の有給取得義務(期限: ".
+            $message = "{$first->user->name}さんは年5日の有給取得義務(期限: ".
                 "{$obligationDeadline->toDateString()})に対し、現在{$usedDays}日しか取得していません。";
 
             SendNotificationJob::enqueue(
-                recipient: $grant->user,
+                recipient: $first->user,
                 title: '有給休暇 年5日取得義務の警告',
                 summary: $message,
                 detailUrl: null,
             );
 
-            $this->commandBus->dispatch(new RaisePaidLeaveGrantWarning(
-                userId: $grant->user_id,
-                grantId: $grant->id,
-                warningType: 'five_day_obligation',
-                message: $message,
-            ));
+            foreach ($grants as $grant) {
+                $this->commandBus->dispatch(new RaisePaidLeaveGrantWarning(
+                    userId: $grant->user_id,
+                    grantId: $grant->id,
+                    warningType: 'five_day_obligation',
+                    message: $message,
+                ));
+            }
 
             $warnedCount++;
         }

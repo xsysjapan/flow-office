@@ -17,5 +17,7 @@ class PaidLeaveScheduleEntrySuperseded extends ShouldBeStored
         public readonly string $previousScheduledOn,
         public readonly string $previousCategory,
         public readonly float $previousCandidateGrantDays,
+        /** 置き換える前の名目の継続勤務月数。古いイベントには無い(null)。 */
+        public readonly ?int $previousNominalServiceMonths = null,
     ) {}
 }

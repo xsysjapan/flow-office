@@ -9,6 +9,7 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
+use App\Domain\UserManagement\Support\UserManagementStreamId;
 use Illuminate\Support\Carbon;
 use Throwable;
 
@@ -17,6 +18,9 @@ use Throwable;
  * Schedule側をGrantedへ遷移させる(依頼書§39)。
  * Eligible以外のエントリが混じっていた場合は当該エントリのみ失敗として扱う
  * (一括操作の他の対象を巻き込まない)。
+ * 渡された行は(付与予定日, 名目の継続勤務月数)の順に並べ替えてから付与する(同じ日の行は名目の月数の小さい順。
+ * 月数がnullの行は同じ日の中で先)。付与IDは行IDから決めたUUIDv5にし、同じ行の再実行で二重に付与しない
+ * (有給口座が同じ付与IDを拒否する)。
  *
  * @implements CommandHandler<ApplyScheduledGrants>
  */
@@ -34,7 +38,7 @@ class ApplyScheduledGrantsHandler implements CommandHandler
         $granted = [];
         $failed = [];
 
-        foreach ($command->scheduleEntryIds as $scheduleEntryId) {
+        foreach ($this->sortedEntryIds($command) as $scheduleEntryId) {
             $grantId = null;
 
             try {
@@ -52,6 +56,7 @@ class ApplyScheduledGrantsHandler implements CommandHandler
                     grantedDays: $entry['candidateGrantDays'],
                     grantReason: '付与予定Scheduleからの一括付与',
                     source: 'scheduled_batch',
+                    grantId: self::grantIdFor($scheduleEntryId),
                 ));
 
                 // 有給口座(GrantPaidLeave)と付与予定は別のストリームなので、上で取った`$aggregate`のまま確定できる。
@@ -92,5 +97,40 @@ class ApplyScheduledGrantsHandler implements CommandHandler
         }
 
         return ['granted' => $granted, 'failed' => $failed];
+    }
+
+    /**
+     * 付与予定の行IDから決めた、有給口座の付与ID(UUIDv5。名前空間は`UserManagementStreamId`と同じ方式)。
+     */
+    public static function grantIdFor(string $scheduleEntryId): string
+    {
+        return UserManagementStreamId::for('paid_leave_schedule_grant', $scheduleEntryId);
+    }
+
+    /**
+     * 渡された行IDを(付与予定日, 名目の月数)の順に並べ替える。集約に無い行は末尾へ(付与時に「存在しません」で失敗する)。
+     *
+     * @return array<int, string>
+     */
+    private function sortedEntryIds(ApplyScheduledGrants $command): array
+    {
+        $entries = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($command->userId))->forUser($command->userId)->entries();
+
+        $ids = array_values($command->scheduleEntryIds);
+        $position = array_flip($ids);
+
+        usort($ids, function (string $a, string $b) use ($entries, $position): int {
+            $entryA = $entries[$a] ?? null;
+            $entryB = $entries[$b] ?? null;
+
+            if ($entryA === null || $entryB === null) {
+                return ($entryA === null) <=> ($entryB === null) ?: $position[$a] <=> $position[$b];
+            }
+
+            return [$entryA['scheduledOn'], $entryA['nominalServiceMonths'] ?? -1, $position[$a]]
+                <=> [$entryB['scheduledOn'], $entryB['nominalServiceMonths'] ?? -1, $position[$b]];
+        });
+
+        return $ids;
     }
 }

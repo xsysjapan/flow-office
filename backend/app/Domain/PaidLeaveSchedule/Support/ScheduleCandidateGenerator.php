@@ -46,7 +46,7 @@ class ScheduleCandidateGenerator
     public function __construct(private readonly GrantCategoryClassifier $classifier) {}
 
     /**
-     * @return array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, isDeterminate: bool}>
+     * @return array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, isDeterminate: bool, nominalServiceMonths: int}>
      */
     public function candidatesFor(User $user, Carbon $from, Carbon $to): array
     {
@@ -102,6 +102,7 @@ class ScheduleCandidateGenerator
                 'category' => $category,
                 'candidateGrantDays' => $result->days,
                 'isDeterminate' => $result->isDeterminate,
+                'nominalServiceMonths' => $nominalMonths,
             ];
         }
 

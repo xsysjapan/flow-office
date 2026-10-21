@@ -11,6 +11,7 @@ const entry: PaidLeaveScheduleEntryDetail = {
   scheduled_on: '2026-10-01',
   category: 'normal',
   candidate_grant_days: 11,
+  nominal_service_months: null,
   status: 'NotEligible',
   latest_assessment_id: 'assessment-1',
   is_manually_overridden: false,

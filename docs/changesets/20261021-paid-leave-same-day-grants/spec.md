@@ -1,6 +1,6 @@
 # 同じ日に複数の有給を付与できるようにする
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 現在は付与を同一日に行うことはできない認識ですが、付与は同一日にできるように変更してください。
@@ -223,4 +223,38 @@
   - 軽微: 列をnullableにする、一覧の並び、Supersededの項目、Ensureの消去との関係、直し方の手順。
 
 ## 実装結果
-未着手
+### 変更(2つのimplementerが並行で担当)
+- 有給口座
+  - `grant()`/`changeGrantDate()`で同じ日を許す(過去の日付は拒否)。
+  - 付与の`order`。最新の判定は(付与日, order)。
+  - 同じ付与IDの拒否。`GrantPaidLeave`に`grantId`を足した。
+  - 充当の順: Step 1は有効期限→付与日→order。Step 2は、同じ日の付与へ続けて充当する。
+  - `UnallocatedUsageAllocator`も同じ順にした。
+- 5日取得義務(`WarnFiveDayObligationHandler`)
+  - 社員×付与日の組で判定する。組の日数の合計が10日以上なら対象。
+  - 取得日数は、基準日から1年間の確定済み・未取消・時間単位以外の消化(`paid_leave_usages.used_days`)の合計。
+  - 警告は組に1件。
+  - 判断: 組のどれかが警告済みなら、組ごと警告済みとみなす(後から同じ日に付与が足されても、再警告しない)。
+- 消滅の警告: 同じ社員・付与日・有効期限の付与をまとめて1件。
+- 付与予定
+  - `nominalServiceMonths`を、候補・`EntryCreated`・`Superseded`(`previousNominalServiceMonths`)・Projectionの列に足した。
+  - 行を(付与予定日, 名目の月数)で見分ける。名目の月数がnullの古い行は、日付だけで見分ける。
+  - 一括付与は(付与予定日, 名目の月数)の順に並べ替える。付与IDは`UserManagementStreamId::for('paid_leave_schedule_grant', 行ID)`。
+  - 一覧APIの並びと`nominal_service_months`。画面に「継続◯か月分」。
+- docs: 09・16・17(古い記述の残り「当面は現行のまま残置」「最新の付与より後」「AggregateId = userId」も直した)。
+### テスト
+- 有給口座: Unit 7件、`PaidLeaveSameDayGrantTest`。
+- 警告: `PaidLeaveWarningBatchTest`に、またがる消化・前年の付与への充当・7+8日・10+11日・取消済み・消滅の警告。
+- 作り直し: `UnallocatedUsageAllocatorTest`に2件。
+- 付与予定: Unit 6件、Feature 3件(並び・名目の小さい順の付与・同じ付与IDの再付与の拒否)。
+- frontend: unit 1件。
+### 検証(委譲元で実行)
+- backend全件(`./vendor/bin/phpunit`): 1959件PASS
+- frontend: tsc OK、unit 1017件PASS(2件は既存のskip)
+- e2e: `scenario-00`・`03`・`15`で13件PASS
+### 受け入れ条件
+- 同じ日の付与を記録できる、過去の日付は拒否: Unit、Feature。
+- 最新・充当・取消の順: Unit。
+- 5日取得義務の警告が基準日ごとに1件: `PaidLeaveWarningBatchTest`。
+- 付与予定が同じ日に複数の行を持ち、その順で付与される: 付与予定のUnit・Feature。
+- docs: 更新した。

@@ -30,6 +30,7 @@ class PaidLeaveScheduleProjector extends Projector
                 'scheduled_on' => $event->scheduledOn,
                 'category' => $event->category,
                 'candidate_grant_days' => $event->candidateGrantDays,
+                'nominal_service_months' => $event->nominalServiceMonths,
                 'status' => $event->isDeterminate ? PaidLeaveScheduleEntry::STATUS_SCHEDULED : PaidLeaveScheduleEntry::STATUS_NEEDS_REVIEW,
             ],
         );

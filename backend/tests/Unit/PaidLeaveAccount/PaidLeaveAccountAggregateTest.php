@@ -89,17 +89,146 @@ class PaidLeaveAccountAggregateTest extends TestCase
             ]);
     }
 
-    public function test_same_day_grant_is_rejected(): void
+    public function test_same_day_grant_is_allowed(): void
+    {
+        // 2026-04-01に半年分10日と1年半分11日の2件を付与できる。
+        PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-04-01', '2028-04-01', 10.0, null, 'manual'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->grant('g2', '2026-04-01', '2028-04-01', 11.0, null, 'manual');
+            })
+            ->assertRecorded([
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-04-01', '2028-04-01', 11.0, null, 'manual'),
+            ]);
+    }
+
+    public function test_grant_with_an_already_recorded_grant_id_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+        $this->expectExceptionMessage('すでに記録されています');
+
+        PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-04-01', '2028-04-01', 10.0, null, 'manual'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->grant('g1', '2027-04-01', '2029-04-01', 12.0, null, 'manual');
+            });
+    }
+
+    public function test_latest_grant_among_same_day_grants_is_the_one_recorded_last(): void
+    {
+        // g2(後に記録)が最新。g2は変更できる。
+        PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-04-01', '2028-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-04-01', '2028-04-01', 11.0, null, 'manual'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('g2', 12.0, '訂正', 'admin-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveGrantAmountChanged(self::USER, 'g2', 12.0, '訂正', 'admin-1'),
+            ]);
+    }
+
+    public function test_earlier_same_day_grant_cannot_be_revoked_until_the_later_one_is_revoked(): void
+    {
+        $aggregate = PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-04-01', '2028-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-04-01', '2028-04-01', 11.0, null, 'manual'),
+            ]);
+
+        try {
+            $aggregate->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->revokeGrant('g1', 'admin-1', '訂正');
+            });
+            $this->fail('先に記録した同日の付与は、後の付与を取り消すまで取り消せない。');
+        } catch (DomainRuleException) {
+        }
+
+        PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-04-01', '2028-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-04-01', '2028-04-01', 11.0, null, 'manual'),
+                new PaidLeaveGrantRevoked(self::USER, 'g2', 'admin-1', '訂正'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->revokeGrant('g1', 'admin-1', '訂正');
+            })
+            ->assertRecorded([
+                new PaidLeaveGrantRevoked(self::USER, 'g1', 'admin-1', '訂正'),
+            ]);
+    }
+
+    public function test_grant_date_can_be_changed_to_the_same_day_as_the_previous_grant(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-04-01', '2028-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-10-01', '2028-10-01', 11.0, null, 'manual'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantDate('g2', '2026-04-01', '訂正', 'admin-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveGrantDateChanged(self::USER, 'g2', '2026-04-01', '訂正', 'admin-1'),
+            ]);
+    }
+
+    public function test_grant_date_change_before_the_previous_grant_is_rejected(): void
     {
         $this->expectException(DomainRuleException::class);
 
         PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new PaidLeaveGrantCreated(self::USER, 'g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-04-01', '2028-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-10-01', '2028-10-01', 11.0, null, 'manual'),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->grant('g2', '2025-04-01', '2027-04-01', 11.0, null, 'manual');
+                $aggregate->changeGrantDate('g2', '2026-03-31', '訂正', 'admin-1');
             });
+    }
+
+    public function test_usage_is_allocated_from_the_same_day_grant_recorded_first(): void
+    {
+        // Step 1の同点(有効期限・付与日が同じ)は先に記録したg1(10日)から充当する。
+        PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-04-01', '2028-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-04-01', '2028-04-01', 11.0, null, 'manual'),
+                new PaidLeaveUsageDesignated(self::USER, 'u1', 'wf-1', 'day-1', '2026-05-01', 3.0),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->confirmUsage('u1', 'approver-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveUsageConfirmed(self::USER, 'u1', 'approver-1'),
+                new PaidLeaveUsageAllocated(self::USER, 'u1', 'g1', 3.0),
+            ]);
+    }
+
+    public function test_step2_continues_to_the_next_same_day_grant_when_the_first_is_short(): void
+    {
+        // 使用日2026-05-01に有効な付与は無く、最も近い将来の付与日2026-06-01のg1(3日)→g2(10日)の順に5日を充当する。
+        PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-06-01', '2028-06-01', 3.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-06-01', '2028-06-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g3', '2026-07-01', '2028-07-01', 10.0, null, 'manual'),
+                new PaidLeaveUsageDesignated(self::USER, 'u1', 'wf-1', 'day-1', '2026-05-01', 5.0),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->confirmUsage('u1', 'approver-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveUsageConfirmed(self::USER, 'u1', 'approver-1'),
+                new PaidLeaveUsageAllocated(self::USER, 'u1', 'g1', 3.0),
+                new PaidLeaveUsageAllocated(self::USER, 'u1', 'g2', 2.0),
+            ]);
     }
 
     public function test_past_dated_grant_is_rejected(): void

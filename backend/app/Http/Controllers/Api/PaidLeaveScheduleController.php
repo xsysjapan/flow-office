@@ -92,7 +92,7 @@ class PaidLeaveScheduleController extends Controller
 
         $filter = $data['filter'] ?? self::FILTER_ALL;
 
-        $query = PaidLeaveScheduleEntry::query()->with('user', 'assessments')->orderBy('scheduled_on');
+        $query = PaidLeaveScheduleEntry::query()->with('user', 'assessments')->orderBy('scheduled_on')->orderBy('nominal_service_months');
 
         match ($filter) {
             self::FILTER_ELIGIBLE => $query->where('status', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
@@ -392,6 +392,7 @@ class PaidLeaveScheduleController extends Controller
             'scheduled_on' => $entry->scheduled_on?->toDateString(),
             'category' => $entry->category,
             'candidate_grant_days' => $entry->candidate_grant_days,
+            'nominal_service_months' => $entry->nominal_service_months,
             'status' => $entry->status,
             'latest_assessment_id' => $entry->latest_assessment_id,
             'is_manually_overridden' => $entry->is_manually_overridden,
