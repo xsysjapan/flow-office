@@ -1,6 +1,6 @@
 # 有給の年度はじめ一斉付与を初期値にし、出勤率の自動判定を戻す
 
-ステータス: レビュー中
+ステータス: 実装中
 
 ## 変更要望(原文)
 > (自動判定を戻す変更セットと、PR#109の機能の突き合わせを)お願いします。加えて今の会社では年度はじめに
@@ -394,6 +394,10 @@
 
 ### 段階2: 判定期間・自動判定・実行状況
 - `PaidLeaveScheduleAssessmentPlanner`(論点5)。`reassess`をこれに置き換える。
+- 付与予定の文脈の「今日」を、`system_settings.default_timezone`の日付に揃える。
+  - 対象: 再計算のReactor 2本、`roll-schedules`、`ScheduleCandidateGenerator::currentWorkStyleFor`/`userIdsCurrentlyOn`、
+    `ReapplyPaidLeaveSchedulePolicyJob`。
+  - `20261021-paid-leave-schedule-recalc-on-assignment-change`の論点3で、この変更セットへ先送りしたもの。
 - イベントの`deemedAttendanceDays`、`paid_leave_schedule_assessments.deemed_attendance_days`、`POLICY_VERSION=v2`。
 - `paid-leave:assess-schedules`と、`routes/console.php`の2つのスケジュール(論点6)。`roll-schedules`の
   コメントを実態に合わせる。
@@ -548,6 +552,10 @@
     - 年度末の入社。
     - `addMonthsNoOverflow`。
     - 名目の月数の出し方。
+
+- 2026-10-21 実装の前に、`20261021-paid-leave-schedule-recalc-on-assignment-change`で先送りした「今日」のタイムゾーンの
+  統一を、段階2に足した。ルールの選択の順(論点4)は、その変更セットで`matchingRuleFor`に入れた。ここでは
+  `PaidLeaveGrantRuleResolver`に切り出して、判定と共有する。
 
 ## 実装結果
 未着手

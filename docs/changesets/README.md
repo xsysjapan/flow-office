@@ -18,7 +18,7 @@
 | [20261021-paid-leave-same-day-grants](./20261021-paid-leave-same-day-grants/spec.md) | 同じ日に複数の有給を付与できるようにする | 完了 |
 | [20261021-paid-leave-aggregate-stream-id](./20261021-paid-leave-aggregate-stream-id/spec.md) | 付与予定と有給口座のAggregateIdを社員から分離する | 完了 |
 | [20261021-paid-leave-schedule-reactor-tests](./20261021-paid-leave-schedule-reactor-tests/spec.md) | 付与予定の再計算Reactorのテストを復元し、再計算の不具合を直す | 完了 |
-| [20261021-paid-leave-fiscal-mass-grant-and-auto-assessment](./20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md) | 有給の年度はじめ一斉付与を初期値にし、出勤率の自動判定を戻す | レビュー中 |
+| [20261021-paid-leave-fiscal-mass-grant-and-auto-assessment](./20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md) | 有給の年度はじめ一斉付与を初期値にし、出勤率の自動判定を戻す | 実装中 |
 | [20261020-paid-leave-schedule-page-restore](./20261020-paid-leave-schedule-page-restore/spec.md) | 有給休暇の付与予定画面の復元(有給休暇画面のボタンから遷移) | 完了 |
 | [20261016-excel-note-compensatory-leave](./20261016-excel-note-compensatory-leave/spec.md) | 勤怠管理表(Excel)の備考に休暇を正しく表示する(代休の追加・特別休暇の種別名) | 完了 |
 | [20261015-excel-export-submitted-month](./20261015-excel-export-submitted-month/spec.md) | 承認待ち(提出済み)の月次勤怠でExcel勤怠管理表がタイトルだけになる不具合の修正(CSVも同じ条件で出力可能に) | 完了 |
