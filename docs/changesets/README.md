@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261021-fix-scenario-08-paid-leave-batches](./20261021-fix-scenario-08-paid-leave-batches/spec.md) | e2eのscenario-08で失敗している有給バッチの2件を直す | レビュー中 |
 | [20261021-paid-leave-schedule-recalc-on-assignment-change](./20261021-paid-leave-schedule-recalc-on-assignment-change/spec.md) | 勤務形態の割当の削除・月替わりで付与予定を再計算する | 完了 |
 | [20261021-paid-leave-same-day-grants](./20261021-paid-leave-same-day-grants/spec.md) | 同じ日に複数の有給を付与できるようにする | 完了 |
 | [20261021-paid-leave-aggregate-stream-id](./20261021-paid-leave-aggregate-stream-id/spec.md) | 付与予定と有給口座のAggregateIdを社員から分離する | 完了 |
