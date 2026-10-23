@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -34,6 +35,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        // 区分の無い古い表の形では、比例の区分の行は表せない。また000004のdown()は法定の写し・比例の移行を戻さないため、
+        // 区分ごとに同じ継続勤務月数の行が残り、古いuniqueと重なって付け直せない。そのため先に区分が normal 以外の行を消す。
+        DB::table('paid_leave_grant_rule_steps')->where('grant_category', '!=', 'normal')->delete();
+
         Schema::table('paid_leave_grant_rule_steps', function (Blueprint $table) {
             $table->unique(['rule_id', 'continuous_service_months'], self::OLD_UNIQUE);
         });

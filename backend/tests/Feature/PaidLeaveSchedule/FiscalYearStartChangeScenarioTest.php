@@ -43,6 +43,10 @@ class FiscalYearStartChangeScenarioTest extends TestCase
     {
         parent::setUp();
 
+        // 年度開始日の変更のReactorが積むReapplyPaidLeaveSchedulePolicyJobを、その場で動かす前提のテスト。
+        // CIは.envのQUEUE_CONNECTION=databaseで動くため、明示する。
+        config(['queue.default' => 'sync']);
+
         Carbon::setTestNow('2026-10-21');
         $this->admin = User::factory()->create();
     }

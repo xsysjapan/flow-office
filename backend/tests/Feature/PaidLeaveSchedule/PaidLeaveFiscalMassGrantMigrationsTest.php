@@ -256,6 +256,26 @@ class PaidLeaveFiscalMassGrantMigrationsTest extends TestCase
         $rule->steps()->create(['grant_category' => 'normal', 'continuous_service_months' => 6, 'grant_days' => 11]);
     }
 
+    public function test_down_drops_the_proportional_steps_so_the_old_unique_can_be_restored(): void
+    {
+        $rule = $this->createRuleFor($this->createWorkStyle('W3D', 3, null), []);
+        $rule->steps()->create(['grant_category' => 'normal', 'continuous_service_months' => 6, 'grant_days' => 10]);
+        $rule->steps()->create(['grant_category' => 'proportional_3', 'continuous_service_months' => 6, 'grant_days' => 5]);
+
+        $migration = $this->migration('2026_10_21_000003_add_grant_category_to_paid_leave_grant_rule_steps_table.php');
+        $migration->down();
+
+        $this->assertFalse(Schema::hasColumn('paid_leave_grant_rule_steps', 'grant_category'));
+        $steps = DB::table('paid_leave_grant_rule_steps')->where('rule_id', $rule->id)->get();
+        $this->assertCount(1, $steps);
+        $this->assertSame(6, (int) $steps[0]->continuous_service_months);
+        $this->assertSame(10.0, (float) $steps[0]->grant_days);
+
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('paid_leave_grant_rule_steps', 'grant_category'));
+    }
+
     public function test_fiscal_year_settings_table_gets_the_initial_value_from_the_default_calendar(): void
     {
         $migration = $this->migration('2026_10_21_000005_create_paid_leave_fiscal_year_settings_table.php');

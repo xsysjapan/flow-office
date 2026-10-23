@@ -4,10 +4,12 @@ namespace Tests\Feature\PaidLeaveSchedule;
 
 use App\Models\AdminCommandRun;
 use App\Models\Role;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\PaidLeave\ScheduleAssessmentRunService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -237,5 +239,20 @@ class ScheduleAssessmentRunApiTest extends TestCase
     {
         $this->getJson('/api/paid-leave/schedule-assessment-runs/status')->assertUnauthorized();
         $this->postJson('/api/paid-leave/schedule-assessment-runs')->assertUnauthorized();
+    }
+
+    public function test_default_timezone_falls_back_to_asia_tokyo_without_creating_a_system_setting_row(): void
+    {
+        DB::table('system_settings')->delete();
+
+        $this->assertSame('Asia/Tokyo', ScheduleAssessmentRunService::defaultTimezone());
+        $this->assertSame(0, DB::table('system_settings')->count());
+    }
+
+    public function test_default_timezone_reads_the_stored_system_setting(): void
+    {
+        SystemSetting::current()->update(['default_timezone' => 'UTC']);
+
+        $this->assertSame('UTC', ScheduleAssessmentRunService::defaultTimezone());
     }
 }

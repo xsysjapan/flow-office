@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261023-fix-pr121-ci](./20261023-fix-pr121-ci/spec.md) | PR#121のCIの失敗(backendのテスト4件・MySQLのmigration)を直す | 完了 |
 | [20261021-fix-scenario-08-paid-leave-batches](./20261021-fix-scenario-08-paid-leave-batches/spec.md) | e2eのscenario-08で失敗している有給バッチの2件を直す | 完了 |
 | [20261021-paid-leave-schedule-recalc-on-assignment-change](./20261021-paid-leave-schedule-recalc-on-assignment-change/spec.md) | 勤務形態の割当の削除・月替わりで付与予定を再計算する | 完了 |
 | [20261021-paid-leave-same-day-grants](./20261021-paid-leave-same-day-grants/spec.md) | 同じ日に複数の有給を付与できるようにする | 完了 |

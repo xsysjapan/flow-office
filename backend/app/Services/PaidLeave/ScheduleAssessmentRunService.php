@@ -179,11 +179,13 @@ class ScheduleAssessmentRunService
     /**
      * 定期実行のタイムゾーン(`system_settings.default_timezone`)。`routes/console.php`はどのartisanコマンドでも読み込まれ、
      * テーブルがまだ無い環境(migrate前)でも壊さないように、取得できなければ`Asia/Tokyo`を返す。
+     * `SystemSetting::current()`は行が無いと作ってしまうため使わず、読むだけにする(routes/console.phpは起動のたびに
+     * 読み込まれるので、ここで行を作ると副作用になる)。
      */
     public static function defaultTimezone(): string
     {
         try {
-            return SystemSetting::current()->default_timezone ?: 'Asia/Tokyo';
+            return SystemSetting::query()->value('default_timezone') ?: 'Asia/Tokyo';
         } catch (Throwable) {
             return 'Asia/Tokyo';
         }
