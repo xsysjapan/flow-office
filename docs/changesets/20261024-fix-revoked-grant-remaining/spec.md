@@ -101,9 +101,15 @@
 - 選択肢:
   - A. Projectorを直したうえで、該当Projectorをリビルド(`php artisan event-sourcing:replay`)する。
   - B. 補正用のイベントを追記する。
-- 決定: A
+- 決定: A。手順は既存の全体リビルドの手順(`docs/32-stored-event-history-normalization.md`・
+  `docs/changesets/20261024-paid-leave-release-rehearsal/assets/rehearsal-checklist.md`)と同じにする:
+  `php artisan leave:rebuild-event-store --list-readmodels`で出る全テーブルを空にしてから
+  `php artisan event-sourcing:replay --force`。
 - 理由: イベント履歴は正しく、派生データの計算だけが誤っている(`data-correction`スキル: 履歴は正しい → リビルドで反映)。
-  リビルド対象は`PaidLeaveUsageAllocationProjector`と`SpecialLeaveAccountProjector`。
+  対象Projectorだけを表を空にせずにreplayするのは不可。`PaidLeaveUsageAllocationProjector::onPaidLeaveUsageAllocated`は
+  既存行に`allocated_days`を足し込み、`resetState`も持たないため、充当が2重になる。対象テーブルだけを空にするのも避ける。
+  `paid_leave_schedule_entries.granted_paid_leave_grant_id`が`paid_leave_grants`を外部キーで参照しているため。
+  PR#121のリリースでも同じ全体リビルドを行う予定で、この修正がそれより前に入れば、そこで既存データも直る。
 - 未確定・要確認事項: なし
 
 ### 論点4: 画面の表示
@@ -112,6 +118,15 @@
   - B. 取消済みの付与は「残N日」を出さない。
 - 決定: A
 - 理由: 値が正しくなれば表示も正しい。表示の変更は頼まれていない。
+- 未確定・要確認事項: なし
+
+### 論点4-2: 取消後に画面で再読込するデータ
+- 選択肢:
+  - A. 有給付与の取消の成功時に、付与一覧に加えて、その社員の消化明細(`PaidLeaveUsageCard`が読むもの)と残高も再読込させる。
+  - B. 付与一覧だけを再読込する(現状)。
+- 決定: A
+- 理由: 消化済みの付与を取り消せるようになると、消化明細の充当先(`paid_leave_grant_id`)と残高が変わる。同じ画面の
+  消化明細が古いまま残るのを防ぐ。
 - 未確定・要確認事項: なし
 
 ### 論点5: 有給の取消ボタンを押せる条件
@@ -153,13 +168,22 @@
     「消化済みの{used_days}日分は他の付与へ付け替えます。付け替え先が足りない分は残高不足(未充当)になります。」を加える
     (既存の「…を取り消します。この操作は元に戻せません。」の後ろ)。
   - 特別休暇・代休の画面は変えない。
+- `frontend/src/hooks/usePaidLeave.ts`の`useRevokePaidLeaveGrant`:成功時に`['paid-leave', 'grants', 'user', userId]`に加えて、
+  その社員の消化明細(`usePaidLeaveUsagesForUser`のqueryKey)と、残高を読むqueryがあればそのqueryKeyも無効化する
+  (queryKeyは同ファイルの既存hookの定義に合わせる)。
+- `backend/app/Http/Controllers/Api/PaidLeaveController.php`の`revoke`のdocコメント(「既に消化された分がある場合は…422」)を、
+  「最新の非取消付与のみ取り消せる(それ以外は422)。消化済みの分は充当を解除して他の付与へ付け替え、足りない分は未充当になる」に直す。
+- `PaidLeaveUsageAllocationProjector`のクラスdocコメントの「冪等な加減算・上書きであり、`event-sourcing:replay`による
+  Projection再生成にそのまま対応する」を、実態(足し込みがあるため、書き込み先テーブルを空にしてからreplayする)に合わせて直す。
 - テスト(既存の取消テストに追記する):
   - `tests/Feature/PaidLeaveAccount/PaidLeaveGrantRevocationTest.php`:付与を取り消すと、
     `GET /paid-leave/grants/user/{userId}`の該当付与が`status=revoked`・`remaining_days=0`になる。
     充当のあった付与(消化が別の付与へ付け替えられるケース)を取り消した場合も`remaining_days=0`。
     消滅警告バッチの対象にならない(既存の警告テストの書き方に合わせる。書きにくければ`remaining_days=0`の確認で足りる)。
   - `tests/Feature/SpecialLeave/SpecialLeaveGrantRevocationTest.php`:取り消すと`remaining_days=0`。
-  - リビルド(Projectorのreplay)後も`remaining_days=0`のままであること(既存のreplayテストの書き方があれば合わせる)。
+  - リビルド後も`remaining_days=0`のままであること。`tests/Feature/EventSourcing/LeaveEventStoreRebuildScenarioTest.php`の
+    `replayReadModels()`と同じく、ReadModelのテーブルを空にしてから`event-sourcing:replay --force`する書き方にする
+    (このファイルにケースを足すか、同じ手順のprivateメソッドを取消テスト側に置く)。
   - バックエンド:付与A(先)・付与B(後)があり、Aに消化が充当されている状態で、Bを取り消したあとAを取り消せる
     (API 200、Aの`status=revoked`・`remaining_days=0`、消化は未充当になり`paid_leave_balances.unallocated_days`に計上)。
     既存テストで同等のケースがあれば追記不要。
@@ -184,12 +208,14 @@
 - 「残N日」の表示文言・レイアウトの変更。
 - 特別休暇・代休の取消ボタンの条件(それぞれの集約の仕様どおり)。
 - `paid_leave_balances`・勤怠Excel(既に取消分を除いている)。
-- 本番環境でのリビルドの実施そのもの(デプロイ時に`event-sourcing:replay`の実行が必要な旨を実装結果に書く)。
+- 本番環境でのリビルドの実施そのもの(論点3の手順でのリビルドが必要な旨を実装結果に書く)。
 
 ## ドキュメントへの影響
 
 - `docs/16-database-schema.md`:`paid_leave_grants.remaining_days`の説明に「取り消した付与(`status=revoked`)は0」を追記する。
   `special_leave_grants`の説明(「同じ`status`/`revoked_at`…を持つ」)にも同じ旨を追記する。
+- `docs/09-usecases-paid-leave.md` UC-P008の手順4:「`paid_leave_grants.remaining_days`を0にする」を追記する。
+  画面では最新の非取消付与のみ取消ボタンを押せる旨も追記する。
 
 ## モック・アセット
 
@@ -203,6 +229,9 @@
 - `backend/tests/Feature/SpecialLeave/SpecialLeaveGrantRevocationTest.php`
 - `frontend/src/pages/paidLeave/PaidLeavePolicyPage.tsx`
 - `frontend/src/pages/paidLeave/PaidLeavePolicyPage.test.tsx`
+- `frontend/src/hooks/usePaidLeave.ts`
+- `backend/app/Http/Controllers/Api/PaidLeaveController.php`(docコメントのみ)
+- `docs/09-usecases-paid-leave.md`
 - `docs/16-database-schema.md`
 
 ## 検証方法
@@ -216,6 +245,12 @@
 
 - 初版(残日数の不具合)
 - 2026-10-24: ユーザーの追加連絡(06-02取消後に06-01が取り消せない)を受け、取消ボタンの条件(論点5・6)を追加
+- 2026-10-24: 独立設計レビューの指摘を反映。
+  (1)対象Projectorだけのreplayは充当が2重になる → 論点3の手順を全体リビルドに変更。
+  (2)APIのdocコメントが古い → 実装対象に追加。
+  (3)取消後に消化明細が古いまま → 論点4-2を追加。
+  (4)docs/09 UC-P008の追記を追加。
+  前提(原因・他の書き込み経路・「最新」の定義・他の付与が無いときも取消可)に誤りはないことを確認済み。
 
 ## 実装結果
 
