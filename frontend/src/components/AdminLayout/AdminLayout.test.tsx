@@ -19,7 +19,7 @@ const mockUser: User = {
   effective_permissions: adminNavGroups.flatMap((group) => group.items.flatMap((item) => [item.permission, ...(item.permissions ?? [])].filter((permission): permission is string => Boolean(permission)))),
 };
 
-function renderLayout(user: User = mockUser) {
+function renderLayout(user: User = mockUser, initialPath = "/admin") {
   const authValue: AuthContextValue = {
     user,
     status: "authenticated",
@@ -31,10 +31,11 @@ function renderLayout(user: User = mockUser) {
 
   return render(
     <AuthContext.Provider value={authValue}>
-      <MemoryRouter initialEntries={["/admin"]}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<p>管理メニューの中身</p>} />
+            <Route path="paid-leave/schedule" element={<p>付与予定の中身</p>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -104,6 +105,14 @@ describe("AdminLayout", () => {
     expect(
       screen.queryByRole("link", { name: "監査ログ" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps 有給休暇 active on the paid-leave schedule page while other items stay exact-match", () => {
+    renderLayout(mockUser, "/admin/paid-leave/schedule");
+
+    expect(screen.getByRole("link", { name: "有給休暇" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "ユーザー" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "勤務形態" })).not.toHaveAttribute("aria-current");
   });
 
   it("has a link back to the main app", () => {

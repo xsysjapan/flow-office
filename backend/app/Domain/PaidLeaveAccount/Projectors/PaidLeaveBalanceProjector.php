@@ -2,6 +2,7 @@
 
 namespace App\Domain\PaidLeaveAccount\Projectors;
 
+use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantAmountChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged;
@@ -21,7 +22,7 @@ use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
  * 承認可否等の業務判定の根拠には使わない(判定は必ずCommandHandlerが
  * `PaidLeaveAccountAggregate`をreplayして行う)。
  *
- * すべての更新契機で、この集約(aggregate_uuid = userId)に記録された
+ * すべての更新契機で、この集約(aggregate_uuid = `PaidLeaveAccountAggregate::streamIdFor(userId)`)に記録された
  * `paid_leave_account.*`イベント全件をstored_eventsから読み直して集計し直す
  * (`PaidLeaveGrantProjector::recalculate()`と同じ「都度全件再集計」方式。Projectorの
  * 再適用・`event-sourcing:replay`に対して冪等)。
@@ -36,58 +37,58 @@ class PaidLeaveBalanceProjector extends Projector
 {
     public function onPaidLeaveGrantCreated(PaidLeaveGrantCreated $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     public function onPaidLeaveGrantAmountChanged(PaidLeaveGrantAmountChanged $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     public function onPaidLeaveGrantDateChanged(PaidLeaveGrantDateChanged $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     public function onPaidLeaveGrantExpiryChanged(PaidLeaveGrantExpiryChanged $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     public function onPaidLeaveGrantRevoked(PaidLeaveGrantRevoked $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     public function onPaidLeaveUsageDesignated(PaidLeaveUsageDesignated $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     public function onPaidLeaveUsageConfirmed(PaidLeaveUsageConfirmed $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     public function onPaidLeaveUsageCancelled(PaidLeaveUsageCancelled $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     public function onPaidLeaveUsageAllocated(PaidLeaveUsageAllocated $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     public function onPaidLeaveUsageAllocationReleased(PaidLeaveUsageAllocationReleased $event): void
     {
-        $this->recalculate($event->aggregateRootUuid());
+        $this->recalculate($event->userId);
     }
 
     private function recalculate(string $userId): void
     {
         $events = EloquentStoredEvent::query()
-            ->where('aggregate_uuid', $userId)
+            ->where('aggregate_uuid', PaidLeaveAccountAggregate::streamIdFor($userId))
             ->where('event_class', 'like', 'paid_leave_account.%')
             ->orderBy('id')
             ->get();

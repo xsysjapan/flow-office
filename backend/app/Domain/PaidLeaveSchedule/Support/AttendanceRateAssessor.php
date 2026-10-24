@@ -24,7 +24,16 @@ use Illuminate\Support\Carbon;
  */
 class AttendanceRateAssessor
 {
-    public const POLICY_VERSION = 'v1';
+    /** v2: 判定期間を「前回(初回は入社日)から付与予定日の前日まで」にし、前倒しの短縮期間のみなし出勤を加えた(`PaidLeaveScheduleAssessmentPlanner`)。 */
+    public const POLICY_VERSION = 'v2';
+
+    /**
+     * 利用開始日の規則: 期間の始まりが利用開始日より前で、移行データが無ければ要確認。
+     */
+    public static function needsReviewForUsageStart(Carbon $periodStart, ?Carbon $usageStartDate, bool $hasMigratedLegacyData): bool
+    {
+        return $usageStartDate !== null && $periodStart->lt($usageStartDate) && ! $hasMigratedLegacyData;
+    }
 
     public function assess(
         string $userId,
@@ -34,7 +43,7 @@ class AttendanceRateAssessor
         ?Carbon $usageStartDate = null,
         bool $hasMigratedLegacyData = false,
     ): AttendanceRateAssessmentResult {
-        if ($usageStartDate !== null && $periodStart->lt($usageStartDate) && ! $hasMigratedLegacyData) {
+        if (self::needsReviewForUsageStart($periodStart, $usageStartDate, $hasMigratedLegacyData)) {
             return new AttendanceRateAssessmentResult(
                 denominatorDays: 0,
                 attendanceDays: 0,

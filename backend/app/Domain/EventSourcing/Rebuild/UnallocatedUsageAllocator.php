@@ -301,12 +301,15 @@ final class UnallocatedUsageAllocator
                     break;
                 case 'paid_leave_account.grant_created':
                     $grantId = (string) $payload['grantId'];
+                    $grantOrder = count($grants[$userId] ?? []);
                     $grants[$userId][$grantId] = [
                         'grantedOn' => substr((string) $payload['grantedOn'], 0, 10),
                         'expiresOn' => substr((string) $payload['expiresOn'], 0, 10),
                         'days' => (float) $payload['grantedDays'],
                         'revoked' => false,
                         'allocated' => 0.0,
+                        // 記録の順(集約のgrantSequenceと同じ。利用者ごとの付与の連番)。
+                        'order' => $grantOrder,
                     ];
 
                     // 付与時の充当(規則 grant)。この付与より前に確定した未取消の消化記録の、不足分へ充当する。
@@ -457,7 +460,7 @@ final class UnallocatedUsageAllocator
      * 集約の grantsSnapshot と同じ形(AllocationPlanner の入力)にする。
      *
      * @param  array<string, array{grantedOn: string, expiresOn: string, days: float, revoked: bool, allocated: float}>  $userGrants
-     * @return list<array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocatedTotal: float}>
+     * @return list<array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocatedTotal: float, order: int}>
      */
     private function grantsSnapshot(array $userGrants): array
     {
@@ -470,6 +473,7 @@ final class UnallocatedUsageAllocator
                 'grantedDays' => $grant['days'],
                 'revoked' => $grant['revoked'],
                 'allocatedTotal' => $grant['allocated'],
+                'order' => $grant['order'] ?? 0,
             ];
         }
 

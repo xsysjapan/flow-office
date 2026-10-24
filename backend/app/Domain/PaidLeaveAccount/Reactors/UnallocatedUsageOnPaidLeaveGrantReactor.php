@@ -19,7 +19,7 @@ class UnallocatedUsageOnPaidLeaveGrantReactor extends Reactor
     public function onPaidLeaveGrantCreated(PaidLeaveGrantCreated $event): void
     {
         $this->commandBus->dispatch(new AllocateUnallocatedPaidLeaveUsages(
-            userId: $event->aggregateRootUuid(),
+            userId: $event->userId,
             grantId: $event->grantId,
             viaReactor: true,
             initiatedByUserId: null,

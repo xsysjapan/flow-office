@@ -366,6 +366,15 @@ final class RebuildLeaveEventStoreCommand extends Command
             $this->table(['event_class', '件数'], $this->countRows($schedule['derived']));
         }
 
+        if (isset($report['paid_leave_rekey'])) {
+            $rekey = $report['paid_leave_rekey'];
+            $this->info('最後の工程: 有給口座の付け替え・付与予定の取り除き(PaidLeaveStreamRekeyer)');
+            $this->line("付け替えた有給口座の行: {$rekey['rekeyed_rows']} 件(旧ID→新IDの対応 {$rekey['mapping_count']} 件) / 取り除いた付与予定の行: {$rekey['removed_rows']} 件");
+            if ($rekey['removed_by_class'] !== []) {
+                $this->table(['取り除いたevent_class', '件数'], $this->countRows($rekey['removed_by_class']));
+            }
+        }
+
         $this->info('cutoverの付与の突き合わせ結果');
         $cutover = $report['cutover'] ?? [];
         $outcomes = [];

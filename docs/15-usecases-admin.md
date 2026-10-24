@@ -54,3 +54,6 @@
   (`AuditLogController`)。ユーザーでの絞り込みは、`payload`のJSON列に対する
   `LIKE '%"key":<id>%'`形式の近似一致で行う簡易実装であり、値の完全一致を保証しない。
   検索精度・検索性能に関する追加対応や、`audit_log_entries`等の専用Projectionは対象外とする。
+  有給口座・付与予定のイベントは社員IDとは別の集約ID(`PaidLeaveAccountAggregate::streamIdFor`・`PaidLeaveScheduleAggregate::streamIdFor`)で
+  記録するため、`aggregate_id`での絞り込みに社員IDを入れても出なくなる(ユーザーでの絞り込みは`payload`の`userId`で拾える。
+  変更セット`20261021-paid-leave-aggregate-stream-id`)。

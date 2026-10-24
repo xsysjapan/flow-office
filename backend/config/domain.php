@@ -316,6 +316,7 @@ use App\Domain\PaidLeaveAccount\Commands\ChangePaidLeaveGrantExpiry;
 use App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeaves;
 use App\Domain\PaidLeaveAccount\Commands\RaisePaidLeaveGrantWarning;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Domain\PaidLeaveAccount\Handlers\AllocateUnallocatedPaidLeaveUsagesHandler;
@@ -326,6 +327,7 @@ use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantExpiryHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ConfirmPaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\DesignatePaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeaveHandler as PaidLeaveAccountGrantPaidLeaveHandler;
+use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeavesHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RaisePaidLeaveGrantWarningHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RevokePaidLeaveGrantHandler as PaidLeaveAccountRevokePaidLeaveGrantHandler;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
@@ -655,6 +657,7 @@ return [
         ResubmitPaidLeaveRequest::class => ResubmitPaidLeaveRequestHandler::class,
 
         GrantPaidLeave::class => PaidLeaveAccountGrantPaidLeaveHandler::class,
+        GrantPaidLeaves::class => GrantPaidLeavesHandler::class,
         ChangePaidLeaveGrantAmount::class => ChangePaidLeaveGrantAmountHandler::class,
         ChangePaidLeaveGrantDate::class => ChangePaidLeaveGrantDateHandler::class,
         ChangePaidLeaveGrantExpiry::class => ChangePaidLeaveGrantExpiryHandler::class,

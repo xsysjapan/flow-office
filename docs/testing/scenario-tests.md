@@ -260,8 +260,8 @@ RoleAssignment・入社日を設定する。モックOIDCの
 `fetchPaidLeaveGrantsForUser`がユーザー単位で全付与を合算する都合上、本シナリオと
 並行実行すると有給消化数の検証に他シナリオの付与・消化が混入するため使わない)。
 
-**技術的な前提(重要)**: `paid-leave:grant-scheduled`/`paid-leave:warn-expiring`/
-`paid-leave:warn-five-day-obligation` はいずれもサーバーの実時刻(`now()`)を基準に
+**技術的な前提(重要)**: `paid-leave:warn-expiring`/
+`paid-leave:warn-five-day-obligation`/`paid-leave:roll-schedules`/`paid-leave:assess-schedules` はいずれもサーバーの実時刻(`now()`)を基準に
 cron実行される設計で、日付を偽装する手段が無い。Playwrightは実際に起動している
 `php artisan serve` プロセスにHTTPでアクセスするだけなので、1年間の経過を実時間の
 経過なしに外側から偽装することはできない。そのため本シナリオは **実時刻に依存しない
@@ -295,12 +295,15 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
    - 年5日警告: `granted_on` = 実行時の実日付 − 305日(期限まで60日)・
      使用日数4日以下の付与を作成し、`warn-five-day-obligation` 実行後に
      `five_day_obligation_warned_at` が記録されることを確認する。
-   - 年次自動付与: `hire_date` を実行時の実日付から逆算して「今日がちょうど
-     継続勤務6か月/1年6か月...の記念日」になる社員を作成し、`grant-scheduled`
-     実行後に `paid_leave_grants` が1件増えることを確認する。
+   - 付与予定(継続勤務の記念日): `hire_date` を実行時の実日付から逆算して「今日がちょうど
+     継続勤務6か月の記念日」になる社員を作成し、`paid-leave:roll-schedules` →
+     `paid-leave:assess-schedules --trigger=manual` を実行して、どちらもエラー無く完走
+     (終了コード0)し、出力の件数が出ることを確認する。自動付与は無く、付与は管理者の一括付与
+     (画面操作)で行うため、本項目では付与しない(一括付与はscenario-15で確認する)。判定の結果
+     (付与対象・要確認)は確かめない(判定の規則は`AssessPaidLeaveSchedulesCommandTest`でカバー)。
    - この3件は「送信結果を確認できるAPI」が無いため(§5-5の既知の欠落と同様)、
      DBの`paid_leave_grants`カラム(`expiry_warned_at`等)を直接検証するか、
-     `backend/tests/Feature/PaidLeave/PaidLeaveScheduledBatchTest.php`側の
+     `backend/tests/Feature/PaidLeaveAccount/PaidLeaveWarningBatchTest.php`側の
      PHPUnitテストでカバーし、本シナリオでは「実際にartisanコマンドがエラー無く
      完走し対象件数が期待通りであること」の疎通確認にとどめる、のいずれかを
      実装時に選ぶ。
@@ -440,23 +443,44 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
 
     1. 前提として対象社員のWorkStyleに所定労働日数(`weekly_scheduled_days`)が設定済み
        であることを確認する。
-    2. `paid-leave:roll-schedules`を実行し、Schedule生成(1年先までのローリング生成)を
+    2. `paid-leave:roll-schedules`を実行し、Schedule生成(今日から1年先までの再計算。
+       `fromDate`は明日)を確認する。
+    3. 「有給休暇」画面(`/admin/paid-leave`)の「付与ルール」カードにある「付与予定を
+       確認」ボタンから`/admin/paid-leave/schedule`(付与予定一覧)を開き、対象社員の行を
        確認する。
-    3. `/admin/paid-leave/schedule`(付与予定一覧)を開き、対象社員の行を確認する。
-    4. 期間フィルタ(付与予定日)で絞り込めることを確認する。
-    5. 詳細パネルからAssessmentの勤怠データ内訳(算定期間・分母/分子・出勤率・判定
+    4. 状態・社員名・付与予定日の期間で絞り込めることを確認する。条件はURLに残り、再読込しても
+       保たれること、0件のときは「検索条件をクリア」で戻せることを確認する。
+    5. 付与予定日を過ぎて未付与の行がある場合(対象データを用意する)、「付与ルール」カードの
+       ボタンに件数が出ること、付与予定画面の警告の「表示する」から`overdue`の一覧に移れることを
+       確認する。
+    6. 詳細パネルからAssessmentの勤怠データ内訳(算定期間・分母/分子・出勤率・判定
        Policyバージョン)を確認する。
-    6. 「再判定」ボタンで自動判定が更新される(エラーにならない)ことを確認する。
-    7. 要確認/対象外の行をOverrideで付与対象(Eligible)に変更し、理由を入力して確定する。
-    8. 付与対象(`eligible`)フィルタで複数選択し、一括付与を実行する。
-    9. 付与後、一覧から`eligible`フィルタで対象行が消えることを確認する。
-    10. 付与された社員本人の有給残数画面(`/paid-leave`)に反映されることを確認する。
-    11. 一括付与に一部失敗が混在するケース(対象外行が紛れ込む等)で、成功/失敗件数が
-        表示されることを確認する。
+    7. 「再判定」ボタンで自動判定が更新される(エラーにならない)ことを確認する。
+    8. 詳細パネルの「4. 区分・日数を修正」で区分または付与候補日数を変更し、修正理由を入力して
+       保存する。行に「変更あり」が付き、`changed`フィルタに出ることを確認する。付与予定日は
+       変更できないこと、理由が空だと保存できないことも確認する。
+    9. 要確認/対象外の行をOverrideで付与対象(Eligible)に変更し、理由を入力して確定する。
+    10. 付与対象(`eligible`)フィルタで複数選択し、一括付与を実行する。確認ダイアログ(件数・
+        合計日数・付与予定日の範囲)が出てから確定することを確認する。
+    11. 付与後、一覧から`eligible`フィルタで対象行が消えることを確認する。
+    12. 付与された社員本人の有給残数画面(`/paid-leave`)に反映されることを確認する。
+    13. 一部失敗のケース(Eligible以外の行を含む一括付与)は、画面では対象外の行を選べないため
+        APIを直接叩いて確認する。`POST /paid-leave/schedule-entries/bulk-grant`に対象外の行の
+        IDを混ぜ、レスポンスの`success_count`/`failure_count`と行ごとの`message`に
+        失敗理由が返ることを確認する。
+    14. 自動判定(UC-P012): 付与予定日が今日以前の「予定」の行を用意し、付与予定画面の上部の「自動判定」カードで
+        次回の自動判定(毎月1日03:00)と前回の結果を確認する。「今すぐ判定する」を押し、確認ダイアログ
+        (「付与予定日を過ぎた『予定』の行を、今すぐ判定します。」)のあとで、記録が待機→実行中になり
+        (`paid-leave:assess-schedules --pending`が毎分拾う。手動の確認では`php artisan paid-leave:assess-schedules --pending`を
+        実行する)、終わると行が付与対象/対象外/要確認になり、カードに前回の結果(対象・付与対象・対象外・要確認・失敗の件数)が
+        出ることを確認する。実行中は「今すぐ判定する」が押せないこと(APIは409)を確認する。判定内訳に
+        みなし日数(前倒しの初回)が出ることも確認する。
+    15. まとめて付与する2件(同じ付与予定日の名目6か月と18か月)は、片方を選ぶともう片方も選ばれ、APIで片方だけを
+        指定すると422(「まとめて付与する2件は、同時に選んでください。」)になることを確認する。
 
     確認ポイント: 通常/比例/シフト区分判定がWorkStyleデータの有無で正しく分岐するか
-    (`GrantCategoryClassifier`/`GrantDaysResolver`)、Assessmentが`scheduled_on`到来前は
-    実行されないこと、`Eligible`行のみ一括付与できること
+    (`GrantCategoryClassifier`・`ScheduleCandidateGenerator`の候補日数算出)、Assessmentが
+    `scheduled_on`到来前は実行されないこと、`Eligible`行のみ一括付与できること
     (`frontend/e2e/scenario-15-paid-leave-schedule.spec.ts`)。
 
 ## 6. 実行方法の検討

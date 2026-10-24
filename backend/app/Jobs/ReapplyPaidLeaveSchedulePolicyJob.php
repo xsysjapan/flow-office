@@ -6,12 +6,12 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Support\ScheduleCandidateGenerator;
 use App\Models\User;
+use App\Support\BusinessDate;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Carbon;
 use Throwable;
 
 /**
@@ -34,7 +34,19 @@ class ReapplyPaidLeaveSchedulePolicyJob implements ShouldQueue
 
     public function handle(CommandBus $commandBus, ScheduleCandidateGenerator $generator): void
     {
-        $from = Carbon::today();
+        $this->reapplyAll($commandBus, $generator);
+    }
+
+    /**
+     * 対象社員全員の未確定Scheduleを作り直す。運用コマンド`paid-leave:schedule:reapply-policy`も
+     * 同じ処理を同期で呼ぶ。
+     *
+     * @return int 作り直した社員の数(失敗した社員は含まない)
+     */
+    public function reapplyAll(CommandBus $commandBus, ScheduleCandidateGenerator $generator): int
+    {
+        $processed = 0;
+        $from = BusinessDate::today();
         $to = $from->copy()->addYear();
 
         $users = User::query()
@@ -51,13 +63,18 @@ class ReapplyPaidLeaveSchedulePolicyJob implements ShouldQueue
                     userId: $user->id,
                     candidates: $candidates,
                     reason: $this->reason,
+                    fromDate: $from->toDateString(),
                     overrideManualEdits: true,
                 ));
+
+                $processed++;
             } catch (Throwable $e) {
                 // 1社員の失敗が他の社員の再計算に影響しないようにする
                 // (RollPaidLeaveSchedulesCommandと同じフェイルセーフパターン)。
                 report($e);
             }
         }
+
+        return $processed;
     }
 }

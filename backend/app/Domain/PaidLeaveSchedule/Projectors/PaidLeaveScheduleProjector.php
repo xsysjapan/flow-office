@@ -26,10 +26,11 @@ class PaidLeaveScheduleProjector extends Projector
         PaidLeaveScheduleEntry::query()->updateOrCreate(
             ['id' => $event->scheduleEntryId],
             [
-                'user_id' => $event->aggregateRootUuid(),
+                'user_id' => $event->userId,
                 'scheduled_on' => $event->scheduledOn,
                 'category' => $event->category,
                 'candidate_grant_days' => $event->candidateGrantDays,
+                'nominal_service_months' => $event->nominalServiceMonths,
                 'status' => $event->isDeterminate ? PaidLeaveScheduleEntry::STATUS_SCHEDULED : PaidLeaveScheduleEntry::STATUS_NEEDS_REVIEW,
             ],
         );
@@ -54,6 +55,7 @@ class PaidLeaveScheduleProjector extends Projector
                 'denominator_days' => $event->denominatorDays,
                 'attendance_days' => $event->attendanceDays,
                 'excluded_days' => $event->excludedDays,
+                'deemed_attendance_days' => $event->deemedAttendanceDays,
                 'attendance_rate' => $event->attendanceRate,
                 'policy_version' => $event->policyVersion,
                 'automatic_result' => $event->automaticResult,

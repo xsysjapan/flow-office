@@ -6,6 +6,7 @@ use App\Domain\EventSourcing\Rebuild\EventStoreRebuilder;
 use App\Domain\EventSourcing\Rebuild\RebuiltEvent;
 use App\Domain\EventSourcing\Rebuild\StoredEventRow;
 use App\Domain\EventSourcing\Rebuild\UnallocatedUsageAllocator;
+use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -107,6 +108,31 @@ class UnallocatedUsageAllocatorTest extends TestCase
 
         $this->assertSame([['usageId' => 'U1', 'grantId' => 'G', 'allocatedDays' => 1.0]], array_map(fn (RebuiltEvent $e) => $e->payload, $result['events']));
         $this->assertSame(0, $result['report']['unallocated_usages']);
+    }
+
+    public function test_confirmation_allocates_from_the_same_day_grant_recorded_first(): void
+    {
+        // Step 1の同点(有効期限・付与日が同じ)は、先に記録したG1(10日)から充当する。
+        $g1 = $this->grant(1, 0, 'G1', '2026-04-01', '2028-03-31', 10.0);
+        $g2 = $this->grant(2, 0, 'G2', '2026-04-01', '2028-03-31', 11.0);
+        $result = $this->allocator->allocate([$g1, $g2, ...$this->usage('U1', '2026-07-10', 3.0, 5)]);
+
+        $this->assertSame([['usageId' => 'U1', 'grantId' => 'G1', 'allocatedDays' => 3.0]], array_map(fn (RebuiltEvent $e) => $e->payload, $result['events']));
+    }
+
+    public function test_confirmation_continues_to_the_next_same_day_grant_in_the_nearest_future_date(): void
+    {
+        // 使用日2026-05-01に有効な付与は無い。最も近い将来の付与日2026-06-01のG1(3日)→G2(10日)の順に5日を充当し、
+        // 付与日の遠いG3(2026-07-01)へは進まない。
+        $g1 = $this->grant(1, 0, 'G1', '2026-06-01', '2028-05-31', 3.0);
+        $g2 = $this->grant(2, 0, 'G2', '2026-06-01', '2028-05-31', 10.0);
+        $g3 = $this->grant(3, 0, 'G3', '2026-07-01', '2028-06-30', 10.0);
+        $result = $this->allocator->allocate([$g1, $g2, $g3, ...$this->usage('U1', '2026-05-01', 5.0, 5)]);
+
+        $this->assertSame([
+            ['usageId' => 'U1', 'grantId' => 'G1', 'allocatedDays' => 3.0],
+            ['usageId' => 'U1', 'grantId' => 'G2', 'allocatedDays' => 2.0],
+        ], array_map(fn (RebuiltEvent $e) => $e->payload, $result['events']));
     }
 
     public function test_confirmation_uses_the_grant_expiry_as_changed_before_the_confirmation(): void
@@ -362,8 +388,11 @@ class UnallocatedUsageAllocatorTest extends TestCase
         $allocated = $result->rows[5];
         $this->assertSame('G2', $allocated['event_properties']['grantId']);
         $this->assertEqualsWithDelta(1.0, $allocated['event_properties']['allocatedDays'], 0.000001);
-        $this->assertSame(self::USER, $allocated['aggregate_uuid']);
-        $this->assertSame([1, 2, 3, 4], array_column(array_filter($result->rows, fn (array $r) => $r['aggregate_uuid'] === self::USER), 'aggregate_version'));
+        // 充当は途中の工程では社員IDで書かれ、最後の工程で新しいストリームIDへ付け替わる(userId が入る)。
+        $accountStream = PaidLeaveAccountAggregate::streamIdFor(self::USER);
+        $this->assertSame($accountStream, $allocated['aggregate_uuid']);
+        $this->assertSame(self::USER, $allocated['event_properties']['userId']);
+        $this->assertSame([1, 2, 3, 4], array_column(array_filter($result->rows, fn (array $r) => $r['aggregate_uuid'] === $accountStream), 'aggregate_version'));
         $this->assertSame(1, $result->report['usage_allocation']['allocated_usages']);
         $this->assertSame(0, $result->report['usage_allocation']['unallocated_usages']);
     }

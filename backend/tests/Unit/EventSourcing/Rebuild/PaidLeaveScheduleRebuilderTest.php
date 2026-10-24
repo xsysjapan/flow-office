@@ -194,10 +194,10 @@ class PaidLeaveScheduleRebuilderTest extends TestCase
         $this->assertSame(['paid_leave_schedule.entry_cancelled' => 1, 'paid_leave_schedule.entry_created' => 1, 'paid_leave_schedule.entry_granted' => 1, 'shift_pattern.created' => 1], $this->sorted($result->report['by_class_after']));
         $this->assertSame(['paid_leave_schedule.entry_created' => 1, 'paid_leave_schedule.entry_granted' => 1], $this->sorted($result->report['paid_leave_schedule']['replaced']));
         $this->assertSame(['paid_leave_schedule.entry_created' => 1, 'paid_leave_schedule.entry_granted' => 1], $this->sorted($result->report['paid_leave_schedule']['derived']));
-        $this->assertSame([1, 2, 3, 4], array_column($result->rows, 'id'));
-        $this->assertSame('u1', $result->rows[0]['aggregate_uuid']);
-        $this->assertSame(1, $result->rows[0]['aggregate_version']);
-        $this->assertSame(2, $result->rows[1]['aggregate_version']);
+        // 変換した付与予定のイベントは、最後の工程(PaidLeaveStreamRekeyer)で取り除かれ、id は詰められる。
+        $this->assertSame(3, $result->report['paid_leave_rekey']['removed_rows']);
+        $this->assertSame([1], array_column($result->rows, 'id'));
+        $this->assertSame(['shift_pattern.created'], array_column($result->rows, 'event_class'));
     }
 
     public function test_event_store_rebuilder_fails_when_the_read_model_row_is_missing(): void

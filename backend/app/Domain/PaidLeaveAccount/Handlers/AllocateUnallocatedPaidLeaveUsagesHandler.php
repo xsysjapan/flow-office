@@ -17,7 +17,7 @@ class AllocateUnallocatedPaidLeaveUsagesHandler implements CommandHandler
         assert($command instanceof AllocateUnallocatedPaidLeaveUsages);
 
         // 充当できるものが無ければ集約は何も記録しない(冪等)。
-        PaidLeaveAccountAggregate::retrieve($command->userId)
+        PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId)
             ->allocateUnallocatedOnGrant($command->grantId)
             ->persist();
 

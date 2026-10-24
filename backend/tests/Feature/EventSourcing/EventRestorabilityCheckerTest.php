@@ -14,7 +14,7 @@ class EventRestorabilityCheckerTest extends TestCase
 
     private const OLD = ['userId' => 'u1', 'entryId' => 'e1', 'scheduledOn' => '2026-10-01', 'category' => 'x', 'candidateGrantDays' => 10];
 
-    private const CURRENT = ['scheduleEntryId' => 'e1', 'scheduledOn' => '2026-10-01', 'category' => 'x', 'candidateGrantDays' => 10, 'isDeterminate' => true];
+    private const CURRENT = ['userId' => 'u1', 'scheduleEntryId' => 'e1', 'scheduledOn' => '2026-10-01', 'category' => 'x', 'candidateGrantDays' => 10, 'isDeterminate' => true];
 
     public function test_old_format_rows_are_reported_by_class_with_count_and_first_id(): void
     {

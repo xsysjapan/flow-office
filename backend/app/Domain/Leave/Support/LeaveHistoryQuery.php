@@ -30,12 +30,10 @@ final class LeaveHistoryQuery
     /**
      * @param  class-string<Model>  $grantModelClass
      * @param  class-string<Model>  $requestModelClass
-     * @param  array<int, string>  $userScopedEventClassPrefixes  `App\Domain\PaidLeaveAccount`
-     *                                                            (docs/changesets/20260906-paid-leave-domain-redesign/spec.md)のように、
-     *                                                            集約ルートがgrant/request単位ではなく社員単位(aggregate_uuid = userId)の
-     *                                                            ドメインを追加で含める場合、そのevent_classの接頭辞(例: 'paid_leave_account.')
-     *                                                            を渡す。
-     * @param  array<int, string>  $additionalAggregateIds  grant/request以外の集約(例: 特別休暇口座の集約ID。利用者から派生する)のID。
+     * @param  array<int, string>  $userScopedEventClassPrefixes  集約ルートの集約IDが社員ID(aggregate_uuid = userId)そのままのドメインを
+     *                                                            追加で含める場合の、そのevent_classの接頭辞。口座の集約は社員から派生したIDに
+     *                                                            分離済み(`additionalAggregateIds`を使う)のため、現在は使う呼び出し元が無い。
+     * @param  array<int, string>  $additionalAggregateIds  grant/request以外の集約(例: 有給・特別休暇・代休の口座の集約ID。利用者から派生する)のID。
      * @return Collection<int, object>
      */
     public static function eventsForUser(

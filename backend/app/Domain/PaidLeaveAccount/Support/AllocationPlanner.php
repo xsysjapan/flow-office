@@ -11,15 +11,17 @@ namespace App\Domain\PaidLeaveAccount\Support;
  * アルゴリズム(spec.md 仕様確定事項 / 依頼書§20):
  * - Step 1: usedOn時点で有効(grantedOn <= usedOn <= expiresOn)かつ未取消のGrantのうち、
  *   空き(grantedDays - allocated済み合計)があるものを expiresOn 昇順(近い順)に充当する。
+ * - Step 1の同点は 付与日→order(記録の順)の古い順。
  * - Step 2: Step 1で不足が残る場合、usedOnより後のgrantedOnを持つ未取消Grantのうち
- *   grantedOnが最も近い1件のみを対象に、残り不足分だけ充当を試みる(複数件へは進まない)。
+ *   grantedOnが最も近い付与日の付与だけを対象に、orderの順に残り不足分を充当する
+ *   (1件目の残りが足りなければ同じ日の次の付与に続ける。別の付与日へは進まない)。
  * - Step 3: それでも不足が残る場合、残りは充当せず未充当のまま残す(呼び出し側で
  *   confirm自体は失敗させない)。
  */
 class AllocationPlanner
 {
     /**
-     * @param  array<int, array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocatedTotal: float}>  $grants
+     * @param  array<int, array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocatedTotal: float, order?: int}>  $grants
      * @return array<int, array{grantId: string, allocatedDays: float}>
      */
     public function plan(string $usedOn, float $usedDays, array $grants): array
@@ -35,7 +37,10 @@ class AllocationPlanner
                 && $this->availableDays($g) > 0,
         ));
 
-        usort($validNow, fn (array $a, array $b) => $a['expiresOn'] <=> $b['expiresOn']);
+        // 有効期限→付与日→記録の順(order)の古い順。
+        usort($validNow, fn (array $a, array $b) => $a['expiresOn'] <=> $b['expiresOn']
+            ?: $a['grantedOn'] <=> $b['grantedOn']
+            ?: ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
 
         foreach ($validNow as $grant) {
             if ($remaining <= 0) {
@@ -58,15 +63,21 @@ class AllocationPlanner
                 fn (array $g) => ! $g['revoked'] && $g['grantedOn'] > $usedOn,
             ));
 
-            usort($futureGrants, fn (array $a, array $b) => $a['grantedOn'] <=> $b['grantedOn']);
+            usort($futureGrants, fn (array $a, array $b) => $a['grantedOn'] <=> $b['grantedOn']
+                ?: ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
 
-            $nearestFuture = $futureGrants[0] ?? null;
+            // 最も近い将来の付与日の付与だけを対象に、order順に続けて充当する(1件目で足りなければ同じ日の次へ)。
+            $nearestDate = $futureGrants[0]['grantedOn'] ?? null;
 
-            if ($nearestFuture !== null) {
-                $take = min($remaining, $this->availableDays($nearestFuture));
+            foreach ($futureGrants as $grant) {
+                if ($remaining <= 0 || $grant['grantedOn'] !== $nearestDate) {
+                    break;
+                }
+
+                $take = min($remaining, $this->availableDays($grant));
 
                 if ($take > 0) {
-                    $plan[] = ['grantId' => $nearestFuture['grantId'], 'allocatedDays' => $take];
+                    $plan[] = ['grantId' => $grant['grantId'], 'allocatedDays' => $take];
                     $remaining -= $take;
                 }
             }

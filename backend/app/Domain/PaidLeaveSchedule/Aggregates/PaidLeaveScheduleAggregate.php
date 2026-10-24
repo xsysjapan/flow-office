@@ -10,10 +10,11 @@ use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCreated;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryGranted;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryManuallyEdited;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntrySuperseded;
+use App\Domain\UserManagement\Support\UserManagementStreamId;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * paid_leave_schedule集約(AggregateId = userId)。社員一人の将来付与予定Schedule一式を
+ * paid_leave_schedule集約(AggregateId = `streamIdFor(userId)`。社員IDから派生させた別のストリーム)。社員一人の将来付与予定Schedule一式を
  * 内部で保持し、「過去確定Schedule不変」「個別修正の保護」という不変条件を、replayされた
  * 自身の内部状態のみで保証する(Projection/Eloquentへは一切アクセスしない)。
  * docs/changesets/20260906-paid-leave-schedule-assessment/spec.md「仕様確定事項」参照。
@@ -21,12 +22,16 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * 状態遷移: Scheduled → AssessmentPending → (Eligible|NotEligible|NeedsReview) →
  * (Granted|Cancelled)。
  *
+ * まとめて付与する2件(同じ社員・同じ付与予定日で、名目の継続勤務月数が初回とその+12か月の2行)は常に組で扱う
+ * (`pairedEntryId`)。判定の上書き・個別修正・置き換え(Superseded)・取消は組の2行に同じ操作を行う
+ * (docs/changesets/20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md 論点10)。
+ *
  * 出勤率Assessmentの分母/分子算出そのものは`Support\AttendanceRateAssessor`が、
  * 通常/比例/シフト区分の算出は`Support\GrantCategoryClassifier`が、いずれも
  * ステートレスにCommandHandler側で行い、この集約はその結果の記録・状態遷移のみを担う。
  *
- * @phpstan-type AssessmentState array{periodStart: string, periodEnd: string, denominatorDays: int, attendanceDays: int, excludedDays: int, attendanceRate: ?float, policyVersion: string, automaticResult: string, finalResult: string, overrideReason: ?string}
- * @phpstan-type EntryState array{scheduledOn: string, category: string, candidateGrantDays: float, status: string, manualOverride: ?array{reason: string, byUserId: string, at: ?string}, assessments: array<string, AssessmentState>, latestAssessmentId: ?string}
+ * @phpstan-type AssessmentState array{periodStart: string, periodEnd: string, denominatorDays: int, attendanceDays: int, excludedDays: int, deemedAttendanceDays: int, attendanceRate: ?float, policyVersion: string, automaticResult: string, finalResult: string, overrideReason: ?string}
+ * @phpstan-type EntryState array{scheduledOn: string, nominalServiceMonths: ?int, category: string, candidateGrantDays: float, status: string, manualOverride: ?array{reason: string, byUserId: string, at: ?string}, assessments: array<string, AssessmentState>, latestAssessmentId: ?string}
  */
 class PaidLeaveScheduleAggregate extends AggregateRoot
 {
@@ -46,20 +51,58 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     private const FINALIZED_STATUSES = [self::STATUS_GRANTED, self::STATUS_CANCELLED];
 
+    /**
+     * 個別修正(manuallyEditScheduleEntry)で変更してよいキー。付与予定日(scheduledOn)や
+     * status等を混入させると、集約の状態とProjectionが食い違うため制限する。
+     */
+    private const MANUALLY_EDITABLE_KEYS = ['category', 'candidateGrantDays'];
+
     /** @var array<string, EntryState> */
     private array $entries = [];
 
+    /** 集約が対象とする社員(forUserで束縛する。イベントの社員IDに使う)。 */
+    private ?string $userId = null;
+
+    /**
+     * 社員IDから付与予定の集約IDを決定的に派生させる。方式は既存の`UserManagementStreamId`(UUIDv5)に従う。
+     * 社員の集約(集約ID=社員ID)や他の口座とストリームを共有しない。
+     */
+    public static function streamIdFor(string $userId): string
+    {
+        return UserManagementStreamId::for('paid_leave_schedule', $userId);
+    }
+
+    /**
+     * この集約が対象とする社員を束縛する(集約IDは`streamIdFor`で決める)。全ての操作の前に呼ぶ。
+     */
+    public function forUser(string $userId): self
+    {
+        $this->userId = $userId;
+
+        return $this;
+    }
+
+    private function requireUserId(): string
+    {
+        if ($this->userId === null) {
+            throw new \LogicException('付与予定の操作の前に社員を束縛してください(forUser)。');
+        }
+
+        return $this->userId;
+    }
+
     /**
      * 対象社員について、1年先までのScheduleエントリ存在を保証する(べき等)。
-     * `scheduledOn`に一致する未取消エントリが既に存在する場合はスキップする
+     * (`scheduledOn`, `nominalServiceMonths`)の組に一致する未取消エントリが既に存在する場合はスキップする
+     * (名目の月数がnullの行・候補は`scheduledOn`だけで見分ける。古いイベントとの互換)
      * (新規社員登録時・日次ロール生成の両方から同じロジックを使う)。
      *
-     * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float}>  $candidates
+     * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, nominalServiceMonths?: ?int}>  $candidates
      */
     public function ensureFutureScheduleGenerated(array $candidates): self
     {
         foreach ($candidates as $candidate) {
-            if ($this->findEntryIdByScheduledOn($candidate['scheduledOn']) !== null) {
+            if ($this->findEntryId($candidate['scheduledOn'], $candidate['nominalServiceMonths'] ?? null) !== null) {
                 continue;
             }
 
@@ -79,26 +122,51 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
      * (依頼書§28)、`$overrideManualEdits`が`true`の場合はこの保護を無視する
      * (法定付与ポリシー・付与ルール自体が変更された場合。未確定の予定は個別修正の有無に
      * 関わらず新しい内容に追従させる、docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md)。
+     * `$fromDate`(Y-m-d。候補を作るときの`from`)を渡した場合、`scheduledOn < $fromDate`の候補は作らず、`scheduledOn < $fromDate`のエントリは状態・
+     * `$includeGrantedEntries`に関わらず取消も置換もしない(過去日付の予定は再計算の対象外、
+     * docs/changesets/20261021-paid-leave-schedule-reactor-tests/spec.md 論点4)。`$includeGrantedEntries=false`で
+     * 読み飛ばす`Granted`エントリと同じ付与予定日の候補は消費し、付与済みの日付に予定を重ねて作らない
+     * (`Cancelled`は消費しない。取り消した日付に予定を作り直せるようにするため)。
+     * 行・候補は(付与予定日, 名目の継続勤務月数)の組で見分ける(同じ日に名目の月数の違う行を持てる。
+     * どちらかの月数がnullなら付与予定日だけで見分ける。docs/changesets/20261021-paid-leave-same-day-grants/spec.md 論点4)。
      *
-     * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float}>  $candidates
+     * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, nominalServiceMonths?: ?int}>  $candidates
      */
-    public function recalculateFutureSchedule(array $candidates, string $reason, bool $overrideManualEdits = false, bool $includeGrantedEntries = false): self
+    public function recalculateFutureSchedule(array $candidates, string $reason, bool $overrideManualEdits = false, bool $includeGrantedEntries = false, ?string $fromDate = null): self
     {
-        $desiredByScheduledOn = [];
+        // 候補をキー(付与予定日|名目の月数)で引く。月数が無い候補のキーは付与予定日だけ。
+        $desiredByKey = [];
         foreach ($candidates as $candidate) {
-            $desiredByScheduledOn[$candidate['scheduledOn']] = $candidate;
+            // fromDateより前の候補は作らない(その日付の行は再計算の対象外。当日の行を
+            // 日次の再計算で二重に作らないため)。
+            if ($fromDate !== null && $candidate['scheduledOn'] < $fromDate) {
+                continue;
+            }
+
+            $desiredByKey[self::entryKey($candidate['scheduledOn'], $candidate['nominalServiceMonths'] ?? null)] = $candidate;
         }
 
-        // 既存の再計算対象エントリを走査する。確定済みの扱いは$includeGrantedEntries次第:
+        // 既存の再計算対象エントリを走査して、行ごとの処理(取消/置き換え/そのまま)を決める。確定済みの扱いは$includeGrantedEntries次第:
         // - false(デフォルト): FINALIZED_STATUSES(Granted/Cancelled)を対象外
         // - true(過去分洗い替え用): Cancelledのみを対象外、Grantedも対象に含める
         // 個別修正済みは$overrideManualEdits次第。
+        /** @var array<string, array{type: string, desired: ?array<string, mixed>}> $actions */
+        $actions = [];
+
         foreach ($this->entries as $entryId => $entry) {
             $excludedStatuses = $includeGrantedEntries
                 ? [self::STATUS_CANCELLED]
                 : self::FINALIZED_STATUSES;
 
+            if ($fromDate !== null && $entry['scheduledOn'] < $fromDate) {
+                continue;
+            }
+
             if (in_array($entry['status'], $excludedStatuses, true)) {
+                if ($entry['status'] === self::STATUS_GRANTED) {
+                    $this->consumeDesired($desiredByKey, $entry);
+                }
+
                 continue;
             }
 
@@ -109,16 +177,56 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
                 // (=一切触らない)ことのみを保証する。
                 // 同じscheduledOnの候補をここで消費しておかないと、下部の「残った候補を
                 // 新規作成する」ループでこのエントリと重複する新規エントリが作られてしまう。
-                unset($desiredByScheduledOn[$entry['scheduledOn']]);
+                $this->consumeDesired($desiredByKey, $entry);
 
                 continue;
             }
 
-            $desired = $desiredByScheduledOn[$entry['scheduledOn']] ?? null;
+            $desiredKey = $this->matchingDesiredKey($desiredByKey, $entry);
+            $desired = $desiredKey !== null ? $desiredByKey[$desiredKey] : null;
 
             if ($desired === null) {
                 // 最新条件ではこの日付にScheduleが不要になった。
+                $actions[$entryId] = ['type' => 'cancel', 'desired' => null];
+
+                continue;
+            }
+
+            unset($desiredByKey[$desiredKey]);
+
+            if ($desired['category'] === $entry['category']
+                && abs($desired['candidateGrantDays'] - $entry['candidateGrantDays']) < 0.0001) {
+                // 内容が変わらない(冪等)。ただし組の相手が取消・置き換えになるときは、組の2行を同じように置き換える。
+                $actions[$entryId] = ['type' => 'keep', 'desired' => $desired];
+
+                continue;
+            }
+
+            $actions[$entryId] = ['type' => 'supersede', 'desired' => $desired];
+        }
+
+        // 組の片方だけが取消・置き換えになるとき、変わらない相手も置き換える(組は常に同じ扱い)。
+        foreach ($actions as $entryId => $action) {
+            if ($action['type'] === 'keep') {
+                continue;
+            }
+
+            $partnerId = $this->pairedEntryId($entryId);
+            if ($partnerId !== null && ($actions[$partnerId]['type'] ?? null) === 'keep') {
+                $actions[$partnerId]['type'] = 'supersede';
+            }
+        }
+
+        foreach ($actions as $entryId => $action) {
+            if ($action['type'] === 'keep') {
+                continue;
+            }
+
+            $entry = $this->entries[$entryId];
+
+            if ($action['type'] === 'cancel') {
                 $this->recordThat(new PaidLeaveScheduleEntryCancelled(
+                    userId: $this->requireUserId(),
                     scheduleEntryId: $entryId,
                     reason: $reason,
                 ));
@@ -126,27 +234,21 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
                 continue;
             }
 
-            unset($desiredByScheduledOn[$entry['scheduledOn']]);
-
-            if ($desired['category'] === $entry['category']
-                && abs($desired['candidateGrantDays'] - $entry['candidateGrantDays']) < 0.0001) {
-                // 内容が変わらないため何もしない(冪等)。
-                continue;
-            }
-
             $this->recordThat(new PaidLeaveScheduleEntrySuperseded(
+                userId: $this->requireUserId(),
                 scheduleEntryId: $entryId,
                 reason: $reason,
                 previousScheduledOn: $entry['scheduledOn'],
                 previousCategory: $entry['category'],
                 previousCandidateGrantDays: $entry['candidateGrantDays'],
+                previousNominalServiceMonths: $entry['nominalServiceMonths'],
             ));
 
-            $this->createEntry($desired);
+            $this->createEntry($action['desired']);
         }
 
         // 残った(既存に一致するものが無かった)候補は新規作成する。
-        foreach ($desiredByScheduledOn as $candidate) {
+        foreach ($desiredByKey as $candidate) {
             $this->createEntry($candidate);
         }
 
@@ -169,6 +271,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         ?float $attendanceRate,
         string $policyVersion,
         string $automaticResult,
+        int $deemedAttendanceDays = 0,
     ): self {
         $entry = $this->requireEntry($scheduleEntryId);
 
@@ -177,6 +280,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleAssessmentRecorded(
+            userId: $this->requireUserId(),
             scheduleEntryId: $scheduleEntryId,
             assessmentId: $assessmentId,
             periodStart: $periodStart,
@@ -187,6 +291,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             attendanceRate: $attendanceRate,
             policyVersion: $policyVersion,
             automaticResult: $automaticResult,
+            deemedAttendanceDays: $deemedAttendanceDays,
         ));
 
         return $this;
@@ -201,31 +306,40 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         string $reason,
         string $operatorUserId,
     ): self {
-        $entry = $this->requireEntry($scheduleEntryId);
+        $targetIds = $this->entryIdWithPartner($scheduleEntryId);
 
-        if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
-            throw new DomainRuleException("Scheduleエントリ [{$scheduleEntryId}] は確定済み・取消済みのため判定を上書きできません。");
+        foreach ($targetIds as $targetId) {
+            $entry = $this->requireEntry($targetId);
+
+            if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
+                throw new DomainRuleException("Scheduleエントリ [{$targetId}] は確定済み・取消済みのため判定を上書きできません。");
+            }
+
+            if ($entry['latestAssessmentId'] === null) {
+                throw new DomainRuleException("Scheduleエントリ [{$targetId}] はまだAssessmentが実行されていません。");
+            }
         }
 
-        if ($entry['latestAssessmentId'] === null) {
-            throw new DomainRuleException("Scheduleエントリ [{$scheduleEntryId}] はまだAssessmentが実行されていません。");
+        foreach ($targetIds as $targetId) {
+            $this->recordThat(new PaidLeaveScheduleAssessmentOverridden(
+                userId: $this->requireUserId(),
+                scheduleEntryId: $targetId,
+                assessmentId: $this->entries[$targetId]['latestAssessmentId'],
+                finalResult: $finalResult,
+                reason: $reason,
+                operatorUserId: $operatorUserId,
+            ));
         }
-
-        $this->recordThat(new PaidLeaveScheduleAssessmentOverridden(
-            scheduleEntryId: $scheduleEntryId,
-            assessmentId: $entry['latestAssessmentId'],
-            finalResult: $finalResult,
-            reason: $reason,
-            operatorUserId: $operatorUserId,
-        ));
 
         return $this;
     }
 
     /**
      * Scheduleエントリの個別修正。修正後は`recalculateFutureSchedule`の対象から除外される。
+     * 個別修正できる項目は区分(category)と候補付与日数(candidateGrantDays)のみ。付与予定日は
+     * 変更対象にしない(docs/changesets/20261020-paid-leave-schedule-page-restore/spec.md 論点3)。
      *
-     * @param  array{scheduledOn?: string, category?: string, candidateGrantDays?: float}  $changes
+     * @param  array{category?: string, candidateGrantDays?: float}  $changes
      */
     public function manuallyEditScheduleEntry(
         string $scheduleEntryId,
@@ -233,18 +347,34 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         string $reason,
         string $operatorUserId,
     ): self {
-        $entry = $this->requireEntry($scheduleEntryId);
+        $this->requireEntry($scheduleEntryId);
 
-        if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
-            throw new DomainRuleException("Scheduleエントリ [{$scheduleEntryId}] は確定済み・取消済みのため編集できません。");
+        if ($changes === []) {
+            throw new DomainRuleException('個別修正する項目がありません。');
         }
 
-        $this->recordThat(new PaidLeaveScheduleEntryManuallyEdited(
-            scheduleEntryId: $scheduleEntryId,
-            changes: $changes,
-            reason: $reason,
-            operatorUserId: $operatorUserId,
-        ));
+        $disallowedKeys = array_diff(array_keys($changes), self::MANUALLY_EDITABLE_KEYS);
+        if ($disallowedKeys !== []) {
+            throw new DomainRuleException('個別修正できる項目は区分・候補付与日数のみです。');
+        }
+
+        $targetIds = $this->entryIdWithPartner($scheduleEntryId);
+
+        foreach ($targetIds as $targetId) {
+            if (in_array($this->entries[$targetId]['status'], self::FINALIZED_STATUSES, true)) {
+                throw new DomainRuleException("Scheduleエントリ [{$targetId}] は確定済み・取消済みのため編集できません。");
+            }
+        }
+
+        foreach ($targetIds as $targetId) {
+            $this->recordThat(new PaidLeaveScheduleEntryManuallyEdited(
+                userId: $this->requireUserId(),
+                scheduleEntryId: $targetId,
+                changes: $changes,
+                reason: $reason,
+                operatorUserId: $operatorUserId,
+            ));
+        }
 
         return $this;
     }
@@ -263,6 +393,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleEntryGranted(
+            userId: $this->requireUserId(),
             scheduleEntryId: $scheduleEntryId,
             grantId: $grantId,
             operatorUserId: $operatorUserId,
@@ -273,18 +404,67 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     public function cancelEntry(string $scheduleEntryId, string $reason): self
     {
-        $entry = $this->requireEntry($scheduleEntryId);
+        $targetIds = $this->entryIdWithPartner($scheduleEntryId);
 
-        if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
-            throw new DomainRuleException("Scheduleエントリ [{$scheduleEntryId}] は既に確定済み・取消済みです。");
+        foreach ($targetIds as $targetId) {
+            if (in_array($this->requireEntry($targetId)['status'], self::FINALIZED_STATUSES, true)) {
+                throw new DomainRuleException("Scheduleエントリ [{$targetId}] は既に確定済み・取消済みです。");
+            }
         }
 
-        $this->recordThat(new PaidLeaveScheduleEntryCancelled(
-            scheduleEntryId: $scheduleEntryId,
-            reason: $reason,
-        ));
+        foreach ($targetIds as $targetId) {
+            $this->recordThat(new PaidLeaveScheduleEntryCancelled(
+                userId: $this->requireUserId(),
+                scheduleEntryId: $targetId,
+                reason: $reason,
+            ));
+        }
 
         return $this;
+    }
+
+    /**
+     * まとめて付与する2件の組の相手の行IDを返す(組でなければnull)。組の目印は、未取消で、付与予定日が同じで、
+     * 名目の継続勤務月数が12か月違う(初回とその+12か月)2行。どちらかの月数がnull・行が無い場合は組として扱わない。
+     */
+    public function pairedEntryId(string $scheduleEntryId): ?string
+    {
+        $entry = $this->entries[$scheduleEntryId] ?? null;
+
+        if ($entry === null || $entry['status'] === self::STATUS_CANCELLED || $entry['nominalServiceMonths'] === null) {
+            return null;
+        }
+
+        foreach ($this->entries as $otherId => $other) {
+            if ($otherId !== $scheduleEntryId
+                && $other['status'] !== self::STATUS_CANCELLED
+                && $other['scheduledOn'] === $entry['scheduledOn']
+                && $other['nominalServiceMonths'] !== null
+                && abs($other['nominalServiceMonths'] - $entry['nominalServiceMonths']) === 12) {
+                return $otherId;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 対象の行と、組の相手(あれば)の行ID。名目の月数の小さい方が先。
+     *
+     * @return array<int, string>
+     */
+    private function entryIdWithPartner(string $scheduleEntryId): array
+    {
+        $this->requireEntry($scheduleEntryId);
+
+        $partnerId = $this->pairedEntryId($scheduleEntryId);
+        if ($partnerId === null) {
+            return [$scheduleEntryId];
+        }
+
+        return $this->entries[$partnerId]['nominalServiceMonths'] < $this->entries[$scheduleEntryId]['nominalServiceMonths']
+            ? [$partnerId, $scheduleEntryId]
+            : [$scheduleEntryId, $partnerId];
     }
 
     /**
@@ -304,28 +484,78 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
     }
 
     /**
-     * @param  array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, isDeterminate?: bool}  $candidate
+     * @param  array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, isDeterminate?: bool, nominalServiceMonths?: ?int}  $candidate
      */
     private function createEntry(array $candidate): void
     {
         $this->recordThat(new PaidLeaveScheduleEntryCreated(
+            userId: $this->requireUserId(),
             scheduleEntryId: $candidate['entryId'],
             scheduledOn: $candidate['scheduledOn'],
             category: $candidate['category'],
             candidateGrantDays: $candidate['candidateGrantDays'],
             isDeterminate: $candidate['isDeterminate'] ?? true,
+            nominalServiceMonths: $candidate['nominalServiceMonths'] ?? null,
         ));
     }
 
-    private function findEntryIdByScheduledOn(string $scheduledOn): ?string
+    /**
+     * (付与予定日, 名目の月数)の組に一致する未取消エントリのIDを返す。どちらかの月数がnullなら付与予定日だけで見分ける。
+     */
+    private function findEntryId(string $scheduledOn, ?int $nominalServiceMonths): ?string
     {
         foreach ($this->entries as $entryId => $entry) {
-            if ($entry['scheduledOn'] === $scheduledOn && $entry['status'] !== self::STATUS_CANCELLED) {
+            if ($entry['status'] !== self::STATUS_CANCELLED
+                && self::sameEntryIdentity($entry['scheduledOn'], $entry['nominalServiceMonths'], $scheduledOn, $nominalServiceMonths)) {
                 return $entryId;
             }
         }
 
         return null;
+    }
+
+    private static function sameEntryIdentity(string $onA, ?int $monthsA, string $onB, ?int $monthsB): bool
+    {
+        return $onA === $onB && ($monthsA === null || $monthsB === null || $monthsA === $monthsB);
+    }
+
+    private static function entryKey(string $scheduledOn, ?int $nominalServiceMonths): string
+    {
+        return $scheduledOn.'|'.($nominalServiceMonths ?? '');
+    }
+
+    /**
+     * 既存の行に対応する候補のキーを返す(完全一致を優先し、無ければ月数がnullの側と付与予定日で一致するもの)。
+     *
+     * @param  array<string, array<string, mixed>>  $desiredByKey
+     * @param  EntryState  $entry
+     */
+    private function matchingDesiredKey(array $desiredByKey, array $entry): ?string
+    {
+        $exact = self::entryKey($entry['scheduledOn'], $entry['nominalServiceMonths']);
+        if (isset($desiredByKey[$exact])) {
+            return $exact;
+        }
+
+        foreach ($desiredByKey as $key => $candidate) {
+            if (self::sameEntryIdentity($entry['scheduledOn'], $entry['nominalServiceMonths'], $candidate['scheduledOn'], $candidate['nominalServiceMonths'] ?? null)) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $desiredByKey
+     * @param  EntryState  $entry
+     */
+    private function consumeDesired(array &$desiredByKey, array $entry): void
+    {
+        $key = $this->matchingDesiredKey($desiredByKey, $entry);
+        if ($key !== null) {
+            unset($desiredByKey[$key]);
+        }
     }
 
     /**
@@ -346,6 +576,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
     {
         $this->entries[$event->scheduleEntryId] = [
             'scheduledOn' => $event->scheduledOn,
+            'nominalServiceMonths' => $event->nominalServiceMonths,
             'category' => $event->category,
             'candidateGrantDays' => $event->candidateGrantDays,
             'status' => $event->isDeterminate ? self::STATUS_SCHEDULED : self::STATUS_NEEDS_REVIEW,
@@ -369,6 +600,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             'denominatorDays' => $event->denominatorDays,
             'attendanceDays' => $event->attendanceDays,
             'excludedDays' => $event->excludedDays,
+            'deemedAttendanceDays' => $event->deemedAttendanceDays,
             'attendanceRate' => $event->attendanceRate,
             'policyVersion' => $event->policyVersion,
             'automaticResult' => $event->automaticResult,

@@ -371,7 +371,7 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $this->assertSame('メモ', $day->note);
     }
 
-    public function test_legacy_paid_leave_schedule_events_are_replaced_from_the_read_model_and_replay_to_the_same_rows(): void
+    public function test_legacy_paid_leave_schedule_events_are_removed_by_the_rebuild_and_the_schedule_projection_is_empty_after_replay(): void
     {
         $user = User::factory()->create();
         $admin = User::factory()->create();
@@ -394,7 +394,6 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
             'attendance_days' => 190, 'excluded_days' => 2, 'attendance_rate' => 79.17, 'policy_version' => 'v1', 'automatic_result' => 'NotEligible',
             'final_result' => 'Eligible', 'override_reason' => '例外承認', 'overridden_by_user_id' => $admin->id, 'created_at' => self::AT, 'updated_at' => self::AT,
         ]);
-        $before = $this->scheduleSnapshot();
 
         // 旧版のイベント(entryId。集約は行id)。plain は旧版のイベントを持つ(entry_createdのみ)。
         foreach ([$granted, $cancelled, $review, $plain] as $id) {
@@ -405,24 +404,13 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
 
         $this->rebuildAndSwap();
 
+        // 付与予定のイベント(旧版の行も、ReadModelから置き換えた現行の形も)は、最後の工程で取り除かれる。
+        $this->assertSame(0, DB::table('stored_events')->where('event_class', 'like', 'paid_leave_schedule.%')->count());
         $this->assertSame(0, DB::table('stored_events')->whereIn('aggregate_uuid', [$granted, $cancelled, $review, $plain])->count());
-        $rows = DB::table('stored_events')->where('aggregate_uuid', $user->id)->orderBy('id')->get();
-        $this->assertSame(range(1, $rows->count()), $rows->pluck('aggregate_version')->map(fn ($v) => (int) $v)->all());
-        $this->assertSame(4, $rows->where('event_class', 'paid_leave_schedule.entry_created')->count());
-        $this->assertSame(1, $rows->where('event_class', 'paid_leave_schedule.assessment_overridden')->count());
-        $this->assertSame(1, $rows->where('event_class', 'paid_leave_schedule.entry_cancelled')->count());
-        foreach ($rows as $row) {
-            $meta = json_decode($row->meta_data, true);
-            $this->assertSame($user->id, $meta['aggregate-root-uuid']);
-            $this->assertSame((int) $row->aggregate_version, $meta['aggregate-root-version']);
-            $this->assertSame((int) $row->id, $meta['stored-event-id']);
-        }
 
-        DB::table('paid_leave_schedule_assessments')->delete();
-        DB::table('paid_leave_schedule_entries')->delete();
         $this->replayReadModels();
 
-        $this->assertEquals($before, $this->scheduleSnapshot());
+        $this->assertSame(['entries' => [], 'assessments' => []], $this->scheduleSnapshot());
     }
 
     /** @return array<string, array<int, array<string, mixed>>> 比較用の付与予定ReadModel(日時列を除く) */

@@ -5,6 +5,7 @@ namespace Tests\Unit\EventSourcing\Rebuild;
 use App\Domain\EventSourcing\Rebuild\AttendanceDayCurrent;
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuilder;
 use App\Domain\EventSourcing\Rebuild\StoredEventRow;
+use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use App\Domain\UserManagement\Support\UserManagementStreamId;
 use PHPUnit\Framework\TestCase;
 
@@ -85,7 +86,9 @@ class EventStoreRebuilderTest extends TestCase
 
         $designated = $this->rowOf($result->rows, 'paid_leave_account.usage_designated');
         $this->assertSame(3, $designated['meta_data']['rebuilt_from']);
-        $this->assertSame('u1', $designated['aggregate_uuid']);
+        // 最後の工程で有給口座は新しいストリームIDへ付け替わり、payload に userId が入る(論点3)。
+        $this->assertSame(PaidLeaveAccountAggregate::streamIdFor('u1'), $designated['aggregate_uuid']);
+        $this->assertSame('u1', $designated['event_properties']['userId']);
 
         $allocated = $this->rowOf($result->rows, 'paid_leave_account.usage_allocated');
         $this->assertSame(7, $allocated['meta_data']['rebuilt_from']);
@@ -166,7 +169,7 @@ class EventStoreRebuilderTest extends TestCase
             ],
             array_column($result->rows, 'event_class'),
         );
-        $this->assertSame([1, 2, 3, 4], $this->versionsOf($result->rows, 'u1'));
+        $this->assertSame([1, 2, 3, 4], $this->versionsOf($result->rows, PaidLeaveAccountAggregate::streamIdFor('u1')));
         $this->assertSame([1, 2, 3], $this->versionsOf($result->rows, 'R1'));
         $this->assertSame([1, 2, 3], $this->versionsOf($result->rows, 'W1'));
         $this->assertSame('approved', $result->report['paid_requests'][0]['final_state']);

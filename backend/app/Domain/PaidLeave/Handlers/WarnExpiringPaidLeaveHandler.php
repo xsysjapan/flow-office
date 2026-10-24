@@ -15,7 +15,7 @@ use App\Support\DailyBatchTimezoneGroups;
 
 /**
  * UC-P005: 有給消滅警告を出す。有効期限90日以内・残日数ありの付与を対象に、
- * 本人へ通知する。同一付与に重複して通知しないよう
+ * 本人へ通知する。同じ社員・付与日・有効期限の付与は1件にまとめて通知し、重複して通知しないよう
  * `paid_leave_grants.expiry_warned_at` で警告済みを記録する。
  *
  * @implements CommandHandler<WarnExpiringPaidLeave>
@@ -54,8 +54,14 @@ class WarnExpiringPaidLeaveHandler implements CommandHandler
                 ->whereHas('user', DailyBatchTimezoneGroups::constraint($group['timezone'], $defaultTimezone))
                 ->get();
 
-            foreach ($grants as $grant) {
-                $message = "{$grant->user->name}さんの有給休暇 {$grant->remaining_days}日が".
+            // 同じ社員・同じ付与日・同じ有効期限の付与は、まとめて1件の警告にする(日数は合計)。
+            $bundles = $grants->groupBy(fn (PaidLeaveGrant $grant) => $grant->user_id.'|'.
+                $grant->granted_on->toDateString().'|'.$grant->expires_on->toDateString());
+
+            foreach ($bundles as $bundle) {
+                $grant = $bundle->first();
+                $remainingDays = number_format((float) $bundle->sum('remaining_days'), 1, '.', '');
+                $message = "{$grant->user->name}さんの有給休暇 {$remainingDays}日が".
                     "{$grant->expires_on->toDateString()}に失効します。";
 
                 SendNotificationJob::enqueue(
@@ -65,15 +71,17 @@ class WarnExpiringPaidLeaveHandler implements CommandHandler
                     detailUrl: null,
                 );
 
-                $this->commandBus->dispatch(new RaisePaidLeaveGrantWarning(
-                    userId: $grant->user_id,
-                    grantId: $grant->id,
-                    warningType: 'expiry',
-                    message: $message,
-                ));
-            }
+                foreach ($bundle as $bundled) {
+                    $this->commandBus->dispatch(new RaisePaidLeaveGrantWarning(
+                        userId: $bundled->user_id,
+                        grantId: $bundled->id,
+                        warningType: 'expiry',
+                        message: $message,
+                    ));
+                }
 
-            $warnedCount += $grants->count();
+                $warnedCount++;
+            }
         }
 
         return $warnedCount;

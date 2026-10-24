@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
+import * as workCalendarsApi from '../../api/workCalendars'
 import type { PaidLeaveGrantPolicies, PaidLeaveGrantRule } from '../../api/types'
 import { PaidLeaveGrantRuleEditPage } from './PaidLeaveGrantRuleEditPage'
 
@@ -14,8 +15,9 @@ const rule: PaidLeaveGrantRule = {
   min_attendance_rate: 80,
   first_grant_after_months: 6,
   grant_cycle_months: 12,
+  grant_cycle_type: 'anniversary',
   is_active: true,
-  steps: [{ continuous_service_months: 6, grant_days: 10 }],
+  steps: [{ grant_category: 'normal', continuous_service_months: 6, grant_days: 10 }],
 }
 
 const policies: PaidLeaveGrantPolicies = {
@@ -29,6 +31,7 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantRules').mockResolvedValue([rule])
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantPolicies').mockResolvedValue(policies)
+  vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([])
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -48,7 +51,9 @@ describe('PaidLeaveGrantRuleEditPage', () => {
 
     expect(await screen.findByLabelText('ルール名')).toHaveValue('正社員標準ルール')
     expect(screen.getByLabelText('最低出勤率')).toHaveValue(80)
-    expect(screen.getByText('継続勤務6か月→10日')).toBeInTheDocument()
+    expect(screen.getByLabelText('通常 継続勤務6か月の付与日数')).toHaveValue(10)
+    expect(screen.getByLabelText('入社日を基準に付与')).toBeChecked()
+    expect(screen.queryByText(/既定の会社カレンダーの年度開始日/)).not.toBeInTheDocument()
   })
 
   it('saves the edited rule and returns to the list', async () => {
@@ -66,8 +71,9 @@ describe('PaidLeaveGrantRuleEditPage', () => {
         min_attendance_rate: 80,
         first_grant_after_months: 6,
         grant_cycle_months: 12,
+        grant_cycle_type: 'anniversary',
         is_active: true,
-        steps: [{ continuous_service_months: 6, grant_days: 10 }],
+        steps: [{ grant_category: 'normal', continuous_service_months: 6, grant_days: 10 }],
       }),
     )
     expect(await screen.findByText('一覧に戻りました')).toBeInTheDocument()

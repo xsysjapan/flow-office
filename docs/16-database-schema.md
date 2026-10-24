@@ -1030,30 +1030,53 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - min_attendance_rate
 - first_grant_after_months
 - grant_cycle_months
-- grant_cycle_type(`anniversary`(既定、hire_date起算の周年サイクル)/
-  `mass_grant_month`(会社が指定した特定月への一斉付与。前倒しアルゴリズムは
-  `ScheduleCandidateGenerator::massGrantScheduledDates()`参照))
-- mass_grant_month(nullable, 1-12。`grant_cycle_type=mass_grant_month`のときのみ使用)
+- grant_cycle_type(`mass_grant_month`(既定。年度はじめに一斉付与。一斉付与日は既定の会社カレンダーの年度開始日に連動する。
+  日付の計算は`ScheduleCandidateGenerator::massGrantScheduledDates()`参照)/
+  `anniversary`(入社日を基準に付与する、hire_date起算の周年サイクル))
 - is_active
 - created_at / updated_at
 
-`work_style_id IS NULL`の全社共通ルールが1件、migrationで冪等に投入される
-(`grant_cycle_type=mass_grant_month`, `mass_grant_month=4`)。対象社員に一致する
-有効なルールが(work_style固有・全社共通のいずれも)存在しない場合、その社員の
+`mass_grant_month`列(一斉付与の月)は削除した。一斉付与日は`paid_leave_fiscal_year_settings`(下記)の年度開始月日を使う。
+
+`work_style_id IS NULL`の全社共通ルール「全社共通(年度はじめ一斉付与)」が1件、migrationで冪等に投入される
+(`grant_cycle_type=mass_grant_month`)。付与日数の表(`paid_leave_grant_rule_steps`)には法定の写し(全区分)が入っている。
+対象社員に一致する有効なルールが(work_style固有・全社共通のいずれも)存在しない場合、その社員の
 Schedule候補は生成されない(`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
+ルールの選択は、勤務形態のルール→全社ルールの順、同じ種類は`created_at`→`id`の古い方
+(`PaidLeaveGrantRuleResolver`)。
 
 ## paid_leave_grant_rule_steps
 
 - id
 - rule_id
+- grant_category(string, NOT NULL, 既定`normal`。付与日数の表の区分: `normal`/`proportional_4`/`proportional_3`/
+  `proportional_2`/`proportional_1`)
 - continuous_service_months
 - grant_days
+- created_at / updated_at
+
+unique(rule_id, grant_category, continuous_service_months)。
+
+## paid_leave_fiscal_year_settings(有給の一斉付与日に使う年度開始日。付与予定の文脈の読み取りビュー)
+
+既定の会社カレンダーの年度開始月日を、有給(付与予定)の文脈へ写した1行(id=1)のビュー。
+`PaidLeaveFiscalYearSettingsProjector`が`company_calendar.created`・`updated`・`default_changed`・`deleted`のイベントから
+作る(勤怠の文脈のテーブルは読まない)。`FiscalYearStartResolver`が読み、行が無ければ4月1日として扱う。
+初期値は、migrationで今の既定の会社カレンダーから入れる(既定のカレンダーが無ければ行を作らない)。
+
+- id(tinyint, 主キー。常に1)
+- company_calendar_id(uuid, nullable。既定の会社カレンダー。既定のカレンダーが削除されたらnull)
+- fiscal_year_start_month(tinyint)
+- fiscal_year_start_day(tinyint)
+- last_changed_event_id(bigint, nullable。年度開始月日、または既定のカレンダーが実際に変わったイベントの`stored_events.id`。
+  `ReapplyScheduleOnFiscalYearStartChangedReactor`が、名前だけの変更と区別して付与予定を作り直すために使う)
 - created_at / updated_at
 
 ## paid_leave_schedule_entries(将来の付与予定のProjection)
 
 `App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId =
-`userId`)のイベントから再構築するProjection。`ScheduleCandidateGenerator`
+`PaidLeaveScheduleAggregate::streamIdFor(userId)`。`UserManagementStreamId::for('paid_leave_schedule', userId)`の派生ID)
+のイベントから再構築するProjection。`ScheduleCandidateGenerator`
 (`backend/app/Domain/PaidLeaveSchedule/Support/`)が対象社員の`paid_leave_grant_rules`・
 `WorkStyle`から将来の候補日・区分・候補日数を算出し、`RollPaidLeaveSchedulesCommand`
 (cron)がCommandを発行してエントリを作成する。
@@ -1061,17 +1084,44 @@ Schedule候補は生成されない(`docs/changesets/20260914-port-to-pr112/spec
 - id(uuid、scheduleEntryId)
 - user_id
 - scheduled_on(付与予定日)
-- category(`GrantCategoryClassifier`の区分: 通常/比例/シフト/要確認)
+- category(区分。`GrantCategoryClassifier`の定数: `normal`(通常付与)/`proportional`(比例付与)/
+  `shift`(シフト勤務)/`needs_review`(区分を判定できない・要確認))
 - candidate_grant_days(付与候補日数。区分・日数が確定できない場合は0)
+- nominal_service_months(名目の継続勤務月数。何回目の付与か。unsigned small int、nullable。古いイベントには無い。
+  行は(scheduled_on, nominal_service_months)の組で見分け、同じ日に月数の違う行を持てる)
 - status(`Scheduled` / `AssessmentPending` / `Eligible` / `NotEligible` / `NeedsReview` /
   `Granted` / `Cancelled`。対象ルールのsteps/法定Policyに該当する行が無く候補日数を
   確定できない場合は`Scheduled`ではなく`NeedsReview`で作成される。
   `docs/changesets/20260914-port-to-pr112/spec.md`参照)
-- latest_assessment_id
-- is_manually_overridden / manual_override_reason / manual_override_by_user_id /
-  manual_override_at(管理者による手動判定上書き)
+- latest_assessment_id(最新の`paid_leave_schedule_assessments`の行を指す)
+- is_manually_overridden(区分・候補日数の個別修正(`ManuallyEditScheduleEntry`)済みかどうか。
+  `PaidLeaveScheduleEntryManuallyEdited`で`true`になる。判定結果のOverrideでは立たない)/
+  manual_override_reason / manual_override_by_user_id / manual_override_at
 - grant_id(付与確定後、`paid_leave_grants`側のIDを紐付け)
 - cancelled_reason
+- created_at / updated_at
+
+## paid_leave_schedule_assessments(出勤率Assessmentの版履歴Projection)
+
+1つの付与予定(`paid_leave_schedule_entries`)に対して、出勤率Assessmentの実行(再判定・
+Override)ごとに1行を持つ。どの判定を根拠に、誰が上書きしたかを監査できるように残す
+(docs/09-usecases-paid-leave.md UC-P012・UC-P014)。
+
+- id (uuid)
+- schedule_entry_id (`paid_leave_schedule_entries.id`)
+- period_start / period_end (判定対象期間)
+- denominator_days (判定の分母(勤務予定日数))
+- attendance_days (判定の分子(出勤日数))
+- excluded_days (除外日数。既定0)
+- deemed_attendance_days (前倒しで短縮された期間のみなし出勤日数。既定0。`denominator_days`/`attendance_days`には含めない。
+  出勤率 = (attendance_days + deemed_attendance_days) ÷ (denominator_days + deemed_attendance_days))
+- attendance_rate (nullable。出勤率)
+- policy_version (判定に用いた`paid_leave_grant_policies`等の版)
+- automatic_result (自動判定結果)
+- final_result (Override後の最終結果。未Overrideなら自動判定と同値)
+- override_reason (nullable)
+- overridden_by_user_id (nullable)
+- created_at / updated_at
 
 ## paid_leave_grant_policies(通常付与の法定日数マスタ)
 
@@ -1112,7 +1162,7 @@ Assessment/Grantの根拠を変えずに新版を追加できるようにする�
 
 ## paid_leave_grants (有給付与の正のProjection)
 
-`App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`(AggregateId = `userId`)の
+`App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`(AggregateId = `PaidLeaveAccountAggregate::streamIdFor(userId)`)の
 Grant系イベント(`PaidLeaveGrantCreated`等)から`PaidLeaveUsageAllocationProjector`が
 再構築する。行自体はProjection(表示専用)であり、業務判定はCommandHandlerが
 Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesign/spec.md参照)。
@@ -1251,41 +1301,6 @@ Assessment・Grantの根拠(`policyVersion`)を変えずに新版を追加でき
 - version (unique)
 - expiry_years
 - created_at / updated_at
-
-## paid_leave_schedule_entries (付与予定のProjection)
-
-`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId = `userId`)の
-イベントから`App\Domain\PaidLeaveSchedule\Projectors\PaidLeaveScheduleEntryProjector`が
-再構築する画面表示用Projection(CLAUDE.md原則2、再生成可能な派生データ)。一覧画面
-(社員/付与予定日/区分/候補日数/出勤率/判定状態)とAssessment内訳(詳細パネル)に必要な値を
-そのまま持つ(docs/09-usecases-paid-leave.md UC-P011以降)。
-
-- id (uuid。`PaidLeaveScheduleEntryCreated.entryId`)
-- user_id
-- scheduled_on (付与予定日)
-- category (`regular`(通常付与) / `proportional`(比例付与) / `shift`(シフト勤務) /
-  `NeedsReview`(区分・判定とも要確認))
-- candidate_grant_days (候補付与日数)
-- status (`Scheduled` / `Eligible` / `NeedsReview` / `NotEligible` / `Granted` / `Cancelled`)
-- manual_override_reason (nullable。手動修正の理由)
-- manual_override_by_user_id (nullable)
-- manual_override_at (nullable)
-- assessment_period_start / assessment_period_end (nullable。出勤率判定の対象期間)
-- assessment_denominator_days (nullable。判定の分母(勤務予定日数))
-- assessment_attendance_days (nullable。判定の分子(出勤日数))
-- assessment_excluded_days (nullable)
-- assessment_attendance_rate (nullable)
-- assessment_policy_version (nullable。判定に用いた`paid_leave_grant_policies`等の版)
-- assessment_automatic_result (nullable。自動判定結果)
-- assessment_final_result (nullable。Override後の最終結果。未Overrideなら自動判定と同値)
-- assessment_override_reason (nullable)
-- granted_paid_leave_grant_id (nullable。一括付与後に紐づく`paid_leave_grants.id`)
-- created_at / updated_at
-
-「変更・要確認」表示は独立列を持たず、`status = NeedsReview`かつ
-`manual_override_by_user_id`が入っている(=個別修正済みだったのに新しい算出結果と
-食い違ってNeedsReviewへ押し出された)という既存列の組み合わせで判定する
-(CLAUDE.md原則2、冗長な列を追加しない)。
 
 ## paid_leave_balances (社員単位の現在残高キャッシュ)
 
@@ -1598,6 +1613,25 @@ docs/20-implementation-notes.md と同様の注記)。
 `stored_events`の`notification.queued` / `notification.sent` / `notification.confirmed`
 イベントから再生成できるProjection (docs/13-usecases-notification.md)。`resolved_at`は
 対象ドメイン側の状態変化(日次編集の完了、申請の承認等)をトリガーに更新する。
+
+## admin_command_runs (運用コマンド・自動判定の実行の記録)
+
+運用コマンド画面(`#[AdminExecutable]`のコマンド)の実行履歴と、有給付与予定の自動判定(`paid-leave:assess-schedules`)の
+実行の記録。運用の記録で、業務の状態ではない(イベントにしない)。`RunAdminCommandJob`と、自動判定のコマンド自身が更新する。
+
+- id (uuid)
+- command_name
+- parameters (json。自動判定は`{"trigger": "schedule"|"manual"}`)
+- status (`queued`/`running`/`succeeded`/`failed`。既定`queued`)
+- requested_by_user_id (nullable。`users.id`。定期実行(自動判定のスケジュール)はnull)
+- started_at / finished_at (nullable)
+- exit_code (nullable)
+- output (nullable。先頭の100000文字だけを残す)
+- error_message (nullable)
+- summary (json nullable。コマンドが書く集計。自動判定は`{targets, assessed, eligible, not_eligible, needs_review, failed}`の件数。
+  出力の切り詰めに左右されない)
+- created_at / updated_at
+- index(command_name, status)
 
 ## テーブル分類の考え方
 

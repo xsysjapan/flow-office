@@ -72,12 +72,12 @@ class PaidLeaveUsageIdempotencyTest extends TestCase
 
     private function aggregate(User $user): PaidLeaveAccountAggregate
     {
-        return PaidLeaveAccountAggregate::retrieve($user->id);
+        return PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($user->id))->forUser($user->id);
     }
 
     private function eventCount(User $user): int
     {
-        return EloquentStoredEvent::query()->where('aggregate_uuid', $user->id)->count();
+        return EloquentStoredEvent::query()->where('aggregate_uuid', PaidLeaveAccountAggregate::streamIdFor($user->id))->count();
     }
 
     // ---- Designate ----

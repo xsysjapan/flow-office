@@ -865,7 +865,15 @@ export interface GroupMember {
   is_primary: boolean;
 }
 
+/** 付与日数の表の区分。通常と比例(週所定日数4/3/2/1)。 */
+export type PaidLeaveGrantCategory =
+  "normal" | "proportional_4" | "proportional_3" | "proportional_2" | "proportional_1";
+
+/** 付与方式。`mass_grant_month`は年度はじめに一斉付与(既定の会社カレンダーの年度開始日)、`anniversary`は入社日基準。 */
+export type PaidLeaveGrantCycleType = "mass_grant_month" | "anniversary";
+
 export interface PaidLeaveGrantRuleStep {
+  grant_category: PaidLeaveGrantCategory;
   continuous_service_months: number;
   grant_days: number;
 }
@@ -945,6 +953,7 @@ export interface PaidLeaveGrantRule {
   min_attendance_rate: number;
   first_grant_after_months: number;
   grant_cycle_months: number;
+  grant_cycle_type: PaidLeaveGrantCycleType;
   is_active: boolean;
   steps?: PaidLeaveGrantRuleStep[];
 }
@@ -968,6 +977,113 @@ export interface PaidLeaveGrantPolicies {
   normal: PaidLeaveGrantPolicyStep[];
   proportional_version: string;
   proportional: PaidLeaveProportionalGrantPolicyStep[];
+}
+
+/** 付与予定Scheduleエントリの区分(通常/比例/シフト勤務/要確認)。 */
+export type PaidLeaveScheduleCategory = "normal" | "proportional" | "shift" | "needs_review";
+
+/** 付与予定Scheduleエントリの判定状態。 */
+export type PaidLeaveScheduleStatus =
+  | "Scheduled"
+  | "AssessmentPending"
+  | "Eligible"
+  | "NotEligible"
+  | "NeedsReview"
+  | "Granted"
+  | "Cancelled";
+
+/** 付与予定一覧行(`PaidLeaveScheduleController::index`のsummarize()と対応)。 */
+export interface PaidLeaveScheduleEntry {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  scheduled_on: string;
+  category: PaidLeaveScheduleCategory;
+  candidate_grant_days: number | null;
+  /** 名目の継続勤務月数(何回目の付与か)。古い付与予定には無い(null)。同じ日の行はこの順に並ぶ。 */
+  nominal_service_months: number | null;
+  status: PaidLeaveScheduleStatus;
+  latest_assessment_id: string | null;
+  is_manually_overridden: boolean;
+  attendance_rate: number | null;
+}
+
+/** 出勤率Assessment(分母/分子/除外日の内訳と自動判定・上書き結果)。 */
+export interface PaidLeaveScheduleAssessment {
+  id: string;
+  period_start: string | null;
+  period_end: string | null;
+  denominator_days: number | null;
+  attendance_days: number | null;
+  /** 前倒し付与で短縮された期間を全出勤とみなした日数(0のときは表示しない。社労士確認が前提)。 */
+  deemed_attendance_days: number;
+  excluded_days: number | null;
+  attendance_rate: number | null;
+  policy_version: string | null;
+  automatic_result: PaidLeaveScheduleStatus | null;
+  final_result: PaidLeaveScheduleStatus | null;
+  override_reason: string | null;
+  overridden_by_user_id: string | null;
+  created_at: string | null;
+}
+
+/** 付与予定Scheduleエントリの詳細(`PaidLeaveScheduleController::show`)。Assessment履歴を含む。 */
+export interface PaidLeaveScheduleEntryDetail extends PaidLeaveScheduleEntry {
+  manual_override_reason: string | null;
+  cancelled_reason: string | null;
+  grant_id: string | null;
+  assessments: PaidLeaveScheduleAssessment[];
+}
+
+/** 自動判定(`paid-leave:assess-schedules`)の実行記録の状態。 */
+export type PaidLeaveScheduleAssessmentRunStatusValue = "queued" | "running" | "succeeded" | "failed";
+
+/** 自動判定の実行の契機。定期(毎月1日)か、画面の「今すぐ判定する」か。 */
+export type PaidLeaveScheduleAssessmentRunTrigger = "schedule" | "manual";
+
+/** 自動判定の実行の集計(件数)。 */
+export interface PaidLeaveScheduleAssessmentRunSummary {
+  targets: number;
+  assessed: number;
+  eligible: number;
+  not_eligible: number;
+  needs_review: number;
+  failed: number;
+}
+
+/** 自動判定の直近の実行記録。 */
+export interface PaidLeaveScheduleAssessmentRun {
+  id: string;
+  status: PaidLeaveScheduleAssessmentRunStatusValue;
+  trigger: PaidLeaveScheduleAssessmentRunTrigger;
+  /** 手動の実行の依頼者名。定期の実行では null。 */
+  requested_by_name: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  summary: PaidLeaveScheduleAssessmentRunSummary | null;
+  error_message: string | null;
+}
+
+/** 自動判定の実行状況(`GET /paid-leave/schedule-assessment-runs/status`)。 */
+export interface PaidLeaveScheduleAssessmentRunStatus {
+  /** 次回の定期実行の日時(ISO8601)。 */
+  next_run_at: string;
+  latest_run: PaidLeaveScheduleAssessmentRun | null;
+}
+
+/** 一括付与1件分の結果。 */
+export interface PaidLeaveScheduleBulkGrantResult {
+  schedule_entry_id: string;
+  success: boolean;
+  message: string | null;
+  grant_id: string | null;
+}
+
+/** 一括付与の実行結果(`ManualGrantCard`の`ResultSummary`パターンに合わせた全体件数+行単位内訳)。 */
+export interface PaidLeaveScheduleBulkGrantResponse {
+  success_count: number;
+  failure_count: number;
+  results: PaidLeaveScheduleBulkGrantResult[];
 }
 
 /** 付与ルールの対象条件にマッチする社員の軽量一覧(対象社員セクション用)。 */
@@ -1776,8 +1892,9 @@ export interface AdminCommandRun {
   command_name: string;
   parameters: Record<string, unknown>;
   status: "queued" | "running" | "succeeded" | "failed";
-  requested_by_user_id: string;
-  requested_by_user?: Pick<User, "id" | "name">;
+  /** 依頼者。定期の実行(システムの実行)では null。 */
+  requested_by_user_id: string | null;
+  requested_by_user?: Pick<User, "id" | "name"> | null;
   started_at: string | null;
   finished_at: string | null;
   exit_code: number | null;
