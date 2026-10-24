@@ -1175,7 +1175,7 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 - allocated_days (`paid_leave_usage_allocations`の合計の非正規化キャッシュ。Source of Truthは
   `paid_leave_usage_allocations`側で、この列はあくまで表示用)
 - used_days (旧ドメイン互換のため存続。`allocated_days`と同じ意味の値を保持)
-- remaining_days (`granted_days - allocated_days`の非正規化キャッシュ)
+- remaining_days (`granted_days - allocated_days`の非正規化キャッシュ。取り消した付与(`status=revoked`)は0)
 - grant_reason
 - source (`manual`(手動付与) / `scheduled_batch`(定期の自動付与) / `carried_over`(cutoverでシステム外から持ち込んだ残高。
   `stored_events`の作り直しで作る)。付与の区別に使う。`original_granted_days`・`cutover_metadata`は撤去した(移行の情報はイベントの`meta`に残る))
@@ -1189,7 +1189,8 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 
 `special_leave_grants`も同じ`status`/`revoked_at`/`revoked_by_user_id`/`revoke_reason`を持つ
 (UC-P008参照。列構成はこの表と`special_leave_type_id`の有無以外は同じ。特別休暇は今回の
-再設計の対象外で、引き続き旧構造のまま実装されている)。
+再設計の対象外で、引き続き旧構造のまま実装されている)。取り消した付与(`status=revoked`)は
+`remaining_days`も0になる。
 
 ## paid_leave_requests (有給申請の申請テーブル。Projection)
 

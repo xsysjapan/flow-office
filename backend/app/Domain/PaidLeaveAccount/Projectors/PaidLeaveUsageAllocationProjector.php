@@ -28,8 +28,11 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  * `paid_leave_account.usage_allocated`/`usage_allocation_released`イベントの合計を
  * `updateOrCreate`で都度反映する非正規化キャッシュであり、Source of Truthは
  * `paid_leave_usage_allocations`(docs/changesets/20260906-paid-leave-domain-redesign/
- * spec.md 論点7)。すべての更新はイベントのプロパティのみから計算する冪等な加減算・上書きで
- * あり、`event-sourcing:replay`によるProjection再生成にそのまま対応する。
+ * spec.md 論点7)。更新はイベントのプロパティのみから計算する。ただし`onPaidLeaveUsageAllocated`は
+ * 既存行へ`allocated_days`を足し込むため、`event-sourcing:replay`で再生成するときは、書き込み先
+ * テーブル(`paid_leave_grants`/`paid_leave_usages`/`paid_leave_usage_allocations`)を空にしてから
+ * replayする(空にせずにreplayすると充当が二重になる)。
+ * 取り消した付与(`status=revoked`)の`remaining_days`は0(使える残日数の意味に揃える)。
  *
  * 旧ドメイン(`App\Domain\PaidLeave\Projectors\PaidLeaveGrantProjector`/
  * `PaidLeaveUsageProjector`)とは別のイベント名前空間(`paid_leave_account.*`)にのみ
@@ -68,7 +71,7 @@ class PaidLeaveUsageAllocationProjector extends Projector
 
         $grant->update([
             'granted_days' => $event->newGrantedDays,
-            'remaining_days' => $event->newGrantedDays - (float) $grant->allocated_days,
+            'remaining_days' => $this->remainingDays($grant->status, (float) $event->newGrantedDays, (float) $grant->allocated_days),
         ]);
     }
 
@@ -89,6 +92,7 @@ class PaidLeaveUsageAllocationProjector extends Projector
             'revoked_at' => $event->createdAt(),
             'revoked_by_user_id' => $event->revokedByUserId,
             'revoke_reason' => $event->reason,
+            'remaining_days' => 0,
         ]);
     }
 
@@ -194,8 +198,20 @@ class PaidLeaveUsageAllocationProjector extends Projector
             // used_daysもallocated_daysと同じ値にしておく(表示用の非正規化キャッシュ。
             // Source of Truthはpaid_leave_usage_allocations)。
             'used_days' => $allocatedTotal,
-            'remaining_days' => (float) $grant->granted_days - $allocatedTotal,
+            'remaining_days' => $this->remainingDays($grant->status, (float) $grant->granted_days, $allocatedTotal),
         ]);
+    }
+
+    /**
+     * 付与の残日数(使える残日数)。取り消した付与は0、それ以外は付与日数から充当の合計を引いた値。
+     */
+    private function remainingDays(string $status, float $grantedDays, float $allocatedTotal): float
+    {
+        if ($status === 'revoked') {
+            return 0.0;
+        }
+
+        return $grantedDays - $allocatedTotal;
     }
 
     /**

@@ -482,8 +482,8 @@ class PaidLeaveController extends Controller
     }
 
     /**
-     * 管理者が発行済みの有給付与を取り消す。既に消化された分がある場合は
-     * RevokePaidLeaveGrantHandlerがDomainRuleExceptionを投げる(422)。
+     * 管理者が発行済みの有給付与を取り消す。最新の非取消付与のみ取り消せる(それ以外はDomainRuleExceptionで422)。
+     * 消化済みの分は充当を解除して他の付与へ付け替え、足りない分は未充当になる。
      */
     #[OA\Post(
         path: '/paid-leave/grants/{grant}/revoke',
