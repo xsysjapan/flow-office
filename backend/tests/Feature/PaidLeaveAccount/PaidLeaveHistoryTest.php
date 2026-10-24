@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\PaidLeaveAccount;
 
+use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
@@ -133,9 +134,10 @@ class PaidLeaveHistoryTest extends TestCase
         $response = $this->actingAs($employee)->getJson('/api/paid-leave/history/mine');
         $response->assertOk();
         $this->assertCount(1, $response->json());
-        // 新ドメインの集約ルートはuserId自体(=aggregate_id)なので、旧`payload.user_id`ではなく
-        // aggregate_idで対象社員のイベントであることを確認する。
-        $this->assertEquals($employee->id, $response->json()[0]['aggregate_id']);
+        // 有給口座の集約は社員IDから派生した別のストリーム。対象社員のイベントであることは、
+        // aggregate_id(口座の集約ID)とpayloadのuser_idで確認する。
+        $this->assertEquals(PaidLeaveAccountAggregate::streamIdFor($employee->id), $response->json()[0]['aggregate_id']);
+        $this->assertEquals($employee->id, $response->json()[0]['payload']['user_id']);
         $this->assertEquals(10.0, $response->json()[0]['payload']['granted_days']);
     }
 }

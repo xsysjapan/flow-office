@@ -16,7 +16,7 @@ class ChangePaidLeaveGrantDateHandler implements CommandHandler
     {
         assert($command instanceof ChangePaidLeaveGrantDate);
 
-        PaidLeaveAccountAggregate::retrieve($command->userId)
+        PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId)
             ->changeGrantDate(
                 grantId: $command->grantId,
                 newGrantedOn: $command->newGrantedOn,

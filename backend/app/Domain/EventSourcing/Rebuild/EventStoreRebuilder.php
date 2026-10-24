@@ -23,6 +23,8 @@ use App\Domain\EventSourcing\Rebuild\Reconcile\SeededDataReconciler;
  * 3. 変換で置き換えた行を除き、残りの行(休暇以外・ワークフロー等)は元の行をそのまま写す。
  * 4. 元の発生順(anchorId・subOrder)に並べ、id を1から振り直し、集約ごとに版を1から連番にする。
  *    休暇・勤怠以外の集約は版が変わらないことを確認し、変わったものは件数を報告する。
+ * 5. 最後の工程として PaidLeaveStreamRekeyer をかける(有給口座は userId を入れて新しいストリームIDへ付け替え、付与予定の行は
+ *    取り除く)。取り除いた分の id は詰める。
  *
  * 未対応が1件でもあれば rows は空にする(書き込ませない)。
  */
@@ -94,6 +96,7 @@ final class EventStoreRebuilder
         private readonly HolidayCalendarDayRefRebuilder $holidayDayRefs = new HolidayCalendarDayRefRebuilder,
         private readonly ExternalTenantIdRebuilder $externalTenants = new ExternalTenantIdRebuilder,
         private readonly UnallocatedUsageAllocator $usageAllocator = new UnallocatedUsageAllocator,
+        private readonly PaidLeaveStreamRekeyer $paidLeaveRekeyer = new PaidLeaveStreamRekeyer,
     ) {}
 
     /**
@@ -501,7 +504,18 @@ final class EventStoreRebuilder
             }
         }
 
-        return $this->renumber($events, $report, $leaveAggregates);
+        $renumbered = $this->renumber($events, $report, $leaveAggregates);
+
+        // 最後の工程: 有給口座のストリームIDを社員から分離し(userId を入れて付け替え)、付与予定の行を取り除く。
+        // 途中の工程(UnallocatedUsageAllocator 等)は aggregateUuid を社員IDとして使うので、付け替えは必ず最後に行う。
+        // 作り直しは id を振り直す出力なので、取り除いた分は詰める。事前条件は見ない(付与予定の旧版イベントは ReadModel から置き換えた
+        // 上で取り除く。取り除いた件数は報告に残す)。
+        $rekeyed = $this->paidLeaveRekeyer->rekey($renumbered->rows, checkPreconditions: false);
+
+        return RebuildResult::succeeded(
+            rows: $this->paidLeaveRekeyer->compactIds($rekeyed->rows),
+            report: $renumbered->report + ['paid_leave_rekey' => $rekeyed->report()],
+        );
     }
 
     /**

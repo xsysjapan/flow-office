@@ -23,5 +23,6 @@ class RunAttendanceRateAssessment implements Command
         public readonly ?float $attendanceRate,
         public readonly string $policyVersion,
         public readonly string $automaticResult,
+        public readonly int $deemedAttendanceDays = 0,
     ) {}
 }

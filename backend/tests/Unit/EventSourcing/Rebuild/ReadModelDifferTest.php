@@ -125,6 +125,28 @@ class ReadModelDifferTest extends TestCase
         $this->assertSame([['keyed', '-', 1, '-', '-', '-', '新設']], ReadModelDiffer::summaryRows($result));
     }
 
+    public function test_last_changed_event_idだけが違う行は比較から除かれ差は0件になる(): void
+    {
+        foreach (['diff_current', 'diff_other'] as $c) {
+            Schema::connection($c)->create('fiscal', function (Blueprint $table) {
+                $table->uuid('id')->primary();
+                $table->unsignedTinyInteger('fiscal_year_start_month');
+                $table->unsignedBigInteger('last_changed_event_id')->nullable();
+                $table->timestamps();
+            });
+        }
+        $now = '2026-01-01 00:00:00';
+        DB::connection('diff_other')->table('fiscal')->insert(['id' => 'a', 'fiscal_year_start_month' => 5, 'last_changed_event_id' => null, 'created_at' => $now, 'updated_at' => $now]);
+        DB::connection('diff_current')->table('fiscal')->insert(['id' => 'a', 'fiscal_year_start_month' => 5, 'last_changed_event_id' => 5, 'created_at' => $now, 'updated_at' => $now]);
+
+        $d = $this->differ()->diffTable('fiscal');
+
+        $this->assertSame('compared', $d['status']);
+        $this->assertSame(0, $d['changed']);
+        $this->assertSame([], $d['changed_columns']);
+        $this->assertSame(0, $d['only_other'] + $d['only_current']);
+    }
+
     public function test_片側にしかない列は比較から除き一覧に出す(): void
     {
         $this->keyed('diff_current');

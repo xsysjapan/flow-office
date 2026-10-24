@@ -3,13 +3,13 @@
 namespace App\Domain\PaidLeaveSchedule\Reactors;
 
 use App\Domain\Attendance\Events\UserWorkStyleAssignedForMonth;
+use App\Domain\Attendance\Events\UserWorkStyleMonthlyAssignmentRemoved;
 use App\Domain\Attendance\Events\WorkStyleUpdated;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Support\ScheduleCandidateGenerator;
 use App\Models\User;
-use App\Models\UserWorkStyleMonthlyAssignment;
-use Illuminate\Support\Carbon;
+use App\Support\BusinessDate;
 use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
 
 /**
@@ -20,8 +20,9 @@ use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
  *
  * `UserWorkStyleAssignedForMonth`(AggregateId=assignment id)はペイロードに`userId`を
  * 直接持つため、対象社員1名を特定できる。`WorkStyleUpdated`(AggregateId=work_style_id)は
- * `userId`を持たないため、`user_work_style_monthly_assignments`から現在この`WorkStyle`に
- * 割り当てられている社員一覧を引いて再計算対象とする(過去月のみの割当は対象外)。
+ * `userId`を持たないため、`ScheduleCandidateGenerator::userIdsCurrentlyOn`で「今(当月以前で最新の割当が)
+ * この`WorkStyle`の社員」を引いて再計算対象とする(付与予定の計算と同じ定義。過去月に1回だけ割り当てて
+ * 今も有効な社員を含み、当月より後にだけ割当がある社員は含まない)。
  */
 class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
 {
@@ -49,6 +50,16 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
         $this->recalculate($event->userId, 'work_style_id割当の変更');
     }
 
+    /**
+     * 割当の削除で社員の勤務形態が変わったとき(削除後の状態は、Projectorが先に行を消しているので
+     * `currentWorkStyleFor`に反映済み)。削除の対象月が当月より後でも、再計算の結果は変わらない
+     * (冪等。変化が無ければイベントは増えない)ため、条件は付けない。
+     */
+    public function onUserWorkStyleMonthlyAssignmentRemoved(UserWorkStyleMonthlyAssignmentRemoved $event): void
+    {
+        $this->recalculate($event->userId, '勤務形態の割当の削除');
+    }
+
     public function onWorkStyleUpdated(WorkStyleUpdated $event): void
     {
         $changedRelevantAttribute = collect(self::CLASSIFICATION_RELEVANT_ATTRIBUTES)
@@ -58,14 +69,7 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
             return;
         }
 
-        $workStyleId = $event->aggregateRootUuid();
-        $thisMonth = Carbon::now()->format('Y-m');
-
-        $userIds = UserWorkStyleMonthlyAssignment::query()
-            ->where('work_style_id', $workStyleId)
-            ->where('year_month', '>=', $thisMonth)
-            ->distinct()
-            ->pluck('user_id');
+        $userIds = $this->generator->userIdsCurrentlyOn($event->aggregateRootUuid(), BusinessDate::today());
 
         foreach ($userIds as $userId) {
             $this->recalculate($userId, 'WorkStyleの区分判定関連列の変更');
@@ -80,13 +84,14 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
             return;
         }
 
-        $from = Carbon::today();
+        $from = BusinessDate::today();
         $candidates = $this->generator->candidatesFor($user, $from, $from->copy()->addYear());
 
         $this->commandBus->dispatch(new RecalculateFutureSchedule(
             userId: $userId,
             candidates: $candidates,
             reason: $reason,
+            fromDate: $from->toDateString(),
         ));
     }
 }

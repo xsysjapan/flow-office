@@ -13,6 +13,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Models\CompanyCalendar;
 use App\Models\CompanyCalendarYear;
+use App\Support\FiscalYearCalculator;
 use Illuminate\Support\Carbon;
 
 /**
@@ -103,19 +104,7 @@ class GenerateCompanyCalendarYearsHandler implements CommandHandler
      */
     private function fiscalYearFor(Carbon $date, CompanyCalendar $calendar): array
     {
-        $startsOnThisCalendarYear = Carbon::create($date->year, $calendar->fiscal_year_start_month, $calendar->fiscal_year_start_day)->startOfDay();
-
-        if ($date->greaterThanOrEqualTo($startsOnThisCalendarYear)) {
-            $fiscalYear = $date->year;
-            $startsOn = $startsOnThisCalendarYear;
-        } else {
-            $fiscalYear = $date->year - 1;
-            $startsOn = Carbon::create($fiscalYear, $calendar->fiscal_year_start_month, $calendar->fiscal_year_start_day)->startOfDay();
-        }
-
-        $endsOn = $startsOn->copy()->addYear()->subDay();
-
-        return ['fiscal_year' => $fiscalYear, 'starts_on' => $startsOn, 'ends_on' => $endsOn];
+        return FiscalYearCalculator::fiscalYearFor($date, $calendar->fiscal_year_start_month, $calendar->fiscal_year_start_day);
     }
 
     private function createYear(CompanyCalendar $calendar, int $fiscalYear, Carbon $startsOn, Carbon $endsOn, bool $isBatch): string

@@ -55,4 +55,37 @@ class GrantCategoryClassifier
 
         return self::CATEGORY_PROPORTIONAL;
     }
+
+    /**
+     * 比例付与の社員の、付与日数の表の区分(`proportional_{N}`。Nは週の所定労働日数4/3/2/1)。
+     * 週所定日数(`weekly_scheduled_days`)が1以上5未満ならその整数部分(切り捨て)。週所定日数が無ければ
+     * 年間所定日数(`annual_scheduled_days`)で決める(労基則24条の3: 169〜216→4、121〜168→3、73〜120→2、48〜72→1)。
+     * 週0日(1未満)・年間48日未満・どちらも無い場合は決められないのでnull(要確認)。
+     *
+     * @param  object{weekly_scheduled_days?: ?float, annual_scheduled_days?: ?float}  $workStyle
+     */
+    public function proportionalGrantCategoryFor(object $workStyle): ?string
+    {
+        $weekly = $workStyle->weekly_scheduled_days ?? null;
+
+        if ($weekly !== null) {
+            $days = (int) floor((float) $weekly);
+
+            return $days >= 1 ? 'proportional_'.min(4, $days) : null;
+        }
+
+        $annual = $workStyle->annual_scheduled_days ?? null;
+
+        if ($annual === null) {
+            return null;
+        }
+
+        return match (true) {
+            $annual >= 169 => 'proportional_4',
+            $annual >= 121 => 'proportional_3',
+            $annual >= 73 => 'proportional_2',
+            $annual >= 48 => 'proportional_1',
+            default => null,
+        };
+    }
 }

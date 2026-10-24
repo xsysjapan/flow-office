@@ -16,7 +16,7 @@ class RaisePaidLeaveGrantWarningHandler implements CommandHandler
     {
         assert($command instanceof RaisePaidLeaveGrantWarning);
 
-        PaidLeaveAccountAggregate::retrieve($command->userId)
+        PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId)
             ->raiseGrantWarning(
                 grantId: $command->grantId,
                 warningType: $command->warningType,

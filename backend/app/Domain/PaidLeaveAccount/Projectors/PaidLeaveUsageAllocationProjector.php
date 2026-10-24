@@ -19,7 +19,7 @@ use App\Models\PaidLeaveUsageAllocation;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
- * PaidLeaveAccountAggregate(AggregateId = userId)のイベントから、既存
+ * PaidLeaveAccountAggregate(AggregateId = `streamIdFor(userId)`。社員IDは各イベントの`userId`)のイベントから、既存
  * `paid_leave_grants`/`paid_leave_usages`テーブルの新ドメイン用行と、新設
  * `paid_leave_usage_allocations`(Usage×GrantのAllocationのSource of Truth)を
  * 作成・更新する。
@@ -45,7 +45,7 @@ class PaidLeaveUsageAllocationProjector extends Projector
         PaidLeaveGrant::query()->updateOrCreate(
             ['id' => $event->grantId],
             [
-                'user_id' => $event->aggregateRootUuid(),
+                'user_id' => $event->userId,
                 'granted_on' => $event->grantedOn,
                 'expires_on' => $event->expiresOn,
                 'granted_days' => $event->grantedDays,
@@ -97,7 +97,7 @@ class PaidLeaveUsageAllocationProjector extends Projector
         PaidLeaveUsage::query()->updateOrCreate(
             ['usage_id' => $event->usageId],
             [
-                'user_id' => $event->aggregateRootUuid(),
+                'user_id' => $event->userId,
                 'attendance_day_id' => $event->attendanceDayId,
                 'paid_leave_grant_id' => null,
                 'paid_leave_request_id' => $event->paidLeaveRequestId,

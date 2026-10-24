@@ -101,6 +101,8 @@ class CompanyCalendarController extends Controller
             'allow_daily_holiday_override' => ['nullable', 'boolean'],
         ]);
 
+        $this->assertValidFiscalYearStart($data['fiscal_year_start_month'] ?? 4, $data['fiscal_year_start_day'] ?? 1);
+
         $calendar = $commandBus->dispatch(new CreateCompanyCalendar(
             name: $data['name'],
             weekStartsOn: $data['week_starts_on'] ?? 1,
@@ -150,6 +152,11 @@ class CompanyCalendarController extends Controller
             'weekday_holiday_pattern' => ['nullable', 'array', self::weekdayHolidayPatternRule()],
             'allow_daily_holiday_override' => ['nullable', 'boolean'],
         ]);
+
+        $this->assertValidFiscalYearStart(
+            $data['fiscal_year_start_month'] ?? $companyCalendar->fiscal_year_start_month,
+            $data['fiscal_year_start_day'] ?? $companyCalendar->fiscal_year_start_day,
+        );
 
         $calendar = $commandBus->dispatch(new UpdateCompanyCalendar(
             companyCalendarId: $companyCalendar->id,
@@ -565,5 +572,18 @@ class CompanyCalendarController extends Controller
                 }
             }
         };
+    }
+
+    /**
+     * 年度開始の月日が実在することを確かめる(4/31などは422)。2/29は閏年にしか無く、毎年の年度開始日に
+     * 使えないので、閏年でない年で判定して拒否する。年度開始日は有給の一斉付与日にも使われる。
+     */
+    private function assertValidFiscalYearStart(int $month, int $day): void
+    {
+        if (! checkdate($month, $day, 2025)) {
+            throw ValidationException::withMessages([
+                'fiscal_year_start_day' => ["年度開始日に存在しない月日({$month}月{$day}日)は指定できません。"],
+            ]);
+        }
     }
 }

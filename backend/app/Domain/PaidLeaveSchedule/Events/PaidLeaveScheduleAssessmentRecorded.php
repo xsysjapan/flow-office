@@ -7,6 +7,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class PaidLeaveScheduleAssessmentRecorded extends ShouldBeStored
 {
     public function __construct(
+        public readonly string $userId,
         public readonly string $scheduleEntryId,
         public readonly string $assessmentId,
         public readonly string $periodStart,
@@ -17,5 +18,7 @@ class PaidLeaveScheduleAssessmentRecorded extends ShouldBeStored
         public readonly ?float $attendanceRate,
         public readonly string $policyVersion,
         public readonly string $automaticResult,
+        /** 前倒しで短縮された期間のみなし出勤日数。古いイベントには無いので0として読む。`denominatorDays`/`attendanceDays`には含めない。 */
+        public readonly int $deemedAttendanceDays = 0,
     ) {}
 }

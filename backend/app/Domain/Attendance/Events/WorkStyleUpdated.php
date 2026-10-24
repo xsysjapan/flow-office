@@ -11,7 +11,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class WorkStyleUpdated extends ShouldBeStored
 {
     /**
-     * @param  array<string, mixed>  $attributes  変更後のwork_styles属性一式。
+     * @param  array<string, mixed>  $attributes  更新で入力された属性だけ(変更しなかった属性は含まない)。
      */
     public function __construct(
         public readonly array $attributes,

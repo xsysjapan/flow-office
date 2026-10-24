@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Console\Attributes\AdminExecutable;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
+use App\Domain\PaidLeaveSchedule\Support\PaidLeaveGrantRuleResolver;
 use App\Domain\PaidLeaveSchedule\Support\ScheduleCandidateGenerator;
 use App\Models\User;
 use Illuminate\Console\Command;
@@ -43,7 +44,7 @@ final class RebuildPaidLeaveScheduleCommand extends Command
 
     protected $description = '過去の有給付与予定Scheduleエントリを現在のルール・ポリシーに基づいて再作成する';
 
-    public function handle(CommandBus $commandBus, ScheduleCandidateGenerator $generator): int
+    public function handle(CommandBus $commandBus, ScheduleCandidateGenerator $generator, PaidLeaveGrantRuleResolver $ruleResolver): int
     {
         $ruleId = $this->option('rule-id') ? (int) $this->option('rule-id') : null;
         $from = $this->option('from') ? Carbon::parse($this->option('from')) : null;
@@ -62,7 +63,7 @@ final class RebuildPaidLeaveScheduleCommand extends Command
             $targetUsers = [];
             foreach ($users as $user) {
                 $workStyle = $generator->currentWorkStyleFor($user);
-                $matchingRule = $generator->matchingRuleFor($workStyle);
+                $matchingRule = $ruleResolver->resolveFor($workStyle);
 
                 if ($matchingRule && $matchingRule->id === $ruleId) {
                     $targetUsers[] = $user;
@@ -88,6 +89,7 @@ final class RebuildPaidLeaveScheduleCommand extends Command
                     userId: $user->id,
                     candidates: $candidates,
                     reason: $reason,
+                    fromDate: $fromDate->toDateString(),
                     overrideManualEdits: true,
                     includeGrantedEntries: true,
                 ));

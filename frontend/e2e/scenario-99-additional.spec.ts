@@ -341,7 +341,7 @@ test("§5-4: 打刻ログと日次実績の不一致確認", async ({ page }) =>
 // WarnFiveDayObligation)は、送信結果を確認できるAPI・画面が無く(Teams通知ジョブを
 // キューに積むのみ)、本ファイルが前提とするブラックボックスE2E(HTTP/画面操作のみで
 // 完結)では検証できない。シナリオ6(通年運用シミュレーション)の手順4が同じ制約を
-// 持つバッチ(grant-scheduledも含む3つ)を、ドキュメントで明示的に許容された例外として
+// 持つバッチ(roll-schedules・assess-schedulesの疎通確認を含む3つ)を、ドキュメントで明示的に許容された例外として
 // `child_process`経由でartisanコマンドを直接実行する方式で検証しているため、
 // `scenario-08-fiscal-year-cycle.spec.ts`の`境界条件の単発確認`を参照。
 

@@ -3,6 +3,7 @@
 namespace Tests\Feature\EventSourcing;
 
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter;
+use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -44,6 +45,20 @@ class LeaveEventStoreRebuildTest extends TestCase
         $this->assertContains('paid_leave_account.usage_confirmed', $classes);
         $this->assertNotContains('paid_leave.requested', $classes);
         $this->assertNotContains('paid_leave.used', $classes);
+    }
+
+    public function test_apply_outputs_paid_leave_account_rows_in_the_new_stream_with_user_id(): void
+    {
+        $this->artisan('leave:rebuild-event-store', ['--apply' => true])->assertExitCode(0);
+
+        $accountRows = DB::table(EventStoreRebuildWriter::TABLE)->where('event_class', 'like', 'paid_leave_account.%')->get();
+        $this->assertNotEmpty($accountRows);
+        foreach ($accountRows as $row) {
+            $userId = json_decode($row->event_properties, true)['userId'] ?? null;
+            $this->assertSame('u1', $userId);
+            $this->assertSame(PaidLeaveAccountAggregate::streamIdFor('u1'), $row->aggregate_uuid);
+        }
+        $this->assertSame(0, DB::table(EventStoreRebuildWriter::TABLE)->where('aggregate_uuid', 'u1')->where('event_class', 'like', 'paid_leave_account.%')->count());
     }
 
     public function test_swap_replaces_stored_events_and_keeps_the_original_table(): void

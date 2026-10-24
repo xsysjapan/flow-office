@@ -69,11 +69,30 @@ implementerは指示に書かれていないことを推測で埋めるか、気
 
 - [ ] ドメイン計算の**期待値とその算出根拠**(どの入力からどの出力になるか)を指示側で示したか。
       implementerに期待値を組み立てさせると、存在しない条件のデータを作って辻褄を合わせることがある。
+- [ ] 日付・日数の期待値は、途中の並び(例: 入社日+6・18・30か月の付与予定日)も併記したか。結果の値だけを書くと、
+      委譲元の計算の誤りに誰も気づけない(入社日を変えても付与予定日が変わらない例を、変わる例として書いた)。
 - [ ] テストの状態はCommand/イベント経由で作らせ、ReadModelへの直接書き込みをさせない(原則2)と書いたか。
 - [ ] テストが依存する前提(シーダーの再実行、キューの実行方法=`QUEUE_CONNECTION`、日付・時刻の固定など)
       を書いたか。
 - [ ] 権限・閲覧可否などの前提が複数のケースに効く場合、特定のケースの注記ではなく全ケース共通の前提として書いたか
       (例: 他人の月次を見るには`attendance.read`のglobalが要る、を1ケースにだけ書いて他のケースで漏れた)。
+- [ ] e2eを書かせる場合、操作の後はAPIの完了(`waitForResponse`や画面上の結果)を待ってから次の操作に進むこと、
+      期待値は変更セットの定義(例: どの操作でどのバッジが付くか)に従うことを書いたか(操作直後のEscで未保存の
+      確認が出て閉じられない、Overrideで「変更あり」が付くと誤って期待する、が起きた)。
+- [ ] serial実行のe2eにテストを足させる場合、前のテストで状態が変わる行(付与済みにした行など)を対象にしない
+      こと、対象はAPIで条件に合う行を探して選ぶことを書いたか。
+- [ ] backendとfrontendを並行で委譲するときは、APIの応答の形を、包み(`{ data: ... }`)まで含めて両方の指示に同じ文で
+      書いたか(包みを書かずに形だけ書いたため、backendは包み、frontendは包みを外さずに受け取り、画面に「NaN」が出た)。
+- [ ] PRを出す前に、backendをCIと同じ条件で全件流したか。手順は`cp .env.example .env && php artisan key:generate && php artisan test`で、後で`.env`と`database/database.sqlite`を消す。
+      `./vendor/bin/phpunit`はphpunit.xmlの値(in-memoryのsqlite・同期キュー・APP_KEYなし)で動き、CI(ファイルのsqlite・databaseのキュー・APP_KEYあり)と違う。
+      そのため、起動の時の行の作成やキューの前提のずれを見逃した(PR#121)。
+- [ ] migrationを足したときは、down()を、データ移行(後続のmigration)の後の状態で確かめるテストがあるか(CIの`migrate-mysql`は、`migrate`の後に`migrate:rollback`を行う)。
+- [ ] frontendの型チェックは`npx tsc -p tsconfig.app.json --noEmit`を指定したか(ルートの`tsconfig.json`は
+      参照だけなので、`npx tsc --noEmit`では何も検査されない)。
+- [ ] コマンドの出力や画面の文言を変える作業では、その文言を期待しているテストとe2eを`grep`で探して直すことを書いたか
+      (roll-schedulesの出力を変えて、e2eの期待値が古いまま残った)。
+- [ ] backendのテストは`./vendor/bin/phpunit`で実行させる。`backend/.env`があると`php artisan test`は開発用のDBに対して動き、
+      DBを壊すことがある。e2eのために`.env`を作ったら、検証の後に消す。
 - [ ] テストを実行させるか、させるならコマンドと対象(例: `cd backend && php artisan test tests/Unit/...`)を
       書いたか。実行させない場合は委譲元で実行する。
 

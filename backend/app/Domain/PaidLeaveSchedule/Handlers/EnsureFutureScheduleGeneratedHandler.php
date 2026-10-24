@@ -16,7 +16,7 @@ class EnsureFutureScheduleGeneratedHandler implements CommandHandler
     {
         assert($command instanceof EnsureFutureScheduleGenerated);
 
-        PaidLeaveScheduleAggregate::retrieve($command->userId)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($command->userId))->forUser($command->userId)
             ->ensureFutureScheduleGenerated($command->candidates)
             ->persist();
 

@@ -212,6 +212,8 @@ class ScenarioSeeder extends Seeder
                 'min_attendance_rate' => 80,
                 'first_grant_after_months' => 6,
                 'grant_cycle_months' => 12,
+                // 付与方式の初期値は年度はじめの一斉付与になったので、シナリオ(入社日基準)は明示する。
+                'grant_cycle_type' => PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY,
                 'is_active' => true,
             ]
         );

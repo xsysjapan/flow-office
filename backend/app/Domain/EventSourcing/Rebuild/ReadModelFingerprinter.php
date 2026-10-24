@@ -17,11 +17,12 @@ use Illuminate\Support\Facades\Schema;
 final class ReadModelFingerprinter
 {
     /**
-     * 比較から除く列。stored_events.id を指す列(マイグレーションの実際の列名。2026-10-13時点では stored_event_id のみ)と、時刻列。
+     * 比較から除く列。stored_events.id を指す列(マイグレーションの実際の列名。stored_event_id と、
+     * paid_leave_fiscal_year_settings の last_changed_event_id)と、時刻列。
      *
      * @var list<string>
      */
-    public const EXCLUDED_COLUMNS = ['created_at', 'updated_at', 'stored_event_id'];
+    public const EXCLUDED_COLUMNS = ['created_at', 'updated_at', 'stored_event_id', 'last_changed_event_id'];
 
     private const CHUNK = 1000;
 

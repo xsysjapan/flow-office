@@ -6,6 +6,7 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
@@ -151,6 +152,95 @@ class PaidLeaveWarningBatchTest extends TestCase
         $count = app(CommandBus::class)->dispatch(new WarnFiveDayObligation($today->toDateString()));
 
         $this->assertSame(0, $count);
+    }
+
+    public function test_five_day_obligation_counts_usage_spanning_two_grants_of_the_same_day(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        // 2026-04-01に3日と10日(合計13日)。5日の消化は3日+2日と2つの付与にまたがるが、基準日の合計5日で警告なし。
+        $first = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 3.0, null));
+        $second = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 10.0, null));
+        foreach (['2026-05-01', '2026-05-04', '2026-06-01', '2026-06-02', '2026-06-03'] as $date) {
+            $this->approvedLeave($employee, $approver, $date);
+        }
+        $this->assertEquals(3.0, (float) PaidLeaveGrant::query()->findOrFail($first)->allocated_days);
+        $this->assertEquals(2.0, (float) PaidLeaveGrant::query()->findOrFail($second)->allocated_days);
+
+        $this->assertSame(0, app(CommandBus::class)->dispatch(new WarnFiveDayObligation('2027-02-15')));
+    }
+
+    public function test_five_day_obligation_counts_usage_allocated_to_the_carried_over_grant_of_the_previous_year(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        // 消化は失効の近い前年の付与(2025-04-01)に充当されるが、2026-04-01の基準日の期間内なので数えられる。
+        $previous = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-04-01', '2027-03-31', 10.0, null));
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 11.0, null));
+        foreach (['2026-05-01', '2026-05-04', '2026-06-01', '2026-06-02', '2026-06-03'] as $date) {
+            $this->approvedLeave($employee, $approver, $date);
+        }
+        $this->assertEquals(5.0, (float) PaidLeaveGrant::query()->findOrFail($previous)->allocated_days);
+
+        $this->assertSame(0, app(CommandBus::class)->dispatch(new WarnFiveDayObligation('2027-02-15')));
+    }
+
+    public function test_five_day_obligation_targets_a_pair_of_proportional_grants_totaling_ten_days(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        $first = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 7.0, null));
+        $second = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 8.0, null));
+        $this->approvedLeave($employee, $approver, '2026-05-01');
+
+        $this->assertSame(1, app(CommandBus::class)->dispatch(new WarnFiveDayObligation('2027-02-15')));
+        $this->assertNotNull(PaidLeaveGrant::query()->findOrFail($first)->five_day_obligation_warned_at);
+        $this->assertNotNull(PaidLeaveGrant::query()->findOrFail($second)->five_day_obligation_warned_at);
+    }
+
+    public function test_five_day_obligation_warns_once_for_two_grants_of_the_same_day(): void
+    {
+        $employee = User::factory()->create();
+
+        $first = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 10.0, null));
+        $second = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 11.0, null));
+
+        $this->assertSame(1, app(CommandBus::class)->dispatch(new WarnFiveDayObligation('2027-02-15')));
+        $this->assertNotNull(PaidLeaveGrant::query()->findOrFail($first)->five_day_obligation_warned_at);
+        $this->assertNotNull(PaidLeaveGrant::query()->findOrFail($second)->five_day_obligation_warned_at);
+
+        // 警告済みの組は再度警告しない。
+        $this->assertSame(0, app(CommandBus::class)->dispatch(new WarnFiveDayObligation('2027-02-16')));
+    }
+
+    public function test_five_day_obligation_excludes_a_revoked_grant_from_the_pair(): void
+    {
+        $employee = User::factory()->create();
+        $admin = User::factory()->create();
+
+        $first = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 4.0, null));
+        $second = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-04-01', '2028-03-31', 8.0, null));
+        // 後に記録した8日を取り消すと、組は4日だけになり義務の対象外。
+        app(CommandBus::class)->dispatch(new RevokePaidLeaveGrant($employee->id, $second, $admin->id, '訂正'));
+
+        $this->assertSame(0, app(CommandBus::class)->dispatch(new WarnFiveDayObligation('2027-02-15')));
+        $this->assertNull(PaidLeaveGrant::query()->findOrFail($first)->five_day_obligation_warned_at);
+    }
+
+    public function test_warn_expiring_bundles_grants_of_the_same_day_and_expiry_into_one_warning(): void
+    {
+        $employee = User::factory()->create();
+
+        $first = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2024-10-01', '2026-10-01', 10.0, null));
+        $second = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2024-10-01', '2026-10-01', 11.0, null));
+
+        $this->assertSame(1, app(CommandBus::class)->dispatch(new WarnExpiringPaidLeave('2026-08-10')));
+        $this->assertNotNull(PaidLeaveGrant::query()->findOrFail($first)->expiry_warned_at);
+        $this->assertNotNull(PaidLeaveGrant::query()->findOrFail($second)->expiry_warned_at);
+        $this->assertSame(0, app(CommandBus::class)->dispatch(new WarnExpiringPaidLeave('2026-08-11')));
     }
 
     /**

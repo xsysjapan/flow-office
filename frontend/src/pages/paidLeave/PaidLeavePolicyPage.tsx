@@ -12,7 +12,9 @@ import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantT
 import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PaidLeaveGrantPolicyMatrix } from '../../components/PaidLeaveGrantPolicyMatrix/PaidLeaveGrantPolicyMatrix'
+import { PaidLeaveGrantCycleTypeField } from '../../components/PaidLeaveGrantCycleTypeField/PaidLeaveGrantCycleTypeField'
 import { PaidLeaveGrantRulePreview } from '../../components/PaidLeaveGrantRulePreview/PaidLeaveGrantRulePreview'
+import { PaidLeaveGrantStepsEditor } from '../../components/PaidLeaveGrantStepsEditor/PaidLeaveGrantStepsEditor'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -31,16 +33,25 @@ import {
   usePaidLeaveGrantRules,
   usePaidLeaveGrantRuleTargetUsers,
   usePaidLeaveGrantsForUser,
+  usePaidLeaveScheduleEntries,
   usePaidLeaveUsagesForUser,
   useRevokePaidLeaveGrant,
 } from '../../hooks/usePaidLeave'
 import { useUpdatePaidLeaveAutoGrantEnabled } from '../../hooks/useUsers'
-import type { PaidLeaveGrantPolicyStep, PaidLeaveProportionalGrantPolicyStep } from '../../api/types'
-
-interface StepInput {
-  continuous_service_months: number
-  grant_days: number
-}
+import { useWorkCalendars } from '../../hooks/useWorkCalendars'
+import { ApiError } from '../../api/client'
+import type {
+  PaidLeaveGrantCycleType,
+  PaidLeaveGrantPolicyStep,
+  PaidLeaveGrantRuleStep,
+  PaidLeaveProportionalGrantPolicyStep,
+} from '../../api/types'
+import {
+  GRANT_CYCLE_TYPE_LABELS,
+  DEFAULT_FISCAL_YEAR_START,
+  pickDefaultFiscalYearStart,
+  statutoryGrantSteps,
+} from '../../lib/paidLeaveGrantRule'
 
 const STATUTORY_POLICY_WARNING =
   'この表の変更は法令に基づく設定です。保存前に社労士等の専門家に確認してください。'
@@ -409,21 +420,19 @@ function PaidLeaveGrantRulesCard() {
     })
   }
 
+  const { data: calendars, isLoading: isLoadingCalendars } = useWorkCalendars()
+  const defaultFiscalYearStart = isLoadingCalendars ? undefined : pickDefaultFiscalYearStart(calendars)
+  const previewFiscalYearStart = defaultFiscalYearStart ?? DEFAULT_FISCAL_YEAR_START
+
   const [ruleName, setRuleName] = useState('')
   const [minAttendanceRate, setMinAttendanceRate] = useState('')
   const [firstGrantAfterMonths, setFirstGrantAfterMonths] = useState('')
   const [grantCycleMonths, setGrantCycleMonths] = useState('')
+  const [grantCycleType, setGrantCycleType] = useState<PaidLeaveGrantCycleType>('mass_grant_month')
   const [isActive, setIsActive] = useState(true)
-  const [steps, setSteps] = useState<StepInput[]>([])
-  const [stepMonths, setStepMonths] = useState('')
-  const [stepDays, setStepDays] = useState('')
-
-  const handleAddStep = () => {
-    if (!stepMonths || !stepDays) return
-    setSteps((prev) => [...prev, { continuous_service_months: Number(stepMonths), grant_days: Number(stepDays) }])
-    setStepMonths('')
-    setStepDays('')
-  }
+  /** 付与日数の表。未編集のあいだは法定表の写し(全区分)を使い、編集したら`stepsOverride`で持つ。 */
+  const [stepsOverride, setStepsOverride] = useState<PaidLeaveGrantRuleStep[] | null>(null)
+  const steps = stepsOverride ?? (policies ? statutoryGrantSteps(policies) : [])
 
   const handleCreateRule = () => {
     createRule.mutate(
@@ -432,6 +441,7 @@ function PaidLeaveGrantRulesCard() {
         min_attendance_rate: minAttendanceRate ? Number(minAttendanceRate) : undefined,
         first_grant_after_months: firstGrantAfterMonths ? Number(firstGrantAfterMonths) : undefined,
         grant_cycle_months: grantCycleMonths ? Number(grantCycleMonths) : undefined,
+        grant_cycle_type: grantCycleType,
         is_active: isActive,
         steps: steps.length > 0 ? steps : undefined,
       },
@@ -441,15 +451,18 @@ function PaidLeaveGrantRulesCard() {
           setMinAttendanceRate('')
           setFirstGrantAfterMonths('')
           setGrantCycleMonths('')
+          setGrantCycleType('mass_grant_month')
           setIsActive(true)
-          setSteps([])
+          setStepsOverride(null)
         },
       },
     )
   }
 
+  const createFieldErrors = createRule.error instanceof ApiError ? createRule.error.errors : undefined
+
   return (
-    <Card title="付与ルール">
+    <Card title="付与ルール" actions={<PaidLeaveScheduleLink />}>
       {error && <ErrorMessage error={error} fallback="付与ルールの取得に失敗しました。" />}
       {createRule.error && <ErrorMessage error={createRule.error} />}
 
@@ -465,6 +478,7 @@ function PaidLeaveGrantRulesCard() {
                 <div className="flex items-center gap-3">
                   <strong className="text-sm font-semibold text-foreground">{rule.name}</strong>
                   <span className="text-sm text-muted-foreground">{rule.is_active ? '有効' : '無効'}</span>
+                  <span className="text-sm text-muted-foreground">{GRANT_CYCLE_TYPE_LABELS[rule.grant_cycle_type]}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button asChild variant="secondary" size="sm">
@@ -476,6 +490,8 @@ function PaidLeaveGrantRulesCard() {
 
               <div className="mt-2">
                 <PaidLeaveGrantRulePreview
+                  grantCycleType={rule.grant_cycle_type}
+                  fiscalYearStart={previewFiscalYearStart}
                   firstGrantAfterMonths={rule.first_grant_after_months}
                   grantCycleMonths={rule.grant_cycle_months}
                   minAttendanceRate={rule.min_attendance_rate}
@@ -527,32 +543,23 @@ function PaidLeaveGrantRulesCard() {
         </FormField>
       </div>
 
-      <label className="mt-4 mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
+      <PaidLeaveGrantCycleTypeField
+        value={grantCycleType}
+        onChange={setGrantCycleType}
+        defaultFiscalYearStart={defaultFiscalYearStart}
+      />
+
+      <label className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
         <Checkbox checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
         有効
       </label>
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
-        <FormField label="継続勤務(か月)" htmlFor="step-months">
-          <Input id="step-months" type="number" value={stepMonths} onChange={(e) => setStepMonths(e.target.value)} />
-        </FormField>
-        <FormField label="付与日数" htmlFor="step-days">
-          <Input id="step-days" type="number" value={stepDays} onChange={(e) => setStepDays(e.target.value)} />
-        </FormField>
-        <Button variant="secondary" onClick={handleAddStep}>
-          追加
-        </Button>
-      </div>
-
-      {steps.length > 0 && (
-        <ul className="mb-4 list-disc pl-4 text-sm text-muted-foreground">
-          {steps.map((step, index) => (
-            <li key={index}>
-              継続勤務{step.continuous_service_months}か月→{step.grant_days}日
-            </li>
-          ))}
-        </ul>
-      )}
+      <PaidLeaveGrantStepsEditor
+        steps={steps}
+        onChange={setStepsOverride}
+        statutory={policies}
+        fieldErrors={createFieldErrors}
+      />
 
       <div className="flex flex-col items-start gap-1">
         <Button isLoading={createRule.isPending} disabled={!ruleName} onClick={handleCreateRule}>
@@ -836,12 +843,33 @@ function PaidLeaveUsageCard() {
 }
 
 /**
+ * 「付与予定を確認」導線(spec.md論点1・8)。付与ルールカードのactionsに置き、付与予定画面
+ * (`/admin/paid-leave/schedule`)へ遷移する。付与予定日を過ぎて未付与の件数(overdue)が
+ * 1件以上あれば件数のバッジを併記し、アクセシブルネームにも件数を含める。
+ * 件数の取得に失敗してもリンクは出す(導線を止めない)。
+ */
+function PaidLeaveScheduleLink() {
+  const { data: overdueEntries } = usePaidLeaveScheduleEntries({ filter: 'overdue' })
+  const overdueCount = overdueEntries?.length ?? 0
+
+  return (
+    <Button asChild variant="secondary" size="sm">
+      <Link
+        to="/admin/paid-leave/schedule"
+        aria-label={overdueCount > 0 ? `付与予定を確認(付与予定日超過 ${overdueCount}件)` : undefined}
+      >
+        付与予定を確認
+        {overdueCount > 0 && <Badge tone="warning">{overdueCount}件</Badge>}
+      </Link>
+    </Button>
+  )
+}
+
+/**
  * UC-P002 / UC-P007: 有給付与ルールの設定・手動付与・対象社員の使用状況確認・
- * 付与取消/申請取消を1画面にまとめて管理者・人事向けに提供する
- * (旧`PaidLeaveAdminPage`。spec.md論点11で「付与予定」画面(`PaidLeaveSchedulePage`)と
- * 分離し、こちらは付与ポリシー(独自ルール・法定Policy)専用のページへリネームした。
- * 「付与予定」は独立ナビ項目を持たず、本ページからのドリルダウンでのみ到達する
- * `docs/changesets/20260914-port-to-pr112/spec.md`参照)。
+ * 付与取消/申請取消を1画面にまとめて管理者・人事向けに提供する有給休暇画面。
+ * 付与予定(UC-P013〜P015)は独立ナビ項目を持たず、付与ルールカードの「付与予定を確認」
+ * ボタンから付与予定画面へ遷移する。
  */
 export function PaidLeavePolicyPage() {
   return (

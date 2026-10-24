@@ -16,17 +16,18 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated;
 use App\Domain\PaidLeaveAccount\Support\AllocationPlanner;
 use App\Domain\PaidLeaveAccount\Support\GrantTimeAllocationPlanner;
+use App\Domain\UserManagement\Support\UserManagementStreamId;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * paid_leave_account集約(AggregateId = userId)。社員一人の年休台帳全体
+ * paid_leave_account集約(AggregateId = `streamIdFor(userId)`。社員IDから派生させた別のストリーム)。社員一人の年休台帳全体
  * (Grant時系列スタック・Usage・Allocation)の不変条件を、replayされた自身の内部状態のみで
  * 保証する(Projection/Eloquentへは一切アクセスしない)。
  * docs/changesets/20260906-paid-leave-domain-redesign/spec.md「仕様確定事項」参照。
  *
  * 不変条件:
- * 1. 新規Grantは非取消の現在最新Grantより`grantedOn`が後(同日・過去挿入不可)。
- * 2. Grant変更・取消は現在最新の非取消Grantのみ許可。
+ * 1. 新規Grantは非取消の現在最新Grantより`grantedOn`が前でない(同日は可・過去挿入不可)。既にあるGrant IDは拒否。
+ * 2. Grant変更・取消は現在最新の非取消Grantのみ許可(最新=付与日が最も遅く、その中で記録の順`order`が最大)。
  * 3. Grant減額は`allocated`合計を下回れない。
  * 4. Grant有効期限短縮はAllocation件数0のGrantのみ許可。
  * 5. Grant取消時は当該Grantの全Allocationを解除する(Usage自体は取消しない)。
@@ -37,7 +38,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  *    残数が不足していても承認(`confirmUsage`)は拒否せず、充当できた分だけ充当し残りは未充当のまま残す
  *    (docs/changesets/20261009-keep-leave-work-type-on-edit 論点17の改訂)。
  *
- * @phpstan-type GrantState array{grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source: string, revoked: bool, allocations: array<string, float>}
+ * @phpstan-type GrantState array{grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source: string, revoked: bool, allocations: array<string, float>, order: int}
  * @phpstan-type UsageState array{workflowRequestId: ?string, attendanceDayId: ?string, paidLeaveRequestId: ?string, usedOn: string, usedDays: float, confirmed: bool, cancelled: bool, allocations: array<string, float>, order: int, confirmOrder?: int}
  */
 class PaidLeaveAccountAggregate extends AggregateRoot
@@ -50,6 +51,8 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
     private int $usageSequence = 0;
 
+    private int $grantSequence = 0;
+
     private int $confirmSequence = 0;
 
     /**
@@ -60,6 +63,37 @@ class PaidLeaveAccountAggregate extends AggregateRoot
      */
     private array $usageIdByPaidLeaveRequestId = [];
 
+    /** 集約が対象とする社員(forUserで束縛する。イベントの社員IDに使う)。 */
+    private ?string $userId = null;
+
+    /**
+     * 社員IDから有給口座の集約IDを決定的に派生させる。方式は既存の`UserManagementStreamId`(UUIDv5)に従う。
+     * 社員の集約(集約ID=社員ID)や他の口座とストリームを共有しない。
+     */
+    public static function streamIdFor(string $userId): string
+    {
+        return UserManagementStreamId::for('paid_leave_account', $userId);
+    }
+
+    /**
+     * この集約が対象とする社員を束縛する(集約IDは`streamIdFor`で決める)。全ての操作の前に呼ぶ。
+     */
+    public function forUser(string $userId): self
+    {
+        $this->userId = $userId;
+
+        return $this;
+    }
+
+    private function requireUserId(): string
+    {
+        if ($this->userId === null) {
+            throw new \LogicException('有給口座の操作の前に社員を束縛してください(forUser)。');
+        }
+
+        return $this->userId;
+    }
+
     public function grant(
         string $grantId,
         string $grantedOn,
@@ -68,15 +102,20 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         ?string $grantReason,
         string $source = 'manual',
     ): self {
+        if (isset($this->grants[$grantId])) {
+            throw new DomainRuleException("この付与はすでに記録されています(Grant [{$grantId}])。");
+        }
+
         $latest = $this->latestActiveGrant();
 
-        if ($latest !== null && $grantedOn <= $latest['grantedOn']) {
+        if ($latest !== null && $grantedOn < $latest['grantedOn']) {
             throw new DomainRuleException(
-                '新規Grantは現在の最新Grantより後の日付である必要があります(同日・過去日付は不可)。'
+                '新規Grantは現在の最新Grant以降の日付である必要があります(同日は可・過去日付は不可)。'
             );
         }
 
         $this->recordThat(new PaidLeaveGrantCreated(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             grantedOn: $grantedOn,
             expiresOn: $expiresOn,
@@ -86,6 +125,29 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         ));
 
         // 付与時の未充当の充当は、付与の記録を受けるReactorが allocateUnallocatedOnGrant() で行う(論点19 決定10-1)。
+
+        return $this;
+    }
+
+    /**
+     * 複数の付与を、1回のpersistで記録する(まとめて付与する2件を、片方だけ記録されないようにするため)。
+     * 各付与は`grant`と同じ検証を順に受ける(同じ日の付与は可)。1件でも失敗したら、何も記録しない
+     * (例外はpersist前に出る)。
+     *
+     * @param  array<int, array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source?: string}>  $grants
+     */
+    public function grantMany(array $grants): self
+    {
+        foreach ($grants as $grant) {
+            $this->grant(
+                grantId: $grant['grantId'],
+                grantedOn: $grant['grantedOn'],
+                expiresOn: $grant['expiresOn'],
+                grantedDays: $grant['grantedDays'],
+                grantReason: $grant['grantReason'],
+                source: $grant['source'] ?? 'manual',
+            );
+        }
 
         return $this;
     }
@@ -122,6 +184,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
         foreach ($plan as $entry) {
             $this->recordThat(new PaidLeaveUsageAllocated(
+                userId: $this->requireUserId(),
                 usageId: $entry['usageId'],
                 grantId: $grantId,
                 allocatedDays: $entry['allocatedDays'],
@@ -142,6 +205,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveGrantAmountChanged(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             newGrantedDays: $newGrantedDays,
             reason: $reason,
@@ -159,8 +223,8 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
         $previous = $this->latestActiveGrantExcluding($grantId);
 
-        if ($previous !== null && $newGrantedOn <= $previous['grantedOn']) {
-            throw new DomainRuleException('Grant日付はひとつ前のGrantより後である必要があります。');
+        if ($previous !== null && $newGrantedOn < $previous['grantedOn']) {
+            throw new DomainRuleException('Grant日付はひとつ前のGrant以降である必要があります(同日は可)。');
         }
 
         if ($newGrantedOn > $this->grants[$grantId]['expiresOn']) {
@@ -168,6 +232,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveGrantDateChanged(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             newGrantedOn: $newGrantedOn,
             reason: $reason,
@@ -195,6 +260,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveGrantExpiryChanged(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             newExpiresOn: $newExpiresOn,
             reason: $reason,
@@ -212,6 +278,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
         foreach ($this->grants[$grantId]['allocations'] as $usageId => $days) {
             $this->recordThat(new PaidLeaveUsageAllocationReleased(
+                userId: $this->requireUserId(),
                 usageId: $usageId,
                 grantId: $grantId,
                 releasedDays: $days,
@@ -219,6 +286,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveGrantRevoked(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             revokedByUserId: $revokedByUserId,
             reason: $reason,
@@ -236,6 +304,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     public function raiseGrantWarning(string $grantId, string $warningType, string $message): self
     {
         $this->recordThat(new PaidLeaveGrantWarningRaised(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             warningType: $warningType,
             message: $message,
@@ -265,6 +334,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         // パラメータの表示投影用にイベントへ乗せて運ぶだけ。
         // PaidLeaveUsageAllocationProjector::createPaidLeaveRequestIfNeeded参照)。
         $this->recordThat(new PaidLeaveUsageDesignated(
+            userId: $this->requireUserId(),
             usageId: $usageId,
             workflowRequestId: $workflowRequestId,
             attendanceDayId: $attendanceDayId,
@@ -297,7 +367,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             throw new DomainRuleException('既に確定済みのUsageです。');
         }
 
-        $this->recordThat(new PaidLeaveUsageConfirmed(usageId: $usageId, confirmedByUserId: $confirmedByUserId));
+        $this->recordThat(new PaidLeaveUsageConfirmed(userId: $this->requireUserId(), usageId: $usageId, confirmedByUserId: $confirmedByUserId));
 
         $this->allocateUsage($usageId);
 
@@ -318,6 +388,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
         foreach ($usage['allocations'] as $grantId => $days) {
             $this->recordThat(new PaidLeaveUsageAllocationReleased(
+                userId: $this->requireUserId(),
                 usageId: $usageId,
                 grantId: $grantId,
                 releasedDays: $days,
@@ -325,6 +396,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveUsageCancelled(
+            userId: $this->requireUserId(),
             usageId: $usageId,
             cancelledByUserId: $cancelledByUserId,
             reason: $reason,
@@ -419,6 +491,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             }
 
             $this->recordThat(new PaidLeaveUsageAllocated(
+                userId: $this->requireUserId(),
                 usageId: $usageId,
                 grantId: $entry['grantId'],
                 allocatedDays: $entry['allocatedDays'],
@@ -448,7 +521,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
-     * @return array<int, array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocatedTotal: float}>
+     * @return array<int, array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocatedTotal: float, order: int}>
      */
     private function grantsSnapshot(): array
     {
@@ -462,6 +535,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
                 'grantedDays' => $grant['grantedDays'],
                 'revoked' => $grant['revoked'],
                 'allocatedTotal' => array_sum($grant['allocations']),
+                'order' => $grant['order'],
             ];
         }
 
@@ -469,7 +543,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
-     * @return null|array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocations: array<string, float>}
+     * @return null|array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocations: array<string, float>, order: int}
      */
     private function latestActiveGrant(): ?array
     {
@@ -477,7 +551,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
-     * @return null|array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocations: array<string, float>}
+     * @return null|array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocations: array<string, float>, order: int}
      */
     private function latestActiveGrantExcluding(?string $excludedGrantId): ?array
     {
@@ -488,7 +562,10 @@ class PaidLeaveAccountAggregate extends AggregateRoot
                 continue;
             }
 
-            if ($latest === null || $grant['grantedOn'] > $latest['grantedOn']) {
+            // 最新 = 付与日が最も遅く、その中で記録の順(order)が最も大きい付与。
+            if ($latest === null
+                || $grant['grantedOn'] > $latest['grantedOn']
+                || ($grant['grantedOn'] === $latest['grantedOn'] && $grant['order'] > $latest['order'])) {
                 $latest = $grant + ['grantId' => $grantId];
             }
         }
@@ -521,6 +598,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             'source' => $event->source,
             'revoked' => false,
             'allocations' => [],
+            'order' => $this->grantSequence++,
         ];
     }
 

@@ -16,7 +16,7 @@ class ChangePaidLeaveGrantExpiryHandler implements CommandHandler
     {
         assert($command instanceof ChangePaidLeaveGrantExpiry);
 
-        PaidLeaveAccountAggregate::retrieve($command->userId)
+        PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId)
             ->changeGrantExpiry(
                 grantId: $command->grantId,
                 newExpiresOn: $command->newExpiresOn,
