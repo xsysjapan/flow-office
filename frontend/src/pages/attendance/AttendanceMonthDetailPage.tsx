@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog'
 import { useAttendanceMonth, useSubmitMonth } from '../../hooks/useAttendance'
+import { useRequestTypes } from '../../hooks/useRequestTypes'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { employmentYearMonths } from '../../utils/employmentPeriod'
@@ -165,6 +166,9 @@ export function AttendanceMonthDetailPage() {
     user?.effective_features === undefined || user.effective_features.includes('paid_leave.requests'),
   )
   const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
+  const workflowEnabled = user?.effective_features === undefined || user.effective_features.includes('workflow.requests')
+  const { data: requestTypes } = useRequestTypes(false, workflowEnabled)
+  const revertType = requestTypes?.find((type) => type.code === 'attendance_confirmation_revert')
 
   if (!yearMonth) return null
 
@@ -229,6 +233,23 @@ export function AttendanceMonthDetailPage() {
         {month?.status === 'returned' && month.return_comment && (
           <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
             差戻し理由: {month.return_comment}
+          </div>
+        )}
+
+        {month?.status === 'approved' && workflowEnabled && revertType && (
+          <div className="mb-3 rounded-md border border-border bg-muted p-3 text-sm text-foreground">
+            <p>この月は承認済みのため編集できません。日次実績の修正が必要な場合は、勤怠確定取消依頼を申請してください（承認後、人事部が確定を取り消すと未提出に戻ります）。</p>
+            <Button asChild size="sm" variant="secondary" className="mt-2">
+              <Link
+                to={`/requests/new?${new URLSearchParams({
+                  type: 'attendance_confirmation_revert',
+                  target_year_month: yearMonth,
+                  title: `${revertType.name}（${yearMonth}）`,
+                })}`}
+              >
+                確定取消を依頼する
+              </Link>
+            </Button>
           </div>
         )}
 

@@ -93,6 +93,9 @@ implementerは指示に書かれていないことを推測で埋めるか、気
       (roll-schedulesの出力を変えて、e2eの期待値が古いまま残った)。
 - [ ] backendのテストは`./vendor/bin/phpunit`で実行させる。`backend/.env`があると`php artisan test`は開発用のDBに対して動き、
       DBを壊すことがある。e2eのために`.env`を作ったら、検証の後に消す。
+- [ ] frontendのテストでログインユーザーを差し替えさせる場合、対象のテストファイルが`useAuth`を`vi.mock`しているか、
+      `AuthContext.Provider`で包んでいるかを指示前に確かめ、その方式で指示したか(storyの書き方をそのまま指示したら、
+      `vi.mock`のファイルでは効かなかった)。
 - [ ] テストを実行させるか、させるならコマンドと対象(例: `cd backend && php artisan test tests/Unit/...`)を
       書いたか。実行させない場合は委譲元で実行する。
 

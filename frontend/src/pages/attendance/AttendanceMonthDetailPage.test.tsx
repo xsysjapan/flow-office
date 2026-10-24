@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import * as requestTypesApi from '../../api/requestTypes'
 import * as userWorkStyleAssignmentsApi from '../../api/userWorkStyleMonthlyAssignments'
 import * as usersApi from '../../api/users'
 import type {
@@ -11,6 +12,7 @@ import type {
   AttendanceMonth,
   AttendanceMonthlyCalculationTotals,
   Paginated,
+  RequestType,
   User,
 } from '../../api/types'
 import { AppSettingsContext } from '../../contexts/AppSettingsContext'
@@ -48,9 +50,33 @@ const currentUser: User = {
   last_login_at: null,
 }
 
+// useAuthをモックしているため、利用者の差し替えはこの可変参照で行う(既定はcurrentUser)。
+const authState = vi.hoisted(() => ({ user: undefined as User | undefined }))
+
 vi.mock('../../auth/useAuth', () => ({
-  useAuth: () => ({ user: currentUser }),
+  useAuth: () => ({ user: authState.user }),
 }))
+
+const revertType: RequestType = {
+  id: 2,
+  code: 'attendance_confirmation_revert',
+  name: '勤怠確定取消依頼',
+  description: null,
+  form_schema: [
+    { key: 'target_year_month', label: '対象年月', type: 'text', required: true },
+    { key: 'reason', label: '取消理由', type: 'text', required: true },
+  ],
+  requires_attachment: false,
+  attachment_max_size_kb: null,
+  attachment_allowed_extensions: null,
+  eligible_role_codes: null,
+  requires_backoffice_task: true,
+  backoffice_task_type: 'attendance_confirmation_revert',
+  backoffice_department: null,
+  export_amount_field: null,
+  allowed_status_transitions: null,
+  is_active: true,
+}
 
 const approver: User = {
   id: 'approver-1',
@@ -133,7 +159,9 @@ describe('AttendanceMonthDetailPage', () => {
     vi.restoreAllMocks()
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-07-15T12:00:00+09:00'))
+    authState.user = currentUser
     vi.spyOn(userWorkStyleAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([])
+    vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue([revertType])
   })
 
   afterEach(() => vi.useRealTimers())
@@ -416,6 +444,80 @@ describe('AttendanceMonthDetailPage', () => {
     renderPage()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('network down')
+  })
+
+  describe('勤怠確定取消依頼への導線', () => {
+    const revertLinkName = '確定取消を依頼する'
+
+    it('shows the guidance and a link to the request form for an approved month', async () => {
+      vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+        days: [],
+        month: { ...notSubmittedMonth, status: 'approved' },
+        flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      })
+
+      renderPage()
+
+      expect(await screen.findByText(/この月は承認済みのため編集できません/)).toBeInTheDocument()
+      const link = screen.getByRole('link', { name: revertLinkName })
+      const href = link.getAttribute('href') ?? ''
+      expect(href).toContain('type=attendance_confirmation_revert')
+      expect(href).toContain('target_year_month=2026-07')
+    })
+
+    it('does not show the guidance for a submitted or closed month', async () => {
+      for (const status of ['submitted', 'closed'] as const) {
+        vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+          days: [],
+          month: { ...notSubmittedMonth, status },
+          flex_settlement_summary: null,
+          monthly_calculation_totals: zeroMonthlyCalculationTotals,
+        })
+
+        const { unmount } = renderPage()
+
+        await waitFor(() => expect(requestTypesApi.fetchRequestTypes).toHaveBeenCalled())
+        await screen.findByText('月次勤怠')
+        expect(screen.queryByRole('link', { name: revertLinkName })).not.toBeInTheDocument()
+        expect(screen.queryByText(/この月は承認済みのため編集できません/)).not.toBeInTheDocument()
+        unmount()
+      }
+    })
+
+    it('does not show the guidance when the revert request type is not returned', async () => {
+      vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+        days: [],
+        month: { ...notSubmittedMonth, status: 'approved' },
+        flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      })
+      vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue([])
+
+      renderPage()
+
+      await waitFor(() => expect(requestTypesApi.fetchRequestTypes).toHaveBeenCalled())
+      await screen.findByText('月次勤怠')
+      expect(screen.queryByRole('link', { name: revertLinkName })).not.toBeInTheDocument()
+      expect(screen.queryByText(/この月は承認済みのため編集できません/)).not.toBeInTheDocument()
+    })
+
+    it('does not show the guidance or fetch request types when workflow.requests is disabled', async () => {
+      authState.user = { ...currentUser, effective_features: ['paid_leave.requests'] }
+      vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+        days: [],
+        month: { ...notSubmittedMonth, status: 'approved' },
+        flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      })
+
+      renderPage()
+
+      await screen.findByText('月次勤怠')
+      expect(screen.queryByRole('link', { name: revertLinkName })).not.toBeInTheDocument()
+      expect(screen.queryByText(/この月は承認済みのため編集できません/)).not.toBeInTheDocument()
+      expect(requestTypesApi.fetchRequestTypes).not.toHaveBeenCalled()
+    })
   })
 
   describe('month navigation', () => {

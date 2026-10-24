@@ -6,10 +6,11 @@ import {
   type SaveRequestTypeInput,
 } from '../api/requestTypes'
 
-export function useRequestTypes(includeInactive = false) {
+export function useRequestTypes(includeInactive = false, enabled = true) {
   return useQuery({
     queryKey: ['request-types', includeInactive],
     queryFn: () => fetchRequestTypes(includeInactive),
+    enabled,
   })
 }
 

@@ -7,6 +7,7 @@ import type {
   AttendanceMonth,
   AttendanceMonthlyCalculationTotals,
   Paginated,
+  RequestType,
   User,
   UserWorkStyleMonthlyAssignment,
 } from '../../api/types'
@@ -42,6 +43,27 @@ const workStyleAssignments: UserWorkStyleMonthlyAssignment[] = ['2026-05', '2026
   work_style_id: 'work-style-1',
   assigned_by_user_id: 'admin-1',
 }))
+
+const revertType: RequestType = {
+  id: 2,
+  code: 'attendance_confirmation_revert',
+  name: '勤怠確定取消依頼',
+  description: null,
+  form_schema: [
+    { key: 'target_year_month', label: '対象年月', type: 'text', required: true },
+    { key: 'reason', label: '取消理由', type: 'text', required: true },
+  ],
+  requires_attachment: false,
+  attachment_max_size_kb: null,
+  attachment_allowed_extensions: null,
+  eligible_role_codes: null,
+  requires_backoffice_task: true,
+  backoffice_task_type: 'attendance_confirmation_revert',
+  backoffice_department: null,
+  export_amount_field: null,
+  allowed_status_transitions: null,
+  is_active: true,
+}
 
 const emptyUsers: Paginated<User> = {
   data: [],
@@ -106,6 +128,7 @@ function withSeeded(monthData: { days: AttendanceDay[]; month: AttendanceMonth |
     monthly_calculation_totals: monthlyCalculationTotals,
   })
   queryClient.setQueryData(['users', 'search', '', 100, ''], emptyUsers)
+  queryClient.setQueryData(['request-types', false], [revertType])
   queryClient.setQueryData(['user-work-style-monthly-assignments', currentUser.id], workStyleAssignments)
 
   return function Decorator() {

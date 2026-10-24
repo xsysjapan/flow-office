@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import type { RequestType } from '../../api/types'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
@@ -12,28 +13,62 @@ import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { useRequestTypes } from '../../hooks/useRequestTypes'
 import { useCreateWorkflowRequest, useSubmitWorkflowRequest } from '../../hooks/useWorkflowRequests'
 
+type RequestNewInitial = {
+  requestTypeCode: string
+  title: string
+  formValues: Record<string, string>
+}
+
+/**
+ * URLクエリから初期値を作る。`type`が有効な申請種別に無ければ無視し、
+ * form項目はその種別のform_schemaに存在するkeyのみ取り込む。
+ */
+function buildInitial(searchParams: URLSearchParams, requestTypes: RequestType[]): RequestNewInitial {
+  const selected = requestTypes.find((type) => type.code === searchParams.get('type'))
+  const formValues: Record<string, string> = {}
+  if (selected) {
+    for (const field of selected.form_schema) {
+      const value = searchParams.get(field.key)
+      if (value !== null) formValues[field.key] = value
+    }
+  }
+  return {
+    requestTypeCode: selected?.code ?? '',
+    title: searchParams.get('title') ?? '',
+    formValues,
+  }
+}
+
 /**
  * UC-W002: 社員が申請する(下書き保存または申請)。
+ * URLクエリ(`type`・`title`・form_schemaの各key)で初期値を受け取れる。
  */
 export function WorkflowRequestNewPage() {
-  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { data: requestTypes, isLoading: isLoadingTypes, error: typesError } = useRequestTypes()
 
-  const [requestTypeCode, setRequestTypeCode] = useState('')
-  const [title, setTitle] = useState('')
-  const [formValues, setFormValues] = useState<Record<string, string>>({})
+  if (isLoadingTypes) return <LoadingState />
+  if (typesError) return <ErrorMessage error={typesError} fallback="申請種別の取得に失敗しました。" />
+
+  const types = requestTypes ?? []
+  return <WorkflowRequestNewForm requestTypes={types} initial={buildInitial(searchParams, types)} />
+}
+
+function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: RequestType[]; initial: RequestNewInitial }) {
+  const navigate = useNavigate()
+
+  const [requestTypeCode, setRequestTypeCode] = useState(() => initial.requestTypeCode)
+  const [title, setTitle] = useState(() => initial.title)
+  const [formValues, setFormValues] = useState<Record<string, string>>(() => initial.formValues)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
 
   const createRequest = useCreateWorkflowRequest()
   const submitRequest = useSubmitWorkflowRequest()
 
   const selectedType = useMemo(
-    () => requestTypes?.find((type) => type.code === requestTypeCode),
+    () => requestTypes.find((type) => type.code === requestTypeCode),
     [requestTypes, requestTypeCode],
   )
-
-  if (isLoadingTypes) return <LoadingState />
-  if (typesError) return <ErrorMessage error={typesError} fallback="申請種別の取得に失敗しました。" />
 
   const isBusy = createRequest.isPending || submitRequest.isPending
   const error = createRequest.error ?? submitRequest.error
@@ -74,7 +109,7 @@ export function WorkflowRequestNewPage() {
             }}
           >
             <option value="">選択してください</option>
-            {requestTypes?.map((type) => (
+            {requestTypes.map((type) => (
               <option key={type.code} value={type.code}>
                 {type.name}
               </option>

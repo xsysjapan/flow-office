@@ -1,6 +1,6 @@
 # 月次勤怠画面から「勤怠確定取消依頼」を作成する導線の追加
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -227,7 +227,7 @@
 
 ```
 cd frontend
-npx tsc --noEmit
+npx tsc -p tsconfig.app.json --noEmit
 npm run lint
 npm test -- src/pages/workflow/WorkflowRequestNewPage.test.tsx src/pages/attendance/AttendanceMonthDetailPage.test.tsx
 ```
@@ -251,4 +251,27 @@ npm test -- src/pages/workflow/WorkflowRequestNewPage.test.tsx src/pages/attenda
 
 ## 実装結果
 
-未着手。
+実装済み(implementerに委譲し、委譲元が差分とテストを確認した)。
+
+変更ファイル:
+- `frontend/src/hooks/useRequestTypes.ts`
+- `frontend/src/pages/workflow/WorkflowRequestNewPage.tsx`・`.test.tsx`
+- `frontend/src/pages/attendance/AttendanceMonthDetailPage.tsx`・`.test.tsx`・`.stories.tsx`
+- `docs/07-usecases-attendance.md`(UC-A018 手順1)・`docs/10-usecases-workflow.md`(UC-W002)
+
+仕様からの差分:
+- 「機能フラグ無効」のテストは、テストファイルが`useAuth`を`vi.mock`しているため、AuthContext.Providerではなく`vi.hoisted`の可変参照でユーザーを差し替えた。
+
+テスト結果:
+- `npx tsc -p tsconfig.app.json --noEmit`: エラーなし。
+- `npm run lint`: exit 0。警告は既存ファイルのみ。
+- `npm test -- src/pages/workflow src/pages/attendance/AttendanceMonthDetailPage.test.tsx src/pages/backOffice`: 8ファイル・93件PASS。
+  - 新規テストは、WorkflowRequestNewPageの3件とAttendanceMonthDetailPageの4件。
+
+受け入れ条件との対応:
+- 表示条件(approvedのみ・種別無効時・機能フラグ無効時): AttendanceMonthDetailPageの新規テスト4件。
+- 初期値の受け渡し、不正なtypeの無視、schemaに無いkeyの無視: WorkflowRequestNewPageの新規テスト3件。
+- クエリ無しでの従来挙動: 既存テストがPASS。
+
+既知の制約:
+- form_schemaのkeyが`type`・`title`と同名の場合、そのkeyはクエリで初期値を受け取れない(`type`・`title`を予約として扱う)。現在の申請種別に該当するkeyは無い。
