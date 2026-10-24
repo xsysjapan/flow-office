@@ -1,69 +1,44 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
 import {
   approvePaidLeaveRequest,
   createPaidLeaveGrant,
+  createWorkStyleViaApi,
   fetchPaidLeaveGrantsForUser,
   fetchUserIdByEmail,
+  generateShiftAssignments,
   requestPaidLeave,
 } from './support/api'
-import { pickUser } from './support/ui'
 
 /**
  * 有給付与の取消(UC-P008)。報告されたケースを画面操作で再現する:
  * 新しい付与(B)を取り消したあと、消化済みの古い付与(A)を取り消す。
  *
- * 対象社員は小林 誠(ScenarioSeederで有給を付与されておらず、他の有給系e2eで使われていない)。
- * 付与A(今日・10日)・付与B(翌日・10日)を作り、Aに1日分の消化を充当してから画面で取り消す。
+ * 対象社員は小林 誠(ScenarioSeederで有給・勤務予定を持たない)。ただしscenario-09 §5-14が
+ * 9000〜9399年のランダムな年に、この社員の付与・勤務予定・消化を作る。付与は既存の付与日より
+ * 後にしか作れないため、本シナリオは専用の年の範囲9500〜9899年からランダムに年を選び、
+ * scenario-09より後の付与日になるようにする(他シナリオの年の範囲とも重ならない)。
+ * 勤務予定が無いと有給を申請できないため、固定時間制の勤務形態を作って{year}-06の勤務予定を作る。
+ * 付与A({year}-04-01・10日)・付与B({year}-04-02・10日)を作り、{year}-06の最初の平日の
+ * 終日有給を申請・承認してAに1日分の消化を充当してから画面で取り消す。
+ * 画面の一覧にはscenario-09の付与も出ることがあるため、行は付与日の完全一致で特定する。
  */
 
 const APPLICANT_EMAIL = 'makoto.kobayashi@example.com'
 const APPROVER_EMAIL = 'naoki.watanabe@example.com'
 
-function addDays(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().slice(0, 10)
-}
-
-/** 付与日の1年後(2年後)の前日。 */
-function expiresOnAfterYears(grantedOn: string, years: number): string {
-  const d = new Date(`${grantedOn}T00:00:00Z`)
-  d.setUTCFullYear(d.getUTCFullYear() + years)
-  d.setUTCDate(d.getUTCDate() - 1)
-  return d.toISOString().slice(0, 10)
-}
-
-/** scenario-03と同じ考え方で、翌月の平日(シフト予定が確実にある月)をランダムに選ぶ。 */
-function randomWorkingDate(): string {
-  const now = new Date()
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-  const daysInNextMonth = new Date(nextMonthStart.getFullYear(), nextMonthStart.getMonth() + 1, 0).getDate()
-  const day = 1 + Math.floor(Math.random() * (daysInNextMonth - 3))
-  const date = new Date(nextMonthStart.getFullYear(), nextMonthStart.getMonth(), day)
-  while (date.getDay() === 0 || date.getDay() === 6) {
-    date.setDate(date.getDate() + 1)
-  }
-  return date.toISOString().slice(0, 10)
-}
-
-/** 重複日などで失敗したら別の日で再試行して、終日有給を申請する。 */
-async function requestFullDayLeave(page: Page, approverUserId: string): Promise<string> {
-  let lastError: unknown
-  for (let attempt = 0; attempt < 20; attempt++) {
-    try {
-      const request = await requestPaidLeave(page, {
-        targetDate: randomWorkingDate(),
-        leaveType: 'full',
-        approverUserId,
-        reason: 'E2Eテスト用有給申請(scenario-16)',
-      })
-      return request.id
-    } catch (error) {
-      lastError = error
+/** 指定した年月内の平日("YYYY-MM-DD")を1日から順に列挙する(scenario-09と同じ)。 */
+function weekdaysOfMonth(year: number, month: number): string[] {
+  const dates: string[] = []
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(Date.UTC(year, month - 1, day))
+    const dow = date.getUTCDay()
+    if (dow !== 0 && dow !== 6) {
+      dates.push(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
     }
   }
-  throw new Error(`有給申請に20回試行しても成功しなかった: ${String(lastError)}`)
+  return dates
 }
 
 test('最新の付与を取り消したあと、消化済みの古い付与も画面から取り消せる', async ({ browser }) => {
@@ -84,41 +59,60 @@ test('最新の付与を取り消したあと、消化済みの古い付与も�
     const applicantUserId = await fetchUserIdByEmail(adminPage, APPLICANT_EMAIL)
     const approverUserId = await fetchUserIdByEmail(adminPage, APPROVER_EMAIL)
 
-    // 前提: 付与は新しい付与日にしか作れない。既存の付与(取消済みを除く)があれば、その最新の付与日より後にずらす。
-    const existingGrants = await fetchPaidLeaveGrantsForUser(adminPage, applicantUserId)
-    const latestExisting = existingGrants
-      .filter((grant) => (grant as { status?: string }).status !== 'revoked')
-      .map((grant) => grant.granted_on.slice(0, 10))
-      .sort()
-      .at(-1)
-    const today = new Date().toISOString().slice(0, 10)
-    const grantedOnA = latestExisting !== undefined && latestExisting >= today ? addDays(latestExisting, 1) : today
-    const grantedOnB = addDays(grantedOnA, 1)
+    // 前提: 勤務予定(固定時間制)と付与A・Bを作る。年はscenario-09(9000〜9399)より後の範囲。
+    const year = 9500 + Math.floor(Math.random() * 400)
+    const grantedOnA = `${year}-04-01`
+    const grantedOnB = `${year}-04-02`
+
+    const workStyle = await createWorkStyleViaApi(adminPage, {
+      code: `rv16_${year}`,
+      name: `E2E 有給付与取消確認${year}`,
+      workTimeSystem: 'fixed',
+      prescribedDailyMinutes: 480,
+      prescribedWeeklyMinutes: 2400,
+    })
+    await generateShiftAssignments(adminPage, {
+      userId: applicantUserId,
+      workStyleId: workStyle.id,
+      from: `${year}-06-01`,
+      to: `${year}-06-30`,
+    })
 
     const grantA = await createPaidLeaveGrant(adminPage, {
       userId: applicantUserId,
       grantedOn: grantedOnA,
-      expiresOn: expiresOnAfterYears(grantedOnA, 1),
+      expiresOn: `${year + 1}-03-31`,
       days: 10,
       reason: 'E2Eテスト用付与A(scenario-16)',
     })
     const grantB = await createPaidLeaveGrant(adminPage, {
       userId: applicantUserId,
       grantedOn: grantedOnB,
-      expiresOn: expiresOnAfterYears(grantedOnB, 2),
+      expiresOn: `${year + 2}-04-01`,
       days: 10,
       reason: 'E2Eテスト用付与B(scenario-16)',
     })
 
     // 終日有給を申請〜承認し、先に付与された付与Aに1日分が充当されることを確かめる。
-    const requestId = await requestFullDayLeave(applicantPage, approverUserId)
-    await approvePaidLeaveRequest(approverPage, requestId)
+    const request = await requestPaidLeave(applicantPage, {
+      targetDate: weekdaysOfMonth(year, 6)[0],
+      leaveType: 'full',
+      approverUserId,
+      reason: 'E2Eテスト用有給申請(scenario-16)',
+    })
+    await approvePaidLeaveRequest(approverPage, request.id)
     const grantsAfterApproval = await fetchPaidLeaveGrantsForUser(adminPage, applicantUserId)
     expect(grantsAfterApproval.find((grant) => grant.id === grantA.id)?.used_days).toBe(1)
 
     // 画面: 有給付与ポリシー画面で小林 誠を個別に選ぶと「対象社員の有給付与状況」が出る。
     await adminPage.goto('/admin/paid-leave')
-    await pickUser(adminPage, '付与対象', SCENARIO_USERS.accountingStaff, APPLICANT_EMAIL, { exact: true })
+    // 付与対象の複数選択ポップオーバーの候補は、ビューポートを広げてもPlaywrightが「画面外」と判定してクリックできない
+    // (pickUserが止まる)ため、検索結果の候補にclickイベントを直接送って選ぶ。
+    await adminPage.getByLabel('付与対象', { exact: true }).click()
+    await adminPage.getByPlaceholder('氏名またはメールアドレスで検索').fill(SCENARIO_USERS.accountingStaff)
+    await adminPage.getByRole('option', { name: `${SCENARIO_USERS.accountingStaff}(${APPLICANT_EMAIL})` }).dispatchEvent('click')
+    await expect(adminPage.getByRole('listitem').filter({ hasText: `${SCENARIO_USERS.accountingStaff}(${APPLICANT_EMAIL})` })).toBeVisible()
+    await adminPage.keyboard.press('Escape')
     await expect(adminPage.getByRole('heading', { name: '対象社員の有給付与状況' })).toBeVisible()
 
     const rowA = adminPage.locator('li', { hasText: `${grantedOnA} 〜` })
