@@ -1,6 +1,6 @@
 # 有給付与の取消の不具合の修正(取り消した付与に残日数が残る・消化済みの最新付与を取り消せない)
 
-ステータス: レビュー中
+ステータス: 実装中
 
 ## 変更要望(原文)
 
@@ -149,6 +149,15 @@
 - 理由: 取り消すと消化分の扱いが変わることを、操作前に管理者が分かるようにする(UC-P008の動作どおりの説明)。
 - 未確定・要確認事項: なし
 
+### 論点7: e2eテスト(ユーザーの依頼「e2eテストも実施をお願いします。」)
+- 選択肢:
+  - A. 報告のケースを画面操作で再現するe2eを新しいファイルに足し、既存の有給系e2eと一緒に流す。
+  - B. 既存のe2eを流すだけにする。
+- 決定: A
+- 理由: 報告された操作(新しい付与を取り消す → 消化のある古い付与を取り消す)が、画面で通しでできることを確かめる。
+  ほかのテストと社員・付与を共有すると残数の期待値が崩れるため、有給系のe2eで使われていない社員を使う。
+- 未確定・要確認事項: なし
+
 ## 仕様確定事項(まとめ)
 
 - `PaidLeaveUsageAllocationProjector`
@@ -192,6 +201,21 @@
     - 最新でない付与の取消ボタンは無効で、`title`が「最新の付与のみ取り消せます。」。
     - 取り消した付与より前の付与は、取り消した付与を除いて最新なら押せる(報告のケース:06-02取消済み・06-01が押せる)。
 
+- e2e:`frontend/e2e/scenario-16-paid-leave-grant-revocation.spec.ts`(新規)
+  - 対象社員:小林 誠(`makoto.kobayashi@example.com`、`SCENARIO_USERS.accountingStaff`)。ScenarioSeederで有給を付与されておらず、
+    有給系のe2eで使われていない。前提として、テスト開始時にこの社員の有給付与が0件であることをAPIで確かめる
+    (0件でなければ、取り消されていない付与のうち付与日が最も遅いものより後の付与日を使う)。
+  - 前提データ(API、`support/api.ts`の既存ヘルパー):管理者で付与A(付与日=今日、失効日=付与日の1年後の前日、10日)と
+    付与B(付与日=今日の翌日、失効日=付与日の2年後の前日、10日)を作る。小林 誠で翌月の勤務日に終日有給を申請し、
+    渡辺 直樹で承認する(scenario-03の`randomWorkingDate`と同じ考え方で日を選ぶ。重複時は別の日で再試行)。
+    承認後、APIで付与Aの`used_days`が1(=付与Aに充当された)ことを確かめる。
+  - 画面操作(管理者):有給付与ポリシー画面の付与フォームで個別に小林 誠を1人選び、「対象社員の有給付与状況」を表示する。
+    1. 付与Aの取消ボタンは無効で、`title`が「最新の付与のみ取り消せます。」。付与Bは押せる。
+    2. 付与Bを取り消す(確認ダイアログで「取消する」)。APIの完了を待ち、付与Bの行が「残0日」と「取消済み」になる。
+    3. 付与Aの取消ボタンが押せる(消化済みでも押せる)。確認文に「消化済みの1日分は他の付与へ付け替えます。」が出る。取り消す。
+    4. 付与Aの行が「残0日」と「取消済み」になる。
+  - 操作の後は、APIの完了(`waitForResponse`)または画面の結果を待ってから次の操作に進む。
+
 ## 受け入れ条件
 
 - 有給付与を取り消すと、管理画面・自分の有給画面のAPIで該当付与の残日数が0日になる。
@@ -199,6 +223,7 @@
 - 特別休暇の付与を取り消した場合も残日数が0日になる。
 - 報告のケース(06-02取消済み、06-01に消化あり)で、06-01の取消ボタンが押せ、取り消せる。
 - 最新でない有給付与の取消ボタンは押せず、理由が表示される。
+- 新しいe2e(scenario-16)と、既存の有給系e2e(scenario-03・scenario-15)がPASSする。
 - Projectorをリビルドしても同じ値になる。
 - 追加・既存のテスト(`php artisan test`)が全てPASSする。
 
@@ -230,6 +255,8 @@
 - `frontend/src/pages/paidLeave/PaidLeavePolicyPage.tsx`
 - `frontend/src/pages/paidLeave/PaidLeavePolicyPage.test.tsx`
 - `frontend/src/hooks/usePaidLeave.ts`
+- `frontend/e2e/scenario-16-paid-leave-grant-revocation.spec.ts`(新規)
+- `frontend/e2e/README.md`(ファイル構成に1行追加)
 - `backend/app/Http/Controllers/Api/PaidLeaveController.php`(docコメントのみ)
 - `docs/09-usecases-paid-leave.md`
 - `docs/16-database-schema.md`
@@ -239,7 +266,9 @@
 - `cd backend && php artisan test --filter='GrantRevocation'`
 - `cd backend && php artisan test`
 - `cd frontend && npx vitest run src/pages/paidLeave/PaidLeavePolicyPage.test.tsx`
-- `cd frontend && npm run lint && npx tsc -b`(または`npm run build`)
+- `cd frontend && npm run lint && npx tsc -p tsconfig.app.json --noEmit`
+- e2e:backend(`php artisan serve`、`MICROSOFT_MOCK_ENABLED=true`)・mock-oidc・frontend(`npm run dev`)を起動し、
+  `npx playwright test --config e2e/playwright.config.ts scenario-16 scenario-03 scenario-15`
 
 ## レビュー履歴
 
@@ -251,6 +280,7 @@
   (3)取消後に消化明細が古いまま → 論点4-2を追加。
   (4)docs/09 UC-P008の追記を追加。
   前提(原因・他の書き込み経路・「最新」の定義・他の付与が無いときも取消可)に誤りはないことを確認済み。
+- 2026-10-24: ユーザーの依頼(e2eテストも実施)を受け、論点7とe2eの仕様を追加。ユーザーの依頼をもって実装の了承とし、ステータスを実装中にした
 
 ## 実装結果
 
