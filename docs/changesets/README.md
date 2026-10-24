@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261024-fix-revoked-grant-remaining](./20261024-fix-revoked-grant-remaining/spec.md) | 有給付与の取消の不具合の修正(取り消した付与に残日数が残る・消化済みの最新付与を取り消せない) | 実装中 |
+| [20261024-fix-revoked-grant-remaining](./20261024-fix-revoked-grant-remaining/spec.md) | 有給付与の取消の不具合の修正(取り消した付与に残日数が残る・消化済みの最新付与を取り消せない) | 完了 |
 | [20261024-paid-leave-release-rehearsal](./20261024-paid-leave-release-rehearsal/spec.md) | PR#121のリリースのリハーサル手順書を作り、リハーサルで見つかった手順の不備を直す | 完了 |
 | [20261023-fix-pr121-ci](./20261023-fix-pr121-ci/spec.md) | PR#121のCIの失敗(backendのテスト4件・MySQLのmigration)を直す | 完了 |
 | [20261021-fix-scenario-08-paid-leave-batches](./20261021-fix-scenario-08-paid-leave-batches/spec.md) | e2eのscenario-08で失敗している有給バッチの2件を直す | 完了 |

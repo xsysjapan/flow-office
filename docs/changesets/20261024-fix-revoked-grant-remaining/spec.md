@@ -1,6 +1,6 @@
 # 有給付与の取消の不具合の修正(取り消した付与に残日数が残る・消化済みの最新付与を取り消せない)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -289,4 +289,40 @@
 
 ## 実装結果
 
-未着手
+### コミット
+- `e7575d1` fix(frontend): 取消ボタンを最新の付与で判定し、消化済みでも取り消せるようにする(画面・hook・画面テスト・e2e新規・e2e README)
+- `4c63983` fix(backend): 取り消した有給・特別休暇の付与の残日数を0にする(Projector 2本・取消テスト・APIのdocコメント・docs/09・docs/16)
+- `ab135f9` test(e2e): scenario-16を専用の年の範囲・勤務予定で作るよう直す
+
+### 検証結果
+- `php artisan test --filter=GrantRevocation`:9件PASS。Projectorの修正を外すと4件FAIL(取消後もremaining_days=10)になることも確認。
+- `php artisan test`(CIと同じ:`.env`+`key:generate`+ファイルのsqlite):2123件中2122件PASS、1件FAIL
+  (`ReadModelFingerprintCommandTest::test_fingerprintは1行1テーブル…`)。`origin/main`でも同じ1件が失敗する(2119件中2118件PASS)。
+  単体で流すと通るため、実行順に依存する既存の不安定さで、本変更とは無関係。
+- `npx vitest run src/pages/paidLeave/PaidLeavePolicyPage.test.tsx`:19件PASS(追加3件)。`npm run lint` error無し。
+  `npx tsc -p tsconfig.app.json --noEmit`・`npx tsc -p e2e/tsconfig.json --noEmit` エラー無し。
+- e2e:
+  - scenario-16:単独で複数回PASS。scenario-09と続けて流してもPASS。全件実行の中でもPASS。
+  - scenario-03・scenario-15:PASS(03/09/15/16をまとめて流した回、15単独の回)。
+  - 全件実行(69件):43 passed / 18 failed / 8 did not run。失敗はすべて本変更の範囲外:
+    - scenario-09 §5-17:テストが待つ文言「締め処理済みのため修正できません。…」がアプリに存在しない(既存)。
+    - scenario-13:この環境でmock-freee(:9001)を起動していない。
+    - scenario-14(備品管理):単独実行でも5件失敗(「作成」ボタン待ちのタイムアウト等)。本変更は備品管理に触れていない。
+    - scenario-15の1件・scenario-99の多数:全件実行の後半のタイムアウトの連鎖。単独で流し直すと15はPASS、99は8件PASS・2件FAIL
+      (§5-6+7はテストが待つナビの「付与ポリシー」がアプリに存在しない。§5-8は月次締め後のCSV出力でタイムアウト)。いずれも有給付与の取消と無関係。
+
+### 受け入れ条件の確認
+- 取消後の残日数0(有給・特別休暇):backendの取消テストで確認。
+- 合計残日数・消滅警告の対象外:どちらも`remaining_days`を読むため、上の確認で担保(警告バッチのテストは追加していない)。
+- 報告のケースで06-01が取り消せる・最新でない付与は押せず理由が出る:画面テストとe2e scenario-16で確認。
+- リビルド後も同じ値:backendのテストで、ReadModelを空にしてreplayして確認。
+- 既存テストが全件PASS:上記の1件(`origin/main`でも失敗する既存の失敗)を除きPASS。
+
+### 本番データへの反映(デプロイ時に必要)
+- 取消済みの付与の既存行は、論点3の手順でリビルドするまで残日数が付与日数のまま。
+  `php artisan leave:rebuild-event-store --list-readmodels`で出る全テーブルを空にしてから`php artisan event-sourcing:replay --force`
+  (PR#121のリリースで行う全体リビルドに含めてよい)。
+
+### 補足
+- e2eの社員の選択で、付与対象の複数選択の候補が「ビューポート外」と判定されてクリックできず、`dispatchEvent('click')`で回避した。
+  アプリ側のポップオーバーの位置の問題の可能性があり、別タスクで確認する。
