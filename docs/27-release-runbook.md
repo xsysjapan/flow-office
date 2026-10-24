@@ -162,8 +162,14 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 
 実行の順:
 
-1. 本番の複製DBでリハーサルする。複製に対して下の4〜8を行い、8の指紋の比較まで確認する。
-2. 本番のDB全体と、全ReadModelのテーブルのバックアップを取る(戻し方に使う)。
+1. 本番の複製DBでリハーサルする。手順は`docs/changesets/20261024-paid-leave-release-rehearsal/assets/rehearsal-checklist.md`に従う(基準Aと合否の条件を含む)。
+2. 本番のDB全体と、全ReadModelのテーブルのバックアップを取る(戻し方に使う。基準Aにも使う)。
+2a. 基準A(旧コードで、付け替えの前に取る)。新しいコードは付け替えの前のイベントを読めない(例: `paid_leave_account.usage_designated`の旧payloadには`userId`が無い)ので、旧コードで取る。
+   - 手順2のバックアップを、同じサーバーの別のDB(例: `flow_office_before`)に戻す。
+   - 今動いている旧コードの`backend/`で、`DB_DATABASE=<別のDB>`を付けて実行する(Laravelは`.env`より環境変数を優先する)。実行の前に、`php artisan db:show`で接続先を確かめる。
+   - 一覧(`php artisan leave:rebuild-event-store --list-readmodels`)のテーブルを空にし、`php artisan event-sourcing:replay --force`で再生する。
+   - `php artisan leave:rebuild-event-store --readmodel-fingerprint`を取る(基準A)。
+   - 別のDBを作れないとき(XSERVERのDBの作成の権限・容量は要確認)は、本番のDBで旧コードで再生して取る。その場合は、本番で実行する前にユーザーの許可を取る。
 3. 新しいコードを配備する(`php artisan migrate --force`があれば実行する)。止めるものは、ここまでに止めておく。
 4. 試し実行: `php artisan leave:rekey-paid-leave-streams`。付け替える行数・取り除く付与予定の行数(種類別)・旧ID→新IDの対応の件数を確かめる。
    事前条件に違反がある(付与予定の付与済み・判定の上書き・個別修正、`source='scheduled_batch'`の付与)ときは止まる。件数をユーザーに報告して判断を仰ぐ。
@@ -172,10 +178,13 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 7. ReadModelを作り直す: `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、`php artisan event-sourcing:replay`で
    全Projectorを再生成する(必ず空にしてから)。
 8. 指紋を比べる(原則2の確認。リハーサルと本番で同じことをする)。
-   - 付け替えの前(手順4の前)に、全ReadModelを空にして再生し、`php artisan leave:rebuild-event-store --readmodel-fingerprint`を取る(基準A)。
-   - 7の再生の後に、もう一度指紋を取る(B)。
-   - AとBの差が、付与予定の2つの表(`paid_leave_schedule_entries`・`paid_leave_schedule_assessments`。Bでは空になる)を除いて0件であること。
-     差があれば`--readmodel-fingerprint-rows=<テーブル>`・`--readmodel-diff=<比較先DB>`で行を特定して止める。
+   - 7の再生の後に、`php artisan leave:rebuild-event-store --readmodel-fingerprint`を取る(B)。
+   - AとBを比べる。合否の条件は次のとおり(リハーサル手順書の「7」と同じ)。
+     - 付与予定の2つの表(`paid_leave_schedule_entries`・`paid_leave_schedule_assessments`)は、Bでは0件(Aの件数は記録する)。
+     - `paid_leave_fiscal_year_settings`は、Aには無い表(このリリースで新しくできる)。Bの行が、既定の会社カレンダー(`company_calendars`の`is_default=1`の行)と、カレンダーのID・年度開始の月・日で一致すること。一致しなければ止める。
+     - それ以外の表は、件数・ハッシュがAと一致すること。
+     - 比較では、`created_at`・`updated_at`と、`stored_events.id`を指す列(`stored_event_id`・`last_changed_event_id`)を比べない(`ReadModelFingerprinter::EXCLUDED_COLUMNS`)。
+   - 差があれば`--readmodel-fingerprint-rows=<テーブル>`・`--readmodel-diff=<基準AのDB>`で行を特定して止める。
    - 本番のReadModelと基準Aの差は、別件として報告する。
 9. 受付を再開する(`php artisan up`、`schedule:run`・キュー・打刻端末・API・MCP)。再開後に、有給の付与・消化・履歴の画面と、
    次の`paid-leave:roll-schedules`(自動付与が有効な社員がいれば、新しいIDで付与予定が作り直される)を確認する。
@@ -200,6 +209,13 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
    - 勤務形態が比例に分類されるルールの表を`proportional_{N}`へ移し、表が空の全社ルールに法定の写しを入れ、初期の全社ルールの名前を
      「全社共通(年度はじめ一斉付与)」にする。
    - `paid_leave_fiscal_year_settings`を作り、今の既定の会社カレンダーから初期値を入れる。
+1a. 影響を数える(個人を特定できる値は出さない)。手順1の直後、手順2の前に、SQLで件数だけを数える。
+   - migrationの出力のルール名と月を控える(ルールの名前は個人情報ではない)。
+   - 在籍中(`employment_status='active'`)・自動付与が有効(`paid_leave_auto_grant_enabled=1`)・入社日がある社員の数。
+   - 付与予定の、状態ごとの件数。
+   - 一斉付与の月が年度開始の月と違うルールに当たる社員の数は、SQLでは数えない(ルールの選び方が複雑なため)。付与予定画面の絞り込みと、手順2の出力の件数で確かめる。
+   - 手順2の出力の件数(作り直した社員の数・付与予定日・日数が変わった行の数)と合わせて、ユーザーに報告する。社員への影響は、付与予定の作り直しを通じてしか出ない(手動の付与には影響しない)。
+   - 詳しいSQLは、リハーサル手順書(`docs/changesets/20261024-paid-leave-release-rehearsal/assets/rehearsal-checklist.md`)の「4」「8」を参照する。
 2. `php artisan paid-leave:schedule:reapply-policy`を実行する(運用コマンド画面からも実行できる)。全アクティブ社員の未確定の
    付与予定を、新しいルール・年度開始日で作り直す(個別修正の行も作り直す。付与済み・取消済みは変えない)。
    出力の「作り直した社員の数」と「付与予定日・日数が変わった行の数」を確かめる。付与済みの社員は、最後の付与済みの行を起点に

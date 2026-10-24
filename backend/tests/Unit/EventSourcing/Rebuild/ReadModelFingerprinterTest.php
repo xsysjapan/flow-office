@@ -73,6 +73,42 @@ class ReadModelFingerprinterTest extends TestCase
         $this->assertSame($before, $after);
     }
 
+    public function test_last_changed_event_idだけが違えばハッシュは一致し通常の列が違えば不一致になる(): void
+    {
+        Schema::create('fingerprint_fiscal', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('company_calendar_id');
+            $table->unsignedTinyInteger('fiscal_year_start_month');
+            $table->unsignedTinyInteger('fiscal_year_start_day');
+            $table->unsignedBigInteger('last_changed_event_id')->nullable();
+            $table->timestamps();
+        });
+        $row = fn (array $override = []) => array_merge([
+            'company_calendar_id' => 1,
+            'fiscal_year_start_month' => 5,
+            'fiscal_year_start_day' => 1,
+            'last_changed_event_id' => null,
+            'created_at' => '2026-01-01 00:00:00',
+            'updated_at' => '2026-01-01 00:00:00',
+        ], $override);
+
+        DB::table('fingerprint_fiscal')->insert([$row()]);
+        $before = (new ReadModelFingerprinter)->fingerprint('fingerprint_fiscal');
+
+        DB::table('fingerprint_fiscal')->delete();
+        DB::table('fingerprint_fiscal')->insert([$row(['last_changed_event_id' => 5])]);
+        $after = (new ReadModelFingerprinter)->fingerprint('fingerprint_fiscal');
+
+        $this->assertSame(1, $before['count']);
+        $this->assertSame($before, $after);
+
+        DB::table('fingerprint_fiscal')->delete();
+        DB::table('fingerprint_fiscal')->insert([$row(['fiscal_year_start_month' => 4, 'last_changed_event_id' => 5])]);
+        $changed = (new ReadModelFingerprinter)->fingerprint('fingerprint_fiscal');
+
+        $this->assertNotSame($before['hash'], $changed['hash']);
+    }
+
     public function test_値が1つ違えばハッシュは不一致になる(): void
     {
         $this->createTable();
