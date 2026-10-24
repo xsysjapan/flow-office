@@ -170,6 +170,7 @@ export function useRevokePaidLeaveGrant() {
     mutationFn: ({ grantId, reason }: { grantId: string; reason?: string }) => revokePaidLeaveGrant(grantId, reason),
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grants', 'user', data.user_id] })
+      void queryClient.invalidateQueries({ queryKey: paidLeaveUsagesForUserKey(data.user_id) })
     },
   })
 }

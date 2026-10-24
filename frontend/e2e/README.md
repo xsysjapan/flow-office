@@ -81,6 +81,8 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
 - `scenario-10-user-management-access.spec.ts` — UserManagementを正本とするGroupType・Group・
   Membership・ExternalIdentity・所属変更・外部HR取込と、AccessControl側のFeature・Role・
   Permission・個別利用停止、有効アクセス、StoredEvent監査ログの統合確認
+- `scenario-16-paid-leave-grant-revocation.spec.ts` — 有給付与の取消(UC-P008)。新しい付与を取り消したあと、
+  消化済みの古い付与も画面から取り消せること(小林 誠を使用。最新でない付与の取消ボタンは無効)
 - `scenario-13-external-integration.spec.ts` — 外部連携(freee/マネーフォワード)の送信フロー。
   管理者が`/admin/external-integration-connections`にfreee(OAuth2)・マネーフォワード(APIキー)の
   接続情報を登録すると一覧・有効化トグルに反映されること、freee向けの勤怠確定データ送信
