@@ -329,6 +329,8 @@ Pagination
 - 頻繁に使うFilterのみ直接表示し、低頻度Filterは追加Filterにまとめる
 - Filterが有効なときはそれが視覚的に分かるようにする
 - ページングは`components/Pagination`を使う
+- 一覧を作る・変えるときは、件数が増え得るかを必ず検討し、増え得るならAPI側でページングし(`paginate`)、画面は`components/Pagination`を使う。
+  全件を返す・表示する場合は、件数が増えない理由を変更セットに書く
 - 状態はURLに載せる(§2.10)
 
 ### 2.21 Selection / Bulk Actions
@@ -546,6 +548,7 @@ Buttonの外観変更      → ui-design-system のみ
 - [ ] 保存後の遷移先が作成時/更新時で不自然に非対称になっていない
 - [ ] BackとCancelを区別している
 - [ ] 未保存の変更がある場合だけ離脱警告が出る
+- [ ] 一覧のページングの要否を検討した(件数が増え得るならAPIと画面の両方でページングしている)
 - [ ] Search / Filter / Sort / PageがURLに反映され、詳細から戻っても維持される
 - [ ] Dialog / Sheet / Page の選択が§2.11に沿っている
 - [ ] 戻せない削除に、対象名と不可逆であることを明示した確認がある

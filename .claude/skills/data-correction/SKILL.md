@@ -87,6 +87,20 @@ ReadModel(Projection)だけを書き換える補正は、どんな場合も行�
 - **リビルドと検証までを1つの手順にする**: 再生成が必要なProjectionとその順序、確認のSELECT文を
   変更セットに書く。
 
+## ReadModelの作り直し(Projectorの修正の反映)
+
+イベント履歴は正しく、Projectorの計算だけを直した場合は、イベントを書き換えずにReadModelを作り直して反映する。
+
+- 運用コマンド「データの作り直し(ReadModel)」(`read-models:rebuild {--dry-run}`。管理画面の運用コマンド、またはSSHで
+  `php artisan read-models:rebuild`)を使う。全ReadModelのテーブルを1つのトランザクションで空にして全Projectorをreplayする。
+  テーブルを手で空にしたり、`event-sourcing:replay`だけを流したりしない(足し込むProjectorがあり値が二重になる)。
+- 手順:
+  1. 試し実行(`--dry-run`)で、変更のあるテーブルと件数の前後を確かめる。直したProjectorのテーブル以外に変更があれば止める。
+  2. 利用者・権限のテーブル(users・memberships・role_assignments・permission_role等)の警告が出たら、イベントを経ずに書かれた行がある。
+     作り直すと消えるので、本実行の前にその行の出どころ(シーダー・migration等)をイベント経由に直す。
+  3. 実行中は全利用者がメンテナンス中(全APIが503)になる。日次バッチの時刻を避け、実行の時間帯をユーザーに確認してから本実行する。
+- 変更セットの「実装結果」に、試し実行の差分と本実行の結果を書く。
+
 ## 本番実行
 
 本番での実行タイミングと担当はユーザーに確認する。試し実行の結果をユーザーに確認してもらってから
