@@ -12,6 +12,10 @@
 他の休暇も確認し、必要ならば横展開をお願いします。履歴表示は不要です。
 ```
 
+```
+すみません。追加でお願いしたいのは、自分の有給で残日数が0のレコードは表示しないようにしてください。代休・特別休暇も同様です。
+```
+
 (「履歴表示は不要」の確認への回答:「履歴画面は今のままでよい」=取り消した付与を一覧に「取消済み」として残す必要はなく、履歴の画面は変えない。)
 
 ## 背景・目的
@@ -48,6 +52,11 @@
 - 理由: ユーザーの依頼「他の休暇も確認し、必要ならば横展開」。他に本人向けの付与一覧は無い(`routes/api.php`の`grants/mine`は3本)。
 - 未確定・要確認事項: なし
 
+### 論点0-2: 残りの無い付与(ユーザーの追加の依頼)
+- 決定:本人向けの付与一覧から、残りの無い付与も除く。有給・特別休暇は`remaining_days > 0`。代休は`remaining_days > 0`または`remaining_minutes > 0`
+  (時間単位の代休は日数が0で分数だけが残るため)。取り消した付与の除外(論点1)と合わせて、本人向けの一覧は「使える残りがある付与」だけになる。
+- 未確定・要確認事項: なし
+
 ### 論点1: どこで除くか
 - 選択肢:
   - A. 本人向けのAPI(`/paid-leave/grants/mine`・`/special-leave/grants/mine`)で`status = 'active'`に絞る。
@@ -64,11 +73,14 @@
 - `PaidLeaveController::myGrants`・`SpecialLeaveController::myGrants`:`where('status', 'active')`を追加する(特別休暇は`SpecialLeaveGrantStatus::ACTIVE`等の既存の定数があれば使う)。
   並び順・応答の形は変えない。Swagger(OA)の説明に「取り消した付与は含めない」を追記する。
 - `CompensatoryLeaveController::myGrants`:`where('status', '!=', CompensatoryLeaveGrantStatus::CANCELLED)`を追加し、OAの説明に同じ旨を追記する。
+- 残りの無い付与(論点0-2):有給・特別休暇の`myGrants`に`where('remaining_days', '>', 0)`、代休の`myGrants`に
+  `where(fn ($q) => $q->where('remaining_days', '>', 0)->orWhere('remaining_minutes', '>', 0))`を追加し、OAの説明に追記する。
 - 画面は変えない。履歴の画面(`/*/history/mine`)も変えない(ユーザーの回答)。
 - テスト:
   - `tests/Feature/PaidLeaveAccount/PaidLeaveTest.php`(または取消のテスト):付与を2件作り1件を取り消すと、`/paid-leave/grants/mine`は取り消していない1件だけを返す。
     管理者向けの`/paid-leave/grants/user/{userId}`は2件(取消済みを含む)を返す。
   - `tests/Feature/SpecialLeave/SpecialLeaveTest.php`(または取消のテスト):同じことを`/special-leave/grants/mine`で確かめる。
+  - 残りの無い付与:有給・特別休暇・代休とも、使い切った付与(残0)が本人向けの一覧に出ない。代休の時間単位の付与(日数0・分数あり)は出る。
   - 代休(`tests/Feature/CompensatoryLeave/`の既存の取消のテストの作り方に合わせる):取消(`cancelled`)の付与は`/compensatory-leave/grants/mine`に出ず、
     確定(`confirmed`)の付与は出る。管理者向けの`/compensatory-leave/grants/user/{userId}`は取消の付与を含めて返す。
 
@@ -106,6 +118,8 @@
 
 - 初版。ユーザーの依頼(確認と修正)をもって実装中にした。
 - 2026-10-25: ユーザーの依頼「他の休暇も確認し、必要ならば横展開」を受け、代休を追加(論点0)。履歴の画面は今のままとする回答を反映。
+- 2026-10-25: ユーザーの追加の依頼を受け、残りの無い付与も除く(論点0-2)。最初の実装のエージェントはユーザーにより停止された
+  (取消の除外とテストは実装済み、特別休暇・代休のdocsと全件の確認は未了)。
 
 ## 実装結果
 
