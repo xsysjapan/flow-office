@@ -994,6 +994,8 @@ SQLだけで推測変換しないため、日次実績とイベント履歴か�
 - submitted_at
 - approved_at
 - returned_at
+- return_comment(差戻し理由。`attendance_month.returned`で設定し、再提出でnullに戻す)
+- revert_comment(未提出に戻した理由。`attendance.month_confirmation_reverted`で設定し、再提出でnullに戻す。UC-A018)
 - closed_at
 - snapshot_json
 - created_at / updated_at

@@ -321,7 +321,7 @@ export function useRevertMonthConfirmation() {
   const invalidate = useInvalidateMonths()
 
   return useMutation({
-    mutationFn: ({ id, reason, workflowRequestId }: { id: string; reason: string; workflowRequestId: string }) =>
+    mutationFn: ({ id, reason, workflowRequestId }: { id: string; reason: string; workflowRequestId?: string }) =>
       revertMonthConfirmation(id, reason, workflowRequestId),
     onSuccess: () => invalidate(),
   })

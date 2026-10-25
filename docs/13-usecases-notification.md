@@ -17,6 +17,7 @@
 - 承認依頼(申請提出時、承認者へ)
 - 差戻し(申請者へ)
 - 承認完了(申請者へ)
+- 月次勤怠が未提出に戻された(月の持ち主へ。docs/07-usecases-attendance.md UC-A018)
 - バックオフィスタスク割当(担当者へ)
 - 有給期限警告 (docs/09-usecases-paid-leave.md UC-P006)
 - 年5日取得義務警告 (docs/09-usecases-paid-leave.md UC-P006)

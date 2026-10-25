@@ -956,31 +956,31 @@ class AttendanceController extends Controller
     }
 
     /**
-     * 救済コマンド: バックオフィス担当者専用。汎用申請ワークフロー「勤怠確定取消依頼」が
-     * 承認され、バックオフィス担当者が処理する過程で、承認済みの月次勤怠の確定を取り消す
-     * (approved→not_submitted)。
+     * 救済コマンド: 確定取消の権限(attendance.confirmation_revert)を持つ担当者が、承認済みの
+     * 月次勤怠の確定を取り消す(approved→not_submitted)。reasonは社員へのメッセージとして
+     * 画面表示・通知される。workflow_request_idは任意で、省略すると申請なしの直接取消になる。
      */
     #[OA\Post(
         path: '/attendance-months/{attendanceMonth}/revert-confirmation',
         operationId: 'attendanceMonths.revertConfirmation',
-        summary: '承認済みの月次勤怠の確定を取り消す(バックオフィス担当者専用)',
+        summary: '承認済みの月次勤怠の確定を取り消す(確定取消の権限が必要。申請なしでも可)',
         tags: ['勤怠'],
         parameters: [new OA\Parameter(name: 'attendanceMonth', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason', 'workflow_request_id'], properties: [new OA\Property(property: 'reason', type: 'string'), new OA\Property(property: 'workflow_request_id', type: 'string', format: 'uuid')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'reason', type: 'string'), new OA\Property(property: 'workflow_request_id', type: 'string', format: 'uuid', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function revertMonthConfirmation(Request $request, AttendanceMonth $attendanceMonth, CommandBus $commandBus): AttendanceMonthResource
     {
         $data = $request->validate([
             'reason' => ['required', 'string'],
-            'workflow_request_id' => ['required', 'string', 'exists:workflow_requests,id'],
+            'workflow_request_id' => ['nullable', 'string', 'exists:workflow_requests,id'],
         ]);
 
         $commandBus->dispatch(new RevertApprovedAttendanceMonth(
             $attendanceMonth->id,
             $request->user()->id,
             $data['reason'],
-            $data['workflow_request_id'],
+            $data['workflow_request_id'] ?? null,
         ));
 
         return new AttendanceMonthResource($attendanceMonth->refresh());
