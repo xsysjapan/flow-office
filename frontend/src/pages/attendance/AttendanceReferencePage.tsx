@@ -12,6 +12,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { RevertMonthConfirmationDialog } from '../../components/RevertMonthConfirmationDialog/RevertMonthConfirmationDialog'
 import { Textarea } from '../../components/ui/textarea'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
@@ -167,6 +168,7 @@ export function MonthlyReferenceView({
   const { user } = useAuth()
   const canReopenMonth = user?.effective_permissions?.includes('attendance.month_reopen') ?? false
   const canCloseMonth = user?.effective_permissions?.includes('backoffice_task.execute') ?? false
+  const canRevertConfirmation = user?.effective_permissions?.includes('attendance.confirmation_revert') ?? false
   const { data, isLoading, error } = useAttendanceMonth(yearMonth, userId)
   const canExport = data?.can_export ?? false
   const closeMonth = useCloseMonth()
@@ -271,22 +273,31 @@ export function MonthlyReferenceView({
        *  (UC-A011・UC-A017)。締めるにはbackoffice_task.execute権限、締めを取り消すには
        *  専用の権限attendance.month_reopenが必要(月次勤怠締め取消は他の権限に流用しない)。 */}
       {!isLoading && !error && month && (
-        (month.status === 'closed' && canReopenMonth) || (month.status !== 'closed' && canCloseMonth)
+        (month.status === 'closed' && canReopenMonth) ||
+        (month.status !== 'closed' && canCloseMonth) ||
+        (month.status === 'approved' && canRevertConfirmation)
       ) && (
         <Card title="管理者操作">
           {month.status === 'closed' ? (
             <ReopenMonthDialog monthId={month.id} yearMonth={yearMonth} />
           ) : (
-            <ConfirmActionDialog
-              triggerLabel="締める"
-              triggerVariant="primary"
-              title="月次勤怠を締めますか?"
-              description={`${yearMonth}の月次勤怠を締めます。締めた後は日次実績を編集できなくなります。この操作は元に戻せません。`}
-              confirmLabel="締めを確定する"
-              isPending={closeMonth.isPending}
-              error={closeMonth.error}
-              onConfirm={() => closeMonth.mutateAsync(month.id)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              {canCloseMonth && (
+                <ConfirmActionDialog
+                  triggerLabel="締める"
+                  triggerVariant="primary"
+                  title="月次勤怠を締めますか?"
+                  description={`${yearMonth}の月次勤怠を締めます。締めた後は日次実績を編集できなくなります。この操作は元に戻せません。`}
+                  confirmLabel="締めを確定する"
+                  isPending={closeMonth.isPending}
+                  error={closeMonth.error}
+                  onConfirm={() => closeMonth.mutateAsync(month.id)}
+                />
+              )}
+              {month.status === 'approved' && canRevertConfirmation && (
+                <RevertMonthConfirmationDialog monthId={month.id} yearMonth={yearMonth} />
+              )}
+            </div>
           )}
         </Card>
       )}

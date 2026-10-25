@@ -236,9 +236,15 @@ export function AttendanceMonthDetailPage() {
           </div>
         )}
 
+        {month?.status === 'not_submitted' && month.revert_comment && (
+          <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
+            未提出に戻した理由: {month.revert_comment}
+          </div>
+        )}
+
         {month?.status === 'approved' && workflowEnabled && revertType && (
           <div className="mb-3 rounded-md border border-border bg-muted p-3 text-sm text-foreground">
-            <p>この月は承認済みのため編集できません。日次実績の修正が必要な場合は、勤怠確定取消依頼を申請してください（承認後、人事部が確定を取り消すと未提出に戻ります）。</p>
+            <p>この月は承認済みのため編集できません。日次実績の修正が必要な場合は、勤怠確定取消依頼を申請してください（承認されると未提出に戻ります）。</p>
             <Button asChild size="sm" variant="secondary" className="mt-2">
               <Link
                 to={`/requests/new?${new URLSearchParams({

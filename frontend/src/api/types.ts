@@ -733,6 +733,8 @@ export interface AttendanceMonth {
   approved_at: string | null;
   returned_at: string | null;
   return_comment: string | null;
+  /** 承認済みの月を未提出に戻したときのメッセージ(確定取消の理由)。再提出でnullに戻る。 */
+  revert_comment: string | null;
   closed_at: string | null;
   snapshot: Record<string, number> | null;
   legal_holiday_warnings: LegalHolidayWarning[];

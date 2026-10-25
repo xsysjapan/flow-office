@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
 import * as attendanceApi from '../../api/attendance'
 import { ApiError } from '../../api/client'
@@ -67,8 +67,11 @@ function mockFetchMonth(month: AttendanceMonth, canExport = false) {
   })
 }
 
+// 既定はassignee。権限を変えるテストだけauthState.userを差し替える。
+const authState = vi.hoisted(() => ({ user: undefined as User | undefined }))
+
 vi.mock('../../auth/useAuth', () => ({
-  useAuth: () => ({ user: assignee }),
+  useAuth: () => ({ user: authState.user ?? assignee }),
 }))
 
 const baseTask: BackOfficeTask = {
@@ -200,6 +203,7 @@ describe('BackOfficeTaskDetailPage', () => {
       approved_at: '2026-08-01T00:00:00+09:00',
       returned_at: null,
       return_comment: null,
+      revert_comment: null,
       closed_at: null,
       snapshot: null,
       legal_holiday_warnings: [],
@@ -302,6 +306,46 @@ describe('BackOfficeTaskDetailPage', () => {
       await screen.findByText('タクシー代の経理処理')
       expect(screen.queryByText('月次勤怠の締め処理')).not.toBeInTheDocument()
     })
+
+    describe('直接の未提出に戻す', () => {
+      afterEach(() => {
+        authState.user = undefined
+      })
+
+      it('shows 未提出に戻す for an approved month when the user has attendance.confirmation_revert', async () => {
+        vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+        mockFetchMonth(baseMonth)
+
+        renderPage(attendanceMonthTask)
+
+        expect(await screen.findByRole('button', { name: '締める' })).toBeInTheDocument()
+        expect(screen.getAllByRole('button', { name: '未提出に戻す' })).toHaveLength(1)
+      })
+
+      it('does not show 未提出に戻す when the user lacks attendance.confirmation_revert', async () => {
+        authState.user = {
+          ...assignee,
+          effective_permissions: ['attendance.month_reopen', 'backoffice_task.execute', 'attendance.export'],
+        }
+        vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+        mockFetchMonth(baseMonth)
+
+        renderPage(attendanceMonthTask)
+
+        expect(await screen.findByRole('button', { name: '締める' })).toBeInTheDocument()
+        expect(screen.queryAllByRole('button', { name: '未提出に戻す' })).toHaveLength(0)
+      })
+
+      it('does not show 未提出に戻す for a month that is not approved', async () => {
+        vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue({ ...baseMonth, status: 'submitted' })
+        mockFetchMonth({ ...baseMonth, status: 'submitted' })
+
+        renderPage(attendanceMonthTask)
+
+        expect(await screen.findByRole('button', { name: '締める' })).toBeInTheDocument()
+        expect(screen.queryAllByRole('button', { name: '未提出に戻す' })).toHaveLength(0)
+      })
+    })
   })
 
   describe('attendance_confirmation_revert task', () => {
@@ -345,6 +389,7 @@ describe('BackOfficeTaskDetailPage', () => {
       approved_at: '2026-08-01T00:00:00+09:00',
       returned_at: null,
       return_comment: null,
+      revert_comment: null,
       closed_at: null,
       snapshot: null,
       legal_holiday_warnings: [],

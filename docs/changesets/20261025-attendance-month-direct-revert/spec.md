@@ -1,6 +1,6 @@
 # 承認済みの月次勤怠を未提出に戻す経路の見直し(バックオフィスの直接取消・取消依頼の承認で即時取消)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -444,4 +444,56 @@ npm test -- src/components/RevertMonthConfirmationDialog src/pages/backOffice sr
 
 ## 実装結果
 
-未着手。
+実装済み。backendはimplementer(sonnet)、frontendはimplementer(haiku)に委譲した。docs本体は委譲元が更新した。
+委譲元が差分とテストを確認した。
+
+変更ファイル:
+- backend
+  - Command・Event・集約・Handler(`RevertApprovedAttendanceMonth`一式)
+  - 新規: `RevertApprovedAttendanceMonthByRequest`(Command・Handler)
+  - 新規: `AttendanceMonthRevertOnConfirmationRevertRequestApprovedReactor`
+  - `AttendanceMonthProjector`
+  - `AttendanceController`・`AttendanceMonthResource`・`AttendanceMonth`
+  - `config/domain.php`、`routes/api.php`、`RequestTypeSeeder`
+  - migration 2本: `2026_10_25_000001_add_revert_comment_to_attendance_months_table`、`2026_10_25_000002_update_attendance_confirmation_revert_request_type`
+  - テスト: `AttendanceMonthRescueCommandsTest`(6件追加)、新規`AttendanceConfirmationRevertRequestFlowTest`(9件)
+- frontend
+  - `api/attendance.ts`・`api/types.ts`・`hooks/useAttendance.ts`
+  - 新規`components/RevertMonthConfirmationDialog/`(component・story・test)
+  - `AttendanceReferencePage`(管理者操作カード)
+  - `AttendanceMonthDetailPage`(理由の表示・案内文)
+  - 各テスト。月データのモックに`revert_comment: null`を追加した
+- docs
+  - `07`(UC-A018を全面改訂)、`10`、`11`(UC-B008)、`13`、`16`(`return_comment`・`revert_comment`)、`17`
+
+仕様からの差分:
+- 論点6の「締め処理タスクの詳細にも置く」: 締め処理タスクの詳細は、勤怠参照の共通部品
+  (`AttendanceMonthReferenceTabs`→`MonthlyReferenceView`)を内包している。そのため、共通の「管理者操作」カードに
+  置くだけで両方の画面に出る。タスク詳細に別に置くと2つ表示されたため、共通カードの1か所にした。
+  - その結果、承認詳細画面でも、確定取消の権限を持つ承認者にはボタンが出る(既存の「締める」と同じ扱い)。
+- 空のメッセージの扱い: 前後の空白を除いて空なら送信しない。エラー文言は「社員へのメッセージを入力してください。」。
+
+テスト結果:
+- backend
+  - CIと同じ条件の全件(`cp .env.example .env && php artisan key:generate && php artisan test`)は、2134件中2133件PASS。
+  - 失敗の1件`ReadModelFingerprintCommandTest::test_fingerprintは1行1テーブル…`は、変更前のブランチ(git stash)でも
+    同じく失敗する既存の失敗で、今回の変更とは無関係。`php artisan test`の出力でタブが失われている。
+  - `pint --test`はpassed。
+- frontend
+  - `npx tsc -p tsconfig.app.json --noEmit`: エラーなし。
+  - `npm run lint`: exit 0。
+  - `npm test`(全件): 146ファイル・1080件PASS(2件skipは既存)。
+
+受け入れ条件との対応:
+- 直接取消(申請なし・メッセージ必須・自分の月も可・通知・理由表示・再提出で消える)は次で確認した。
+  - `AttendanceMonthRescueCommandsTest`の追加6件
+  - `RevertMonthConfirmationDialog`・`AttendanceReferencePage`・`BackOfficeTaskDetailPage`・`AttendanceMonthDetailPage`のテスト
+- 承認で即時取消(タスクを作らない・状態ごとのエラーと冪等・自己承認・ロールバックで何も増えない・他の種別に影響しない)は、
+  `AttendanceConfirmationRevertRequestFlowTest`の9件で確認した。
+- リビルドで`revert_comment`が同じになることは、`test_revert_comment_is_reproduced_by_replaying_the_projector`で確認した。
+
+リリース手順:
+1. migrationを実行する。
+2. `SELECT COUNT(*) FROM stored_events WHERE event_class LIKE '%ConfirmationReverted%';`が0件であることを確かめる
+   (0件ならデータ移行は不要)。
+3. 人事担当ロールに`attendance.confirmation_revert`を管理画面から手動で追加する(ユーザーが実施)。

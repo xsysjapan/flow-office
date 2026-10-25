@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
@@ -38,8 +38,11 @@ const adminUser: User = {
   effective_permissions: ['attendance.month_reopen', 'backoffice_task.execute', 'attendance.export'],
 }
 
+// 既定はadminUser。権限を変えるテストだけauthState.userを差し替える。
+const authState = vi.hoisted(() => ({ user: undefined as User | undefined }))
+
 vi.mock('../../auth/useAuth', () => ({
-  useAuth: () => ({ user: adminUser }),
+  useAuth: () => ({ user: authState.user ?? adminUser }),
 }))
 
 const paginatedUsers: Paginated<User> = {
@@ -204,6 +207,7 @@ describe('AttendanceReferencePage', () => {
       approved_at: null,
       returned_at: null,
       return_comment: null,
+      revert_comment: null,
       closed_at: `${formatDate(new Date())}T00:00:00+09:00`,
       snapshot: null,
       legal_holiday_warnings: [],
@@ -239,6 +243,7 @@ describe('AttendanceReferencePage', () => {
       approved_at: null,
       returned_at: null,
       return_comment: null,
+      revert_comment: null,
       closed_at: null,
       snapshot: null,
       legal_holiday_warnings: [],
@@ -271,6 +276,7 @@ describe('AttendanceReferencePage', () => {
       approved_at: null,
       returned_at: null,
       return_comment: null,
+      revert_comment: null,
       closed_at: null,
       snapshot: null,
       legal_holiday_warnings: [],
@@ -307,6 +313,83 @@ describe('AttendanceReferencePage', () => {
     })
   })
 
+  describe('revert to not_submitted for an approved month', () => {
+    afterEach(() => {
+      authState.user = undefined
+    })
+
+    function mockMonthStatusForRevert(status: AttendanceMonthStatus) {
+      const month: AttendanceMonth = {
+        id: `month-revert-${status}`,
+        user_id: targetUser.id,
+        year_month: formatDate(new Date()).slice(0, 7),
+        status,
+        submitted_at: null,
+        approved_at: null,
+        returned_at: null,
+        return_comment: null,
+        revert_comment: null,
+        closed_at: null,
+        snapshot: null,
+        legal_holiday_warnings: [],
+      }
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+      vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+        days: [],
+        month,
+        flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      })
+    }
+
+    it('shows 未提出に戻す for an approved month when the user has attendance.confirmation_revert', async () => {
+      authState.user = { ...adminUser, effective_permissions: ['attendance.confirmation_revert'] }
+      mockMonthStatusForRevert('approved')
+
+      renderPage()
+      await selectTargetUser()
+
+      expect(await screen.findByRole('button', { name: '未提出に戻す' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '締める' })).not.toBeInTheDocument()
+    })
+
+    it('shows 未提出に戻す next to 締める when the user has both permissions', async () => {
+      authState.user = {
+        ...adminUser,
+        effective_permissions: ['attendance.confirmation_revert', 'backoffice_task.execute'],
+      }
+      mockMonthStatusForRevert('approved')
+
+      renderPage()
+      await selectTargetUser()
+
+      expect(await screen.findByRole('button', { name: '未提出に戻す' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '締める' })).toBeInTheDocument()
+    })
+
+    it('does not show 未提出に戻す when the user lacks attendance.confirmation_revert', async () => {
+      mockMonthStatusForRevert('approved')
+
+      renderPage()
+      await selectTargetUser()
+
+      expect(await screen.findByRole('button', { name: '締める' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '未提出に戻す' })).not.toBeInTheDocument()
+    })
+
+    it('does not show 未提出に戻す for a month that is not approved', async () => {
+      authState.user = { ...adminUser, effective_permissions: ['attendance.confirmation_revert'] }
+      mockMonthStatusForRevert('submitted')
+
+      renderPage()
+      await selectTargetUser()
+
+      expect(await screen.findByText('月次勤怠')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '未提出に戻す' })).not.toBeInTheDocument()
+      expect(screen.queryByText('管理者操作')).not.toBeInTheDocument()
+    })
+  })
+
   describe('output card by monthly status', () => {
     const exportHint = '提出後に出力できます。'
 
@@ -320,6 +403,7 @@ describe('AttendanceReferencePage', () => {
         approved_at: null,
         returned_at: null,
         return_comment: null,
+        revert_comment: null,
         closed_at: null,
         snapshot: null,
         legal_holiday_warnings: [],

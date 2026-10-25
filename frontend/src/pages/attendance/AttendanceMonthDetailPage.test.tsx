@@ -103,6 +103,7 @@ const notSubmittedMonth: AttendanceMonth = {
   approved_at: null,
   returned_at: null,
   return_comment: null,
+  revert_comment: null,
   closed_at: null,
   snapshot: null,
   legal_holiday_warnings: [],
@@ -438,6 +439,55 @@ describe('AttendanceMonthDetailPage', () => {
     expect(screen.queryByText(/差戻し理由/)).not.toBeInTheDocument()
   })
 
+  it('shows the revert reason for a not_submitted month that was reverted with a message', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: { ...notSubmittedMonth, revert_comment: '日次の休憩入力に誤りがあります' },
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
+
+    renderPage()
+
+    expect(await screen.findByText('未提出に戻した理由: 日次の休憩入力に誤りがあります')).toBeInTheDocument()
+  })
+
+  it('does not show the revert reason when revert_comment is null', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: notSubmittedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
+
+    renderPage()
+
+    await screen.findByText('月次勤怠')
+    expect(screen.queryByText(/未提出に戻した理由/)).not.toBeInTheDocument()
+  })
+
+  it('shows only the return comment, not the revert reason, for a returned month', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: {
+        ...notSubmittedMonth,
+        status: 'returned',
+        return_comment: '休憩時間の入力に不備があります',
+        revert_comment: '日次の休憩入力に誤りがあります',
+      },
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
+
+    renderPage()
+
+    expect(await screen.findByText('差戻し理由: 休憩時間の入力に不備があります')).toBeInTheDocument()
+    expect(screen.queryByText(/未提出に戻した理由/)).not.toBeInTheDocument()
+  })
+
   it('shows an error message when the fetch fails', async () => {
     vi.spyOn(attendanceApi, 'fetchMonth').mockRejectedValue(new Error('network down'))
 
@@ -460,6 +510,7 @@ describe('AttendanceMonthDetailPage', () => {
       renderPage()
 
       expect(await screen.findByText(/この月は承認済みのため編集できません/)).toBeInTheDocument()
+      expect(screen.getByText(/（承認されると未提出に戻ります）/)).toBeInTheDocument()
       const link = screen.getByRole('link', { name: revertLinkName })
       const href = link.getAttribute('href') ?? ''
       expect(href).toContain('type=attendance_confirmation_revert')
