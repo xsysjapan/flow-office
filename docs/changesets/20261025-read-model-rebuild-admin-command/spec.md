@@ -1,6 +1,6 @@
 # ReadModelの作り直しを運用コマンドにし、開発用シーダーをイベント経由にする
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -220,4 +220,36 @@
 
 ## 実装結果
 
-未着手
+### コミット
+- `dfd2d83` refactor(frontend): 専用画面の削除、メンテナンス表示の例外を`/admin/commands`に(この時点のコミットに、backendの削除ファイルも一緒に入った。次のコミットで整合)
+- 次のコミット refactor(backend): 運用コマンドの実行役`admin-commands:run-pending`(`App\Console\Commands\RunPendingAdminCommandsCommand`・
+  `App\Services\AdminCommand\AdminCommandRunner`・`App\Console\CurrentAdminCommandRun`)、`read-models:rebuild {--dry-run}`の運用コマンド化、
+  専用API・権限・監査イベント・依頼者の確認の削除、`RunAdminCommandJob`の削除、docs
+- fix(seed): `DatabaseSeeder`・`ScenarioSeeder`・`ScenarioAccessSeeder`をCommand経由に。`tests/Feature/Seeders/DevSeedersEventSourcedTest.php`
+- fix(frontend): 運用コマンドの確認ダイアログの文言(「DBキューへ投入」→「約1分以内に始まり」)
+
+### 実装上の決定(仕様の範囲内・レビューで確定)
+- 実行役が扱う記録は`AdminCommandRegistry`に載っている運用コマンドのものだけ(有給付与予定の判定の記録は別経路のため触らない)。
+- CLIから直接の作り直しは、記録の`parameters`を`{"dry-run": bool}`(画面からの依頼と同じ)とし、作り直しの実行中・判定の実行中は拒否(終了コード1)。
+- 開発用の管理者の部署・役職は「開発部」「システム管理者」(シーダーの値。e2eは参照しない)。
+- `attendance:rebuild-calculation-projections`の出力が運用コマンドの画面で空になるのは既存の挙動で、対象外。
+
+### 検証結果
+- backend(CIと同じ条件の全件):2198件中2197件PASS。失敗は既存の`ReadModelFingerprintCommandTest::test_fingerprintは1行1テーブル…`の1件(`origin/main`でも失敗)。
+- frontend:`vitest --project=unit`全件PASS、lint error無し、tsc(app・e2e)エラー無し、MaintenanceGate/MaintenanceNoticeのstorybookテストPASS。
+- e2e(新しいシーダーでDBをリセット):scenario-00・scenario-03・scenario-11・scenario-16の12件PASS(管理者のmock-oidcログインを含む)。
+- 実機(e2eの後のデータ):運用コマンドの画面で「データの作り直し(ReadModel)」を試し実行・本実行し、`admin-commands:run-pending`で実行 → どちらも
+  `succeeded`、変更のあったテーブル0件。実行中、一般の利用者の画面は「メンテナンス中」になり、終了後`maintenance:false`。管理者は作り直し後も運用コマンドの画面を使えた。
+
+### 受け入れ条件の確認
+- 運用コマンドに出て試し実行・本実行を依頼でき約1分以内に始まる:実機・`RunPendingAdminCommandsTest`。
+- 60秒を超える運用コマンドが打ち切られない:キューを使わずCLIで実行(`RunAdminCommandJob`は削除)。
+- 実行中の503とメンテナンス表示、運用コマンドの画面では進み具合が見られる:実機・`BlockDuringReadModelRebuildTest`。
+- 結果の表・警告・summary:`ReadModelRebuildCommandTest`・実機の出力。
+- 専用画面・API・権限・監査イベントが無い:削除済み(frontendのgrepで残存0件)。
+- 開発環境で作り直しても変わらない:`DevSeedersEventSourcedTest`(changed_tables=0)・実機。
+- e2e・backend・frontendのテスト:上記。
+
+### リリース時の注意
+- デプロイ時に`jobs`から`RunAdminCommandJob`の行を削除する(docs/27-release-runbook.md 3.4)。
+- 既存の開発DBは`migrate:fresh --seed`で作り直す。
