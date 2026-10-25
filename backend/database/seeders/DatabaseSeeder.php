@@ -4,10 +4,13 @@ namespace Database\Seeders;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\UserManagement\Commands\AddMembership;
+use App\Domain\UserManagement\Commands\CreateUser;
+use App\Domain\UserManagement\Commands\LinkSsoAccount;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Ramsey\Uuid\Uuid;
 
 class DatabaseSeeder extends Seeder
 {
@@ -28,13 +31,25 @@ class DatabaseSeeder extends Seeder
             PaidLeaveGrantPolicySeeder::class,
         ]);
 
-        $admin = User::query()->firstOrCreate(
-            ['email' => 'admin@example.com'],
-            User::factory()->make([
+        // admin@example.comはCreateUser(イベントを記録する)で作る。ReadModelを作り直しても消えないようにするため。
+        // 既に同じメールの利用者がいれば何もしない。作成者には作る利用者自身を使う。
+        $admin = User::query()->where('email', 'admin@example.com')->first();
+        if ($admin === null) {
+            $adminId = Uuid::uuid5(Uuid::NAMESPACE_URL, 'seed-user:admin@example.com')->toString();
+            $admin = app(CommandBus::class)->dispatch(new CreateUser($adminId, [
                 'name' => 'Test Admin',
                 'email' => 'admin@example.com',
-            ])->getAttributes(),
-        );
+                'department' => '開発部',
+                'job_title' => 'システム管理者',
+                'employment_status' => 'active',
+                'account_status' => 'active',
+            ], $adminId));
+        }
+
+        // mock-oidcは`entra_user_id`のある利用者だけを出すため、mock有効時は管理者を`mock-entra-admin`と連携する。
+        if (config('services.azure.mock_enabled') && $admin->entra_user_id === null) {
+            app(CommandBus::class)->dispatch(new LinkSsoAccount($admin->id, 'mock-entra-admin'));
+        }
 
         $this->call([
             UserManagementSeeder::class,

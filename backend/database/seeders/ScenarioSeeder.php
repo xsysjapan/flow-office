@@ -11,6 +11,8 @@ use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
+use App\Domain\AccessControl\Commands\CreateRoleAssignment;
+use App\Domain\UserManagement\Commands\LinkSsoAccount;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Models\CompanyCalendar;
@@ -95,20 +97,22 @@ class ScenarioSeeder extends Seeder
     }
 
     /**
-     * DatabaseSeederが作成する admin@example.com は entra_user_id がランダムなUUIDのため
-     * (UserFactory参照)、そのままではモックOIDCでログインできない。mock-oidc/server.js の
-     * 'mock-entra-admin' エントリと対応させ、管理者としてもシナリオを実施できるようにする。
+     * DatabaseSeederが作成する admin@example.com は、mock有効でなければ entra_user_id が未設定のため、
+     * そのままではモックOIDCでログインできない。mock-oidc/server.js の 'mock-entra-admin' エントリと
+     * 対応させ、管理者としてもシナリオを実施できるようにする。
      *
-     * LinkSsoAccountコマンドはentra_user_id未設定のユーザーにしか使えない(UC-004、
-     * 既に連携済みアカウントの上書きは業務上想定しない)ため、ここだけはテスト環境専用の
-     * 割り切りとして直接更新する。
+     * 連携はLinkSsoAccountコマンド(イベントを記録する)で行う。未連携のときだけ発行する
+     * (DatabaseSeederで連携済みなら何もしない)。
      */
     private function linkAdminToMockOidc(): User
     {
         $admin = User::query()->where('email', 'admin@example.com')->firstOrFail();
-        $admin->update(['entra_user_id' => 'mock-entra-admin']);
+        if ($admin->entra_user_id === null) {
+            app(CommandBus::class)->dispatch(new LinkSsoAccount($admin->id, 'mock-entra-admin'));
+            $admin->refresh();
+        }
 
-        return $admin->refresh();
+        return $admin;
     }
 
     private function seedCalendar(CommandBus $commandBus, string $adminId, Carbon $month, Carbon $from, Carbon $to): CompanyCalendar
@@ -320,18 +324,10 @@ class ScenarioSeeder extends Seeder
                     Role::BACKOFFICE_STAFF => 'approval_task',
                     default => 'global',
                 };
-                DB::table('role_assignments')->updateOrInsert(
-                    ['id' => Uuid::uuid5(Uuid::NAMESPACE_URL, "scenario-user-role-assignment:{$userId}:{$roleCode}")->toString()],
-                    [
-                        'subject_type' => 'user',
-                        'subject_id' => $userId,
-                        'role_id' => $roleId,
-                        'scope_type' => $scopeType,
-                        'status' => 'active',
-                        'updated_at' => now(),
-                        'created_at' => now(),
-                    ],
-                );
+                $assignmentId = Uuid::uuid5(Uuid::NAMESPACE_URL, "scenario-user-role-assignment:{$userId}:{$roleCode}")->toString();
+                if (! DB::table('role_assignments')->where('id', $assignmentId)->exists()) {
+                    $commandBus->dispatch(new CreateRoleAssignment($assignmentId, 'user', $userId, (int) $roleId, $scopeType, null, false, null, null, null));
+                }
             }
 
             $standardGroupCodes = ['ALL_USERS'];

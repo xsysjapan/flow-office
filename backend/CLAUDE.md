@@ -16,6 +16,9 @@ php artisan serve                # http://localhost:8000
 php artisan test
 ```
 
+既存の開発DBは `php artisan migrate:fresh --seed` で作り直す(開発用シーダーが管理者の連携をイベントで作るため。
+管理者にランダムなentra_user_idが入った古いDBでは連携が拒否される)。
+
 API仕様書(Swagger UI)の生成手順は `docs/02-tech-stack.md` を参照。
 
 ## ディレクトリ構成

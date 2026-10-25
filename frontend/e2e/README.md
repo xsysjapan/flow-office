@@ -35,6 +35,7 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
    backendを起動した直後にAPIの疎通だけ手動確認したい場合は、従来どおり
    `php artisan db:seed --class=ScenarioSeeder`を実行しても問題ない
    (`firstOrCreate`/`updateOrCreate`のみを使うため何度実行しても安全))
+   既存の開発DBは`php artisan migrate:fresh --seed`で作り直す(管理者の連携をイベントで作るため)。
 2. mock-oidc: `cd mock-oidc && node server.js`(ポート9000。`npm install`不要、
    Node標準ライブラリのみで動く)
    - scenario-13(外部連携送信)を実行する場合は、同様に`node mock-freee/server.js`
