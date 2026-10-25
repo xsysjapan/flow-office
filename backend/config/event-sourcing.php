@@ -182,6 +182,7 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestResubmitted;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantAmountChanged;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
@@ -544,6 +545,7 @@ return [
         // SpecialLeaveAccountAggregate(利用者単位の特別休暇口座集約。付与・消化記録・充当の残数を一括で持つ。
         // 集約IDは利用者IDからの派生UUID)。docs/changesets/20261009-keep-leave-work-type-on-edit/spec.md 仕様確定事項D参照。
         'special_leave_account.grant_registered' => SpecialLeaveAccountGrantRegistered::class,
+        'special_leave_account.grant_amount_changed' => SpecialLeaveAccountGrantAmountChanged::class,
         'special_leave_account.grant_revoked' => SpecialLeaveAccountGrantRevoked::class,
         'special_leave_account.usage_designated' => SpecialLeaveAccountUsageDesignated::class,
         'special_leave_account.usage_confirmed' => SpecialLeaveAccountUsageConfirmed::class,

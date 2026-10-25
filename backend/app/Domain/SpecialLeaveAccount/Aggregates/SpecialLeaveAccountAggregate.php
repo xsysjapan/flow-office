@@ -3,6 +3,7 @@
 namespace App\Domain\SpecialLeaveAccount\Aggregates;
 
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantAmountChanged;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
@@ -129,6 +130,40 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
             grantId: $grantId,
             revokedByUserId: $revokedByUserId,
             reason: $reason,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 付与日数を変更する。取消済み・存在しない付与は拒否、使用済み(充当済み)の日数を下回る日数は拒否する。
+     * 日数が同じならイベントを記録しない。増やしても、確定済みの消化の未充当日数は充当し直さない。
+     */
+    public function changeGrantAmount(string $grantId, float $newGrantedDays, string $changedByUserId, ?string $reason): self
+    {
+        $grant = $this->grants[$grantId] ?? null;
+
+        if ($grant === null) {
+            throw new DomainRuleException("Grant [{$grantId}] は存在しません。");
+        }
+
+        if ($grant['revoked']) {
+            throw new DomainRuleException('取り消し済みの特別休暇付与は変更できません。');
+        }
+
+        if ($newGrantedDays < $this->usedDaysOf($grantId)) {
+            throw new DomainRuleException('使用済みの日数より少なくはできません。');
+        }
+
+        if (abs($newGrantedDays - $grant['grantedDays']) < 0.00001) {
+            return $this;
+        }
+
+        $this->recordThat(new SpecialLeaveAccountGrantAmountChanged(
+            grantId: $grantId,
+            newGrantedDays: $newGrantedDays,
+            reason: $reason,
+            changedByUserId: $changedByUserId,
         ));
 
         return $this;
@@ -322,6 +357,11 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     protected function applySpecialLeaveAccountGrantRevoked(SpecialLeaveAccountGrantRevoked $event): void
     {
         $this->grants[$event->grantId]['revoked'] = true;
+    }
+
+    protected function applySpecialLeaveAccountGrantAmountChanged(SpecialLeaveAccountGrantAmountChanged $event): void
+    {
+        $this->grants[$event->grantId]['grantedDays'] = $event->newGrantedDays;
     }
 
     protected function applySpecialLeaveAccountUsageDesignated(SpecialLeaveAccountUsageDesignated $event): void

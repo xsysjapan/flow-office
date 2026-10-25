@@ -10,6 +10,7 @@ import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
 import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { ChangeGrantDaysButton } from '../../components/ChangeGrantDaysButton/ChangeGrantDaysButton'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -22,6 +23,7 @@ import {
   useCreateSpecialLeaveGrantRule,
   useCreateSpecialLeaveType,
   useGrantSpecialLeave,
+  useChangeSpecialLeaveGrantedDays,
   useRevokeSpecialLeaveGrant,
   useSpecialLeaveGrantRules,
   useSpecialLeaveGrantRuleTargetUsers,
@@ -458,6 +460,7 @@ function ManualGrantCard() {
 
   const grantSpecialLeave = useGrantSpecialLeave()
   const revokeGrant = useRevokeSpecialLeaveGrant()
+  const changeGrantedDays = useChangeSpecialLeaveGrantedDays()
 
   const singleTargetUserId = targetMode === 'individual' && targetIds.length === 1 ? targetIds[0] : undefined
   const { data: userGrants, isLoading: isLoadingUserGrants } = useSpecialLeaveGrantsForUser(singleTargetUserId ?? '')
@@ -583,6 +586,18 @@ function ManualGrantCard() {
                     )}
                   </span>
                   {grant.status === 'active' && (
+                    <div className="flex items-center gap-2">
+                    <ChangeGrantDaysButton
+                      id={`change-days-${grant.id}`}
+                      grantedOn={grant.granted_on}
+                      currentDays={grant.granted_days}
+                      usedDays={grant.used_days}
+                      isPending={changeGrantedDays.isPending}
+                      error={changeGrantedDays.error}
+                      onChange={(days, reason) =>
+                        changeGrantedDays.mutateAsync({ grantId: grant.id, grantedDays: days, reason })
+                      }
+                    />
                     <RevokeGrantButton
                       id={`revoke-reason-${grant.id}`}
                       title="特別休暇付与を取り消しますか?"
@@ -593,6 +608,7 @@ function ManualGrantCard() {
                       disabled={grant.used_days > 0}
                       disabledReason="既に消化された分は取り消せません。"
                     />
+                    </div>
                   )}
                 </li>
               ))}

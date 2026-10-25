@@ -4,6 +4,7 @@ namespace Tests\Unit\SpecialLeaveAccount;
 
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeaveAccount\Aggregates\SpecialLeaveAccountAggregate;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantAmountChanged;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
@@ -72,6 +73,97 @@ class SpecialLeaveAccountAggregateTest extends TestCase
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', null, 2.0, null, self::USER);
             });
+    }
+
+    // ---- 付与日数の変更 ----
+
+    private function grantWithOneDayUsed(): array
+    {
+        return [
+            new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
+            new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
+            new SpecialLeaveAccountUsageConfirmed('u1', [['grantId' => 'g1', 'allocatedDays' => 1.0]]),
+        ];
+    }
+
+    public function test_grant_amount_can_be_increased(): void
+    {
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->given([new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER)])
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('g1', 5.0, 'admin-1', '訂正');
+            })
+            ->assertRecorded([new SpecialLeaveAccountGrantAmountChanged('g1', 5.0, '訂正', 'admin-1')]);
+    }
+
+    public function test_grant_amount_can_be_decreased_down_to_the_used_days(): void
+    {
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->given($this->grantWithOneDayUsed())
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('g1', 1.0, 'admin-1', null);
+            })
+            ->assertRecorded([new SpecialLeaveAccountGrantAmountChanged('g1', 1.0, null, 'admin-1')]);
+    }
+
+    public function test_grant_amount_below_the_used_days_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+        $this->expectExceptionMessage('使用済みの日数より少なくはできません。');
+
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->given($this->grantWithOneDayUsed())
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('g1', 0.5, 'admin-1', null);
+            });
+    }
+
+    public function test_grant_amount_of_a_revoked_grant_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
+                new SpecialLeaveAccountGrantRevoked('g1', 'admin-1', null),
+            ])
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('g1', 5.0, 'admin-1', null);
+            });
+    }
+
+    public function test_grant_amount_of_an_unknown_grant_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('missing', 5.0, 'admin-1', null);
+            });
+    }
+
+    public function test_grant_amount_change_to_the_same_days_records_no_event(): void
+    {
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->given([new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER)])
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('g1', 3.0, 'admin-1', null);
+            })
+            ->assertNothingRecorded();
+    }
+
+    public function test_changed_amount_is_used_by_later_checks(): void
+    {
+        // 5日に増やした後は、4日までの減額が可能(replay後の状態に反映される)。
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
+                new SpecialLeaveAccountGrantAmountChanged('g1', 5.0, null, 'admin-1'),
+            ])
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('g1', 5.0, 'admin-1', null);
+            })
+            ->assertNothingRecorded();
     }
 
     public function test_unused_grant_can_be_revoked(): void

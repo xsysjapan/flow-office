@@ -436,6 +436,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/paid-leave/history/user/{userId}', [PaidLeaveController::class, 'historyForUser']);
         Route::get('/paid-leave/usages/user/{userId}', [PaidLeaveController::class, 'usagesForUser']);
         Route::post('/paid-leave/grants', [PaidLeaveController::class, 'grant']);
+        Route::put('/paid-leave/grants/{grant}/granted-days', [PaidLeaveController::class, 'changeGrantedDays']);
         Route::post('/paid-leave/grants/{grant}/revoke', [PaidLeaveController::class, 'revoke']);
         Route::post('/paid-leave/requests/{paidLeaveRequest}/admin-cancel', [PaidLeaveController::class, 'adminCancelRequest']);
         Route::put('/paid-leave/grant-rules/{rule}', [PaidLeaveController::class, 'updateRule']);
@@ -474,6 +475,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/special-leave/history/user/{userId}', [SpecialLeaveController::class, 'historyForUser']);
         Route::get('/special-leave/usages/user/{userId}', [SpecialLeaveController::class, 'usagesForUser']);
         Route::post('/special-leave/grants', [SpecialLeaveController::class, 'grant']);
+        Route::put('/special-leave/grants/{grant}/granted-days', [SpecialLeaveController::class, 'changeGrantedDays']);
         Route::post('/special-leave/grants/{grant}/revoke', [SpecialLeaveController::class, 'revoke']);
         Route::post('/special-leave/requests/{specialLeaveRequest}/admin-cancel', [SpecialLeaveController::class, 'adminCancelRequest']);
     });

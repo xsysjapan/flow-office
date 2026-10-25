@@ -188,4 +188,5 @@
 
 ## 実装結果
 
-未着手
+実装済み。backend全件PASS(既存の`ReadModelFingerprintCommandTest`1件のみ既知の失敗)、frontend(vitest・lint・tsc・storybook)PASS。
+UC番号は既存の`UC-P010`と衝突するため`docs/09-usecases-paid-leave.md`では`UC-P008b`とした。

@@ -809,6 +809,8 @@ export interface PaidLeaveGrant {
   revoked_at: string | null;
   revoked_by_user_id: string | null;
   revoke_reason: string | null;
+  /** 最新の非取消付与か(管理者向けの付与一覧のみ。集約の判定で、日数の変更・取消ができる付与)。 */
+  is_latest?: boolean;
 }
 
 /** 有給の消化記録(usage行)。1件の承認済み申請が複数の付与(grant)にまたがって消化された

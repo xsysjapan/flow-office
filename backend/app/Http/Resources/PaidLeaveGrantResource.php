@@ -26,6 +26,8 @@ class PaidLeaveGrantResource extends JsonResource
             'revoked_at' => $this->revoked_at?->toIso8601String(),
             'revoked_by_user_id' => $this->revoked_by_user_id,
             'revoke_reason' => $this->revoke_reason,
+            // 管理者向けの付与一覧だけが付ける(最新の非取消付与かどうか。集約の判定)。
+            'is_latest' => $this->when($this->resource->getAttribute('is_latest') !== null, fn () => (bool) $this->resource->getAttribute('is_latest')),
         ];
     }
 }

@@ -25,6 +25,7 @@ import {
   grantPaidLeave,
   overridePaidLeaveScheduleAssessment,
   reassessPaidLeaveScheduleEntry,
+  changePaidLeaveGrantedDays,
   revokePaidLeaveGrant,
   startPaidLeaveScheduleAssessmentRun,
   updatePaidLeaveGrantRule,
@@ -160,6 +161,20 @@ export function useGrantPaidLeave() {
     mutationFn: (input: GrantPaidLeaveInput) => grantPaidLeave(input),
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grants', 'user', input.user_id] })
+    },
+  })
+}
+
+export function useChangePaidLeaveGrantedDays() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ grantId, grantedDays, reason }: { grantId: string; grantedDays: number; reason?: string }) =>
+      changePaidLeaveGrantedDays(grantId, grantedDays, reason),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grants', 'user', data.user_id] })
+      void queryClient.invalidateQueries({ queryKey: paidLeaveUsagesForUserKey(data.user_id) })
+      void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'history', 'user', data.user_id] })
     },
   })
 }

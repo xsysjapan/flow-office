@@ -198,6 +198,11 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     {
         $this->assertGrantIsLatestAndActive($grantId);
 
+        // 日数が変わらない操作はイベントを記録しない。
+        if (abs($newGrantedDays - $this->grants[$grantId]['grantedDays']) < 0.00001) {
+            return $this;
+        }
+
         $allocatedTotal = array_sum($this->grants[$grantId]['allocations']);
 
         if ($newGrantedDays < $allocatedTotal) {
@@ -548,6 +553,15 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     private function latestActiveGrant(): ?array
     {
         return $this->latestActiveGrantExcluding(null);
+    }
+
+    /**
+     * 最新の非取消付与のID(付与日が最も遅く、同じなら記録の順が最後)。無ければnull。
+     * 変更・取消できる付与の判定(`assertGrantIsLatestAndActive`)と同じ判定で、画面の「最新」の表示に使う。
+     */
+    public function latestActiveGrantId(): ?string
+    {
+        return $this->latestActiveGrant()['grantId'] ?? null;
     }
 
     /**
