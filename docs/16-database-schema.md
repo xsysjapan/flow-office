@@ -1617,12 +1617,12 @@ docs/20-implementation-notes.md と同様の注記)。
 
 ## admin_command_runs (運用コマンド・自動判定の実行の記録)
 
-運用コマンド画面(`#[AdminExecutable]`のコマンド)の実行履歴と、有給付与予定の自動判定(`paid-leave:assess-schedules`)の
-実行の記録。運用の記録で、業務の状態ではない(イベントにしない)。`RunAdminCommandJob`と、自動判定のコマンド自身が更新する。
+運用コマンド画面(`#[AdminExecutable]`のコマンド)の実行履歴と、有給付与予定の自動判定(`paid-leave:assess-schedules`)・
+ReadModelの作り直し(`read-models:rebuild`)の実行の記録。運用の記録で、業務の状態ではない(イベントにしない)。`RunAdminCommandJob`と、自動判定のコマンド自身が更新する。
 
 - id (uuid)
 - command_name
-- parameters (json。自動判定は`{"trigger": "schedule"|"manual"}`)
+- parameters (json。自動判定は`{"trigger": "schedule"|"manual"}`、作り直し(`command_name = 'read-models:rebuild'`)は`{"dry_run": bool}`)
 - status (`queued`/`running`/`succeeded`/`failed`。既定`queued`)
 - requested_by_user_id (nullable。`users.id`。定期実行(自動判定のスケジュール)はnull)
 - started_at / finished_at (nullable)
@@ -1630,9 +1630,14 @@ docs/20-implementation-notes.md と同様の注記)。
 - output (nullable。先頭の100000文字だけを残す)
 - error_message (nullable)
 - summary (json nullable。コマンドが書く集計。自動判定は`{targets, assessed, eligible, not_eligible, needs_review, failed}`の件数。
-  出力の切り詰めに左右されない)
+  出力の切り詰めに左右されない。作り直しは`{"dry_run": bool, "tables": [{"table", "before", "after", "changed"}], "changed_tables": int}`。
+  `before`/`after`は作り直し前後の行数、`changed`は`ReadModelFingerprinter`のハッシュが変わったか。一覧外(`NOT_READ_MODELS`)のテーブルは含めない)
 - created_at / updated_at
 - index(command_name, status)
+
+作り直しの`running`の記録は、心拍(`Cache::store('file')`のキー`read-model-rebuild:heartbeat`。DBキャッシュはトランザクションの中の書き込みが
+他から見えないため使わない)が10分以内の間だけ「実行中(メンテナンス中)」とみなす。心拍が古い`running`は失敗に更新する。
+`admin_command_runs`は作り直しの対象(`ReadModelTableLister`の一覧)ではなく、作り直しで空にならない。
 
 ## テーブル分類の考え方
 

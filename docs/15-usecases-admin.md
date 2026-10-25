@@ -45,6 +45,24 @@
 3. 操作履歴を確認する
 4. 必要に応じてCSV出力する
 
+## UC-M004: ReadModelをイベントから作り直す
+
+権限`read_model.rebuild`(global。システム管理者ロールに付与。新規環境は`AccessControlSeeder`、既存環境はマイグレーション
+`2026_10_25_100000`が`ChangeRolePermissions`で`role.permissions_changed`を記録して付ける)を持つ管理者が、管理画面「データの作り直し」
+(`/admin/read-model-rebuild`)から、全ReadModelのテーブルを空にして全Projectorを`stored_events`の先頭から再生する
+(変更セット`20261025-admin-read-model-rebuild`)。
+
+1. 「試し実行」(最後にロールバックする)または「作り直す」(コミットする)を依頼する(`POST /admin/read-model-rebuilds`、body `{"dry_run": bool}`。
+   `queued`/`running`の記録があれば409)。記録は`admin_command_runs`(`command_name = 'read-models:rebuild'`)。
+2. スケジューラーが毎分起動する`read-models:rebuild --pending`が取り出して実行する(開始まで最大約1分、取り出した後に60秒待つ)。
+   有給付与予定の判定が`queued`/`running`の間は取り出さない。
+3. 実行中(`running`かつ心拍が10分以内)は、全APIが503(`{"code":"maintenance",...}`)になる。除外は`GET /maintenance-status`・
+   `GET /admin/read-model-rebuilds`・`GET /admin/read-model-rebuilds/{id}`・`GET /auth/me`・`GET /access/me`・`GET /onboarding/status`。
+   作り直し以外のスケジュールも飛ばす(飛ばされた日次バッチは追い付かないので、1:00〜3:00台を避けて実行する)。
+4. 結果(テーブルごとの件数の前後と内容の変化)を履歴で確認する(`GET /admin/read-model-rebuilds/{id}`)。
+   依頼者のアカウント・権限が作り直し後に失われる場合、時間の上限(180分)を超えた場合は、コミットせずロールバックして失敗にする。
+5. 依頼と終了は監査イベント`read_model_rebuild.requested`・`read_model_rebuild.finished`として`stored_events`に残る。
+
 ## 実装上のポイント
 
 - 権限管理 (UC-M001) は [UC-002 MS365ユーザーを同期する](./06-usecases-auth.md#uc-002-ms365ユーザーを同期する)

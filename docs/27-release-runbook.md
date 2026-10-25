@@ -134,7 +134,11 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 7. 本番で入れ替える: `php artisan leave:rebuild-event-store --swap`。元の表は`stored_events_before_rebuild_YYYYMMDDHHMMSS`として残る。
 8. 旧系統を削除した新しいコードを配備し、`php artisan migrate --force`を実行する(マイグレーション`2026_10_10_000001`〜`000009`・
    `2026_10_11_000001`)。新しいコードは旧イベントを読めないため、7の後は新しいコードを配備するまで休暇を操作させない。
-9. ReadModelを作り直す: `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、
+9. ReadModelを作り直す: 管理画面「データの作り直し」(`/admin/read-model-rebuild`。権限`read_model.rebuild`)から、まず「試し実行」で
+   テーブルごとの件数・内容の差(利用者・権限のテーブルの変化の警告を含む)を確かめ、問題が無ければ「作り直す」を実行する
+   (1トランザクションで全ReadModelを空にして全Projectorを再生する。実行中は全APIが503のメンテナンス中になり、失敗・中止ならロールバックされる。
+   スケジューラー(`schedule:run`のcron)が動いていることが前提。日次バッチの時刻(1:00〜3:00台)を避ける)。
+   SSHで行う場合の手作業の手順: `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、
    `php artisan event-sourcing:replay`で全Projectorを再生成する(Projectorは既存の状態を消さない前提のため、必ず空にしてから実行する)。
 10. 日次計算を再計算する: `php artisan attendance:recalculate-days --from=... --to=...`(既定は試し実行。一覧で値が変わる日を確認し、
     `--apply`で記録する)。締め・提出済みの月の日も対象に含め、一覧に印を付ける。月次スナップショットは変えない。
@@ -175,7 +179,8 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
    事前条件に違反がある(付与予定の付与済み・判定の上書き・個別修正、`source='scheduled_batch'`の付与)ときは止まる。件数をユーザーに報告して判断を仰ぐ。
 5. `php artisan leave:rekey-paid-leave-streams --apply`(`stored_events_rebuilt`に書き、検査する)。検査だけを再度行う場合は`--verify`。
 6. `php artisan leave:rekey-paid-leave-streams --swap`(検査が通っている場合のみ。元の表は`stored_events_before_rekey_YYYYMMDDHHMMSS`として残る)。
-7. ReadModelを作り直す: `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、`php artisan event-sourcing:replay`で
+7. ReadModelを作り直す: 管理画面「データの作り直し」から実行する(試し実行→本実行。手順9の説明を参照)。SSHで行う場合は、
+   `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、`php artisan event-sourcing:replay`で
    全Projectorを再生成する(必ず空にしてから)。
 8. 指紋を比べる(原則2の確認。リハーサルと本番で同じことをする)。
    - 7の再生の後に、`php artisan leave:rebuild-event-store --readmodel-fingerprint`を取る(B)。

@@ -57,6 +57,10 @@
   `user.migrated_from_legacy`のattributesは、fillableに無い`paid_leave_auto_grant_enabled`・`special_leave_auto_grant_enabled`と
   `created_at`(新規作成時のみ。無ければイベントの発生日時)も反映する。
 - `system_settings.updated` (システム設定の直接更新と同一トランザクションで記録する監査イベント)
+- `read_model_rebuild.requested` (管理画面からのReadModelの作り直し(`read-models:rebuild`)の依頼。記録の作成と同一トランザクションで記録する監査イベント。
+  `runId`・`requestedByUserId`・`dryRun`。監査専用の集約`ReadModelRebuildAuditAggregate`。Projectorは無い)
+- `read_model_rebuild.finished` (作り直しの終了。作り直しのトランザクションの外(コミット/ロールバックの後)で記録する監査イベント。
+  `runId`・`result`(`succeeded`/`failed`)・`dryRun`・`changedTables`(変更のあったテーブル数。失敗は0))
 
 ## Workflow (汎用申請)
 

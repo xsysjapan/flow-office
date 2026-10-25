@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Http\Middleware\BlockDuringReadModelRebuild;
 use App\Http\Middleware\CheckAbilitiesOrFullSession;
 use App\Http\Middleware\CheckForAnyAbilityOrFullSession;
 use App\Http\Middleware\EnsureActiveAccount;
@@ -59,6 +60,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // 明示的に付与されたルート)以外の一般APIを操作できないようにするグローバルな
         // 安全策(docs/23-usecases-devices.md UC-D002「重要な考慮事項」)。
         $middleware->api(append: [EnsureFullAccessOrExplicitAbility::class]);
+
+        // ReadModelの作り直しの実行中は全APIを503(メンテナンス中)にする。認証より前に判定する。
+        $middleware->api(prepend: [BlockDuringReadModelRebuild::class]);
 
         $middleware->redirectGuestsTo(
             fn (Request $request) => $isApiRequest($request) ? null : route('login'),
