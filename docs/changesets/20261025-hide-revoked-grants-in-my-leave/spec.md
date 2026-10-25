@@ -1,6 +1,6 @@
 # 自分の有給・特別休暇・代休の画面に、取り消した付与が残る不具合の修正
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -123,4 +123,10 @@
 
 ## 実装結果
 
-未着手
+- コミット`66d72d8`。有給・特別休暇の`myGrants`に`status = active`と`remaining_days > 0`、代休の`myGrants`に`status != cancelled`と
+  `remaining_days > 0 または remaining_minutes > 0`。OAの説明を更新。docs/09のUC-P003付近・特別休暇・代休の節に追記。
+- テスト:取消の除外(有給・特別休暇・代休)、残りの無い付与の除外(代休は分数だけ残る付与が出ることも確認)。
+- 経緯:最初のエージェントはユーザーにより停止され、残りを別のエージェントが仕上げた(前の実装は読んで確認のうえ流用)。
+- 検証:backend(CIと同じ条件の全件)2219件中2218件PASS(失敗は既存の`ReadModelFingerprintCommandTest`の1件)。
+  frontend:`vitest --project=unit` 1096件PASS、lint error無し、tsc(app・e2e)エラー無し。
+  e2e:scenario-01・02・03・16 の6件PASS。

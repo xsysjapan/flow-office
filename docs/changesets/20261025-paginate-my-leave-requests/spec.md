@@ -1,6 +1,6 @@
 # 自分の休暇申請の一覧(有給・特別休暇・代休)を対象日の降順でページングする
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -112,4 +112,9 @@
 
 ## 実装結果
 
-未着手
+- コミット`66d72d8`。3つの`myRequests`を対象日の降順・同日はidの降順で20件ずつのページングにし、`target_date`で絞れるようにした。
+  本人の3画面はURLの`requestPage`でページを読み`Pagination`を表示。`AttendanceDayPage`は3種ともその日で読む。MCPのツールの説明を追記。docs/09に追記。
+- テスト:3種それぞれ5ケース(並び順・21件で2ページ・target_dateで絞る・不正なtarget_dateは422・他人の申請は出ない)、本人の3画面と日次勤怠の画面のテスト。
+- 検証:backend(CIと同じ条件の全件)2219件中2218件PASS(失敗は既存の`ReadModelFingerprintCommandTest`の1件)。
+  frontend:`vitest --project=unit` 1096件PASS、lint error無し、tsc(app・e2e)エラー無し。
+  e2e:scenario-01・02・03・16 の6件PASS。
