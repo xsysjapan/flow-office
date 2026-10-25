@@ -319,6 +319,8 @@ Projectorの不具合修正(例:変更セット20261024-fix-revoked-grant-remain
   (中7)日次バッチが飛ばされる → 時刻を避ける案内、追い付きは対象外。
   (低8〜10)現在の設定値で計算されること、`tables()`の引数、一覧外からの外部キーの確認、複製DBでの測定を追記。
   前提(replayは外側のトランザクションの中で動く・Reactorを呼ばない・副作用のあるProjectorは無い・除外したGETは書かない・本番の利用者と通知の既読はイベント経由)は問題なしと確認。
+- 2026-10-25: 変更セット`20261025-read-model-rebuild-admin-command`で置き換えた。専用画面・専用API・権限`read_model.rebuild`・監査イベント`read_model_rebuild.*`・
+  `read-models:rebuild --pending`を削除し、運用コマンド`read-models:rebuild {--dry-run}`と実行役`admin-commands:run-pending`にした(依頼者の確認も削除)。
 
 ## 実装結果
 

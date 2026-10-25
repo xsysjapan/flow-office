@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * ReadModelの作り直しの実行中(`ReadModelRebuildRunService::isRunning()`)は、全APIを503(`code=maintenance`)にする
- * (docs/changesets/20261025-admin-read-model-rebuild/spec.md 論点3)。
+ * (docs/changesets/20261025-read-model-rebuild-admin-command/spec.md 論点3)。
  * 通すのは、メンテナンスの解除の検知と進み具合の確認に要る読み取り(GET)だけ。
  */
 class BlockDuringReadModelRebuild
@@ -19,11 +19,11 @@ class BlockDuringReadModelRebuild
     /** メンテナンス中も通すGET(APIプレフィックスを除いたパス)。 */
     private const ALLOWED_GET_PATTERNS = [
         '#^maintenance-status$#',
-        '#^admin/read-model-rebuilds$#',
-        '#^admin/read-model-rebuilds/[^/]+$#',
         '#^auth/me$#',
         '#^access/me$#',
         '#^onboarding/status$#',
+        '#^admin/commands$#',
+        '#^admin/command-runs$#',
     ];
 
     public function __construct(private readonly ReadModelRebuildRunService $service) {}

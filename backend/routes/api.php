@@ -45,7 +45,6 @@ use App\Http\Controllers\Api\PaidLeaveScheduleAssessmentRunController;
 use App\Http\Controllers\Api\PaidLeaveScheduleController;
 use App\Http\Controllers\Api\MaintenanceStatusController;
 use App\Http\Controllers\Api\PublicSystemSettingController;
-use App\Http\Controllers\Api\ReadModelRebuildController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RotationPatternController;
 use App\Http\Controllers\Api\ShiftPatternController;
@@ -548,10 +547,6 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/commands', [AdminCommandController::class, 'index'])->middleware('permission:admin_command.view,any');
         Route::get('/command-runs', [AdminCommandController::class, 'runs'])->middleware('permission:admin_command.view,any');
         Route::post('/commands/{command}/runs', [AdminCommandController::class, 'store'])->where('command', '.*')->middleware('permission:admin_command.execute,any');
-        // ReadModelの作り直し(全テーブルを空にして全Projectorをreplay)。依頼は記録を作るだけで、実行は`read-models:rebuild --pending`。
-        Route::get('/read-model-rebuilds', [ReadModelRebuildController::class, 'index'])->middleware('permission:read_model.rebuild,global');
-        Route::get('/read-model-rebuilds/{id}', [ReadModelRebuildController::class, 'show'])->middleware('permission:read_model.rebuild,global');
-        Route::post('/read-model-rebuilds', [ReadModelRebuildController::class, 'store'])->middleware('permission:read_model.rebuild,global');
         Route::get('/audit-log', [AuditLogController::class, 'index'])->middleware('permission:audit_log.view,any');
         Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv'])->middleware('permission:audit_log.export,any');
         Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('permission:system_settings.read');

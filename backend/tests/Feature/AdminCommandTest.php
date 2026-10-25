@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\RunAdminCommandJob;
+use App\Models\AdminCommandRun;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,7 +23,7 @@ class AdminCommandTest extends TestCase
 
         $commands = collect($response->json('data'))->keyBy('name');
         $this->assertSame(
-            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild'],
+            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
             $commands->keys()->sort()->values()->all(),
         );
         $this->assertSame('apply', $commands['attendance:migrate-work-classifications']['parameters'][0]['name']);
@@ -42,7 +42,10 @@ class AdminCommandTest extends TestCase
         $this->actingAs($admin)->postJson('/api/admin/commands/attendance:recalculate-month-snapshots/runs', [
             'parameters' => ['year-month' => '2026-07', 'dry-run' => true],
         ])->assertAccepted()->assertJsonPath('data.status', 'queued');
-        Queue::assertPushed(RunAdminCommandJob::class);
+        Queue::assertNothingPushed();
+        $run = AdminCommandRun::query()->sole();
+        $this->assertSame('queued', $run->status);
+        $this->assertSame('attendance:recalculate-month-snapshots', $run->command_name);
 
         $this->actingAs($admin)->postJson('/api/admin/commands/attendance:recalculate-month-snapshots/runs', [
             'parameters' => ['unexpected' => 'value'],

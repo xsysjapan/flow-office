@@ -15,7 +15,7 @@ use Tests\TestCase;
 
 /**
  * 作り直しの実行中のメンテナンス(全APIを503・除外のGETは通す・`GET /maintenance-status`・スケジュールの`skip`)のテスト
- * (docs/changesets/20261025-admin-read-model-rebuild/spec.md 論点3)。
+ * (docs/changesets/20261025-read-model-rebuild-admin-command/spec.md 論点3)。
  */
 class BlockDuringReadModelRebuildTest extends TestCase
 {
@@ -77,7 +77,7 @@ class BlockDuringReadModelRebuildTest extends TestCase
         foreach ([
             ['getJson', '/api/users'],
             ['getJson', '/api/admin/system-settings'],
-            ['postJson', '/api/admin/read-model-rebuilds'],
+            ['postJson', '/api/admin/commands/read-models:rebuild/runs'],
             ['putJson', '/api/admin/system-settings'],
             ['deleteJson', '/api/admin/user-management/users/'.$user->id.'/groups/'.fake()->uuid()],
             ['postJson', '/api/attendance/clock-in'],
@@ -101,13 +101,13 @@ class BlockDuringReadModelRebuildTest extends TestCase
     public function test_excluded_get_endpoints_still_work_during_the_maintenance(): void
     {
         $user = $this->admin();
-        $run = $this->startMaintenance($user);
+        $this->startMaintenance($user);
 
         $this->getJson('/api/maintenance-status')->assertOk();
         $this->getJson('/api/onboarding/status')->assertOk();
         $this->actingAs($user)->getJson('/api/access/me')->assertOk();
-        $this->actingAs($user)->getJson('/api/admin/read-model-rebuilds')->assertOk();
-        $this->actingAs($user)->getJson('/api/admin/read-model-rebuilds/'.$run->id)->assertOk()->assertJsonPath('data.status', 'running');
+        $this->actingAs($user)->getJson('/api/admin/commands')->assertOk();
+        $this->actingAs($user)->getJson('/api/admin/command-runs')->assertOk()->assertJsonPath('data.0.status', 'running');
         $this->actingAs($user)->getJson('/api/auth/me')->assertStatus(200);
     }
 
@@ -116,8 +116,8 @@ class BlockDuringReadModelRebuildTest extends TestCase
         $user = $this->admin();
         $this->startMaintenance($user);
 
-        // 作り直しを依頼するAPI(同じパスのPOST)も止める。
-        $this->actingAs($user)->postJson('/api/admin/read-model-rebuilds', ['dry_run' => true])->assertStatus(503);
+        // 運用コマンドの依頼(同じ画面のPOST)は止める。
+        $this->actingAs($user)->postJson('/api/admin/commands/read-models:rebuild/runs', ['parameters' => ['dry-run' => true]])->assertStatus(503);
         $this->assertSame(1, AdminCommandRun::query()->count());
     }
 
@@ -157,27 +157,20 @@ class BlockDuringReadModelRebuildTest extends TestCase
         $this->getJson('/api/maintenance-status')->assertExactJson(['maintenance' => false]);
     }
 
-    public function test_every_schedule_except_the_rebuild_is_skipped_while_running(): void
+    public function test_every_schedule_including_the_runner_is_skipped_while_running(): void
     {
         $this->app->make(Kernel::class)->bootstrap();
         $events = collect($this->app->make(Schedule::class)->events());
-        $rebuild = $events->first(fn ($event) => str_contains($event->command, 'read-models:rebuild --pending'));
-        $others = $events->reject(fn ($event) => str_contains($event->command, 'read-models:rebuild'));
-        $this->assertNotNull($rebuild);
-        $this->assertGreaterThan(5, $others->count());
+        $this->assertGreaterThan(5, $events->count());
+        $this->assertNull($events->first(fn ($event) => str_contains($event->command, 'read-models:rebuild')));
+        $this->assertNotNull($events->first(fn ($event) => str_contains($event->command, 'admin-commands:run-pending')));
 
-        $this->assertTrue($others->every(fn ($event) => $event->filtersPass($this->app)));
-        $this->assertTrue($rebuild->filtersPass($this->app));
+        $this->assertTrue($events->every(fn ($event) => $event->filtersPass($this->app)));
 
         $this->startMaintenance($this->admin());
 
-        foreach ($others as $event) {
+        foreach ($events as $event) {
             $this->assertFalse($event->filtersPass($this->app), $event->command);
         }
-        $this->assertTrue($rebuild->filtersPass($this->app));
-        $this->assertSame('* * * * *', $rebuild->expression);
-        $this->assertTrue($rebuild->withoutOverlapping);
-        $this->assertSame(240, $rebuild->expiresAt);
-        $this->assertTrue($rebuild->runInBackground);
     }
 }

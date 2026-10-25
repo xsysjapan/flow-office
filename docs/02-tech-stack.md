@@ -13,7 +13,8 @@
   コードファーストOpenAPI定義。ローカル開発では Swagger UI (`/api/documentation`) を提供
 
 XSERVER では常駐プロセスを前提にしない。キューは DB に積み、cron で
-`queue:work --stop-when-empty` を起動する。
+`queue:work --stop-when-empty` を起動する。ただし運用コマンド(`/admin/commands`)は、60秒の打ち切りを避けるため
+キューを使わず、スケジューラーが毎分起動する`admin-commands:run-pending`が実行する。
 
 ## API仕様書 (OpenAPI / Swagger UI)
 

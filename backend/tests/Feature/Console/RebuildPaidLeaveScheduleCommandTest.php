@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Console;
 
-use App\Jobs\RunAdminCommandJob;
+use App\Models\AdminCommandRun;
 use App\Models\PaidLeaveGrantPolicy;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveScheduleEntry;
@@ -12,6 +12,7 @@ use App\Models\UserWorkStyleMonthlyAssignment;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -490,6 +491,12 @@ class RebuildPaidLeaveScheduleCommandTest extends TestCase
         ])->assertAccepted();
 
         $this->assertSame('queued', $response->json('data.status'));
-        Queue::assertPushed(RunAdminCommandJob::class);
+        Queue::assertNothingPushed();
+
+        // 実行役の実行で結果になる。
+        $this->assertSame(0, Artisan::call('admin-commands:run-pending'));
+        $run = AdminCommandRun::query()->findOrFail($response->json('data.id'));
+        $this->assertSame('succeeded', $run->status);
+        $this->assertSame(0, $run->exit_code);
     }
 }

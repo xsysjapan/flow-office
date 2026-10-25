@@ -2,8 +2,6 @@
 
 namespace App\Domain\EventSourcing\Rebuild;
 
-use App\Domain\AccessControl\Services\EffectiveAccessResolver;
-use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -13,32 +11,31 @@ use Throwable;
 
 /**
  * 全ReadModelを1つのトランザクションで空にして、全Projectorを`stored_events`の先頭から再生する
- * (docs/changesets/20261025-admin-read-model-rebuild/spec.md 論点2・6)。
+ * (docs/changesets/20261025-admin-read-model-rebuild/spec.md 論点2・6、docs/changesets/20261025-read-model-rebuild-admin-command/spec.md 論点2)。
  *
  * 手順: 件数とハッシュを取る → 外部キーの検査を切る → トランザクション開始 → 全テーブルをDELETE → 全Projectorをreplay →
- * 件数とハッシュを取り直す → 依頼者のアカウントと権限・時間の上限を確かめる → 試し実行ならロールバック・本実行ならコミット
+ * 件数とハッシュを取り直す → 時間の上限を確かめる → 試し実行ならロールバック・本実行ならコミット
  * (例外ならロールバックして再送出)→ 外部キーの検査を戻す。TRUNCATEは暗黙にコミットされるため使わない。
  * 対象は`ReadModelTableLister::tables()`(`leave:rebuild-event-store --list-readmodels`と同じ一覧)のうちDBに存在するもの。
  * 心拍は`Cache::store('file')`(既定のキャッシュはDBで、トランザクションの中の書き込みは他の接続から見えないため)。
  */
 class ReadModelRebuilder
 {
-    public const PERMISSION = 'read_model.rebuild';
-
     public const HEARTBEAT_KEY = 'read-model-rebuild:heartbeat';
 
     public const HEARTBEAT_TTL_SECONDS = 86400;
 
     public const HEARTBEAT_EVENT_INTERVAL = 1000;
 
-    public const ACCOUNT_LOST_MESSAGE = '作り直すと依頼者のアカウントまたは権限が失われるため中止しました。イベントを経ずに作られたデータがあります。';
+    /** 利用者・権限のテーブル。ここに変更があると、イベントを経ずに作られた行がある(出力の先頭に警告を出す)。 */
+    public const ACCOUNT_TABLES = ['users', 'memberships', 'groups', 'roles', 'role_assignments', 'permission_role', 'role_features', 'group_feature_assignments'];
 
     public const TIME_LIMIT_MESSAGE = '時間の上限を超えたため中止しました。';
 
     /**
      * @return array{dry_run: bool, tables: list<array{table: string, before: int, after: int, changed: bool}>, changed_tables: int}
      */
-    public function rebuild(bool $dryRun, string $requestedByUserId): array
+    public function rebuild(bool $dryRun): array
     {
         $startedAt = microtime(true);
         $limitSeconds = (int) config('read_model_rebuild.time_limit_minutes', 180) * 60;
@@ -88,7 +85,6 @@ class ReadModelRebuilder
                 'changed_tables' => count(array_filter($rows, fn (array $row) => $row['changed'])),
             ];
 
-            $this->assertRequesterSurvives($requestedByUserId);
             $this->assertWithinTimeLimit($startedAt, $limitSeconds);
 
             if ($dryRun) {
@@ -117,13 +113,18 @@ class ReadModelRebuilder
         ));
     }
 
-    /** 作り直し後に、依頼者の`users`の行があり、`read_model.rebuild`(global)を実効権限として持つこと(トランザクションの中のデータで判定)。 */
-    public function assertRequesterSurvives(string $userId): void
+    /**
+     * 変更のあった利用者・権限のテーブル名(summaryの`tables`から)。
+     *
+     * @param  list<array{table: string, before: int, after: int, changed: bool}>  $rows
+     * @return list<string>
+     */
+    public static function changedAccountTables(array $rows): array
     {
-        $user = User::query()->find($userId);
-        if ($user === null || ! app(EffectiveAccessResolver::class)->hasGlobalPermission($user, self::PERMISSION)) {
-            throw new RuntimeException(self::ACCOUNT_LOST_MESSAGE);
-        }
+        return array_values(array_map(
+            fn (array $row) => $row['table'],
+            array_filter($rows, fn (array $row) => $row['changed'] && in_array($row['table'], self::ACCOUNT_TABLES, true)),
+        ));
     }
 
     public function assertWithinTimeLimit(float $startedAt, int $limitSeconds): void

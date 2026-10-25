@@ -2,16 +2,12 @@
 
 namespace Tests\Feature\EventSourcing;
 
-use App\Domain\AccessControl\Commands\ChangeRolePermissions;
-use App\Domain\AccessControl\Commands\CreateRole;
-use App\Domain\AccessControl\Commands\CreateRoleAssignment;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
 use App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
@@ -96,7 +92,7 @@ class ReadModelRebuilderTest extends TestCase
         // イベントを経ずに壊す(取消済みの付与の残日数を付与日数に戻す)。
         DB::table('paid_leave_grants')->where('id', $grantId)->update(['remaining_days' => 10.0]);
 
-        $summary = (new ReadModelRebuilder)->rebuild(false, $admin->id);
+        $summary = (new ReadModelRebuilder)->rebuild(false);
 
         $this->assertEqualsWithDelta(0.0, (float) DB::table('paid_leave_grants')->where('id', $grantId)->value('remaining_days'), 0.000001);
         $this->assertFalse($summary['dry_run']);
@@ -123,7 +119,7 @@ class ReadModelRebuilderTest extends TestCase
         }
         $this->assertGreaterThan(0, $before['stored_events']);
 
-        (new ReadModelRebuilder)->rebuild(false, $admin->id);
+        (new ReadModelRebuilder)->rebuild(false);
 
         foreach ($protected as $table) {
             $this->assertSame($before[$table], DB::table($table)->count(), $table);
@@ -166,9 +162,9 @@ class ReadModelRebuilderTest extends TestCase
         $this->assertSame(8.0, $first['remaining']);
 
         $rebuilder = new ReadModelRebuilder;
-        $summary1 = $rebuilder->rebuild(false, $admin->id);
+        $summary1 = $rebuilder->rebuild(false);
         $afterOnce = $snapshot();
-        $summary2 = $rebuilder->rebuild(false, $admin->id);
+        $summary2 = $rebuilder->rebuild(false);
         $afterTwice = $snapshot();
 
         $this->assertSame($first, $afterOnce);
@@ -185,7 +181,7 @@ class ReadModelRebuilderTest extends TestCase
         [, $grantId] = $this->userWithRevokedGrant($admin);
         DB::table('paid_leave_grants')->where('id', $grantId)->update(['remaining_days' => 10.0]);
 
-        $dry = (new ReadModelRebuilder)->rebuild(true, $admin->id);
+        $dry = (new ReadModelRebuilder)->rebuild(true);
 
         $this->assertTrue($dry['dry_run']);
         $this->assertEqualsWithDelta(10.0, (float) DB::table('paid_leave_grants')->where('id', $grantId)->value('remaining_days'), 0.000001);
@@ -193,58 +189,10 @@ class ReadModelRebuilderTest extends TestCase
         $this->assertTrue(DB::table('users')->where('id', $admin->id)->exists());
         $this->assertTrue($this->foreignKeysEnabled());
 
-        $real = (new ReadModelRebuilder)->rebuild(false, $admin->id);
+        $real = (new ReadModelRebuilder)->rebuild(false);
         $this->assertSame($dry['tables'], $real['tables']);
         $this->assertSame($dry['changed_tables'], $real['changed_tables']);
         $this->assertFalse($real['dry_run']);
-    }
-
-    public function test_rebuild_rolls_back_when_the_requester_row_cannot_be_rebuilt_from_events(): void
-    {
-        $admin = $this->createEventAdmin();
-        [, $grantId] = $this->userWithRevokedGrant($admin);
-        DB::table('paid_leave_grants')->where('id', $grantId)->update(['remaining_days' => 10.0]);
-        // イベントを経ずに作られた利用者(直接作った)。管理者のグループへは所属させず、管理者のロールを直接割り当てる。
-        $direct = User::factory()->create();
-        $adminRoleId = (int) Role::query()->where('code', Role::ADMIN)->value('id');
-        $this->bus()->dispatch(new CreateRoleAssignment((string) Str::uuid(), 'user', $direct->id, $adminRoleId, 'global', null, false, null, null, null));
-
-        try {
-            (new ReadModelRebuilder)->rebuild(false, $direct->id);
-            $this->fail('例外が出るはず');
-        } catch (RuntimeException $e) {
-            $this->assertSame(ReadModelRebuilder::ACCOUNT_LOST_MESSAGE, $e->getMessage());
-        }
-
-        $this->assertTrue(DB::table('users')->where('id', $direct->id)->exists());
-        $this->assertEqualsWithDelta(10.0, (float) DB::table('paid_leave_grants')->where('id', $grantId)->value('remaining_days'), 0.000001);
-        $this->assertTrue($this->foreignKeysEnabled());
-        $this->assertSame(0, DB::transactionLevel());
-    }
-
-    public function test_rebuild_rolls_back_when_the_requester_permission_cannot_be_rebuilt_from_events(): void
-    {
-        $this->createEventAdmin();
-        $user = $this->createEventUser('Direct Permission Holder');
-        $this->bus()->dispatch(new CreateRole('direct_role', '直接付与', null, null, false));
-        $role = Role::query()->where('code', 'direct_role')->firstOrFail();
-        // 割当にはglobalで有効なPermissionが要るので、イベント経由で別の権限(system_settings.read)を持たせておく。
-        $this->bus()->dispatch(new ChangeRolePermissions((int) $role->id, [(int) DB::table('permissions')->where('code', 'system_settings.read')->value('id')], null));
-        $this->bus()->dispatch(new CreateRoleAssignment((string) Str::uuid(), 'user', $user->id, (int) $role->id, 'global', null, false, null, null, null));
-        // `permission_role`へイベントを経ずに直接書く(原則2の違反データ)。
-        DB::table('permission_role')->insert(['role_id' => $role->id, 'permission_id' => DB::table('permissions')->where('code', ReadModelRebuilder::PERMISSION)->value('id')]);
-        $this->assertTrue(app(\App\Domain\AccessControl\Services\EffectiveAccessResolver::class)->hasGlobalPermission($user, ReadModelRebuilder::PERMISSION));
-
-        try {
-            (new ReadModelRebuilder)->rebuild(false, $user->id);
-            $this->fail('例外が出るはず');
-        } catch (RuntimeException $e) {
-            $this->assertSame(ReadModelRebuilder::ACCOUNT_LOST_MESSAGE, $e->getMessage());
-        }
-
-        // ロールバックされ、直接書いた行も残っている(イベント経由のsystem_settings.read + 直接のread_model.rebuild)。
-        $this->assertSame(2, DB::table('permission_role')->where('role_id', $role->id)->count());
-        $this->assertTrue($this->foreignKeysEnabled());
     }
 
     public function test_time_limit_of_zero_rolls_back_and_fails(): void
@@ -255,7 +203,7 @@ class ReadModelRebuilderTest extends TestCase
         config(['read_model_rebuild.time_limit_minutes' => 0]);
 
         try {
-            (new ReadModelRebuilder)->rebuild(false, $admin->id);
+            (new ReadModelRebuilder)->rebuild(false);
             $this->fail('例外が出るはず');
         } catch (RuntimeException $e) {
             $this->assertSame(ReadModelRebuilder::TIME_LIMIT_MESSAGE, $e->getMessage());
@@ -275,7 +223,7 @@ class ReadModelRebuilderTest extends TestCase
         $this->assertLessThan(array_search('memberships', $tables, true), array_search('groups', $tables, true));
         $this->assertTrue($this->foreignKeysEnabled());
 
-        $summary = (new ReadModelRebuilder)->rebuild(false, $admin->id);
+        $summary = (new ReadModelRebuilder)->rebuild(false);
 
         $this->assertSame(0, $summary['changed_tables']);
         $this->assertTrue($this->foreignKeysEnabled());

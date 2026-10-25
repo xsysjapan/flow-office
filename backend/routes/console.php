@@ -17,7 +17,7 @@ Artisan::command('inspire', function () {
 // ReadModelの作り直し(`read-models:rebuild`)の実行中は、作り直し以外の全スケジュールを飛ばす
 // (実行中の書き込みが、トランザクションのロック待ち・再生との競合で漏れたり二重になったりしないように)。
 // 新しく起動されるものだけが止まる。飛ばされた日次バッチは後から追い付かない
-// (docs/changesets/20261025-admin-read-model-rebuild/spec.md 論点3)。
+// (docs/changesets/20261025-read-model-rebuild-admin-command/spec.md 論点3)。
 $skipDuringReadModelRebuild = fn (): bool => app(ReadModelRebuildRunService::class)->isRunning();
 
 // 期限到来済みの所属変更セットを適用する。
@@ -114,9 +114,13 @@ Schedule::command('calendar:generate-years')
     ->withoutOverlapping()
     ->skip($skipDuringReadModelRebuild);
 
-// 管理画面から依頼されたReadModelの作り直しを、1分ごとに1件拾って実行する(判定の実行中は取り出さない)。
-// 作り直し自身は`skip`しない。時間の上限(180分)に余裕を持たせて`withoutOverlapping(240)`。
-Schedule::command('read-models:rebuild --pending')
+// 運用コマンドの画面(`/admin/commands`)から依頼された記録を、1分ごとに古い順にすべて実行する実行役。
+// キュー(`queue:work`は既定60秒で打ち切られる)を使わず、スケジューラーから`runInBackground()`で直接動かす。
+// 作り直し(`read-models:rebuild`)はこの実行役の中で動くので、作り直しの実行中は新しく起動しない(`skip`)。
+// `withoutOverlapping`の期限は作り直しの時間の上限(180分)に余裕を足した240分(プロセスが落ちても24時間止めない)。
+// docs/changesets/20261025-read-model-rebuild-admin-command/spec.md 論点1・3。
+Schedule::command('admin-commands:run-pending')
     ->everyMinute()
     ->withoutOverlapping(240)
-    ->runInBackground();
+    ->runInBackground()
+    ->skip($skipDuringReadModelRebuild);

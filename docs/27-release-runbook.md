@@ -134,10 +134,12 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 7. 本番で入れ替える: `php artisan leave:rebuild-event-store --swap`。元の表は`stored_events_before_rebuild_YYYYMMDDHHMMSS`として残る。
 8. 旧系統を削除した新しいコードを配備し、`php artisan migrate --force`を実行する(マイグレーション`2026_10_10_000001`〜`000009`・
    `2026_10_11_000001`)。新しいコードは旧イベントを読めないため、7の後は新しいコードを配備するまで休暇を操作させない。
-9. ReadModelを作り直す: 管理画面「データの作り直し」(`/admin/read-model-rebuild`。権限`read_model.rebuild`)から、まず「試し実行」で
-   テーブルごとの件数・内容の差(利用者・権限のテーブルの変化の警告を含む)を確かめ、問題が無ければ「作り直す」を実行する
+9. ReadModelを作り直す: 運用コマンド画面の「データの作り直し(ReadModel)」(`read-models:rebuild`。権限は`admin_command.execute`)から、
+   まず「試し実行」(`--dry-run`)で、出力のテーブルごとの件数・変更の有無(利用者・権限のテーブルの変化の警告を含む)を確かめ、
+   問題が無ければ試し実行なしで実行する
    (1トランザクションで全ReadModelを空にして全Projectorを再生する。実行中は全APIが503のメンテナンス中になり、失敗・中止ならロールバックされる。
-   スケジューラー(`schedule:run`のcron)が動いていることが前提。日次バッチの時刻(1:00〜3:00台)を避ける)。
+   実行役`admin-commands:run-pending`を毎分起動するスケジューラー(`schedule:run`のcron)が動いていることが前提。日次バッチの時刻(1:00〜2:20)を避ける)。
+   SSHからは`php artisan read-models:rebuild --dry-run`・`php artisan read-models:rebuild`でも実行できる(記録は自動で作られる)。
    SSHで行う場合の手作業の手順: `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、
    `php artisan event-sourcing:replay`で全Projectorを再生成する(Projectorは既存の状態を消さない前提のため、必ず空にしてから実行する)。
 10. 日次計算を再計算する: `php artisan attendance:recalculate-days --from=... --to=...`(既定は試し実行。一覧で値が変わる日を確認し、
@@ -179,7 +181,7 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
    事前条件に違反がある(付与予定の付与済み・判定の上書き・個別修正、`source='scheduled_batch'`の付与)ときは止まる。件数をユーザーに報告して判断を仰ぐ。
 5. `php artisan leave:rekey-paid-leave-streams --apply`(`stored_events_rebuilt`に書き、検査する)。検査だけを再度行う場合は`--verify`。
 6. `php artisan leave:rekey-paid-leave-streams --swap`(検査が通っている場合のみ。元の表は`stored_events_before_rekey_YYYYMMDDHHMMSS`として残る)。
-7. ReadModelを作り直す: 管理画面「データの作り直し」から実行する(試し実行→本実行。手順9の説明を参照)。SSHで行う場合は、
+7. ReadModelを作り直す: 運用コマンド画面の「データの作り直し(ReadModel)」から実行する(試し実行→本実行。手順9の説明を参照)。SSHで行う場合は、
    `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、`php artisan event-sourcing:replay`で
    全Projectorを再生成する(必ず空にしてから)。
 8. 指紋を比べる(原則2の確認。リハーサルと本番で同じことをする)。
@@ -229,6 +231,17 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
    既存の比例のルールが要確認に後退していないこと。
 - 戻し方: 付与予定は、ルール・年度開始日を戻して`paid-leave:schedule:reapply-policy`をもう一度実行すれば作り直せる。
   migrationの`down`は、列の既定値・区分・uniqueを戻すが、削除した`mass_grant_month`の値は戻らない(出力した内容を控えておく)。
+
+### 3.4 運用コマンドの実行経路の切替(変更セット `20261025-read-model-rebuild-admin-command`)のデプロイ手順
+
+運用コマンドの実行を、DBキュー(`RunAdminCommandJob`。`queue:work`の60秒で強制終了される)から、毎分起動する実行役
+`admin-commands:run-pending`(`routes/console.php`)へ移した。`App\Jobs\RunAdminCommandJob`は削除されている。
+
+1. 新しいコードを配備する(`php artisan migrate --force`。この変更でmigrationは増えない)。
+2. `jobs`テーブルに残った`RunAdminCommandJob`の行を削除する(クラスが無いため、残ると`queue:work`で失敗し続ける)。
+   `DELETE FROM jobs WHERE payload LIKE '%RunAdminCommandJob%';`(先に`SELECT COUNT(*)`で件数を確かめる)。
+3. `admin_command_runs`に`queued`のまま残っている記録は、新しい実行役が次の起動で拾って実行する(`running`のまま残っているものは、
+   実行役の起動時に「応答がないため失敗とみなしました」で失敗になる)。
 
 ## 4. frontend/ のデプロイ手順
 

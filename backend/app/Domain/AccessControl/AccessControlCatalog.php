@@ -65,7 +65,6 @@ class AccessControlCatalog
         'system_settings.update' => ['name' => 'システム設定更新', 'scopes' => ['global']],
         'admin_command.view' => ['name' => '運用コマンド閲覧', 'scopes' => ['global']],
         'admin_command.execute' => ['name' => '運用コマンド実行', 'scopes' => ['global']],
-        'read_model.rebuild' => ['name' => 'データの作り直し', 'scopes' => ['global']],
         // 旧APIとの移行互換。新しい画面・APIは上記の操作単位Permissionを使用する。
         'user.manage' => ['name' => 'ユーザー管理（互換）', 'scopes' => ['global', 'group']],
         // 備品管理(spec: docs/changesets/20260830-equipment-management/spec.md 論点10)。

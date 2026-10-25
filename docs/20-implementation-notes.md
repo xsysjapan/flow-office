@@ -99,8 +99,10 @@ CI/CDとは別に一度限りの補正処理を実行する必要がある場合
 シェルコマンドを公開せず、アプリ固有Artisanコマンドへ`#[AdminExecutable]`を付与する。
 管理APIはこのAttributeが付いたコマンドだけを列挙し、コマンド名・説明・引数・オプションを
 Symfony Consoleの定義から自動取得する。入力形式、画面コントロール、同時実行可否はAttributeで
-補足する。実行要求は`admin_command_runs`へ記録してDBキューに投入し、cronで起動される既存の
-`queue:work --stop-when-empty`が処理する。実行者、入力、状態、終了コード、出力を履歴として残す。
+補足する。実行要求は`admin_command_runs`へ`queued`で記録するだけで、cronの`schedule:run`が毎分起動する実行役
+`admin-commands:run-pending`(`runInBackground()`・`withoutOverlapping(240)`)が古い順に実行する(キューのワーカーの60秒の打ち切りを受けない)。
+起動時に残っている`running`の記録は前のプロセスの取り残しとして失敗にし、排他のロック(`admin-command:<name>`、期限240分)を解放する。
+実行者、入力、状態、終了コード、出力を履歴として残す(変更セット`20261025-read-model-rebuild-admin-command`)。
 
 公開例は`RecalculateAttendanceMonthSnapshotsCommand`を参照する。新規コマンドは冪等にし、
 再実行時の結果と部分失敗時の復旧方法をコマンドの説明または該当ユースケースへ記載する。

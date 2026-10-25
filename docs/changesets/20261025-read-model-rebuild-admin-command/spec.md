@@ -84,7 +84,8 @@
     1トランザクションのDELETE+replay、試し実行のロールバック、心拍、時間の上限、60秒の待ちはそのまま。有給付与予定の判定との調整は論点1の取り出しの条件で行う。
   - 実行の記録:実行役から渡された記録を使う。CLI(SSH)から直接`read-models:rebuild`を実行した場合は、自分で`admin_command_runs`の記録
     (`command_name = 'read-models:rebuild'`、依頼者null、`running`)を作ってから始め、終わったら更新する(メンテナンスに入るように)。
-    その場合も、判定が`queued`/`running`なら拒否して終了コード1(「有給付与予定の判定の実行中です」)。
+    その場合も、判定が`queued`/`running`なら拒否して終了コード1(「有給付与予定の判定の実行中です」)。作り直しの記録が既に`running`(`isRunning()`が真)のときも拒否して終了コード1(「作り直しを実行中です」)。
+    記録の`parameters`は運用コマンドの画面と同じ`{"dry-run": bool}`にする。
   - `summary`の保存は、試し実行ではロールバックの後(トランザクションの外)で行う。
   - 結果:テーブルごとの件数の前後と変更の有無を、コマンドの出力(運用コマンドの画面の「出力」に出る)に表で書く。変更のあったテーブルを先に書き、
     利用者・権限のテーブル(`users`・`memberships`・`groups`・`roles`・`role_assignments`・`permission_role`・`role_features`・`group_feature_assignments`)に

@@ -187,8 +187,6 @@ use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageConfirmed;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageDesignated;
-use App\Domain\ReadModelRebuild\Events\ReadModelRebuildFinished;
-use App\Domain\ReadModelRebuild\Events\ReadModelRebuildRequested;
 use App\Domain\SystemSettings\Events\SystemSettingsUpdated;
 use App\Domain\UserManagement\Events\ExternalHrImportApplied;
 use App\Domain\UserManagement\Events\ExternalIdentityLinked;
@@ -366,8 +364,6 @@ return [
         'role.permissions_changed' => RolePermissionsChanged::class,
         'role.features_changed' => RoleFeaturesChanged::class,
         'system_settings.updated' => SystemSettingsUpdated::class,
-        'read_model_rebuild.requested' => ReadModelRebuildRequested::class,
-        'read_model_rebuild.finished' => ReadModelRebuildFinished::class,
         'external_integration_connection.created' => ExternalIntegrationConnectionCreated::class,
         'external_integration_connection.updated' => ExternalIntegrationConnectionUpdated::class,
         'external_integration_connection.deleted' => ExternalIntegrationConnectionDeleted::class,
