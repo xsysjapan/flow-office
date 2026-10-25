@@ -1,6 +1,6 @@
 # e2e(scenario-16)で付与対象の社員を選べない不安定さの修正
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -91,4 +91,7 @@ scenario-16は、付与対象の社員を共通の操作`pickUser`で選べず�
 
 ## 実装結果
 
-未着手
+- `frontend/e2e/scenario-16-paid-leave-grant-revocation.spec.ts`:`/admin/paid-leave`を開いた後に`getByText('読み込み中...')`が0件になるのを待ち
+  (付与ルール・対象社員の一覧・法定付与表の`LoadingState`が出す文言)、`pickUser`で付与対象を選ぶ形に戻した。`dispatchEvent('click')`とEscapeを削除。
+- 検証:scenario-16を3回(委譲先で2回、委譲元で1回)流し、すべてPASS(約32〜34秒)。`npx tsc -p e2e/tsconfig.json --noEmit`エラー無し。
+- 受け入れ条件:`pickUser`で選んで続けてPASS・`dispatchEvent`の残存無し(差分で確認)。
