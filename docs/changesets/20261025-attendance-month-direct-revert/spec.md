@@ -229,10 +229,9 @@
 
 ### 論点7: 権限
 
-- 決定(ユーザー回答): 人事担当ロールの初期権限に`attendance.confirmation_revert`を追加する
-  (`AccessControlSeeder`)。
-- 既存の環境: シーダーは権限行がまだ無いロールにだけ設定するため、既存の環境には反映されない。
-  リリース手順として、管理画面のロール権限設定で追加する旨を記載する。
+- 決定(ユーザー回答): 人事担当ロールで運用する。権限の追加は、ユーザーが管理画面から手動で行う
+  (2026-10-25の追加指示「権限追加は手動で実施します」)。`AccessControlSeeder`は変更しない。
+- リリース手順に、管理画面のロール権限設定で手動で追加する旨を記載する。
 - 実行できる範囲(ユーザー回答): 制限しない。権限があれば、全社員の月と自分の月を戻せる。ルートの
   `permission:attendance.confirmation_revert,any`のままとし、Handlerで対象の社員を確かめることはしない。
   ただし、画面に月を表示するには、従来どおり対象社員の`attendance.read`が要る。
@@ -261,7 +260,7 @@
    - `AttendanceMonthSubmitted`(新規作成・再提出)で`revert_comment = null`にする。
    - 差戻し・締め取消など他のイベントでは変えない。
 6. `AttendanceMonth`モデル・`AttendanceMonthResource`に`revert_comment`を加える。
-7. `AccessControlSeeder`: `Role::HR_STAFF`に`attendance.confirmation_revert`を追加する。
+7. (欠番)`AccessControlSeeder`は変更しない。権限の追加は手動で行う。
 8. 論点5:
    - `RevertApprovedAttendanceMonthByRequest`(Command・Handler)を新しく作る。
    - `app/Domain/Workflow/Reactors/AttendanceMonthRevertOnConfirmationRevertRequestApprovedReactor.php`を
@@ -281,7 +280,6 @@
    - 存在しない`workflow_request_id`を渡すと422になる。
    - 申請ありの既存の経路が引き続き動く(既存テスト)。
    - `projections:rebuild`(またはProjectorの再生)の後も、`revert_comment`が同じ値になる。
-   - 人事担当ロール(シーダーの初期権限)で戻せる。
 10. シナリオテスト(新規`tests/Feature/Attendance/AttendanceConfirmationRevertRequestFlowTest.php`):
    - 提出→承認済みの月について、社員が勤怠確定取消依頼を作成・提出し、承認者が承認する
      (APIで操作する)。その結果、次のようになること。
@@ -325,7 +323,6 @@
 - 勤怠確定取消依頼が承認されると(自己承認では提出の時点で)、その時点で月が未提出に戻り、バックオフィスタスクは作られない。
   対象の月が承認待ち・締め済み・見つからないときは、承認がエラーになり何も変わらない。すでに未提出・差戻し中なら、承認は成功し月は変わらない。
 - 人事担当・バックオフィス担当など確定取消の権限を持つ人は、自分の月を含め全社員の月を戻せる(画面に月を表示するには、その社員の勤怠閲覧権限が要る)。
-- 人事担当ロールの初期権限に`attendance.confirmation_revert`が含まれる。
 - Projectorのリビルドの後も、`revert_comment`が同じになる。
 - backendの確定取消のテスト・シナリオテスト(仕様確定事項9・10)と、frontendの関連テスト・型チェック・lintがPASSする。
 
@@ -375,7 +372,6 @@
   - `app/Http/Controllers/Api/AttendanceController.php`
   - `AttendanceMonth`モデル、`AttendanceMonthResource`
   - 新しいmigration
-  - `database/seeders/AccessControlSeeder.php`
   - `tests/Feature/Attendance/AttendanceMonthRescueCommandsTest.php`
   - 新規: `app/Domain/Attendance/Commands/RevertApprovedAttendanceMonthByRequest.php`・Handler、
     `app/Domain/Workflow/Reactors/AttendanceMonthRevertOnConfirmationRevertRequestApprovedReactor.php`、
@@ -414,7 +410,7 @@ npm test -- src/components/RevertMonthConfirmationDialog src/pages/backOffice sr
    `SELECT COUNT(*) FROM stored_events WHERE event_class LIKE '%ConfirmationReverted%';`が0件であることを
    確かめる。0件でなければ、`php artisan projections:rebuild AttendanceMonthProjector`を実行する。
 3. 既存の未処理の確定取消タスクは、タスク画面から従来どおり処理する。
-4. 既存の環境では、人事担当ロールに`attendance.confirmation_revert`を管理画面から追加する。
+4. 人事担当ロールに`attendance.confirmation_revert`を管理画面から手動で追加する(ユーザーが実施)。
 
 ## レビュー履歴
 
@@ -443,6 +439,8 @@ npm test -- src/components/RevertMonthConfirmationDialog src/pages/backOffice sr
   - バックオフィス担当ロールの閲覧権限 → ユーザー回答で人事担当で運用。
 - 2026-10-25 ユーザーから、本番では一度も未提出に戻していないと回答があった。データ移行(Projectorのリビルド)を
   不要とし、リリース手順を0件の確認に変えた。ユーザーの承認を得て実装中にした。
+- 2026-10-25 ユーザーの追加指示「権限追加は手動で実施します」により、`AccessControlSeeder`の変更を
+  実装対象から外した。
 
 ## 実装結果
 
