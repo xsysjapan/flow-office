@@ -3,8 +3,8 @@ import { useLocation } from 'react-router-dom'
 import { MAINTENANCE_EVENT } from '../../api/client'
 import { MaintenanceNotice } from '../MaintenanceNotice/MaintenanceNotice'
 
-/** 作り直しの管理画面。進み具合を隠さないため、ここでは全画面のメンテナンス表示を出さない。 */
-export const REBUILD_PAGE_PATH = '/admin/read-model-rebuild'
+/** 運用コマンドの画面。作り直しの進み具合を見続けられるように、ここでは全画面のメンテナンス表示を出さない。 */
+export const COMMANDS_PAGE_PATH = '/admin/commands'
 
 export interface MaintenanceGateProps {
   children: ReactNode
@@ -24,7 +24,7 @@ export function MaintenanceGate({ children }: MaintenanceGateProps) {
     return () => window.removeEventListener(MAINTENANCE_EVENT, handler)
   }, [])
 
-  if (message !== null && pathname.replace(/\/$/, '') !== REBUILD_PAGE_PATH) {
+  if (message !== null && pathname.replace(/\/$/, '') !== COMMANDS_PAGE_PATH) {
     return <MaintenanceNotice message={message} />
   }
 

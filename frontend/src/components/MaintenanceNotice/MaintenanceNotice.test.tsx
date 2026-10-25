@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import * as api from '../../api/readModelRebuilds'
+import * as api from '../../api/maintenance'
 import { MaintenanceNotice } from './MaintenanceNotice'
 
 const originalLocation = window.location

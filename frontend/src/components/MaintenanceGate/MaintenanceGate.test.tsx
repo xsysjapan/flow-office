@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
-import * as api from '../../api/readModelRebuilds'
+import * as api from '../../api/maintenance'
 import { MAINTENANCE_EVENT } from '../../api/client'
 import { MaintenanceGate } from './MaintenanceGate'
 
@@ -37,8 +37,8 @@ it('shows children until a maintenance error is received, then the full-screen n
   expect(screen.queryByText('通常の画面')).not.toBeInTheDocument()
 })
 
-it('does not show the notice on the rebuild admin page', () => {
-  renderGate('/admin/read-model-rebuild')
+it('does not show the notice on the commands admin page', () => {
+  renderGate('/admin/commands')
 
   fireMaintenance()
 

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Wrench } from 'lucide-react'
-import { useMaintenanceStatus } from '../../hooks/useReadModelRebuilds'
+import { useMaintenanceStatus } from '../../hooks/useMaintenance'
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
 
 export interface MaintenanceNoticeProps {
