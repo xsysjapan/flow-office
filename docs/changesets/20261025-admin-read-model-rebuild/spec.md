@@ -1,6 +1,6 @@
 # 管理画面からReadModelを作り直す(全テーブルを空にしてevent-sourcing:replay)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -322,4 +322,46 @@ Projectorの不具合修正(例:変更セット20261024-fix-revoked-grant-remain
 
 ## 実装結果
 
-未着手
+### コミット
+- `2909045` feat(frontend): 「データの作り直し」画面(`/admin/read-model-rebuild`)・API hook・全画面のメンテナンス表示(`MaintenanceGate`/`MaintenanceNotice`、`client.ts`の503判別)
+- `d48621b` feat(backend): `ReadModelRebuilder`・`ReadModelRebuildRunService`・`read-models:rebuild --pending`・API 3本と`GET /maintenance-status`・
+  ミドルウェア`BlockDuringReadModelRebuild`・監査イベント2種(`App\Domain\ReadModelRebuild`)・権限`read_model.rebuild`の追加migration・テスト・docs
+- `8e66c88` fix(frontend): 実行履歴でエラーを全幅の行に出し、表を画面幅に収める(実機確認で見つかった表示の不具合)
+
+### 実装上の決定(仕様の範囲内)
+- 権限の付与はmigration(`2026_10_25_100000_add_read_model_rebuild_permission.php`)で、`permissions`の行の追加と、adminロールへの`ChangeRolePermissions`の発行(イベント)。
+  `permission_role`へ直接書いていない。作り直し後も管理者が持ち続けることをテストで確認。
+- 設定値:`config/read_model_rebuild.php`(待ち60秒・時間の上限180分・心拍の古さ10分・queuedの上限30分。envで上書き可)。
+- 一覧外のテーブルから一覧内のテーブルへの外部キーが16件ある(`admin_command_runs.requested_by_user_id`→users、`asset_loan_requests`→users/assets、
+  `authentication_key_device_rules`→devices/authentication_keys、`compensatory_leave_grant_cancellations`→users/compensatory_leave_grants、
+  `expense_entry_presets`→users、`external_employee_mappings`→users、`external_integration_connections`→users、`paid_leave_grant_rules`/
+  `special_leave_grant_rules`/`system_settings`→work_styles)。作り直しは同じIDで行を作り直すため、親がイベントから作り直せる限り参照は保たれる。
+  本番の複製DBでの試し実行の後に、参照切れが無いかを確かめる。
+
+### 検証結果
+- backend(CIと同じ条件:`.env`+`key:generate`+ファイルのsqlite+`php artisan test`):2176件中2175件PASS。失敗は
+  `ReadModelFingerprintCommandTest::test_fingerprintは1行1テーブル…`の1件で、`origin/main`でも失敗する既存の失敗(変更セット20261024-fix-revoked-grant-remainingで確認)。
+  追加テストは53件(`ReadModelRebuilderTest`・`ReadModelRebuildCommandTest`・`ReadModelRebuildRunServiceTest`・`ReadModelRebuildApiTest`・
+  `BlockDuringReadModelRebuildTest`・`ReadModelRebuildPermissionMigrationTest`)。
+- frontend:`npx vitest run --project=unit` 全件PASS(1076件+追加分)、`npm run lint` error無し、`tsc`(app・e2e)エラー無し、
+  追加したstoryのstorybookテストPASS(`VITEST_CHROMIUM_EXECUTABLE_PATH`指定)。
+- 開発環境での実機確認(backend・mock-oidc・frontendを起動し、`read-models:rebuild --pending`をスケジューラーの代わりに実行):
+  - 試し実行を依頼(202)→実行中、一般の利用者の画面は「メンテナンス中」の全画面表示になり、終了後`maintenance:false`で通常の画面に戻った。
+  - 開発用の`admin@example.com`(シーダーが`firstOrCreate`で直接作る)が依頼者のときは、安全装置で中止された
+    (「作り直すと依頼者のアカウントまたは権限が失われるため中止しました。…」)。
+  - イベントから作られた社員(高橋 健太)を管理者グループに所属させて本実行を依頼→成功(約23秒)。結果は変更3テーブル
+    (`users` 7→6、`role_assignments` 14→6、`group_feature_assignments` 16→15。いずれもシーダーが直接書いた行で、イベントから作り直せない分)。
+    利用者・権限の警告が表示された。依頼者は作り直し後も操作できた。
+
+### 受け入れ条件の確認
+- 試し実行・本実行を単独で依頼でき、`--pending`で開始される:実機・テストで確認。
+- 実行中の503とメンテナンス表示、終了後の復帰:実機・`BlockDuringReadModelRebuildTest`で確認。
+- 本実行でイベントどおりの値に戻り二重にならない・試し実行でDBが変わらない・失敗でロールバック・依頼者の保護:`ReadModelRebuilderTest`・実機で確認。
+- 権限の無い利用者は使えない:`ReadModelRebuildApiTest`(403)、ナビは権限`read_model.rebuild`で表示。
+- 依頼と終了の監査:`ReadModelRebuildCommandTest`・`ReadModelRebuildRunServiceTest`で`read_model_rebuild.requested`/`finished`を確認。
+- 既存テスト:上記の既存の1件を除きPASS。
+
+### リリース時の注意
+- 本番で使う前に、本番の複製DBで試し実行を流し、所要時間・メモリ・MySQLのトランザクションの大きさと、差分(特に利用者・権限のテーブル)を確かめる。
+- PR#121のリリース(stored_eventsの作り直し。`RoleSetReconciler`が直接書かれた権限の付与をイベント化する)より前に本実行すると、
+  `admin_command.*`の付与が消える。試し実行の警告で確認できる。
