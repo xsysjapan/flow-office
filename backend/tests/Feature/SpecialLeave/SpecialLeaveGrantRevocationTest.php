@@ -50,6 +50,22 @@ class SpecialLeaveGrantRevocationTest extends TestCase
         $this->assertSame('revoked', SpecialLeaveGrant::query()->findOrFail($grantId)->status);
     }
 
+    public function test_revoking_a_grant_sets_its_remaining_days_to_zero(): void
+    {
+        $hr = User::factory()->create();
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $employee = User::factory()->create();
+
+        $grantId = $this->grantFor($hr, $employee);
+        $this->assertEquals(5.0, (float) SpecialLeaveGrant::query()->findOrFail($grantId)->remaining_days);
+
+        $this->actingAs($hr)->postJson("/api/special-leave/grants/{$grantId}/revoke")->assertOk();
+
+        $grant = SpecialLeaveGrant::query()->findOrFail($grantId);
+        $this->assertSame('revoked', $grant->status);
+        $this->assertEquals(0.0, (float) $grant->remaining_days);
+    }
+
     public function test_revocation_is_blocked_once_any_days_have_been_used(): void
     {
         $hr = User::factory()->create();

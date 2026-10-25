@@ -76,11 +76,13 @@ import { GroupTypeManagementPage } from "./pages/admin/GroupTypeManagementPage";
 import { AssetNumberRuleListPage } from "./pages/admin/AssetNumberRuleListPage";
 import { GroupDetailPage } from "./pages/admin/GroupDetailPage";
 import { AdminCommandsPage } from "./pages/admin/AdminCommandsPage";
+import { MaintenanceGate } from "./components/MaintenanceGate/MaintenanceGate";
 import { RoleDefinitionPage } from "./pages/admin/RoleDefinitionPage";
 
 function App() {
   return (
     <ErrorBoundary>
+      <MaintenanceGate>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
@@ -267,6 +269,7 @@ function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </MaintenanceGate>
     </ErrorBoundary>
   );
 }

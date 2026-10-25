@@ -532,7 +532,9 @@ Request idで絞り込む必要はなく、`LeaveHistoryQuery`の`additionalAggr
 4. `RevokePaidLeaveGrant` Commandにより、当該Grantの全Allocationを解除
    (`PaidLeaveUsageAllocationReleased`)したうえで`PaidLeaveGrantRevoked`イベントを記録し、
    `paid_leave_grants.status`を`revoked`に、`revoked_at`/`revoked_by_user_id`/
-   `revoke_reason`を設定する
+   `revoke_reason`を設定する。`paid_leave_grants.remaining_days`を0にする
+
+画面(有給付与ポリシー画面)では最新の非取消付与のみ取消ボタンを押せる。消化済みの付与を取り消す場合は確認文で付け替えを案内する。
 
 `POST /paid-leave/grants/{grant}/revoke`(`RevokePaidLeaveGrant`
 Command/`RevokePaidLeaveGrantHandler`)。旧ドメインでは「消化済み(`used_days > 0`)の

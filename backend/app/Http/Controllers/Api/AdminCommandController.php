@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Console\AdminCommandRegistry;
 use App\Http\Controllers\Controller;
-use App\Jobs\RunAdminCommandJob;
 use App\Models\AdminCommandRun;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +31,7 @@ final class AdminCommandController extends Controller
         ]);
     }
 
-    #[OA\Post(path: '/admin/commands/{command}/runs', operationId: 'adminCommands.run', summary: '許可済み運用コマンドをDBキューへ投入する', tags: ['運用コマンド'], responses: [new OA\Response(response: 202, description: 'Accepted')])]
+    #[OA\Post(path: '/admin/commands/{command}/runs', operationId: 'adminCommands.run', summary: '許可済み運用コマンドの実行を依頼する(待機中の記録を作る。実行は`admin-commands:run-pending`)', tags: ['運用コマンド'], responses: [new OA\Response(response: 202, description: 'Accepted')])]
     public function store(Request $request, string $command, AdminCommandRegistry $registry): JsonResponse
     {
         $metadata = $registry->find($command);
@@ -55,7 +54,6 @@ final class AdminCommandController extends Controller
             'status' => 'queued',
             'requested_by_user_id' => $request->user()->id,
         ]);
-        RunAdminCommandJob::dispatch($run->id);
 
         return response()->json(['data' => $run], 202);
     }

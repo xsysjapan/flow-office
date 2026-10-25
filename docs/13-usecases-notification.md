@@ -82,7 +82,7 @@ CommandHandler側で判定する(原則9・11: 判定ロジックはAPI側に集
 
 - 通知は DB queue (`notification.queued` → `notification.sent` → `notification.confirmed`)
   を経由する。常駐ワーカーを前提にしないため、cronで `queue:work --stop-when-empty` を
-  定期実行する。
+  定期実行する(運用コマンドはキューではなく実行役`admin-commands:run-pending`で動かす)。
 - 送信失敗はリトライではなくログに残し、再送は手動または次回バッチでカバーする方針とする
   (XSERVERの実行時間制約を考慮)。
 - `notification.queued`のpayloadに、宛先ユーザー(`recipientUserId`)・通知種別

@@ -272,6 +272,85 @@ describe('PaidLeavePolicyPage', () => {
     expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
   })
 
+  describe('revoke button of the target user grants', () => {
+    function grantOf(overrides: Partial<PaidLeaveGrant>): PaidLeaveGrant {
+      return {
+        id: 'grant-1',
+        user_id: 'user-3',
+        granted_on: '2026-06-01',
+        expires_on: '2027-05-31',
+        granted_days: 20,
+        used_days: 0,
+        remaining_days: 20,
+        grant_reason: null,
+        status: 'active',
+        revoked_at: null,
+        revoked_by_user_id: null,
+        revoke_reason: null,
+        ...overrides,
+      } as PaidLeaveGrant
+    }
+
+    async function showGrantsOfTargetUser(grants: PaidLeaveGrant[]) {
+      const paginatedUsers: Paginated<User> = {
+        data: [targetUser],
+        meta: { current_page: 1, last_page: 1, total: 1 },
+        links: { next: null, prev: null },
+      }
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+      vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantsForUser').mockResolvedValue(grants)
+      renderPage()
+
+      await userEvent.click(document.getElementById('grant-target-users')!)
+      await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+      await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+      await screen.findByText('対象社員の有給付与状況')
+    }
+
+    it('enables revoking the latest grant even when it has been used', async () => {
+      await showGrantsOfTargetUser([grantOf({ id: 'grant-1', used_days: 4, remaining_days: 16 })])
+
+      const button = await screen.findByRole('button', { name: '取消' })
+      expect(button).toBeEnabled()
+      await userEvent.click(button)
+      expect(
+        await screen.findByText(/消化済みの4日分は他の付与へ付け替えます。付け替え先が足りない分は残高不足\(未充当\)になります。/),
+      ).toBeInTheDocument()
+    })
+
+    it('disables revoking a grant that is not the latest, with a reason', async () => {
+      await showGrantsOfTargetUser([
+        grantOf({ id: 'grant-new', granted_on: '2026-06-02', expires_on: '2028-05-31' }),
+        grantOf({ id: 'grant-old', granted_on: '2026-06-01' }),
+      ])
+
+      await screen.findAllByRole('button', { name: '取消' })
+      const buttons = screen.getAllByRole('button', { name: '取消' })
+      expect(buttons).toHaveLength(2)
+      expect(buttons[0]).toBeEnabled()
+      expect(buttons[1]).toBeDisabled()
+      expect(buttons[1]).toHaveAttribute('title', '最新の付与のみ取り消せます。')
+    })
+
+    it('enables revoking the next grant once the newer one is revoked', async () => {
+      await showGrantsOfTargetUser([
+        grantOf({
+          id: 'grant-new',
+          granted_on: '2026-06-02',
+          expires_on: '2028-05-31',
+          remaining_days: 0,
+          status: 'revoked',
+          revoked_at: '2026-10-01T00:00:00Z',
+        }),
+        grantOf({ id: 'grant-old', granted_on: '2026-06-01', used_days: 4, remaining_days: 16 }),
+      ])
+
+      const button = await screen.findByRole('button', { name: '取消' })
+      expect(screen.getAllByRole('button', { name: '取消' })).toHaveLength(1)
+      expect(button).toBeEnabled()
+    })
+  })
+
   it('shows the selected users usage records from the ?userId= URL query param', async () => {
     const usage: PaidLeaveUsage = {
       id: 'usage-1',

@@ -1177,7 +1177,7 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 - allocated_days (`paid_leave_usage_allocations`の合計の非正規化キャッシュ。Source of Truthは
   `paid_leave_usage_allocations`側で、この列はあくまで表示用)
 - used_days (旧ドメイン互換のため存続。`allocated_days`と同じ意味の値を保持)
-- remaining_days (`granted_days - allocated_days`の非正規化キャッシュ)
+- remaining_days (`granted_days - allocated_days`の非正規化キャッシュ。取り消した付与(`status=revoked`)は0)
 - grant_reason
 - source (`manual`(手動付与) / `scheduled_batch`(定期の自動付与) / `carried_over`(cutoverでシステム外から持ち込んだ残高。
   `stored_events`の作り直しで作る)。付与の区別に使う。`original_granted_days`・`cutover_metadata`は撤去した(移行の情報はイベントの`meta`に残る))
@@ -1191,7 +1191,8 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 
 `special_leave_grants`も同じ`status`/`revoked_at`/`revoked_by_user_id`/`revoke_reason`を持つ
 (UC-P008参照。列構成はこの表と`special_leave_type_id`の有無以外は同じ。特別休暇は今回の
-再設計の対象外で、引き続き旧構造のまま実装されている)。
+再設計の対象外で、引き続き旧構造のまま実装されている)。取り消した付与(`status=revoked`)は
+`remaining_days`も0になる。
 
 ## paid_leave_requests (有給申請の申請テーブル。Projection)
 
@@ -1618,12 +1619,12 @@ docs/20-implementation-notes.md と同様の注記)。
 
 ## admin_command_runs (運用コマンド・自動判定の実行の記録)
 
-運用コマンド画面(`#[AdminExecutable]`のコマンド)の実行履歴と、有給付与予定の自動判定(`paid-leave:assess-schedules`)の
-実行の記録。運用の記録で、業務の状態ではない(イベントにしない)。`RunAdminCommandJob`と、自動判定のコマンド自身が更新する。
+運用コマンド画面(`#[AdminExecutable]`のコマンド)の実行履歴と、有給付与予定の自動判定(`paid-leave:assess-schedules`)・
+ReadModelの作り直し(`read-models:rebuild`)の実行の記録。運用の記録で、業務の状態ではない(イベントにしない)。運用コマンドの記録は実行役`admin-commands:run-pending`(`AdminCommandRunner`)が、自動判定のコマンド自身が更新する。作り直しはCLIから直接実行した場合に自分で記録(依頼者なし)を作る。
 
 - id (uuid)
 - command_name
-- parameters (json。自動判定は`{"trigger": "schedule"|"manual"}`)
+- parameters (json。自動判定は`{"trigger": "schedule"|"manual"}`、作り直し(`command_name = 'read-models:rebuild'`)は`{"dry-run": bool}`(オプション名。CLIからの直接実行の記録も同じ)
 - status (`queued`/`running`/`succeeded`/`failed`。既定`queued`)
 - requested_by_user_id (nullable。`users.id`。定期実行(自動判定のスケジュール)はnull)
 - started_at / finished_at (nullable)
@@ -1631,9 +1632,15 @@ docs/20-implementation-notes.md と同様の注記)。
 - output (nullable。先頭の100000文字だけを残す)
 - error_message (nullable)
 - summary (json nullable。コマンドが書く集計。自動判定は`{targets, assessed, eligible, not_eligible, needs_review, failed}`の件数。
-  出力の切り詰めに左右されない)
+  出力の切り詰めに左右されない。作り直し(コマンドが書く。出力の表と同じ内容)は`{"dry_run": bool, "tables": [{"table", "before", "after", "changed"}], "changed_tables": int}`。
+  `before`/`after`は作り直し前後の行数、`changed`は`ReadModelFingerprinter`のハッシュが変わったか。一覧外(`NOT_READ_MODELS`)のテーブルは含めない)
 - created_at / updated_at
 - index(command_name, status)
+
+作り直しの`running`の記録は、心拍(`Cache::store('file')`のキー`read-model-rebuild:heartbeat`。DBキャッシュはトランザクションの中の書き込みが
+他から見えないため使わない)が10分以内の間だけ「実行中(メンテナンス中)」とみなす(判定は読むだけで、記録は書き換えない)。
+実行役は起動時に残っている`running`の記録(運用コマンドのもの)をすべて失敗(「応答がないため失敗とみなしました」)にする。
+`admin_command_runs`は作り直しの対象(`ReadModelTableLister`の一覧)ではなく、作り直しで空にならない。
 
 ## テーブル分類の考え方
 

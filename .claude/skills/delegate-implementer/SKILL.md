@@ -84,11 +84,20 @@ implementerは指示に書かれていないことを推測で埋めるか、気
       確認が出て閉じられない、Overrideで「変更あり」が付くと誤って期待する、が起きた)。
 - [ ] serial実行のe2eにテストを足させる場合、前のテストで状態が変わる行(付与済みにした行など)を対象にしない
       こと、対象はAPIで条件に合う行を探して選ぶことを書いたか。
+- [ ] e2eの対象社員・日付(年の範囲)を指示する前に、委譲元が全specでの使われ方(`grep`で社員のメール・`SCENARIO_USERS`のキー)と、
+      ScenarioSeederで勤務予定・付与があるかを確かめたか(「有給系のe2eで使われていない」と確かめずに書き、scenario-09の9000〜9399年の
+      付与と勤務予定の無さで2回手戻りした)。他のspecと重ならない年の範囲を使うなら、その範囲を指示に書く。
+- [ ] e2eで社員などを選ぶ操作は、キーボード(Enter)ではなく候補のクリックと、選択結果の`expect`で確かめるよう書いたか
+      (絞り込み前の先頭が選ばれ、別の社員で進んだ)。
 - [ ] backendとfrontendを並行で委譲するときは、APIの応答の形を、包み(`{ data: ... }`)まで含めて両方の指示に同じ文で
       書いたか(包みを書かずに形だけ書いたため、backendは包み、frontendは包みを外さずに受け取り、画面に「NaN」が出た)。
 - [ ] PRを出す前に、backendをCIと同じ条件で全件流したか。手順は`cp .env.example .env && php artisan key:generate && php artisan test`で、後で`.env`と`database/database.sqlite`を消す。
       `./vendor/bin/phpunit`はphpunit.xmlの値(in-memoryのsqlite・同期キュー・APP_KEYなし)で動き、CI(ファイルのsqlite・databaseのキュー・APP_KEYあり)と違う。
       そのため、起動の時の行の作成やキューの前提のずれを見逃した(PR#121)。
+- [ ] backendのテストを委譲するときは、指示の中で「全件はCIと同じ条件(`.env`をコピー+`key:generate`+ファイルのsqlite+`php artisan test`)で流す」
+      と書いたか(implementerが`./vendor/bin/phpunit`のメモリDBだけで確かめ、`DatabaseMigrations`の後始末(rollback)を省いた上書きで
+      ファイルのDBに行が残り、後続の`RefreshDatabase`のテスト約140件を壊したのを見逃した)。`DatabaseMigrations`を使うテストには、
+      後続のテストへ状態を残さないこと(`RefreshDatabaseState::$migrated`を戻す等)を書く。
 - [ ] migrationを足したときは、down()を、データ移行(後続のmigration)の後の状態で確かめるテストがあるか(CIの`migrate-mysql`は、`migrate`の後に`migrate:rollback`を行う)。
 - [ ] frontendの型チェックは`npx tsc -p tsconfig.app.json --noEmit`を指定したか(ルートの`tsconfig.json`は
       参照だけなので、`npx tsc --noEmit`では何も検査されない)。

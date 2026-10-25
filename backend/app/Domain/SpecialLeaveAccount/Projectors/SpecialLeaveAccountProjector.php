@@ -54,6 +54,7 @@ class SpecialLeaveAccountProjector extends Projector
             'revoked_at' => $event->createdAt(),
             'revoked_by_user_id' => $event->revokedByUserId,
             'revoke_reason' => $event->reason,
+            'remaining_days' => 0,
         ]);
     }
 
@@ -193,9 +194,14 @@ class SpecialLeaveAccountProjector extends Projector
             ->where('grant_id', $grantId)
             ->sum('allocated_days');
 
+        // 取り消した付与の残数は0(使える残日数の意味に揃える)。statusは文字列列(モデルにcastなし)。
+        $remainingDays = $grant->status === SpecialLeaveGrantStatus::REVOKED
+            ? 0.0
+            : (float) $grant->granted_days - $usedDays;
+
         $grant->update([
             'used_days' => $usedDays,
-            'remaining_days' => (float) $grant->granted_days - $usedDays,
+            'remaining_days' => $remainingDays,
         ]);
     }
 }

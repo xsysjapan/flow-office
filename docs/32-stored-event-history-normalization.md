@@ -198,6 +198,10 @@ php artisan <補正コマンド> --apply --backup-table=stored_events_backup_202
 
 ### 作り直しの後(休暇まわりの確認)
 
+ReadModelの作り直し(全テーブルを空にしてreplay)は、運用コマンド`read-models:rebuild {--dry-run}`(運用コマンド画面の
+「データの作り直し(ReadModel)」。試し実行・本実行。変更セット`20261025-read-model-rebuild-admin-command`)からも実行できる。
+以下はSSHで`leave:rebuild-event-store --list-readmodels`と`event-sourcing:replay`を使って手作業で行う場合の手順。
+
 - 全ReadModelのテーブル(`leave:rebuild-event-store --list-readmodels`で出す一覧)を空にしてから、全Projectorを`event-sourcing:replay`する
   (Projectorは既存の状態を消さない前提のため空にする。手順は`docs/29`参照)。
 - 日次計算を`attendance:recalculate-days`(`--from`・`--to`必須。既定は試し実行、`--apply`で記録。締め・提出済みの日は一覧に印を付ける)で

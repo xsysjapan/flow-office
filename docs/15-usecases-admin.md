@@ -45,6 +45,25 @@
 3. 操作履歴を確認する
 4. 必要に応じてCSV出力する
 
+## UC-M004: ReadModelをイベントから作り直す
+
+運用コマンド`read-models:rebuild {--dry-run}`(運用コマンド画面の「データの作り直し(ReadModel)」。権限は運用コマンドの`admin_command.execute`)が、
+全ReadModelのテーブルを空にして全Projectorを`stored_events`の先頭から再生する(変更セット`20261025-read-model-rebuild-admin-command`。
+専用画面・専用API・専用の権限・監査イベントは持たない)。
+
+1. 運用コマンド画面から、「試し実行」(`--dry-run`のチェックボックス。最後にロールバックする)の有無を選んで依頼する
+   (`POST /admin/commands/read-models:rebuild/runs`。`admin_command_runs`に`queued`の記録ができる)。
+2. 実行役`admin-commands:run-pending`(スケジューラーが毎分起動)が`queued`の記録を古い順に実行する(開始まで最大約1分)。
+   有給付与予定の判定が`queued`/`running`の間は、作り直しの記録を取り出さず`queued`のまま残す(他の運用コマンドの記録は実行する)。
+   コマンドは心拍を書き、60秒待ってから作り直す。SSHから直接`php artisan read-models:rebuild`を実行した場合は、コマンドが自分で記録
+   (依頼者なし)を作る(判定の実行中は拒否して終了コード1)。
+3. 実行中(`running`かつ心拍が10分以内)は、全APIが503(`{"code":"maintenance",...}`)になる。除外は`GET /maintenance-status`・`GET /auth/me`・
+   `GET /access/me`・`GET /onboarding/status`・`GET /admin/commands`・`GET /admin/command-runs`。作り直し以外のスケジュールと実行役も新しく
+   起動しない(飛ばされた日次バッチは追い付かないので、日次バッチの時刻(1:00〜2:20)を避けて実行する)。
+4. 結果は実行履歴の「出力」に出る。利用者・権限のテーブル(`users`・`memberships`・`groups`・`roles`・`role_assignments`・`permission_role`・
+   `role_features`・`group_feature_assignments`)に変更があれば先頭に警告の行、続いて変更のあったテーブルを先に並べた表(テーブル・前・後・変更)。
+   同じ内容(`{dry_run, tables, changed_tables}`)を`admin_command_runs.summary`に保存する。時間の上限(180分)を超えた場合は、コミットせずロールバックして失敗にする。
+
 ## 実装上のポイント
 
 - 権限管理 (UC-M001) は [UC-002 MS365ユーザーを同期する](./06-usecases-auth.md#uc-002-ms365ユーザーを同期する)
