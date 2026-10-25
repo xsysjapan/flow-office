@@ -147,15 +147,15 @@ class AttendanceMonthAggregate extends AggregateRoot
     }
 
     /**
-     * 救済コマンド: 「勤怠確定取消依頼」の承認後、バックオフィス担当者が承認済みの月次勤怠の
-     * 確定を取り消す(approved→not_submitted)。差戻しと同様、対象月の日次勤怠一式のロックを
+     * 救済コマンド: 承認済みの月次勤怠の確定を取り消す(approved→not_submitted)。
+     * 勤怠確定取消依頼の承認、または担当者の直接取消(workflowRequestIdはnull)で呼ばれる。差戻しと同様、対象月の日次勤怠一式のロックを
      * 解除して再編集できるようにする。
      */
     public function revertConfirmation(
         string $userId,
         string $revertedByUserId,
         string $reason,
-        string $workflowRequestId,
+        ?string $workflowRequestId,
         string $periodStartDate,
         string $periodEndDate,
     ): self {

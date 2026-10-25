@@ -392,8 +392,8 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         // 救済コマンド(管理者専用): 締め済みの月次勤怠の締めを取り消す。
         Route::post('/{attendanceMonth}/reopen', [AttendanceController::class, 'reopenMonth'])
             ->middleware('permission:attendance.month_reopen,any');
-        // 救済コマンド(バックオフィス担当者専用): 「勤怠確定取消依頼」の承認後、承認済みの
-        // 月次勤怠の確定を取り消す。
+        // 救済コマンド(確定取消の権限が必要): 承認済みの月次勤怠の確定を、申請なし(メッセージ
+        // 付き)または勤怠確定取消依頼を根拠に取り消す。
         Route::post('/{attendanceMonth}/revert-confirmation', [AttendanceController::class, 'revertMonthConfirmation'])
             ->middleware('permission:attendance.confirmation_revert,any');
     });

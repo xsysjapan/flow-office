@@ -88,14 +88,16 @@ class RequestTypeSeeder extends Seeder
             [
                 'code' => 'attendance_confirmation_revert',
                 'name' => '勤怠確定取消依頼',
-                'description' => '締め前(承認済み)の月次勤怠の確定を取り消し、日次実績を修正できる状態に戻す依頼',
+                'description' => '承認されると、締め前(承認済み)の月次勤怠が未提出に戻り、日次実績を修正できるようになる依頼',
                 'form_schema' => [
                     ['key' => 'target_year_month', 'label' => '対象年月', 'type' => 'text', 'required' => true],
                     ['key' => 'reason', 'label' => '取消理由', 'type' => 'text', 'required' => true],
                 ],
-                'requires_backoffice_task' => true,
-                'backoffice_task_type' => 'attendance_confirmation_revert',
-                'backoffice_department' => '人事部',
+                // 承認の時点でReactor(AttendanceMonthRevertOnConfirmationRevertRequestApprovedReactor)が
+                // 月次勤怠を未提出に戻すため、バックオフィスタスクは作らない。
+                'requires_backoffice_task' => false,
+                'backoffice_task_type' => null,
+                'backoffice_department' => null,
             ],
             [
                 'code' => 'asset_loan',

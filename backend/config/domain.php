@@ -115,6 +115,7 @@ use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
 use App\Domain\Attendance\Commands\ReopenClosedAttendanceMonth;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\RevertApprovedAttendanceMonth;
+use App\Domain\Attendance\Commands\RevertApprovedAttendanceMonthByRequest;
 use App\Domain\Attendance\Commands\RevertCalendarBulkOperation;
 use App\Domain\Attendance\Commands\RevertLastHolidayCalendarSync;
 use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
@@ -180,6 +181,7 @@ use App\Domain\Attendance\Handlers\ReleaseLeaveFromAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\RemoveUserWorkStyleMonthlyAssignmentHandler;
 use App\Domain\Attendance\Handlers\ReopenClosedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\RevertApprovedAttendanceMonthByRequestHandler;
 use App\Domain\Attendance\Handlers\RevertApprovedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\RevertCalendarBulkOperationHandler;
 use App\Domain\Attendance\Handlers\RevertLastHolidayCalendarSyncHandler;
@@ -638,6 +640,7 @@ return [
         CloseAttendanceMonth::class => CloseAttendanceMonthHandler::class,
         ReopenClosedAttendanceMonth::class => ReopenClosedAttendanceMonthHandler::class,
         RevertApprovedAttendanceMonth::class => RevertApprovedAttendanceMonthHandler::class,
+        RevertApprovedAttendanceMonthByRequest::class => RevertApprovedAttendanceMonthByRequestHandler::class,
         RecalculateAttendanceMonthSnapshot::class => RecalculateAttendanceMonthSnapshotHandler::class,
         WarnUnsubmittedAttendance::class => WarnUnsubmittedAttendanceHandler::class,
         WarnMonthCloseDeadline::class => WarnMonthCloseDeadlineHandler::class,

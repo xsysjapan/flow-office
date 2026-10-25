@@ -8,9 +8,13 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 /**
@@ -220,5 +224,153 @@ class AttendanceMonthRescueCommandsTest extends TestCase
             'reason' => 'まだ承認されていない月',
             'workflow_request_id' => $workflowRequest->id,
         ])->assertStatus(422);
+    }
+
+    private const REVERT_NOTIFICATION_TITLE = '月次勤怠が未提出に戻されました';
+
+    private function backofficeStaff(): User
+    {
+        $user = User::factory()->create();
+        $this->assignRole($user, Role::query()->create(['code' => Role::BACKOFFICE_STAFF, 'name' => 'バックオフィス担当']));
+
+        return $user;
+    }
+
+    private function revertedEvents(): Collection
+    {
+        return EloquentStoredEvent::query()->where('event_class', 'attendance.month_confirmation_reverted')->get();
+    }
+
+    public function test_revert_without_a_workflow_request_resets_the_month_and_unlocks_days(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $staff = $this->backofficeStaff();
+        $month = $this->submitAndApprove($employee, $approver);
+        $dayId = AttendanceDay::query()->where('user_id', $employee->id)->firstOrFail()->id;
+
+        $this->actingAs($staff)->postJson("/api/attendance-months/{$month->id}/revert-confirmation", [
+            'reason' => '打刻の記載漏れを直してください',
+        ])->assertOk()->assertJsonPath('status', 'not_submitted')
+            ->assertJsonPath('revert_comment', '打刻の記載漏れを直してください');
+
+        $month->refresh();
+        $this->assertSame('not_submitted', $month->status);
+        $this->assertSame('打刻の記載漏れを直してください', $month->revert_comment);
+        $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}")->assertJsonPath('is_locked', false);
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", ['reason' => '取消後の編集'])->assertSuccessful();
+
+        $events = $this->revertedEvents();
+        $this->assertCount(1, $events);
+        $this->assertNull($events->first()->event_properties['workflowRequestId']);
+    }
+
+    public function test_resubmitting_after_a_revert_clears_revert_comment(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $staff = $this->backofficeStaff();
+        $month = $this->submitAndApprove($employee, $approver);
+
+        $this->actingAs($staff)->postJson("/api/attendance-months/{$month->id}/revert-confirmation", [
+            'reason' => '修正してください',
+        ])->assertOk();
+        $this->assertSame('修正してください', $month->refresh()->revert_comment);
+
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$month->year_month}/submit", [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful();
+
+        $month->refresh();
+        $this->assertSame('submitted', $month->status);
+        $this->assertNull($month->revert_comment);
+    }
+
+    public function test_revert_notifies_the_month_owner_once_with_or_without_a_workflow_request(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $staff = $this->backofficeStaff();
+        $month = $this->submitAndApprove($employee, $approver);
+
+        $this->actingAs($staff)->postJson("/api/attendance-months/{$month->id}/revert-confirmation", [
+            'reason' => '直接取消の理由',
+        ])->assertOk();
+
+        $rows = DB::table('notifications')->where('title', self::REVERT_NOTIFICATION_TITLE)->get();
+        $this->assertCount(1, $rows);
+        $this->assertSame($employee->id, $rows->first()->recipient_user_id);
+        $this->assertSame("{$month->year_month}の月次勤怠が未提出に戻されました。理由: 直接取消の理由", $rows->first()->summary);
+        $this->assertStringEndsWith("/attendance/months/{$month->year_month}", $rows->first()->detail_url);
+
+        // 申請ありの経路でも同じ通知が1件送られる。
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$month->year_month}/submit", [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful();
+        $this->actingAs($approver)->postJson("/api/attendance-months/{$month->id}/approve")->assertOk();
+        $workflowRequest = WorkflowRequest::query()->create([
+            'id' => (string) Str::uuid(),
+            'title' => '勤怠確定取消依頼',
+            'applicant_user_id' => $employee->id,
+            'approver_user_id' => $approver->id,
+            'status' => WorkflowRequestStatus::APPROVED,
+            'form_data' => ['target_year_month' => $month->year_month, 'reason' => '打刻修正のため'],
+            'submitted_at' => now(),
+            'approved_at' => now(),
+        ]);
+        $this->actingAs($staff)->postJson("/api/attendance-months/{$month->id}/revert-confirmation", [
+            'reason' => '申請ありの理由',
+            'workflow_request_id' => $workflowRequest->id,
+        ])->assertOk();
+
+        $this->assertSame(2, DB::table('notifications')->where('title', self::REVERT_NOTIFICATION_TITLE)->count());
+        $this->assertSame($workflowRequest->id, $this->revertedEvents()->last()->event_properties['workflowRequestId']);
+    }
+
+    public function test_staff_can_revert_their_own_month(): void
+    {
+        $staff = $this->backofficeStaff();
+        $approver = User::factory()->create();
+        $month = $this->submitAndApprove($staff, $approver);
+
+        $this->actingAs($staff)->postJson("/api/attendance-months/{$month->id}/revert-confirmation", [
+            'reason' => '自分の月を戻す',
+        ])->assertOk()->assertJsonPath('status', 'not_submitted');
+    }
+
+    public function test_revert_validates_workflow_request_id_and_reason(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $staff = $this->backofficeStaff();
+        $month = $this->submitAndApprove($employee, $approver);
+
+        $this->actingAs($staff)->postJson("/api/attendance-months/{$month->id}/revert-confirmation", [
+            'reason' => '存在しない申請',
+            'workflow_request_id' => (string) Str::uuid(),
+        ])->assertStatus(422);
+
+        $this->actingAs($staff)->postJson("/api/attendance-months/{$month->id}/revert-confirmation", [])
+            ->assertStatus(422);
+
+        $this->assertSame('approved', $month->refresh()->status);
+    }
+
+    public function test_revert_comment_is_reproduced_by_replaying_the_projector(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $staff = $this->backofficeStaff();
+        $month = $this->submitAndApprove($employee, $approver);
+
+        $this->actingAs($staff)->postJson("/api/attendance-months/{$month->id}/revert-confirmation", [
+            'reason' => '再生で同じになる理由',
+        ])->assertOk();
+
+        Artisan::call('projections:rebuild', ['projector' => 'AttendanceMonthProjector']);
+
+        $month = AttendanceMonth::query()->findOrFail($month->id);
+        $this->assertSame('not_submitted', $month->status);
+        $this->assertSame('再生で同じになる理由', $month->revert_comment);
     }
 }

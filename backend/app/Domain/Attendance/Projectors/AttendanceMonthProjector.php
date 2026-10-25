@@ -37,6 +37,8 @@ class AttendanceMonthProjector extends Projector
                 'snapshot_json' => $event->snapshot,
                 // 差戻し後の再提出では、前回の差戻し理由を画面に残さない。
                 'return_comment' => null,
+                // 確定取消後の再提出では、前回の確定取消の理由を画面に残さない。
+                'revert_comment' => null,
             ],
         );
     }
@@ -91,8 +93,9 @@ class AttendanceMonthProjector extends Projector
     }
 
     /**
-     * 救済コマンド: 「勤怠確定取消依頼」の承認後、バックオフィス担当者が承認済みの月次勤怠の
-     * 確定を取り消す。未提出状態に戻し、以降は通常の日次編集→再提出フローに乗せる。
+     * 救済コマンド: 承認済みの月次勤怠の確定を取り消す(取消依頼の承認、または担当者の直接取消)。
+     * 未提出状態に戻し、以降は通常の日次編集→再提出フローに乗せる。取消の理由は
+     * 社員の画面に表示するためrevert_commentに写す。
      */
     public function onAttendanceMonthConfirmationReverted(AttendanceMonthConfirmationReverted $event): void
     {
@@ -101,6 +104,7 @@ class AttendanceMonthProjector extends Projector
             'submitted_at' => null,
             'approved_at' => null,
             'return_comment' => null,
+            'revert_comment' => $event->reason,
         ]);
     }
 

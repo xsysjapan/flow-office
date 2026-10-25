@@ -27,6 +27,27 @@ const expenseType: RequestType = {
   is_active: true,
 }
 
+const revertType: RequestType = {
+  id: 2,
+  code: 'attendance_confirmation_revert',
+  name: '勤怠確定取消依頼',
+  description: null,
+  form_schema: [
+    { key: 'target_year_month', label: '対象年月', type: 'text', required: true },
+    { key: 'reason', label: '取消理由', type: 'text', required: true },
+  ],
+  requires_attachment: false,
+  attachment_max_size_kb: null,
+  attachment_allowed_extensions: null,
+  eligible_role_codes: null,
+  requires_backoffice_task: true,
+  backoffice_task_type: 'attendance_confirmation_revert',
+  backoffice_department: null,
+  export_amount_field: null,
+  allowed_status_transitions: null,
+  is_active: true,
+}
+
 const approver: User = {
   id: 'approver-1',
   name: '承認者花子',
@@ -37,11 +58,11 @@ const approver: User = {
   last_login_at: null,
 }
 
-function renderPage() {
+function renderPage(initialEntries = ['/requests/new']) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/requests/new']}>
+      <MemoryRouter initialEntries={initialEntries}>
         <Routes>
           <Route path="/requests/new" element={<WorkflowRequestNewPage />} />
           <Route path="/requests/:id" element={<p>申請詳細ページ</p>} />
@@ -105,5 +126,39 @@ describe('WorkflowRequestNewPage', () => {
       expect(workflowRequestsApi.submitWorkflowRequest).toHaveBeenCalledWith('workflow-request-42', 'approver-1'),
     )
     expect(await screen.findByText('申請詳細ページ')).toBeInTheDocument()
+  })
+
+  it('fills the request type, title and form fields from the URL query', async () => {
+    vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue([revertType])
+
+    renderPage([
+      '/requests/new?type=attendance_confirmation_revert&target_year_month=2026-09&title=勤怠確定取消依頼（2026-09）',
+    ])
+
+    expect(await screen.findByLabelText('申請種別')).toHaveValue('attendance_confirmation_revert')
+    expect(screen.getByLabelText('タイトル')).toHaveValue('勤怠確定取消依頼（2026-09）')
+    expect(screen.getByLabelText('対象年月')).toHaveValue('2026-09')
+    expect(screen.getByLabelText('取消理由')).toHaveValue('')
+  })
+
+  it('ignores an unknown request type in the URL query', async () => {
+    vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue([revertType])
+
+    renderPage(['/requests/new?type=unknown_code&title=x'])
+
+    expect(await screen.findByLabelText('申請種別')).toHaveValue('')
+    expect(screen.getByLabelText('タイトル')).toHaveValue('x')
+  })
+
+  it('ignores query keys that are not in the form schema of the request type', async () => {
+    vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue([revertType])
+
+    const { container } = renderPage([
+      '/requests/new?type=attendance_confirmation_revert&foo=bar&target_year_month=2026-09',
+    ])
+
+    expect(await screen.findByLabelText('対象年月')).toHaveValue('2026-09')
+    expect(container.querySelector('#field-foo')).toBeNull()
+    expect(screen.queryByLabelText(/foo/)).not.toBeInTheDocument()
   })
 })

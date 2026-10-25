@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
  * 主キーはUUID(HasUuids)。集約ID(aggregate_id)としてstored_eventsに書き込まれるため、
  * DB採番だと確定前にProjectorが行を作成できない(docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['id', 'user_id', 'year_month', 'status', 'approver_user_id', 'submitted_at', 'approved_at', 'returned_at', 'return_comment', 'closed_at', 'snapshot_json'])]
+#[Fillable(['id', 'user_id', 'year_month', 'status', 'approver_user_id', 'submitted_at', 'approved_at', 'returned_at', 'return_comment', 'revert_comment', 'closed_at', 'snapshot_json'])]
 class AttendanceMonth extends Model
 {
     use HasUuids;
