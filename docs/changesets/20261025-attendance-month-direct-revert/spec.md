@@ -1,6 +1,6 @@
 # 承認済みの月次勤怠を未提出に戻す経路の見直し(バックオフィスの直接取消・取消依頼の承認で即時取消)
 
-ステータス: 検討中
+ステータス: レビュー中
 
 ## 変更要望(原文)
 
@@ -16,6 +16,12 @@
 > について、イメージが違いました。承認したら、即時未提出に変更してください。
 
 - 権限: 人事担当ロールの初期権限に確定取消(`attendance.confirmation_revert`)を追加する。
+
+設計レビュー後に確認した回答(AskUserQuestion、2026-10-25):
+- 勤怠確定取消依頼で、承認者に自分自身を指定すること(自己承認): 許可する。
+- 人事部による代理申請: やめて、本人の申請だけにする(人事部は直接取消を使う)。
+- 直接取消を実行できる範囲: 制限なし。確定取消の権限があれば、全社員の月と自分の月を戻せる。
+- バックオフィス担当ロールの閲覧権限: 追加しない。初期設定では人事担当ロールで運用する。
 
 ## 背景・目的
 
@@ -125,8 +131,9 @@
 - 理由: Bは「差戻し理由」と「確定取消のメッセージ」で列の意味が二重になる(設計前提の検証)。
   Cは画面からイベントストアを直接読むことになり、Projectionで読む既存の方式と合わない。
   AならProjectorのリビルドで同じ結果を再現できる。
-- 表示する経路: 申請ありの取消も、申請なしの取消も、同じように表示する(どちらもバックオフィス担当者の
-  入力した理由)。
+- 表示する経路: 申請ありの取消も、申請なしの取消も、同じように表示する。直接取消ではバックオフィス担当者の
+  メッセージ、申請経由では申請者本人が書いた取消理由になる。本人の理由が本人に見えるだけなので問題ない。
+  ラベルは、どちらにも当てはまる「未提出に戻した理由」にする。
 - 既存データ: migrationで列を追加した後、`php artisan projections:rebuild AttendanceMonthProjector`を
   実行する。過去に確定取消されて未提出のままの月にも、イベントの`reason`が入る。ReadModelを
   直接書き換えるデータ補正はしない(原則2、`data-correction`)。
@@ -159,25 +166,38 @@
 - 理由: 既存の差戻し・承認の連携(`AttendanceMonthReturnOnWorkflowRequestReturnedReactor`・
   `AttendanceMonthApprovalOnWorkflowRequestApprovedReactor`)と同じ形で、原則15の同期Reactorに沿う。
   Bは不要なタスクを経由するだけになる。
+- 申請の対象: 申請者本人の月だけ(ユーザー回答)。form_schemaに対象社員の欄は加えない。
+  UC-A018の「(または代理で人事部)」を削る。人事部が戻すときは論点6の直接取消を使う。
 - Commandの形: 勤怠側に`RevertApprovedAttendanceMonthByRequest`を新しく作る。
   - 項目: `userId`(申請者)・`yearMonth`(`form_data.target_year_month`)・`reason`(`form_data.reason`)・
     `workflowRequestId`・`revertedByUserId`(承認者。`WorkflowRequestApproved::$approvedByUserId`)。
-  - Handlerは`user_id`と`year_month`で月を探す。見つかれば、既存の確定取消と同じ集約操作
+  - Handlerは`user_id`と`year_month`で`AttendanceMonth`を検索する。無ければ`DomainRuleException`
+    (`findOrFail`の404にはしない)。`AttendanceMonth::resolveIdFor`は、行が無いと新しいUUIDを採番するので
+    使わない。見つかれば、既存の確定取消と同じ集約操作
     (`revertConfirmation`)を行う。
   - ワークフロー側で`attendance_months`を読まないために、既存のCommand(月のIDを受け取る)とは別にした。
-- 取り消せない場合(対象の月が無い、`approved`でない、`target_year_month`が`YYYY-MM`形式でない):
-  Handlerは`DomainRuleException`を投げる。同期Reactorなので承認ごとロールバックされ、承認者には
-  「対象の月次勤怠(YYYY-MM)は承認済みではないため、確定を取り消せません。」のようなエラーが表示される。
-  承認者は差戻しで社員に直させる。承認されたのに戻らない、という状態を作らない。
-- 承認が複数段のとき: `WorkflowRequestApproved`は最終承認で記録されるイベントなので、最終承認の時点で戻す
-  (実装時に、途中の段では記録されないことをテストで確かめる)。
+- 月の状態ごとの扱い:
+  - `approved`: 確定を取り消す(未提出に戻す)。
+  - `not_submitted`・`returned`: 何もせず正常終了する。すでに編集できる状態なので目的は達している。
+    同じ月を、承認待ちの間にバックオフィスが直接戻した場合などがこれに当たる(原則15の冪等性)。
+  - `submitted`: `DomainRuleException`。文言は「対象の月次勤怠(YYYY-MM)は承認待ちのため、確定を取り消せません。承認者に差戻しを依頼してください。」
+  - `closed`: `DomainRuleException`。文言は「対象の月次勤怠(YYYY-MM)は締め済みです。先に管理者による締め取消が必要です。」
+  - 月が無い、または`target_year_month`が`YYYY-MM`形式でない: `DomainRuleException`。文言は「対象の月次勤怠(YYYY-MM)が見つかりません。」
+- 例外のときは、同期Reactorなので承認ごとロールバックされ、APIは422を返す(`CommandBus::dispatch`の
+  `DB::transaction`、`DomainRuleException`→422)。承認者は差戻しで社員に直させる。
+  承認されたのに戻らない、という状態を作らない。
+- 承認は1回で確定する(`WorkflowRequestAggregate::approve`。複数段の承認は無い)。
+- 自己承認(ユーザー回答で許可): 承認者に本人を指定すると、提出と同時に承認が記録される
+  (`SubmitWorkflowRequestHandler`64-72行目)。そのため即時取消も提出の時点で起き、エラーは提出API
+  (`/submit`)で返る。
 - 承認者が自動承認(`approvedByUserId`がnull)になることは、この申請種別では無い。nullの場合は
   Handlerが`DomainRuleException`を投げる。
 - 権限: 承認できること自体が根拠になるため、`attendance.confirmation_revert`は確かめない
   (差戻しの連携と同じ)。
 - バックオフィスタスク: この申請種別は、承認してもタスクを作らないようにする。
   - `RequestTypeSeeder`の`requires_backoffice_task`を`false`にし、`backoffice_task_type`・
-    `backoffice_department`をnullにする。
+    `backoffice_department`をnullにする。`description`も「承認されると、締め前(承認済み)の月次勤怠が
+    未提出に戻り、日次実績を修正できるようになる依頼」に変える。
   - 既存の環境の`request_types`の行は、migrationで同じ値に更新する(`request_types`はイベントで管理しない
     マスタで、管理画面からも直接更新している)。
   - すでに作られて未処理の確定取消タスクのために、`BackOfficeTaskDetailPage`の
@@ -213,7 +233,11 @@
   (`AccessControlSeeder`)。
 - 既存の環境: シーダーは権限行がまだ無いロールにだけ設定するため、既存の環境には反映されない。
   リリース手順として、管理画面のロール権限設定で追加する旨を記載する。
-- バックオフィス担当ロールの`attendance.read`は追加しない。バックオフィス担当ロールだけの利用者は、
+- 実行できる範囲(ユーザー回答): 制限しない。権限があれば、全社員の月と自分の月を戻せる。ルートの
+  `permission:attendance.confirmation_revert,any`のままとし、Handlerで対象の社員を確かめることはしない。
+  ただし、画面に月を表示するには、従来どおり対象社員の`attendance.read`が要る。
+  原則13の「申請者自身には行わせない」は締め後(ロック後)の巻戻しが対象で、締め前の`approved`には当たらない。
+- バックオフィス担当ロールの`attendance.read`は追加しない(ユーザー回答)。バックオフィス担当ロールだけの利用者は、
   これまでどおり他の社員の月を表示できない(既知の制約)。
 - 未確定・要確認事項: なし。
 
@@ -241,14 +265,17 @@
 8. 論点5:
    - `RevertApprovedAttendanceMonthByRequest`(Command・Handler)を新しく作る。
    - `app/Domain/Workflow/Reactors/AttendanceMonthRevertOnConfirmationRevertRequestApprovedReactor.php`を
-     新しく作る。同期Reactorとして既存のReactorと同じ方法で登録する。
+     新しく作る。Reactorは自動検出・同期で動く(`config/event-sourcing.php`)。新しいCommand→Handlerは
+     `config/domain.php`に登録する。
    - 申請種別のコードは、Reactorの定数`REQUEST_TYPE_CODE = 'attendance_confirmation_revert'`で判定する。
    - `RequestTypeSeeder`を変更し、既存の行を更新するmigrationを追加する(論点5)。
 9. テスト(`AttendanceMonthRescueCommandsTest`に追加。`domain-test`):
    - 申請なしで、バックオフィス担当者が承認済みの月を戻せる。statusが`not_submitted`になり、
      `revert_comment`がメッセージになり、日次のロックが外れる。
    - 戻した後、日次を編集して再提出できる。再提出で`revert_comment`がnullになる。
-   - 申請なしで戻すと、通知ジョブが月の持ち主宛てに1件積まれる(申請ありでも同じ)。
+   - 申請なしで戻すと、通知が月の持ち主宛てに1件積まれる(申請ありでも同じ)。テストは`QUEUE_CONNECTION=sync`
+     (`phpunit.xml`)で動くので、`Queue::fake()`でジョブを確かめるか、`notifications`の行で確かめる。
+   - 自分の月も戻せる(実行範囲を制限しない、ユーザー回答)。
    - `approved`以外(`submitted`・`closed`・`not_submitted`)は422などで拒否される。既存のテストを流用してよい。
    - 従業員だけのユーザーは403になる。
    - 存在しない`workflow_request_id`を渡すと422になる。
@@ -264,8 +291,14 @@
      - バックオフィスタスクは作られない。
      - 申請は`approved`になる。
      - 確定取消イベントの`workflowRequestId`が申請のIDになる。
-   - 対象の月が`submitted`・`closed`・存在しない・`target_year_month`が形式外の場合: 承認APIがエラー
-     (422)を返し、申請は`submitted`のまま、月の状態も変わらない。
+   - 対象の月が`submitted`・`closed`・存在しない・`target_year_month`が形式外の場合:
+     - 承認APIが422と論点5の文言を返す。
+     - 申請は`submitted`のまま、月の状態も変わらない。
+     - `stored_events`・通知・`backoffice_tasks`が増えていない。
+   - 対象の月がすでに`not_submitted`(承認待ちの間に直接取消された)の場合: 承認は成功し、月は変わらず、
+     確定取消イベントは追加されない。
+   - 自己承認(承認者=申請者)で提出すると、提出APIの時点で月が`not_submitted`になる。
+     対象の月が`closed`なら、提出APIが422を返して何も変わらない。
    - 他の申請種別の承認では、勤怠に何も起きない。
 
 ### frontend
@@ -289,8 +322,9 @@
 - 戻した後、社員の月次勤怠画面に「未提出に戻した理由」が表示され、社員に通知が届く(通知ジョブが積まれる)。
   再提出すると、理由の表示は消える。
 - 承認済み以外の月では、ボタンが出ず、APIも拒否する。
-- 勤怠確定取消依頼が最終承認されると、その時点で月が未提出に戻り、バックオフィスタスクは作られない。
-  取り消せない月が対象のときは、承認がエラーになり、何も変わらない。
+- 勤怠確定取消依頼が承認されると(自己承認では提出の時点で)、その時点で月が未提出に戻り、バックオフィスタスクは作られない。
+  対象の月が承認待ち・締め済み・見つからないときは、承認がエラーになり何も変わらない。すでに未提出・差戻し中なら、承認は成功し月は変わらない。
+- 人事担当・バックオフィス担当など確定取消の権限を持つ人は、自分の月を含め全社員の月を戻せる(画面に月を表示するには、その社員の勤怠閲覧権限が要る)。
 - 人事担当ロールの初期権限に`attendance.confirmation_revert`が含まれる。
 - Projectorのリビルドの後も、`revert_comment`が同じになる。
 - backendの確定取消のテスト(上記8)と、frontendの関連テスト・型チェック・lintがPASSする。
@@ -304,6 +338,10 @@
 - バックオフィス担当ロールへの`attendance.read`の付与。
 - 既存の、承認済みで未処理の確定取消タスクの自動処理(タスク画面から従来どおり処理する)。
 - 申請作成時(提出時)の`target_year_month`の検証(承認時に検証する)。
+- 管理画面での申請種別の変更への備え。`code`を変えると即時取消は動かなくなり、`requires_backoffice_task`を
+  `true`に戻すとタスクが作られる(そのタスクの取消は、すでに戻っているため422になる)。運用で変更しない。
+- 承認済みの確定取消依頼の取消: できない(`cancellable()`はdraft・submitted・returnedだけ)。
+  差戻し: 勤怠には何も起きない(`subject_type`がnull)。MCPには承認・取消のツールが無い。いずれも対応不要。
 - 承認者への通知。
 
 ## ドキュメントへの影響
@@ -311,7 +349,9 @@
 - `docs/07-usecases-attendance.md` UC-A018: 次の点を追記・修正する。
   - 手順を「承認されると即時に未提出に戻る」に書き換える。取り消せないときは承認がエラーになることも書く。
   - 申請なしでバックオフィス担当者が直接戻す経路(メッセージ必須・社員への表示と通知)。
-  - 実行できるロールの記述(バックオフィス担当者・人事担当者)。
+  - 実行できるロールの記述(確定取消の権限を持つ人。初期設定ではバックオフィス担当・人事担当・システム管理者)。
+  - 手順1の「(または代理で人事部)」を削り、本人の申請だけにする。人事部は直接取消を使う。
+  - 前回の変更セットで手順1に追記した文(月次勤怠画面からの導線)は残す。
 - `docs/11-usecases-backoffice.md`95-106行目: 確定取消依頼でタスクが作られなくなったことを反映し、
   締め処理タスクから未提出に戻せることを追記する。
 - `docs/10-usecases-workflow.md`: 勤怠確定取消依頼の承認で、勤怠が即時に未提出に戻ることを追記する
@@ -341,6 +381,10 @@
     `app/Domain/Workflow/Reactors/AttendanceMonthRevertOnConfirmationRevertRequestApprovedReactor.php`、
     request_typesを更新するmigration、`tests/Feature/Attendance/AttendanceConfirmationRevertRequestFlowTest.php`
   - `database/seeders/RequestTypeSeeder.php`
+  - コメント・OpenAPIの記述の更新: `RevertApprovedAttendanceMonthHandler`・Command・Eventの説明、
+    `AttendanceMonthProjector`の確定取消の箇所、`AttendanceController`のOpenAPI summary(「バックオフィス担当者専用」の表現)、
+    `routes/api.php`397行目付近のコメント
+  - `config/domain.php`
 - frontend:
   - `api/attendance.ts`、`api/types.ts`、`hooks/useAttendance.ts`
   - `components/RevertMonthConfirmationDialog/`(新規)
@@ -365,7 +409,8 @@ npm test -- src/components/RevertMonthConfirmationDialog src/pages/backOffice sr
 
 リリース手順(「実装結果」に記載する):
 1. migrationを実行する。
-2. `php artisan projections:rebuild AttendanceMonthProjector`を実行する。
+2. `php artisan projections:rebuild AttendanceMonthProjector`を実行する。`stored_events`の全件を再生するため、
+   事前に件数を見て、所要時間を見積もっておく。
 3. 既存の未処理の確定取消タスクは、タスク画面から従来どおり処理する。
 4. 既存の環境では、人事担当ロールに`attendance.confirmation_revert`を管理画面から追加する。
 
@@ -374,6 +419,26 @@ npm test -- src/components/RevertMonthConfirmationDialog src/pages/backOffice sr
 - 初版。
 - 2026-10-25 ユーザーの追加指示(「承認したら、即時未提出に変更してください」)で、論点5を追加した。
   既存の流れを「残す」としていた回答を変更し、申請の承認で即時に戻す形にした。
+- 2026-10-25 独立設計レビュー(general-purposeエージェント)。即時取消で例外を投げたときに承認ごと
+  ロールバックされることは、コードで確認できた。指摘への対応:
+  - ユーザーに確認して決めたもの(must-fix):
+    - 代理申請 → 本人の申請だけにする。
+    - 自己承認 → 許可する。提出APIの時点で戻るケースをテストに追加。
+    - 直接取消の範囲 → 制限しない。
+  - 仕様に反映したもの(should-fix):
+    - 冪等性(`not_submitted`・`returned`なら何もしない)。
+    - 状態ごとのエラー文言(締め済みの案内を含む)。
+    - 申請種別の`description`の更新。
+    - 理由の表示が経路によって誰の入力かの明記。
+    - テストでの通知の確かめ方とロールバックの確認。
+    - 複数段承認の記述の削除。
+    - `config/domain.php`・コメントの更新。
+    - 月の検索方法。
+    - リビルドの所要時間。
+  - 対象外として記録したもの:
+    - 管理画面での申請種別の変更。
+    - 承認済み依頼の取消・差戻し・MCP(影響なし)。
+  - バックオフィス担当ロールの閲覧権限 → ユーザー回答で人事担当で運用。
 
 ## 実装結果
 
