@@ -1,6 +1,6 @@
 # 承認済みの月次勤怠を未提出に戻す経路の見直し(バックオフィスの直接取消・取消依頼の承認で即時取消)
 
-ステータス: レビュー中
+ステータス: 実装中
 
 ## 変更要望(原文)
 
@@ -134,9 +134,9 @@
 - 表示する経路: 申請ありの取消も、申請なしの取消も、同じように表示する。直接取消ではバックオフィス担当者の
   メッセージ、申請経由では申請者本人が書いた取消理由になる。本人の理由が本人に見えるだけなので問題ない。
   ラベルは、どちらにも当てはまる「未提出に戻した理由」にする。
-- 既存データ: migrationで列を追加した後、`php artisan projections:rebuild AttendanceMonthProjector`を
-  実行する。過去に確定取消されて未提出のままの月にも、イベントの`reason`が入る。ReadModelを
-  直接書き換えるデータ補正はしない(原則2、`data-correction`)。
+- 既存データ: 本番ではまだ確定取消をしていないため、データ移行は不要(リリース手順を参照)。
+  既存イベントの形は変えないので、`stored_events`の作り直しも不要。ReadModelを直接書き換える
+  データ補正はしない(原則2、`data-correction`)。
 - 未確定・要確認事項: なし。
 
 ### 論点4: 通知
@@ -408,9 +408,11 @@ npm test -- src/components/RevertMonthConfirmationDialog src/pages/backOffice sr
 ```
 
 リリース手順(「実装結果」に記載する):
-1. migrationを実行する。
-2. `php artisan projections:rebuild AttendanceMonthProjector`を実行する。`stored_events`の全件を再生するため、
-   事前に件数を見て、所要時間を見積もっておく。
+1. migrationを実行する(`revert_comment`列の追加と、申請種別`attendance_confirmation_revert`の設定変更)。
+2. データ移行は不要。本番ではまだ一度も確定取消をしていない(ユーザー確認)ため、`revert_comment`に
+   入れる過去の理由が無い。念のため
+   `SELECT COUNT(*) FROM stored_events WHERE event_class LIKE '%ConfirmationReverted%';`が0件であることを
+   確かめる。0件でなければ、`php artisan projections:rebuild AttendanceMonthProjector`を実行する。
 3. 既存の未処理の確定取消タスクは、タスク画面から従来どおり処理する。
 4. 既存の環境では、人事担当ロールに`attendance.confirmation_revert`を管理画面から追加する。
 
@@ -439,6 +441,8 @@ npm test -- src/components/RevertMonthConfirmationDialog src/pages/backOffice sr
     - 管理画面での申請種別の変更。
     - 承認済み依頼の取消・差戻し・MCP(影響なし)。
   - バックオフィス担当ロールの閲覧権限 → ユーザー回答で人事担当で運用。
+- 2026-10-25 ユーザーから、本番では一度も未提出に戻していないと回答があった。データ移行(Projectorのリビルド)を
+  不要とし、リリース手順を0件の確認に変えた。ユーザーの承認を得て実装中にした。
 
 ## 実装結果
 
