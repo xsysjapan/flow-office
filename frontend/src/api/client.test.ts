@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiFetch, ApiError, clearToken, getToken, setToken } from './client'
+import { apiFetch, ApiError, clearToken, getToken, MAINTENANCE_EVENT, setToken } from './client'
 
 describe('token storage', () => {
   afterEach(() => {
@@ -81,6 +81,48 @@ describe('apiFetch', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(ApiError)
     }
+  })
+
+  it('marks a 503 with code=maintenance as a maintenance error and notifies the window', async () => {
+    const listener = vi.fn()
+    window.addEventListener(MAINTENANCE_EVENT, listener)
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ code: 'maintenance', message: 'メンテナンス中です。' }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    try {
+      await apiFetch('/attendance/today')
+      expect.fail('expected apiFetch to throw')
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiError)
+      expect((error as ApiError).isMaintenance).toBe(true)
+      expect((error as ApiError).message).toBe('メンテナンス中です。')
+    } finally {
+      window.removeEventListener(MAINTENANCE_EVENT, listener)
+    }
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect((listener.mock.calls[0][0] as CustomEvent<string>).detail).toBe('メンテナンス中です。')
+  })
+
+  it('does not treat other 503 or other codes as maintenance', async () => {
+    const listener = vi.fn()
+    window.addEventListener(MAINTENANCE_EVENT, listener)
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('down', { status: 503 }))
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ code: 'other', message: 'x' }), { status: 503, headers: { 'content-type': 'application/json' } }),
+    )
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ code: 'maintenance', message: 'x' }), { status: 500, headers: { 'content-type': 'application/json' } }),
+    )
+
+    for (let i = 0; i < 3; i++) {
+      await expect(apiFetch('/x')).rejects.toMatchObject({ isMaintenance: false })
+    }
+    window.removeEventListener(MAINTENANCE_EVENT, listener)
+    expect(listener).not.toHaveBeenCalled()
   })
 
   it('returns undefined for a 204 No Content response', async () => {

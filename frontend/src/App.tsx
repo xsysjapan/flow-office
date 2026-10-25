@@ -76,11 +76,14 @@ import { GroupTypeManagementPage } from "./pages/admin/GroupTypeManagementPage";
 import { AssetNumberRuleListPage } from "./pages/admin/AssetNumberRuleListPage";
 import { GroupDetailPage } from "./pages/admin/GroupDetailPage";
 import { AdminCommandsPage } from "./pages/admin/AdminCommandsPage";
+import { ReadModelRebuildPage } from "./pages/admin/ReadModelRebuildPage";
+import { MaintenanceGate } from "./components/MaintenanceGate/MaintenanceGate";
 import { RoleDefinitionPage } from "./pages/admin/RoleDefinitionPage";
 
 function App() {
   return (
     <ErrorBoundary>
+      <MaintenanceGate>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
@@ -260,6 +263,10 @@ function App() {
             <Route path="system-settings" element={<SystemSettingsPage />} />
             <Route path="commands" element={<AdminCommandsPage />} />
             <Route
+              path="read-model-rebuild"
+              element={<ReadModelRebuildPage />}
+            />
+            <Route
               path="external-integration-connections"
               element={<ExternalIntegrationConnectionsPage />}
             />
@@ -267,6 +274,7 @@ function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </MaintenanceGate>
     </ErrorBoundary>
   );
 }

@@ -234,6 +234,13 @@ export const adminNavGroups: AdminNavGroup[] = [
         permission: "admin_command.view",
       },
       {
+        to: "/admin/read-model-rebuild",
+        label: "データの作り直し",
+        description: "イベントから画面表示用のデータを作り直す(実行中はメンテナンス中になる)",
+        feature: "administration.settings",
+        permission: "read_model.rebuild",
+      },
+      {
         to: "/admin/external-integration-connections",
         label: "外部連携設定",
         description: "freee・マネーフォワード等の外部会計サービスとの接続情報を管理する",

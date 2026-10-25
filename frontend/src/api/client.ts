@@ -4,14 +4,25 @@ const TOKEN_STORAGE_KEY = 'flow-office.token'
 export class ApiError extends Error {
   readonly status: number
   readonly errors?: Record<string, string[]>
+  /** APIが返す機械可読なコード(例: メンテナンス中の `maintenance`)。 */
+  readonly code?: string
 
-  constructor(status: number, message: string, errors?: Record<string, string[]>) {
+  constructor(status: number, message: string, errors?: Record<string, string[]>, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.errors = errors
+    this.code = code
+  }
+
+  /** データの作り直し中のメンテナンス(503 かつ code === 'maintenance')。 */
+  get isMaintenance(): boolean {
+    return this.status === 503 && this.code === 'maintenance'
   }
 }
+
+/** メンテナンスのエラーを受けたときに window へ送るイベント名(detail は表示するメッセージ)。 */
+export const MAINTENANCE_EVENT = 'flow-office:maintenance'
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -81,7 +92,15 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       ? (payload as { errors: Record<string, string[]> }).errors
       : undefined
 
-    throw new ApiError(response.status, message, errors)
+    const code = isJson && typeof payload === 'object' && payload && 'code' in payload && typeof (payload as { code: unknown }).code === 'string'
+      ? (payload as { code: string }).code
+      : undefined
+
+    const error = new ApiError(response.status, message, errors, code)
+    if (error.isMaintenance) {
+      window.dispatchEvent(new CustomEvent<string>(MAINTENANCE_EVENT, { detail: message }))
+    }
+    throw error
   }
 
   return payload as T
