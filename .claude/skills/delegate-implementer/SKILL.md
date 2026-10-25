@@ -91,6 +91,10 @@ implementerは指示に書かれていないことを推測で埋めるか、気
 - [ ] PRを出す前に、backendをCIと同じ条件で全件流したか。手順は`cp .env.example .env && php artisan key:generate && php artisan test`で、後で`.env`と`database/database.sqlite`を消す。
       `./vendor/bin/phpunit`はphpunit.xmlの値(in-memoryのsqlite・同期キュー・APP_KEYなし)で動き、CI(ファイルのsqlite・databaseのキュー・APP_KEYあり)と違う。
       そのため、起動の時の行の作成やキューの前提のずれを見逃した(PR#121)。
+- [ ] backendのテストを委譲するときは、指示の中で「全件はCIと同じ条件(`.env`をコピー+`key:generate`+ファイルのsqlite+`php artisan test`)で流す」
+      と書いたか(implementerが`./vendor/bin/phpunit`のメモリDBだけで確かめ、`DatabaseMigrations`の後始末(rollback)を省いた上書きで
+      ファイルのDBに行が残り、後続の`RefreshDatabase`のテスト約140件を壊したのを見逃した)。`DatabaseMigrations`を使うテストには、
+      後続のテストへ状態を残さないこと(`RefreshDatabaseState::$migrated`を戻す等)を書く。
 - [ ] migrationを足したときは、down()を、データ移行(後続のmigration)の後の状態で確かめるテストがあるか(CIの`migrate-mysql`は、`migrate`の後に`migrate:rollback`を行う)。
 - [ ] frontendの型チェックは`npx tsc -p tsconfig.app.json --noEmit`を指定したか(ルートの`tsconfig.json`は
       参照だけなので、`npx tsc --noEmit`では何も検査されない)。
