@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TriangleAlert } from 'lucide-react'
+import { CircleAlert, TriangleAlert } from 'lucide-react'
 import type { ReadModelRebuildRun, ReadModelRebuildStatus } from '../../api/readModelRebuilds'
 import { Badge, type BadgeTone } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -33,8 +33,13 @@ const STATUS_TONE: Record<ReadModelRebuildStatus, BadgeTone> = {
   failed: 'danger',
 }
 
+/** 表示は年なしの短い形式。年を含む完全な日時は title 属性に入れる。 */
 function formatDateTime(value: string | null): string {
-  return value ? new Date(value).toLocaleString('ja-JP') : '—'
+  return value ? new Date(value).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '—'
+}
+
+function fullDateTime(value: string | null): string | undefined {
+  return value ? new Date(value).toLocaleString('ja-JP') : undefined
 }
 
 function RunDetail({ id }: { id: string }) {
@@ -90,19 +95,30 @@ function RunRow({ run, isOpen, onToggle }: { run: ReadModelRebuildRun; isOpen: b
         <TableCell>{run.dry_run ? '試し実行' : '本実行'}</TableCell>
         <TableCell><Badge tone={STATUS_TONE[run.status]}>{STATUS_LABEL[run.status]}</Badge></TableCell>
         <TableCell>{run.requested_by?.name ?? '—'}</TableCell>
-        <TableCell>{formatDateTime(run.requested_at)}</TableCell>
-        <TableCell>{formatDateTime(run.started_at)}</TableCell>
-        <TableCell>{formatDateTime(run.finished_at)}</TableCell>
-        <TableCell className="max-w-xs whitespace-normal break-words">{run.error_message ?? '—'}</TableCell>
+        <TableCell title={fullDateTime(run.requested_at)}>{formatDateTime(run.requested_at)}</TableCell>
+        <TableCell title={fullDateTime(run.started_at)}>{formatDateTime(run.started_at)}</TableCell>
+        <TableCell title={fullDateTime(run.finished_at)}>{formatDateTime(run.finished_at)}</TableCell>
         <TableCell>
           <Button size="sm" variant="secondary" aria-expanded={isOpen} onClick={onToggle}>
             {isOpen ? '閉じる' : '結果を見る'}
           </Button>
         </TableCell>
       </TableRow>
+      {run.error_message && (
+        <TableRow>
+          <TableCell colSpan={7} className="whitespace-normal break-words">
+            <Alert variant="destructive">
+              <CircleAlert />
+              <AlertDescription>
+                <p>{run.error_message}</p>
+              </AlertDescription>
+            </Alert>
+          </TableCell>
+        </TableRow>
+      )}
       {isOpen && (
         <TableRow>
-          <TableCell colSpan={8}><RunDetail id={run.id} /></TableCell>
+          <TableCell colSpan={7}><RunDetail id={run.id} /></TableCell>
         </TableRow>
       )}
     </>
@@ -185,7 +201,6 @@ export function ReadModelRebuildPage() {
                 <TableHead>依頼日時</TableHead>
                 <TableHead>開始</TableHead>
                 <TableHead>終了</TableHead>
-                <TableHead>エラー</TableHead>
                 <TableHead><span className="sr-only">操作</span></TableHead>
               </TableRow>
             </TableHeader>

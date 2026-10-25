@@ -33,6 +33,27 @@ it('describes the operation and lists the history', async () => {
   expect(screen.getByRole('button', { name: '試し実行' })).toBeEnabled()
 })
 
+it('shows the error message in a full-width row below a failed run', async () => {
+  vi.spyOn(api, 'fetchReadModelRebuilds').mockResolvedValue({ data: [run({ id: 'run-2', dry_run: false, status: 'failed', error_message: '時間の上限を超えたため中止しました。' })] })
+  renderPage()
+
+  const message = await screen.findByText('時間の上限を超えたため中止しました。')
+  const cell = message.closest('td')
+  expect(cell).toHaveAttribute('colspan', '7')
+  expect(cell?.closest('tr')?.previousElementSibling?.textContent).toContain('本実行')
+  expect(screen.queryByRole('columnheader', { name: 'エラー' })).not.toBeInTheDocument()
+})
+
+it('shows dates without the year and keeps the full date in the title', async () => {
+  vi.spyOn(api, 'fetchReadModelRebuilds').mockResolvedValue({ data: [run()] })
+  renderPage()
+
+  const [requested] = await screen.findAllByTitle(/2026/)
+  expect(requested.tagName).toBe('TD')
+  expect(requested.textContent).not.toContain('2026')
+  expect(requested.textContent).toMatch(/\d{1,2}\/\d{1,2}/)
+})
+
 it('requests a dry run after confirmation', async () => {
   vi.spyOn(api, 'fetchReadModelRebuilds').mockResolvedValue({ data: [] })
   const post = vi.spyOn(api, 'requestReadModelRebuild').mockResolvedValue({ data: run({ status: 'queued' }) })
