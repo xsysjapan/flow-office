@@ -1,6 +1,6 @@
 # 有給・特別休暇の付与日数を管理画面から変更する(代休は同じ位置に変更できない理由を出す)
 
-ステータス: 検討中
+ステータス: レビュー中
 
 ## 変更要望(原文)
 
@@ -59,39 +59,57 @@
       入力「新しい付与日数」(数値、0.5刻み、必須、初期値=現在の付与日数、最小値=使用済みの日数と0.5の大きい方)、「変更理由(任意)」、確定ボタン「変更する」。
     - `disabled`+`disabledReason`で、押せない理由をボタンの`title`に出す(取消ボタンと同じ)。
     - 確定でAPIを呼び、成功で閉じる。エラーはダイアログ内に出す(422の業務ルールの文言をそのまま)。
+    - 入力が空・0.5未満・最小値未満の間は確定ボタンを押せない。共通の`ConfirmActionDialog`に、`confirmDisabled?: boolean`と
+      `confirmVariant?`(既定は今の`danger`)を追加して使う。日数の変更の確定ボタンは`primary`。既存の利用箇所の見た目は変えない。
+    - 最小値は、使用済みの日数を0.5単位に切り上げた値と0.5の大きい方(時間単位の消化で使用済みが端数になる場合に備える)。
   - 押せる条件・理由:
     - 有給:取消ボタンと同じ「最新の非取消付与」だけ押せる。押せない理由「最新の付与のみ変更できます。」。取り消した付与には出さない。
+      「最新」の判定は画面で付与日を比べるのではなく、APIが返す`is_latest`で行う(論点2-2)。取消ボタンも同じ判定に変える
+      (付与日が同じ付与が2件あると、今は両方押せて片方が422になる)。
     - 特別休暇:取り消していない付与なら押せる。取り消した付与には出さない。
     - 代休:取り消していない付与の行に出すが常に押せない。理由「代休の日数は休日出勤の勤怠から決まるため、ここでは変更できません。勤怠を修正してください。」。
+  - 減らした後に申請中(未確定)の消化が確定すると、足りない分は未充当になる(集約の既存の挙動)。ダイアログの説明に
+    「申請中の休暇があると、確定時に残日数が足りなくなることがあります。」を1文出す。
 - 未確定・要確認事項: なし
 
 ### 論点2: 有給のAPI
-- 決定:`PUT /paid-leave/grants/{grant}/granted-days`(`leave.manage`)。body `{ "granted_days": number, "reason": string|null }`。
-  検証:`granted_days`は必須・数値・0.5以上・0.5刻み、`reason`は任意・255文字以内。`ChangePaidLeaveGrantAmount`を発行。
+- 決定:`PUT /paid-leave/grants/{grant}/granted-days`(`leave.manage`)。body `{ "granted_days": number, "reason": string|null }`。`ChangePaidLeaveGrantAmount`を発行。
   集約が拒否した場合(最新でない・充当済みを下回る)は422(既存の`DomainRuleException`の扱い)。応答は付与1件(`PaidLeaveGrantResource`)。
-  日数が現在と同じ場合は何もせず200で返す(イベントを記録しない)。
+  - 検証:`granted_days`は必須・数値・0.5以上(既存の付与のAPIと同じ。0.5刻みの検証はしない)、`reason`は任意・255文字以内。
+  - Commandに渡す値:`ChangePaidLeaveGrantAmount(userId: $grant->user_id, grantId: $grant->id, newGrantedDays, changedByUserId: $request->user()->id, reason)`。
+    Handlerは値を返さないため、応答は`$grant->refresh()`した付与(`PaidLeaveGrantResource`)。
+  - 日数が現在と同じ場合:集約の`changeGrantAmount`に「同じ日数ならイベントを記録しない」を追加する(ReadModelでは判定しない)。APIは200。
+
+### 論点2-2: 有給の「最新の付与」をAPIで返す
+- 決定:管理者向けの`GET /paid-leave/grants/user/{userId}`の各付与に`is_latest`(boolean)を追加する。値は集約の判定(付与日が最も遅く、同じなら記録の順が最後の、
+  取り消していない付与)と同じにする。集約に`latestActiveGrantId(): ?string`(既存の`latestActiveGrant()`のID)を公開し、Controllerは対象社員の口座を読み込んで
+  一致する付与に`true`を付ける。本人向けの`/mine`には付けない(使わない)。
+- 理由:画面で付与日だけを比べると、付与日が同じ付与で集約と食い違う。業務ルールの判定はAPI側に置く。
+- 未確定・要確認事項: なし
 - 未確定・要確認事項: なし
 
 ### 論点3: 特別休暇の集約・イベント・API
 - 決定:
   - 集約`SpecialLeaveAccountAggregate::changeGrantAmount(string $grantId, float $newGrantedDays, string $changedByUserId, ?string $reason)`:
     付与が存在しない・取り消し済みなら拒否。`$newGrantedDays < usedDaysOf($grantId)`なら拒否(「使用済みの日数より少なくはできません。」)。
-    同じ日数なら何もしない。イベント`SpecialLeaveAccountGrantAmountChanged`(別名`special_leave_account.grant_amount_changed`。
-    grantId・previousGrantedDays・newGrantedDays・changedByUserId・reason)を記録。
+    同じ日数ならイベントを記録しない。イベント`SpecialLeaveAccountGrantAmountChanged`(別名`special_leave_account.grant_amount_changed`。
+    項目は有給の`PaidLeaveGrantAmountChanged`と揃える:grantId・newGrantedDays・changedByUserId・reason。変更前の日数は持たない)を記録。
   - 増やしても、確定済みの消化の未充当(`unallocatedDays`)は充当し直さない(今の特別休暇の集約に充当し直す仕組みが無いため。対象外)。
   - Projector:`SpecialLeaveAccountProjector`に`onSpecialLeaveAccountGrantAmountChanged`(`granted_days`を更新し、残数を充当の表から再計算)。
-  - Command`ChangeSpecialLeaveGrantAmount`・Handler(`config/domain.php`に登録)。
-  - API:`PUT /special-leave/grants/{grant}/granted-days`(`leave.manage`)。body・検証・応答・同じ日数の扱いは有給と同じ。
+  - Command`ChangeSpecialLeaveGrantAmount(userId, grantId, newGrantedDays, changedByUserId, reason)`・Handler(`config/domain.php`に登録。
+    口座のストリームは`userId`から開く)。
+  - API:`PUT /special-leave/grants/{grant}/granted-days`(`leave.manage`)。body・検証・同じ日数の扱いは有給と同じ。応答は`$grant->refresh()->load('specialLeaveType')`。
 - 未確定・要確認事項: なし
 
 ### 論点4: 代休
 - 決定:日数の変更APIは作らない。画面に押せない「日数を変更」ボタンを出す(論点1)。
   あわせて既存の不整合を直す:取消ボタンは確定済み(`confirmed`)の行だけ押せるようにし、下書きの行は押せず理由「月次の提出で確定する前の代休は取り消せません。」を出す
-  (APIの「確定済みのみ取消可」と揃える)。
+  (APIの「確定済みのみ取消可」と揃える)。下書きと消化済みの両方に当たる場合は、下書きの理由を出す。
 - 未確定・要確認事項: なし
 
 ### 論点5: 履歴の表示名
 - 決定:`leaveEventSuffixMeta`に`grant_amount_changed: { label: '付与日数の変更', tone: 'info' }`を追加する(有給・特別休暇の両方の履歴に出る)。
+  詳細文(`leaveEventDetail`)に`grant_amount_changed`の分岐を足し、`付与日数を{new_granted_days}日に変更`(理由があれば「(理由)」を併記)と出す。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
@@ -101,12 +119,15 @@
   - 特別休暇:集約のメソッド・イベント(event_class_mapに登録)・Projector・Command/Handler・API(論点3)。
   - テスト(domain-test):
     - 有給:最新の付与の増額・減額が反映(`granted_days`・`remaining_days`・`paid_leave_balances`)、最新でない付与は422、充当済みを下回る減額は422、
-      増額で未充当の消化が充当される、同じ日数は何もしない、権限の無い利用者は403、0.5刻みでない値は422。
+      増額で未充当の消化が充当される、同じ日数はイベントを記録しない(集約の単体テスト)、権限の無い利用者は403、0.5未満は422、
+      `is_latest`が付与日が同じ付与でも1件だけ`true`。
     - 特別休暇:集約の単体テスト(増額・減額・使用済みを下回る拒否・取消済みの拒否・同じ日数)、APIのテスト(反映・422・403)、
       作り直し(ReadModelを空にしてreplay)後も同じ値。
 - frontend
   - `components/ChangeGrantDaysButton/`(.tsx・.stories.tsx・.test.tsx。`add-frontend-component`)。
-  - `api/paidLeave.ts`・`hooks/usePaidLeave.ts`、`api/specialLeave.ts`・`hooks/useSpecialLeave.ts`に関数とmutation(成功で付与一覧・消化明細・残高を無効化。取消のmutationと同じ範囲)。
+  - `api/paidLeave.ts`・`hooks/usePaidLeave.ts`、`api/specialLeave.ts`・`hooks/useSpecialLeave.ts`に関数とmutation。成功で無効化するqueryKey:
+    対象社員の付与一覧、(有給は)対象社員の消化明細、対象社員の履歴。型`PaidLeaveGrant`に`is_latest?: boolean`。
+  - `components/ConfirmActionDialog/`:`confirmDisabled`・`confirmVariant`(論点1)。既存のテストを壊さない。
   - 有給・特別休暇・代休の管理画面の付与一覧に`ChangeGrantDaysButton`を置く(論点1・4)。代休の取消ボタンの条件を直す(論点4)。
   - `utils/statusLabels.ts`に履歴の表示名(論点5)。
   - テスト:各画面のテストに、ボタンの表示・押せる条件・API呼び出しの値を追加。代休の下書きの行の取消ボタンが押せないこと。
@@ -132,6 +153,9 @@
 - 代休の日数の変更。
 - 有給の古い付与の変更(最新のみ。ユーザーの回答)。
 - e2e(画面のテストで確かめる)。
+- 申請中の消化を下限に含めること(集約の不変条件どおり確定済みの充当だけを下限にする。ダイアログに注意書きを出すだけ)。
+- 年5日の取得義務の警告済みの記録(10日未満に減らしても消さない)。
+- 代休の時間単位の付与が一覧で「残0日」と表示される既存の問題。
 
 ## ドキュメントへの影響
 
@@ -153,7 +177,14 @@
 
 ## レビュー履歴
 
-初版
+- 初版
+- 2026-10-25: 独立設計レビューの指摘を反映。
+  (1)`ConfirmActionDialog`に確定を押せなくする手段が無い → `confirmDisabled`・`confirmVariant`を追加。
+  (2)有給の「最新」の判定が画面(付与日だけ)と集約(同日は記録の順)で食い違う → APIが`is_latest`を返す(論点2-2)。取消ボタンも同じ判定に。
+  (3)履歴の詳細文 → `leaveEventDetail`に分岐。特別休暇のイベントの項目を有給と揃える(変更前の日数は持たない)。
+  (4)同じ日数の判定 → 有給・特別休暇とも集約で行う。(5)Commandに渡す値と応答の作り方を明記。(6)無効化するqueryKeyを列挙。
+  (7)最小値は使用済みを0.5単位に切り上げ、APIは既存の付与と同じ検証(0.5刻みは検証しない)。(8)申請中の消化は下限に含めず注意書き。
+  (9)年5日の警告済みの記録は消さない。(10)代休の取消の理由の優先(下書き)、時間単位の「残0日」は対象外。
 
 ## 実装結果
 
