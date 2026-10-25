@@ -14,9 +14,9 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261025-fix-e2e-paid-leave-retry](./20261025-fix-e2e-paid-leave-retry/spec.md) | e2e(scenario-03)の有給申請の再試行で前の対象日が残って失敗し続ける不具合の修正 | 実装中 |
+| [20261025-fix-e2e-paid-leave-retry](./20261025-fix-e2e-paid-leave-retry/spec.md) | e2e(scenario-03)の有給申請の再試行で前の対象日が残って失敗し続ける不具合の修正 | 完了 |
 | [20261025-paginate-my-leave-requests](./20261025-paginate-my-leave-requests/spec.md) | 自分の休暇申請の一覧(有給・特別休暇・代休)を対象日の降順でページングする | 完了 |
-| [20261025-edit-leave-grant-days](./20261025-edit-leave-grant-days/spec.md) | 有給・特別休暇の付与日数を管理画面から変更する(代休は変更できない理由を出す) | 実装中 |
+| [20261025-edit-leave-grant-days](./20261025-edit-leave-grant-days/spec.md) | 有給・特別休暇の付与日数を管理画面から変更する(代休は変更できない理由を出す) | 完了 |
 | [20261025-hide-revoked-grants-in-my-leave](./20261025-hide-revoked-grants-in-my-leave/spec.md) | 自分の有給・特別休暇・代休の画面に、取り消した付与が残る不具合の修正 | 完了 |
 | [20261025-fix-e2e-grant-target-picker](./20261025-fix-e2e-grant-target-picker/spec.md) | e2e(scenario-16)で付与対象の社員を選べない不安定さの修正 | 完了 |
 | [20261025-read-model-rebuild-admin-command](./20261025-read-model-rebuild-admin-command/spec.md) | ReadModelの作り直しを運用コマンドにし、開発用シーダーをイベント経由にする | 完了 |

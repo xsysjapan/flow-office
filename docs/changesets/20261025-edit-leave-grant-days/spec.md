@@ -1,6 +1,6 @@
 # 有給・特別休暇の付与日数を管理画面から変更する(代休は同じ位置に変更できない理由を出す)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -190,3 +190,12 @@
 
 実装済み。backend全件PASS(既存の`ReadModelFingerprintCommandTest`1件のみ既知の失敗)、frontend(vitest・lint・tsc・storybook)PASS。
 UC番号は既存の`UC-P010`と衝突するため`docs/09-usecases-paid-leave.md`では`UC-P008b`とした。
+
+### 委譲元の確認(統合後)
+- worktreeのコミット`0534479`を、本人の画面の修正・ページングを含むブランチにマージ(`cca521e`。衝突は変更セットのファイルのみ)。
+- backend(CIと同じ条件の全件):2249件中2248件PASS(失敗は既存の`ReadModelFingerprintCommandTest`の1件)。frontend:`vitest --project=unit` 1113件PASS、lint error無し、tsc(app・e2e)エラー無し。
+- 実機:有給の管理画面で最新の付与の日数を10→11に変更し、一覧が「残11日」になることを確認。ダイアログ・ボタンの並びが仕様どおり。
+- e2eの全件:42件PASS・19件失敗・8件未実行。18件は前回の全件実行と同じ既存の失敗(変更セット20261024-fix-revoked-grant-remainingで切り分け済み)。
+  新しい1件(scenario-03の半休)はe2eの補助処理の不具合で、変更セット20261025-fix-e2e-paid-leave-retryで修正(本変更とは無関係)。
+- UC番号:既存のUC-P010(有給データの移行)と衝突するため、UC-P008bとして追加した。
+

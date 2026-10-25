@@ -53,10 +53,11 @@ function weeksBetweenMondays(from: Date, to: Date): number {
 }
 
 /**
- * 有給を申請する。同じ対象日への重複申請はドメインルールで拒否されるため
- * (「この日は既に有給を申請済みです。」)、このE2Eテストを何度も実行して過去の
- * 実行結果と衝突した場合は、別の日を選んで再試行する。ページは /paid-leave を
- * 開いた状態で呼び出すこと。
+ * 有給を申請する。申請が拒否される理由(同じ対象日の重複申請「この日は既に有給を申請済みです。」、
+ * 全休の日への併存不可「全休の日には他の休暇を併存できません。」等)は増えうるため、
+ * 拒否の文言に依らず申請フォームのエラー(role="alert")が出たら拒否とみなして再試行する。
+ * 各試行の最初に /paid-leave を開き直し、フォームを空の状態から入力する(前の試行で
+ * 拒否された日が対象日に残らないようにするため)。
  */
 async function submitPaidLeaveRequest(
   page: Page,
@@ -66,22 +67,25 @@ async function submitPaidLeaveRequest(
     const targetDate = randomWorkingDate()
 
     try {
+      await page.goto('/paid-leave')
+      await expect(page.getByText('読み込み中...')).toHaveCount(0)
+
       await pickDate(page, '対象日', targetDate, { exact: true })
       await page.getByLabel('取得単位').selectOption({ label: options.leaveTypeLabel }, { timeout: 30000 })
       await pickUser(page, '承認者', options.approverName, options.approverEmail, { timeout: 30000 })
       await page.getByRole('button', { name: '申請する' }).click({ timeout: 30000 })
 
-      const duplicateError = page.getByText('この日は既に有給を申請済みです。')
       const submittedRow = page.locator('li', { hasText: targetDate }).getByRole('status', { name: '申請中' })
+      const formError = page.getByRole('alert')
 
       const result = await Promise.race([
-        duplicateError
-          .waitFor({ state: 'visible', timeout: 30000 })
-          .then(() => 'duplicate' as const)
-          .catch(() => null),
         submittedRow
-          .waitFor({ state: 'visible', timeout: 30000 })
+          .waitFor({ state: 'visible', timeout: 15000 })
           .then(() => 'submitted' as const)
+          .catch(() => null),
+        formError
+          .waitFor({ state: 'visible', timeout: 15000 })
+          .then(() => 'error' as const)
           .catch(() => null),
       ])
 
