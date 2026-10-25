@@ -83,6 +83,11 @@ export function grantSpecialLeave(input: GrantSpecialLeaveInput): Promise<Specia
 }
 
 /** 使用日数が0の付与のみ取消可能(422で拒否される場合がある)。 */
+/** 取り消していない付与の付与日数を変更する(使用済みの日数を下回る場合は422)。 */
+export function changeSpecialLeaveGrantedDays(grantId: string, grantedDays: number, reason?: string): Promise<SpecialLeaveGrant> {
+  return apiFetch(`/special-leave/grants/${grantId}/granted-days`, { method: 'PUT', body: { granted_days: grantedDays, reason } })
+}
+
 export function revokeSpecialLeaveGrant(grantId: string, reason?: string): Promise<SpecialLeaveGrant> {
   return apiFetch(`/special-leave/grants/${grantId}/revoke`, { method: 'POST', body: { reason } })
 }

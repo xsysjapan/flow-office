@@ -9,6 +9,7 @@ import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
 import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { ChangeGrantDaysButton } from '../../components/ChangeGrantDaysButton/ChangeGrantDaysButton'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Input } from '../../components/ui/input'
@@ -159,6 +160,16 @@ function ManualGrantCard() {
                     {grant.status === 'cancelled' && <Badge tone="neutral">取消済み</Badge>}
                   </span>
                   {grant.status !== 'cancelled' && (
+                    <div className="flex items-center gap-2">
+                    <ChangeGrantDaysButton
+                      id={`change-days-${grant.id}`}
+                      grantedOn={grant.work_date}
+                      currentDays={grant.granted_days}
+                      usedDays={grant.used_days}
+                      onChange={async () => undefined}
+                      disabled
+                      disabledReason="代休の日数は休日出勤の勤怠から決まるため、ここでは変更できません。勤怠を修正してください。"
+                    />
                     <RevokeGrantButton
                       id={`revoke-reason-${grant.id}`}
                       title="代休付与を取り消しますか?"
@@ -166,9 +177,14 @@ function ManualGrantCard() {
                       isPending={revokeGrant.isPending}
                       error={revokeGrant.error}
                       onRevoke={(reason) => revokeGrant.mutateAsync({ grantId: grant.id, reason })}
-                      disabled={grant.used_days > 0}
-                      disabledReason="既に消化された分は取り消せません。"
+                      disabled={grant.status !== 'confirmed' || grant.used_days > 0}
+                      disabledReason={
+                        grant.status !== 'confirmed'
+                          ? '月次の提出で確定する前の代休は取り消せません。'
+                          : '既に消化された分は取り消せません。'
+                      }
                     />
+                    </div>
                   )}
                 </li>
               ))}

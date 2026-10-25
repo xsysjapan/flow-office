@@ -10,6 +10,7 @@ use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest as ApprovePaidLeaveReq
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
+use App\Domain\PaidLeaveAccount\Commands\ChangePaidLeaveGrantAmount;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
@@ -444,6 +445,12 @@ class PaidLeaveController extends Controller
             ->orderBy('expires_on')
             ->get();
 
+        // 画面の「最新の付与」(変更・取消できる付与)は集約の判定と同じにする(付与日が同じ付与でも1件だけ)。
+        $latestGrantId = PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($userId))->latestActiveGrantId();
+        foreach ($grants as $grant) {
+            $grant->setAttribute('is_latest', $latestGrantId !== null && (string) $grant->id === $latestGrantId);
+        }
+
         return PaidLeaveGrantResource::collection($grants);
     }
 
@@ -479,6 +486,37 @@ class PaidLeaveController extends Controller
         $grant = PaidLeaveGrant::query()->findOrFail($grantId);
 
         return (new PaidLeaveGrantResource($grant))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 管理者が有給付与の付与日数を変更する。最新の非取消付与のみ変更でき、充当済みの日数を下回る減額はできない
+     * (どちらも集約がDomainRuleExceptionを投げて422)。増やすと未充当の消化が充当される。日数が同じならイベントを記録しない。
+     */
+    #[OA\Put(
+        path: '/paid-leave/grants/{grant}/granted-days',
+        operationId: 'paidLeave.grants.changeGrantedDays',
+        summary: '有給付与の付与日数を変更する',
+        tags: ['有給休暇'],
+        parameters: [new OA\Parameter(name: 'grant', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['granted_days'], properties: [new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function changeGrantedDays(Request $request, PaidLeaveGrant $grant, CommandBus $commandBus): PaidLeaveGrantResource
+    {
+        $data = $request->validate([
+            'granted_days' => ['required', 'numeric', 'min:0.5'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $commandBus->dispatch(new ChangePaidLeaveGrantAmount(
+            userId: (string) $grant->user_id,
+            grantId: (string) $grant->id,
+            newGrantedDays: (float) $data['granted_days'],
+            reason: $data['reason'] ?? null,
+            changedByUserId: $request->user()->id,
+        ));
+
+        return new PaidLeaveGrantResource($grant->refresh());
     }
 
     /**

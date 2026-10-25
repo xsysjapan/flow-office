@@ -287,6 +287,7 @@ describe('PaidLeavePolicyPage', () => {
         revoked_at: null,
         revoked_by_user_id: null,
         revoke_reason: null,
+        is_latest: true,
         ...overrides,
       } as PaidLeaveGrant
     }
@@ -321,7 +322,7 @@ describe('PaidLeavePolicyPage', () => {
     it('disables revoking a grant that is not the latest, with a reason', async () => {
       await showGrantsOfTargetUser([
         grantOf({ id: 'grant-new', granted_on: '2026-06-02', expires_on: '2028-05-31' }),
-        grantOf({ id: 'grant-old', granted_on: '2026-06-01' }),
+        grantOf({ id: 'grant-old', granted_on: '2026-06-01', is_latest: false }),
       ])
 
       await screen.findAllByRole('button', { name: '取消' })
@@ -330,6 +331,53 @@ describe('PaidLeavePolicyPage', () => {
       expect(buttons[0]).toBeEnabled()
       expect(buttons[1]).toBeDisabled()
       expect(buttons[1]).toHaveAttribute('title', '最新の付与のみ取り消せます。')
+    })
+
+    it('disables revoking both same-day grants but the one the API reports as latest', async () => {
+      await showGrantsOfTargetUser([
+        grantOf({ id: 'grant-a', granted_on: '2026-06-01', is_latest: false }),
+        grantOf({ id: 'grant-b', granted_on: '2026-06-01', is_latest: true }),
+      ])
+
+      await screen.findAllByRole('button', { name: '取消' })
+      const buttons = screen.getAllByRole('button', { name: '取消' })
+      expect(buttons[0]).toBeDisabled()
+      expect(buttons[1]).toBeEnabled()
+    })
+
+    it('changes the granted days of the latest grant with the entered days and reason', async () => {
+      vi.spyOn(paidLeaveApi, 'changePaidLeaveGrantedDays').mockResolvedValue(grantOf({ granted_days: 22 }))
+      await showGrantsOfTargetUser([grantOf({ id: 'grant-1', used_days: 4, remaining_days: 16 })])
+
+      await userEvent.click(await screen.findByRole('button', { name: '日数を変更' }))
+      const input = await screen.findByLabelText(/新しい付与日数/)
+      expect(input).toHaveValue(20)
+      await userEvent.clear(input)
+      await userEvent.type(input, '22')
+      await userEvent.type(screen.getByLabelText('変更理由(任意)'), '訂正')
+      await userEvent.click(screen.getByRole('button', { name: '変更する' }))
+
+      await waitFor(() => expect(paidLeaveApi.changePaidLeaveGrantedDays).toHaveBeenCalledWith('grant-1', 22, '訂正'))
+    })
+
+    it('disables changing the days of a non-latest grant with a reason', async () => {
+      await showGrantsOfTargetUser([
+        grantOf({ id: 'grant-new', granted_on: '2026-06-02', expires_on: '2028-05-31' }),
+        grantOf({ id: 'grant-old', granted_on: '2026-06-01', is_latest: false }),
+      ])
+
+      await screen.findAllByRole('button', { name: '日数を変更' })
+      const buttons = screen.getAllByRole('button', { name: '日数を変更' })
+      expect(buttons[0]).toBeEnabled()
+      expect(buttons[1]).toBeDisabled()
+      expect(buttons[1]).toHaveAttribute('title', '最新の付与のみ変更できます。')
+    })
+
+    it('does not show the change button for a revoked grant', async () => {
+      await showGrantsOfTargetUser([grantOf({ status: 'revoked', is_latest: false, remaining_days: 0 })])
+
+      await screen.findByText(/取消済み/)
+      expect(screen.queryByRole('button', { name: '日数を変更' })).not.toBeInTheDocument()
     })
 
     it('enables revoking the next grant once the newer one is revoked', async () => {
@@ -343,7 +391,7 @@ describe('PaidLeavePolicyPage', () => {
           revoked_at: '2026-10-01T00:00:00Z',
         }),
         grantOf({ id: 'grant-old', granted_on: '2026-06-01', used_days: 4, remaining_days: 16 }),
-      ])
+      ].map((g) => (g.status === 'revoked' ? { ...g, is_latest: false } : g)))
 
       const button = await screen.findByRole('button', { name: '取消' })
       expect(screen.getAllByRole('button', { name: '取消' })).toHaveLength(1)

@@ -15,6 +15,7 @@ import { PaidLeaveGrantPolicyMatrix } from '../../components/PaidLeaveGrantPolic
 import { PaidLeaveGrantCycleTypeField } from '../../components/PaidLeaveGrantCycleTypeField/PaidLeaveGrantCycleTypeField'
 import { PaidLeaveGrantRulePreview } from '../../components/PaidLeaveGrantRulePreview/PaidLeaveGrantRulePreview'
 import { PaidLeaveGrantStepsEditor } from '../../components/PaidLeaveGrantStepsEditor/PaidLeaveGrantStepsEditor'
+import { ChangeGrantDaysButton } from '../../components/ChangeGrantDaysButton/ChangeGrantDaysButton'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -35,6 +36,7 @@ import {
   usePaidLeaveGrantsForUser,
   usePaidLeaveScheduleEntries,
   usePaidLeaveUsagesForUser,
+  useChangePaidLeaveGrantedDays,
   useRevokePaidLeaveGrant,
 } from '../../hooks/usePaidLeave'
 import { useUpdatePaidLeaveAutoGrantEnabled } from '../../hooks/useUsers'
@@ -647,14 +649,10 @@ function ManualGrantCard() {
 
   const grantPaidLeave = useGrantPaidLeave()
   const revokeGrant = useRevokePaidLeaveGrant()
+  const changeGrantedDays = useChangePaidLeaveGrantedDays()
 
   const singleTargetUserId = targetMode === 'individual' && targetIds.length === 1 ? targetIds[0] : undefined
   const { data: userGrants, isLoading: isLoadingUserGrants } = usePaidLeaveGrantsForUser(singleTargetUserId ?? '')
-
-  // 取消できるのは取り消されていない付与のうち付与日が最も遅いもの(集約の不変条件と同じ)。
-  const latestActiveGrantedOn = (userGrants ?? [])
-    .filter((grant) => grant.status === 'active')
-    .reduce((latest, grant) => (grant.granted_on > latest ? grant.granted_on : latest), '')
 
   const failedIds = results?.filter((r) => !r.success).map((r) => r.userId) ?? []
 
@@ -765,6 +763,21 @@ function ManualGrantCard() {
                     )}
                   </span>
                   {grant.status === 'active' && (
+                    <div className="flex items-center gap-2">
+                    {/* 変更・取消できるのは最新の非取消付与だけ(APIの is_latest。集約の判定と同じ) */}
+                    <ChangeGrantDaysButton
+                      id={`change-days-${grant.id}`}
+                      grantedOn={grant.granted_on}
+                      currentDays={grant.granted_days}
+                      usedDays={grant.used_days}
+                      isPending={changeGrantedDays.isPending}
+                      error={changeGrantedDays.error}
+                      onChange={(days, reason) =>
+                        changeGrantedDays.mutateAsync({ grantId: grant.id, grantedDays: days, reason })
+                      }
+                      disabled={!grant.is_latest}
+                      disabledReason="最新の付与のみ変更できます。"
+                    />
                     <RevokeGrantButton
                       id={`revoke-reason-${grant.id}`}
                       title="有給付与を取り消しますか?"
@@ -776,9 +789,10 @@ function ManualGrantCard() {
                       isPending={revokeGrant.isPending}
                       error={revokeGrant.error}
                       onRevoke={(reason) => revokeGrant.mutateAsync({ grantId: grant.id, reason })}
-                      disabled={grant.granted_on < latestActiveGrantedOn}
+                      disabled={!grant.is_latest}
                       disabledReason="最新の付与のみ取り消せます。"
                     />
+                    </div>
                   )}
                 </li>
               ))}

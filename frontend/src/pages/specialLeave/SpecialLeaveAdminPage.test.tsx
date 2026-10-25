@@ -213,4 +213,77 @@ describe('SpecialLeaveAdminPage', () => {
       expect(usersApi.updateSpecialLeaveAutoGrantEnabled).toHaveBeenCalledWith('user-4', true),
     )
   })
+
+  describe('change days button of the target user grants', () => {
+    function grantOf(overrides: Partial<SpecialLeaveGrant>): SpecialLeaveGrant {
+      return {
+        id: 'grant-1',
+        user_id: 'user-3',
+        special_leave_type_id: birthdayType.id,
+        special_leave_type_name: birthdayType.name,
+        granted_on: '2026-07-01',
+        expires_on: null,
+        granted_days: 5,
+        used_days: 0,
+        remaining_days: 5,
+        grant_reason: null,
+        status: 'active',
+        revoked_at: null,
+        revoked_by_user_id: null,
+        revoke_reason: null,
+        ...overrides,
+      } as SpecialLeaveGrant
+    }
+
+    async function showGrantsOfTargetUser(grants: SpecialLeaveGrant[]) {
+      const paginatedUsers: Paginated<User> = {
+        data: [targetUser],
+        meta: { current_page: 1, last_page: 1, total: 1 },
+        links: { next: null, prev: null },
+      }
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+      vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantsForUser').mockResolvedValue(grants)
+      renderPage()
+      await screen.findByText('誕生日休暇: 誕生日休暇ルール')
+
+      await userEvent.click(screen.getByLabelText('付与対象'))
+      await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+      await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    }
+
+    it('changes the granted days even for a used grant, sending the entered days and reason', async () => {
+      vi.spyOn(specialLeaveApi, 'changeSpecialLeaveGrantedDays').mockResolvedValue(grantOf({ granted_days: 7 }))
+      await showGrantsOfTargetUser([grantOf({ used_days: 1, remaining_days: 4 })])
+
+      const button = await screen.findByRole('button', { name: '日数を変更' })
+      expect(button).toBeEnabled()
+      await userEvent.click(button)
+      const input = await screen.findByLabelText(/新しい付与日数/)
+      expect(input).toHaveValue(5)
+      await userEvent.clear(input)
+      await userEvent.type(input, '7')
+      await userEvent.type(screen.getByLabelText('変更理由(任意)'), '訂正')
+      await userEvent.click(screen.getByRole('button', { name: '変更する' }))
+
+      await waitFor(() => expect(specialLeaveApi.changeSpecialLeaveGrantedDays).toHaveBeenCalledWith('grant-1', 7, '訂正'))
+    })
+
+    it('does not allow a value below the used days', async () => {
+      await showGrantsOfTargetUser([grantOf({ used_days: 2, remaining_days: 3 })])
+
+      await userEvent.click(await screen.findByRole('button', { name: '日数を変更' }))
+      const input = await screen.findByLabelText(/新しい付与日数/)
+      await userEvent.clear(input)
+      await userEvent.type(input, '1.5')
+
+      expect(screen.getByRole('button', { name: '変更する' })).toBeDisabled()
+    })
+
+    it('does not show the change button for a revoked grant', async () => {
+      await showGrantsOfTargetUser([grantOf({ status: 'revoked', remaining_days: 0 })])
+
+      await screen.findByText(/取消済み/)
+      expect(screen.queryByRole('button', { name: '日数を変更' })).not.toBeInTheDocument()
+    })
+  })
 })

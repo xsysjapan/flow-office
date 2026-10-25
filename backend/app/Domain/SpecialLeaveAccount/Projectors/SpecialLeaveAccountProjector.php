@@ -2,6 +2,7 @@
 
 namespace App\Domain\SpecialLeaveAccount\Projectors;
 
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantAmountChanged;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
@@ -56,6 +57,15 @@ class SpecialLeaveAccountProjector extends Projector
             'revoke_reason' => $event->reason,
             'remaining_days' => 0,
         ]);
+    }
+
+    public function onSpecialLeaveAccountGrantAmountChanged(SpecialLeaveAccountGrantAmountChanged $event): void
+    {
+        SpecialLeaveGrant::query()->whereKey($event->grantId)->update([
+            'granted_days' => $event->newGrantedDays,
+        ]);
+
+        $this->recalculateGrant($event->grantId);
     }
 
     public function onSpecialLeaveAccountUsageDesignated(SpecialLeaveAccountUsageDesignated $event): void

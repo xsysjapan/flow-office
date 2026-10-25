@@ -333,6 +333,8 @@ const leaveEventSuffixMeta: Record<string, StatusMeta> = {
   grant_warning_raised: { label: '警告', tone: 'warning' },
   /** 有給・特別休暇の付与取消(口座の RevokePaidLeaveGrant・RevokeSpecialLeaveAccountGrant)。 */
   grant_revoked: { label: '取消', tone: 'danger' },
+  /** 有給・特別休暇の付与日数の変更(grant_amount_changed)。 */
+  grant_amount_changed: { label: '付与日数の変更', tone: 'info' },
   /** 代休固有: 休日出勤実績からの自動計上(下書き)。 */
   grant_synced: { label: '自動計上', tone: 'success' },
   /** 代休固有: 月次確定前の下書き付与の取消。 */
@@ -388,6 +390,10 @@ function leaveEventDetail(event: StoredEvent, domainLabel: string): string {
     case 'grant_registered': {
       const expiry = payload.expires_on ? `有効期限 ${payload.expires_on}` : '有効期限なし'
       return `${payload.granted_days}日を付与(${expiry})`
+    }
+    case 'grant_amount_changed': {
+      const reason = payload.reason ? `(${payload.reason})` : ''
+      return `付与日数を${payload.new_granted_days}日に変更${reason}`
     }
     case 'requested':
       return `対象日 ${payload.target_date} の${paidLeaveTypeLabel(payload.leave_type as PaidLeaveType)}を申請(${payload.requested_days}日)`

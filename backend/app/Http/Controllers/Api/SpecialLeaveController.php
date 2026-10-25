@@ -12,6 +12,7 @@ use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RevokeSpecialLeaveGrant;
 use App\Domain\SpecialLeaveAccount\Aggregates\SpecialLeaveAccountAggregate;
+use App\Domain\SpecialLeaveAccount\Commands\ChangeSpecialLeaveGrantAmount;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -258,6 +259,37 @@ class SpecialLeaveController extends Controller
         ));
 
         return (new SpecialLeaveGrantResource($grant->load('specialLeaveType')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 管理者が特別休暇付与の付与日数を変更する。取消済み・使用済みの日数を下回る日数は口座集約が拒否する(422)。
+     * 日数が同じならイベントを記録しない。
+     */
+    #[OA\Put(
+        path: '/special-leave/grants/{grant}/granted-days',
+        operationId: 'specialLeave.grants.changeGrantedDays',
+        summary: '特別休暇付与の付与日数を変更する',
+        tags: ['特別休暇'],
+        parameters: [new OA\Parameter(name: 'grant', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['granted_days'], properties: [new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function changeGrantedDays(Request $request, SpecialLeaveGrant $grant, CommandBus $commandBus): SpecialLeaveGrantResource
+    {
+        $data = $request->validate([
+            'granted_days' => ['required', 'numeric', 'min:0.5'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $commandBus->dispatch(new ChangeSpecialLeaveGrantAmount(
+            userId: (string) $grant->user_id,
+            grantId: (string) $grant->id,
+            newGrantedDays: (float) $data['granted_days'],
+            changedByUserId: $request->user()->id,
+            reason: $data['reason'] ?? null,
+        ));
+
+        return new SpecialLeaveGrantResource($grant->refresh()->load('specialLeaveType'));
     }
 
     /**

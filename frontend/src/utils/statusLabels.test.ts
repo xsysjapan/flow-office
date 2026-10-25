@@ -7,6 +7,8 @@ import {
   attendanceRowDisplayLabel,
   paidLeaveEventDetail,
   paidLeaveEventTypeLabel,
+  specialLeaveEventDetail,
+  specialLeaveEventTypeLabel,
   workflowRequestStatusLabel,
   workLocationTypeLabel,
   WORK_LOCATION_TYPE_OPTIONS,
@@ -190,6 +192,17 @@ describe('statusLabels', () => {
     expect(paidLeaveEventTypeLabel('paid_leave_account.usage_confirmed')).toEqual({ label: '消化', tone: 'info' })
     expect(paidLeaveEventTypeLabel('paid_leave.granted')).toEqual({ label: 'paid_leave.granted', tone: 'neutral' })
     expect(paidLeaveEventTypeLabel('paid_leave.unknown_event')).toEqual({ label: 'paid_leave.unknown_event', tone: 'neutral' })
+  })
+
+  it('labels the grant_amount_changed event for paid and special leave and formats its detail', () => {
+    expect(paidLeaveEventTypeLabel('paid_leave_account.grant_amount_changed')).toEqual({ label: '付与日数の変更', tone: 'info' })
+    expect(specialLeaveEventTypeLabel('special_leave_account.grant_amount_changed')).toEqual({ label: '付与日数の変更', tone: 'info' })
+    expect(
+      paidLeaveEventDetail(buildEvent('paid_leave_account.grant_amount_changed', { new_granted_days: 12, reason: '訂正' })),
+    ).toBe('付与日数を12日に変更(訂正)')
+    expect(
+      specialLeaveEventDetail(buildEvent('special_leave_account.grant_amount_changed', { new_granted_days: 3.5, reason: null })),
+    ).toBe('付与日数を3.5日に変更')
   })
 
   it('formats each paid leave history event type using its own payload shape', () => {
