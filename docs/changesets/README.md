@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261025-fix-e2e-grant-target-picker](./20261025-fix-e2e-grant-target-picker/spec.md) | e2e(scenario-16)で付与対象の社員を選べない不安定さの修正 | 実装中 |
 | [20261025-read-model-rebuild-admin-command](./20261025-read-model-rebuild-admin-command/spec.md) | ReadModelの作り直しを運用コマンドにし、開発用シーダーをイベント経由にする | 完了 |
 | [20261025-admin-read-model-rebuild](./20261025-admin-read-model-rebuild/spec.md) | 管理画面からReadModelを作り直す(全テーブルを空にしてevent-sourcing:replay) | 完了 |
 | [20261024-fix-revoked-grant-remaining](./20261024-fix-revoked-grant-remaining/spec.md) | 有給付与の取消の不具合の修正(取り消した付与に残日数が残る・消化済みの最新付与を取り消せない) | 完了 |
