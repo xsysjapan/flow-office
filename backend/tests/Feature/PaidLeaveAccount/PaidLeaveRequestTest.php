@@ -430,7 +430,7 @@ class PaidLeaveRequestTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertCreated();
 
-        $this->actingAs($employee)->getJson('/api/paid-leave/requests/mine')->assertOk()->assertJsonCount(1);
+        $this->actingAs($employee)->getJson('/api/paid-leave/requests/mine')->assertOk()->assertJsonCount(1, 'data');
         $this->actingAs($approver)->getJson('/api/paid-leave/requests/to-approve')->assertOk()->assertJsonCount(1);
     }
 
@@ -450,7 +450,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->assertNotNull($workflowRequestId);
 
         $this->actingAs($employee)->getJson('/api/paid-leave/requests/mine')
-            ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
+            ->assertOk()->assertJsonPath('data.0.workflow_request_id', $workflowRequestId);
         $this->actingAs($approver)->getJson('/api/paid-leave/requests/to-approve')
             ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")
@@ -470,7 +470,7 @@ class PaidLeaveRequestTest extends TestCase
         ])->assertCreated()->assertJsonPath('workflow_request_id', null);
 
         $this->actingAs($employee)->getJson('/api/paid-leave/requests/mine')
-            ->assertOk()->assertJsonPath('0.workflow_request_id', null);
+            ->assertOk()->assertJsonPath('data.0.workflow_request_id', null);
     }
 
     /**

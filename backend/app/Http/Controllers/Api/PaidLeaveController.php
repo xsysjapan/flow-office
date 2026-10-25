@@ -30,6 +30,7 @@ use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantPolicy;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveGrantRuleStep;
+use App\Models\PaidLeaveGrantStatus;
 use App\Models\PaidLeaveProportionalGrantPolicy;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
@@ -415,7 +416,8 @@ class PaidLeaveController extends Controller
     #[OA\Get(
         path: '/paid-leave/grants/mine',
         operationId: 'paidLeave.grants.mine',
-        summary: '自分の有給残数を取得する',
+        summary: '自分の有給残数を取得する(取り消した付与・残りの無い付与は含めない)',
+        description: '本人の有効な(status=active)で残日数のある有給付与を返す。管理者により取り消された付与(status=revoked)は含めない。取消の記録は有給履歴で確認する。',
         tags: ['有給休暇'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
@@ -423,6 +425,8 @@ class PaidLeaveController extends Controller
     {
         $grants = PaidLeaveGrant::query()
             ->where('user_id', $request->user()->id)
+            ->where('status', PaidLeaveGrantStatus::ACTIVE)
+            ->where('remaining_days', '>', 0)
             ->orderBy('expires_on')
             ->get();
 
@@ -607,17 +611,29 @@ class PaidLeaveController extends Controller
     #[OA\Get(
         path: '/paid-leave/requests/mine',
         operationId: 'paidLeave.requests.mine',
-        summary: '自分の有給申請一覧を取得する',
+        summary: '自分の有給申請一覧を取得する(対象日の降順・20件ずつ)',
+        description: '本人の有給申請を対象日(target_date)の降順、同じ日はidの降順で20件ずつ返す。応答は{ data, links, meta }のページング形式。target_dateを指定するとその日の申請だけを返す。',
         tags: ['有給休暇'],
+        parameters: [
+            new OA\Parameter(name: 'page', in: 'query', required: false, description: 'ページ番号(1以上、既定1)', schema: new OA\Schema(type: 'integer', minimum: 1)),
+            new OA\Parameter(name: 'target_date', in: 'query', required: false, description: '対象日(Y-m-d)。指定するとその日の申請だけを返す', schema: new OA\Schema(type: 'string', format: 'date')),
+        ],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function myRequests(Request $request, LeaveRequestWorkflowLinks $links): AnonymousResourceCollection
     {
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'target_date' => ['sometimes', 'date_format:Y-m-d'],
+        ]);
+
         $requests = PaidLeaveRequest::query()
             ->with('user', 'approver')
             ->where('user_id', $request->user()->id)
+            ->when(isset($data['target_date']), fn ($query) => $query->whereDate('target_date', $data['target_date']))
             ->orderByDesc('target_date')
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(20);
         $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, $requests);
 
         return PaidLeaveRequestResource::collection($requests);

@@ -51,11 +51,15 @@ function renderPage(
   types: SpecialLeaveType[] = [birthdayType],
   specialLeaveRequiresApproval = true,
   initialPath = '/special-leave',
+  requestsPaging = { last_page: 1, total: requests.length },
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
   vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveTypes').mockResolvedValue(types)
-  vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue(requests)
+  vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockImplementation(async (params) => ({
+    data: requests,
+    meta: { current_page: params?.page ?? 1, ...requestsPaging },
+  }))
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -326,5 +330,29 @@ describe('MySpecialLeavePage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '取消する' }))
 
     await waitFor(() => expect(specialLeaveApi.cancelSpecialLeaveRequest).toHaveBeenCalledWith(submittedRequest.id))
+  })
+
+  it('shows the pagination below the request list', async () => {
+    vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
+
+    renderPage([], [birthdayType], true, '/special-leave', { last_page: 2, total: 21 })
+
+    expect(await screen.findByText('21件中 1 / 2 ページ')).toBeInTheDocument()
+  })
+
+  it('reads the requestPage URL query param and moves between pages', async () => {
+    vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
+
+    renderPage([], [birthdayType], true, '/special-leave?requestPage=2&date=2026-08-20', { last_page: 2, total: 21 })
+
+    expect(await screen.findByText('21件中 2 / 2 ページ')).toBeInTheDocument()
+    expect(specialLeaveApi.fetchMySpecialLeaveRequests).toHaveBeenCalledWith({ page: 2 })
+
+    await userEvent.click(screen.getByRole('button', { name: '前のページ' }))
+
+    expect(await screen.findByText('21件中 1 / 2 ページ')).toBeInTheDocument()
+    expect(specialLeaveApi.fetchMySpecialLeaveRequests).toHaveBeenCalledWith({ page: 1 })
+    // 既存の date クエリは残る。
+    expect(screen.getByText('2026-08-20')).toBeInTheDocument()
   })
 })

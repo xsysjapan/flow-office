@@ -227,6 +227,43 @@ class PaidLeaveGrantRevocationTest extends TestCase
         $this->assertEquals(1.0, (float) DB::table('paid_leave_balances')->where('user_id', $employee->id)->value('unallocated_days'));
     }
 
+    public function test_my_grants_hides_a_revoked_grant_while_the_admin_list_still_shows_it(): void
+    {
+        $hr = User::factory()->create();
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $employee = User::factory()->create();
+
+        $this->grantOn($hr, $employee, '2026-07-01', '2028-06-30');
+        $latestGrantId = $this->grantOn($hr, $employee, '2026-07-02', '2028-06-30');
+
+        $this->actingAs($hr)->postJson("/api/paid-leave/grants/{$latestGrantId}/revoke")->assertOk();
+
+        $mine = $this->actingAs($employee)->getJson('/api/paid-leave/grants/mine');
+        $mine->assertOk();
+        $this->assertCount(1, $mine->json());
+        $this->assertSame('2026-07-01', $mine->json()[0]['granted_on']);
+        $this->assertSame('active', $mine->json()[0]['status']);
+
+        $adminList = $this->actingAs($hr)->getJson("/api/paid-leave/grants/user/{$employee->id}")->assertOk()->json();
+        $this->assertCount(2, $adminList);
+        $this->assertSame('revoked', collect($adminList)->firstWhere('granted_on', '2026-07-02')['status']);
+    }
+
+    public function test_my_grants_hides_a_grant_with_no_remaining_days(): void
+    {
+        $hr = User::factory()->create();
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $employee = User::factory()->create();
+
+        $this->grantOn($hr, $employee, '2026-07-01', '2028-06-30');
+        $usedUpGrantId = $this->grantOn($hr, $employee, '2026-07-02', '2028-06-30');
+        PaidLeaveGrant::query()->findOrFail($usedUpGrantId)->update(['used_days' => 10, 'remaining_days' => 0]);
+
+        $mine = $this->actingAs($employee)->getJson('/api/paid-leave/grants/mine')->assertOk();
+        $this->assertCount(1, $mine->json());
+        $this->assertSame('2026-07-01', $mine->json()[0]['granted_on']);
+    }
+
     public function test_revoked_grant_keeps_zero_remaining_days_after_rebuild(): void
     {
         $hr = User::factory()->create();

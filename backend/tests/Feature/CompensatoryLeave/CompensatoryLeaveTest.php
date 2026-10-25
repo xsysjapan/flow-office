@@ -8,6 +8,7 @@ use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveUsage;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkflowRequest;
@@ -233,6 +234,64 @@ class CompensatoryLeaveTest extends TestCase
         ])->assertSuccessful();
 
         return CompensatoryLeaveGrant::query()->where('user_id', $employee->id)->firstOrFail();
+    }
+
+    public function test_my_grants_hides_a_cancelled_grant_and_keeps_the_confirmed_one_while_the_admin_list_shows_both(): void
+    {
+        SystemSetting::current()->update([
+            'compensatory_leave_enabled' => true,
+            'compensatory_leave_unit' => 'daily',
+            'compensatory_leave_requires_approval' => false,
+        ]);
+
+        $hr = User::factory()->create();
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $employee = User::factory()->create();
+
+        // 2日分の休日出勤を1回の月次提出で確定させ、2件の付与(08-08・08-09)を作る。
+        $workStyle = $this->makeWorkStyle();
+        foreach (['2026-08-08', '2026-08-09'] as $workDate) {
+            $this->makeHolidayShift($employee, $workStyle, $workDate);
+            $this->recordAttendance($employee, $workDate, '09:00', '17:00', [['start' => "{$workDate}T12:00:00+09:00", 'end' => "{$workDate}T13:00:00+09:00"]]);
+        }
+        $this->actingAs($employee)->postJson('/api/attendance/months/2026-08/submit', [
+            'approver_user_id' => User::factory()->create()->id,
+        ])->assertSuccessful();
+
+        [$cancelledGrant, $confirmedGrant] = CompensatoryLeaveGrant::query()
+            ->where('user_id', $employee->id)->orderBy('work_date')->get()->all();
+
+        // 先の付与(08-08)を未使用のまま取り消す(自己申請・承認不要の設定で即時に cancelled になる)。
+        $this->actingAs($employee)->postJson("/api/compensatory-leave/grants/{$cancelledGrant->id}/request-cancellation", [
+            'reason' => '出勤日を勘違いしていたため',
+        ])->assertOk();
+        $this->assertSame('cancelled', $cancelledGrant->refresh()->status);
+
+        $mine = $this->actingAs($employee)->getJson('/api/compensatory-leave/grants/mine');
+        $mine->assertOk();
+        $this->assertCount(1, $mine->json());
+        $this->assertSame($confirmedGrant->id, $mine->json()[0]['id']);
+        $this->assertSame('confirmed', $mine->json()[0]['status']);
+
+        $adminList = $this->actingAs($hr)->getJson("/api/compensatory-leave/grants/user/{$employee->id}")->assertOk()->json();
+        $this->assertCount(2, $adminList);
+        $this->assertSame('cancelled', collect($adminList)->firstWhere('id', $cancelledGrant->id)['status']);
+    }
+
+    public function test_my_grants_hides_an_exhausted_grant_but_keeps_an_hourly_grant_with_only_minutes_left(): void
+    {
+        $employee = User::factory()->create();
+        $grant = $this->confirmedGrant($employee);
+
+        // 使い切った付与(日数・分数とも残0)は出ない。
+        $grant->update(['remaining_days' => 0, 'remaining_minutes' => 0]);
+        $this->assertCount(0, $this->actingAs($employee)->getJson('/api/compensatory-leave/grants/mine')->assertOk()->json());
+
+        // 時間単位の付与(日数0・分数あり)は出る。
+        $grant->update(['remaining_days' => 0, 'remaining_minutes' => 120]);
+        $mine = $this->actingAs($employee)->getJson('/api/compensatory-leave/grants/mine')->assertOk();
+        $this->assertCount(1, $mine->json());
+        $this->assertSame($grant->id, $mine->json()[0]['id']);
     }
 
     public function test_a_confirmed_grant_can_be_consumed_via_request_and_approval(): void

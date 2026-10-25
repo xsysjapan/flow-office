@@ -34,6 +34,7 @@ import {
   type GrantPaidLeaveInput,
   type OverridePaidLeaveScheduleAssessmentInput,
   type PaidLeaveScheduleEntriesParams,
+  type FetchMyPaidLeaveRequestsParams,
 } from '../api/paidLeave'
 import type { PaidLeaveGrantPolicyStep, PaidLeaveProportionalGrantPolicyStep, PaidLeaveScheduleAssessmentRun } from '../api/types'
 
@@ -175,8 +176,8 @@ export function useRevokePaidLeaveGrant() {
   })
 }
 
-export function useMyPaidLeaveRequests() {
-  return useQuery({ queryKey: MY_REQUESTS_KEY, queryFn: fetchMyPaidLeaveRequests })
+export function useMyPaidLeaveRequests(params: FetchMyPaidLeaveRequestsParams = {}) {
+  return useQuery({ queryKey: [...MY_REQUESTS_KEY, params], queryFn: () => fetchMyPaidLeaveRequests(params) })
 }
 
 export function useCreatePaidLeaveRequest() {

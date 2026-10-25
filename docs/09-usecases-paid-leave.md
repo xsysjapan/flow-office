@@ -263,6 +263,11 @@ Handlerは勤怠の勤務予定を読んで拒否せず、休暇の申請・再�
 (提出中・承認済みが既にある場合)も拒否する。これらの重複申請チェックはPaidLeaveドメインの
 外側(Workflow・申請入口側)の判定として残る(CLAUDE.md原則14、spec.md「Command/Handler」節)。
 
+本人向けの付与一覧(`GET /paid-leave/grants/mine`)は、使える残りがある付与だけを返す(取り消した付与(status=revoked)と残日数0の付与は表示しない)。
+管理者向けの一覧(`GET /paid-leave/grants/user/{userId}`)は取消済みを含む。
+
+自分の申請一覧(`GET /paid-leave/requests/mine`)は、対象日の降順(同じ日はidの降順)に20件ずつのページングで返す(応答は`{ data, links, meta }`。`page`・`target_date`(`Y-m-d`。指定するとその日の申請だけ)を受ける)。画面のページ番号はURLの`requestPage`に載る。
+
 申請そのものの進行状況(`paid_leave_requests.status`: submitted → approved / returned /
 cancelled)は独立ステータス系列として引き続き管理するが、実際にGrantへどう充当するか
 (Allocation)を決めるのは常に`PaidLeaveAccountAggregate`である。申請時点では
@@ -847,6 +852,8 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
   (`special_leave_account.*`)が持つ。申請時に消化記録を作り、承認時に付与へ充当し、差戻し・取消で消化記録を
   取り消す(Reactor: `SpecialLeaveUsageOnSpecialLeaveRequestReactor`)。
 - 付与は`special_leave_account.grant_registered`で登録し、取消は`special_leave_account.grant_revoked`で記録する。
+  本人向けの付与一覧(`GET /special-leave/grants/mine`)は取り消した付与(status=revoked)と残日数0の付与を表示しない。管理者向けの一覧は取消済みを「取消済み」として含む。
+  自分の申請一覧(`GET /special-leave/requests/mine`)も有給と同じく、対象日の降順・20件ずつのページング(`page`・`target_date`)。
   既存の付与・消化は、`stored_events`の作り直し(`leave:rebuild-event-store`)で口座のイベントに変換する(`docs/27-release-runbook.md` 3.1)。
 - 承認時に残数が不足していても承認は拒否せず、充当できた分だけ充当し、充当できなかった分は
   `unallocatedDays`として確定イベントに記録する(論点17)。
@@ -869,6 +876,8 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 代休は今回の有給ドメイン再設計の対象外で、引き続き従来通りの独立ドメインとして実装されている。
 付与の残数と消化記録(申請→作成、承認→充当、差戻し・取消→解除)は代休の口座集約が持つ。
 申請の状態は`compensatory_leave.*`(休暇申請文脈)が持つ。
+本人向けの付与一覧(`GET /compensatory-leave/grants/mine`)は取り消した付与(status=cancelled)と残りの無い付与(残日数・残分数とも0)を表示しない。仮(draft)・確定(confirmed)の付与は残りがあれば表示する(時間単位は日数0・分数ありでも表示)。管理者向けの一覧は取消済みを含む。
+自分の申請一覧(`GET /compensatory-leave/requests/mine`)も有給と同じく、対象日の降順・20件ずつのページング(`page`・`target_date`)。
 
 月次勤怠の提出(`AttendanceMonthSubmitted`)を受けて、対象月のdraft Grantを一括で
 `confirmed`に確定する(口座集約の`compensatory_leave_account.grant_confirmed`。月の判定は

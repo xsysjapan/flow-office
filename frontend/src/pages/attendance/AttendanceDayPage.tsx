@@ -1241,9 +1241,12 @@ export function AttendanceDayPage() {
   const { user } = useAuth()
   const { data: scheduleDays } = useShiftAssignments(user?.id ?? '', monday, addDays(monday, 6))
   const monthLocked = useMonthLocked(date ?? '')
-  const { data: paidLeaveRequests } = useMyPaidLeaveRequests()
-  const { data: specialLeaveRequests } = useMySpecialLeaveRequests()
-  const { data: compensatoryLeaveRequests } = useMyCompensatoryLeaveRequests()
+  const { data: paidLeaveRequestsPage } = useMyPaidLeaveRequests({ targetDate: date })
+  const paidLeaveRequests = paidLeaveRequestsPage?.data
+  const { data: specialLeaveRequestsPage } = useMySpecialLeaveRequests({ targetDate: date })
+  const specialLeaveRequests = specialLeaveRequestsPage?.data
+  const { data: compensatoryLeaveRequestsPage } = useMyCompensatoryLeaveRequests({ targetDate: date })
+  const compensatoryLeaveRequests = compensatoryLeaveRequestsPage?.data
 
   if (!date) return null
   if (isLoading) return <LoadingState />

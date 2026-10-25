@@ -47,10 +47,14 @@ function renderPage(
   requests: CompensatoryLeaveRequest[] = [],
   compensatoryLeaveRequiresApproval = true,
   initialPath = '/compensatory-leave',
+  requestsPaging = { last_page: 1, total: requests.length },
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
-  vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(requests)
+  vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockImplementation(async (params) => ({
+    data: requests,
+    meta: { current_page: params?.page ?? 1, ...requestsPaging },
+  }))
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -343,5 +347,29 @@ describe('MyCompensatoryLeavePage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '取消する' }))
 
     await waitFor(() => expect(compensatoryLeaveApi.cancelCompensatoryLeaveRequest).toHaveBeenCalledWith(submittedRequest.id))
+  })
+
+  it('shows the pagination below the request list', async () => {
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
+
+    renderPage([], true, '/compensatory-leave', { last_page: 2, total: 21 })
+
+    expect(await screen.findByText('21件中 1 / 2 ページ')).toBeInTheDocument()
+  })
+
+  it('reads the requestPage URL query param and moves between pages', async () => {
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
+
+    renderPage([], true, '/compensatory-leave?requestPage=2&date=2026-08-20', { last_page: 2, total: 21 })
+
+    expect(await screen.findByText('21件中 2 / 2 ページ')).toBeInTheDocument()
+    expect(compensatoryLeaveApi.fetchMyCompensatoryLeaveRequests).toHaveBeenCalledWith({ page: 2 })
+
+    await userEvent.click(screen.getByRole('button', { name: '前のページ' }))
+
+    expect(await screen.findByText('21件中 1 / 2 ページ')).toBeInTheDocument()
+    expect(compensatoryLeaveApi.fetchMyCompensatoryLeaveRequests).toHaveBeenCalledWith({ page: 1 })
+    // 既存の date クエリは残る。
+    expect(screen.getByText('2026-08-20')).toBeInTheDocument()
   })
 })

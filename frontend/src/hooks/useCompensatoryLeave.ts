@@ -13,6 +13,7 @@ import {
   revokeCompensatoryLeaveGrant,
   type CreateCompensatoryLeaveRequestInput,
   type GrantCompensatoryLeaveInput,
+  type FetchMyCompensatoryLeaveRequestsParams,
 } from '../api/compensatoryLeave'
 
 const MY_GRANTS_KEY = ['compensatory-leave', 'grants', 'mine']
@@ -52,8 +53,8 @@ export function useRevokeCompensatoryLeaveGrant() {
   })
 }
 
-export function useMyCompensatoryLeaveRequests() {
-  return useQuery({ queryKey: MY_REQUESTS_KEY, queryFn: fetchMyCompensatoryLeaveRequests })
+export function useMyCompensatoryLeaveRequests(params: FetchMyCompensatoryLeaveRequestsParams = {}) {
+  return useQuery({ queryKey: [...MY_REQUESTS_KEY, params], queryFn: () => fetchMyCompensatoryLeaveRequests(params) })
 }
 
 function useInvalidateCompensatoryLeaveRequests() {

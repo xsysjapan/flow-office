@@ -23,6 +23,7 @@ import {
   type CreateSpecialLeaveTypeInput,
   type GrantSpecialLeaveInput,
   type UpdateSpecialLeaveTypeInput,
+  type FetchMySpecialLeaveRequestsParams,
 } from '../api/specialLeave'
 
 const TYPES_KEY = ['special-leave', 'types']
@@ -121,8 +122,8 @@ export function useRevokeSpecialLeaveGrant() {
   })
 }
 
-export function useMySpecialLeaveRequests() {
-  return useQuery({ queryKey: MY_REQUESTS_KEY, queryFn: fetchMySpecialLeaveRequests })
+export function useMySpecialLeaveRequests(params: FetchMySpecialLeaveRequestsParams = {}) {
+  return useQuery({ queryKey: [...MY_REQUESTS_KEY, params], queryFn: () => fetchMySpecialLeaveRequests(params) })
 }
 
 export function useCreateSpecialLeaveRequest() {

@@ -15,7 +15,7 @@ class GetMyLeaveRequestsTool implements Tool
 
     public function description(): string
     {
-        return '自分の有給申請一覧を取得する。';
+        return '自分の有給申請一覧を取得する。新しい順(対象日の降順)に20件を返し、応答のmetaにページ情報が入る。';
     }
 
     public function inputSchema(): array

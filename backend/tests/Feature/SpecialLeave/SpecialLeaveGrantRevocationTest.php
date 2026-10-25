@@ -66,6 +66,60 @@ class SpecialLeaveGrantRevocationTest extends TestCase
         $this->assertEquals(0.0, (float) $grant->remaining_days);
     }
 
+    public function test_my_grants_hides_a_revoked_grant_while_the_admin_list_still_shows_it(): void
+    {
+        $hr = User::factory()->create();
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $employee = User::factory()->create();
+        $type = SpecialLeaveType::query()->create(['name' => '慶弔休暇', 'is_active' => true, 'requires_grant' => true]);
+
+        $grant = fn (string $grantedOn): string => $this->actingAs($hr)->postJson('/api/special-leave/grants', [
+            'user_id' => $employee->id,
+            'special_leave_type_id' => $type->id,
+            'granted_on' => $grantedOn,
+            'granted_days' => 5,
+            'grant_reason' => '慶弔',
+        ])->assertCreated()->json('id');
+
+        $grant('2026-07-01');
+        $latestGrantId = $grant('2026-07-02');
+
+        $this->actingAs($hr)->postJson("/api/special-leave/grants/{$latestGrantId}/revoke")->assertOk();
+
+        $mine = $this->actingAs($employee)->getJson('/api/special-leave/grants/mine');
+        $mine->assertOk();
+        $this->assertCount(1, $mine->json());
+        $this->assertSame('2026-07-01', $mine->json()[0]['granted_on']);
+
+        $adminList = $this->actingAs($hr)->getJson("/api/special-leave/grants/user/{$employee->id}")->assertOk()->json();
+        $this->assertCount(2, $adminList);
+        $this->assertSame('revoked', collect($adminList)->firstWhere('granted_on', '2026-07-02')['status']);
+    }
+
+    public function test_my_grants_hides_a_grant_with_no_remaining_days(): void
+    {
+        $hr = User::factory()->create();
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $employee = User::factory()->create();
+        $type = SpecialLeaveType::query()->create(['name' => '慶弔休暇', 'is_active' => true, 'requires_grant' => true]);
+
+        $grant = fn (string $grantedOn): string => $this->actingAs($hr)->postJson('/api/special-leave/grants', [
+            'user_id' => $employee->id,
+            'special_leave_type_id' => $type->id,
+            'granted_on' => $grantedOn,
+            'granted_days' => 5,
+            'grant_reason' => '慶弔',
+        ])->assertCreated()->json('id');
+
+        $grant('2026-07-01');
+        $usedUpGrantId = $grant('2026-07-02');
+        SpecialLeaveGrant::query()->findOrFail($usedUpGrantId)->update(['used_days' => 5, 'remaining_days' => 0]);
+
+        $mine = $this->actingAs($employee)->getJson('/api/special-leave/grants/mine')->assertOk();
+        $this->assertCount(1, $mine->json());
+        $this->assertSame('2026-07-01', $mine->json()[0]['granted_on']);
+    }
+
     public function test_revocation_is_blocked_once_any_days_have_been_used(): void
     {
         $hr = User::factory()->create();

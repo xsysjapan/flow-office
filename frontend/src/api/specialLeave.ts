@@ -1,5 +1,6 @@
 import { apiFetch } from './client'
 import type {
+  Paginated,
   PaidLeaveType,
   SpecialLeaveGrant,
   SpecialLeaveGrantRule,
@@ -87,8 +88,15 @@ export function revokeSpecialLeaveGrant(grantId: string, reason?: string): Promi
   return apiFetch(`/special-leave/grants/${grantId}/revoke`, { method: 'POST', body: { reason } })
 }
 
-export function fetchMySpecialLeaveRequests(): Promise<SpecialLeaveRequest[]> {
-  return apiFetch('/special-leave/requests/mine')
+export interface FetchMySpecialLeaveRequestsParams {
+  page?: number
+  /** 指定するとその日(Y-m-d)の申請だけを返す。 */
+  targetDate?: string
+}
+
+/** 自分の申請一覧。対象日の降順に20件ずつのページング。 */
+export function fetchMySpecialLeaveRequests(params: FetchMySpecialLeaveRequestsParams = {}): Promise<Pick<Paginated<SpecialLeaveRequest>, 'data' | 'meta'>> {
+  return apiFetch('/special-leave/requests/mine', { query: { page: params.page, target_date: params.targetDate } })
 }
 
 export interface CreateSpecialLeaveRequestInput {

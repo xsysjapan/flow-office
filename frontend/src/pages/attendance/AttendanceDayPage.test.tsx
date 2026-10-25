@@ -108,6 +108,10 @@ const recordedDay: AttendanceDay = {
   },
 }
 
+function leavePage<T>(data: T[]) {
+  return { data, meta: { current_page: 1, last_page: 1, total: data.length } }
+}
+
 function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date, shiftSwapRequiresApproval = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
@@ -792,9 +796,9 @@ describe('AttendanceDayPage', () => {
 
     it('does not show a cancel item when there is no approved leave on this day', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
-      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([])
-      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
-      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(leavePage([]))
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue(leavePage([]))
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([]))
       renderPage([recordedDay])
 
       await screen.findByText('日次勤怠')
@@ -805,11 +809,25 @@ describe('AttendanceDayPage', () => {
       expect(screen.queryByRole('menuitem', { name: '代休の承認を取り消す' })).not.toBeInTheDocument()
     })
 
+    it('reads the leave requests of the displayed day only', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      const paidSpy = vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(leavePage([]))
+      const specialSpy = vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue(leavePage([]))
+      const compensatorySpy = vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([]))
+      renderPage([recordedDay])
+
+      await screen.findByText('日次勤怠')
+
+      expect(paidSpy).toHaveBeenCalledWith({ targetDate: date })
+      expect(specialSpy).toHaveBeenCalledWith({ targetDate: date })
+      expect(compensatorySpy).toHaveBeenCalledWith({ targetDate: date })
+    })
+
     it('cancels an approved paid leave request from the kebab menu', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
-      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([approvedPaidLeaveRequest])
-      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
-      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(leavePage([approvedPaidLeaveRequest]))
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue(leavePage([]))
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([]))
       vi.spyOn(paidLeaveApi, 'cancelPaidLeaveRequest').mockResolvedValue({ ...approvedPaidLeaveRequest, status: 'cancelled' })
       renderPage([recordedDay])
 
@@ -826,9 +844,9 @@ describe('AttendanceDayPage', () => {
 
     it('shows cancel items for approved special-leave and compensatory-leave requests on the same day', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
-      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([])
-      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([approvedSpecialLeaveRequest])
-      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([approvedCompensatoryLeaveRequest])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(leavePage([]))
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue(leavePage([approvedSpecialLeaveRequest]))
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([approvedCompensatoryLeaveRequest]))
       renderPage([recordedDay])
 
       await screen.findByText('日次勤怠')
@@ -857,9 +875,9 @@ describe('AttendanceDayPage', () => {
 
     it('does not show the duplicated inline leave field and keeps leave requests in the kebab menu', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
-      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([])
-      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
-      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(leavePage([]))
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue(leavePage([]))
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([]))
       renderPage([recordedDay])
 
       await userEvent.click(await screen.findByRole('button', { name: '編集' }))
@@ -874,9 +892,9 @@ describe('AttendanceDayPage', () => {
 
     it.skip('applies for paid leave as part of saving the day edit, without a free-text work_type', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
-      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([])
-      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
-      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(leavePage([]))
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue(leavePage([]))
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([]))
       vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue(recordedDay)
       const createdPaidLeaveRequest: PaidLeaveRequest = {
         id: 'paid-leave-request-2',
@@ -952,9 +970,9 @@ describe('AttendanceDayPage', () => {
         ],
       }
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
-      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([approvedPaidLeaveRequest])
-      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
-      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(leavePage([approvedPaidLeaveRequest]))
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue(leavePage([]))
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([]))
       vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue({ ...paidLeaveDay, leaves: [] })
       vi.spyOn(paidLeaveApi, 'cancelPaidLeaveRequest').mockResolvedValue({ ...approvedPaidLeaveRequest, status: 'cancelled' })
       const createPaidLeaveRequestSpy = vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest')
