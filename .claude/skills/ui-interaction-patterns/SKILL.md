@@ -329,6 +329,8 @@ Pagination
 - 頻繁に使うFilterのみ直接表示し、低頻度Filterは追加Filterにまとめる
 - Filterが有効なときはそれが視覚的に分かるようにする
 - ページングは`components/Pagination`を使う
+- 一覧を作る・変えるときは、件数が増え得るかを必ず検討し、増え得るならAPI側でページングし(`paginate`)、画面は`components/Pagination`を使う。
+  全件を返す・表示する場合は、件数が増えない理由を変更セットに書く
 - 状態はURLに載せる(§2.10)
 
 ### 2.21 Selection / Bulk Actions
@@ -412,6 +414,28 @@ Focus Indicatorの見た目・消さないルールは`ui-design-system` §2.5�
 - **入れ子オブジェクト**を意識する。あるオブジェクトが別オブジェクトを内包/参照する場合
   (カレンダー年度が日別設定を内包する、申請が承認履歴を内包する等)、一覧では要約だけ
   埋め込み、詳細はリンクで正史画面に逃がす。
+
+### 2.25 同種の業務を持つ画面群の操作感の統一(休暇)
+
+有給・特別休暇・代休は、同じ種類の業務(付与・消化・申請・取消)を持つ画面群として扱い、操作感を揃える。
+1つの休暇の画面・APIを変えるときは、残りの休暇にも同じ変更が要るかを必ず確かめる(変更セットの
+「設計前提の検証」の横展開。`changeset`スキル)。
+
+- 対象の画面:
+  - 本人の画面:`pages/paidLeave/MyPaidLeavePage.tsx`・`pages/specialLeave/MySpecialLeavePage.tsx`・
+    `pages/compensatoryLeave/MyCompensatoryLeavePage.tsx`
+  - 管理画面:`pages/paidLeave/PaidLeavePolicyPage.tsx`(付与・使用状況)・`pages/specialLeave/SpecialLeaveAdminPage.tsx`・
+    `pages/compensatoryLeave/CompensatoryLeaveAdminPage.tsx`
+- 揃えるもの:
+  - 付与一覧の行内の操作は共通部品を使い、同じ並び・同じ名称にする(取消:`components/RevokeGrantButton`、
+    付与日数の変更:`components/ChangeGrantDaysButton`(変更セット20261025-edit-leave-grant-daysで追加))。
+  - ある休暇でできない操作は、ボタンを隠さず同じ位置に置き、押せない理由を`disabledReason`で示す
+    (例:代休の日数は勤怠から決まるため変更できない)。§2.14と同じ考え方。
+  - 本人の画面の付与一覧・合計に出す付与の条件(取り消した付与・残りの無い付与を出さない等)、申請一覧の並び順・
+    ページングは、3種で同じにする。条件は本人向けのAPI(`/*/grants/mine`・`/*/requests/mine`)側で揃える。
+  - 確認ダイアログの文言の型(タイトル「〜しますか?」、説明に対象の付与日・日数、取り消せない場合はその旨)を揃える。
+- 揃えられない差がある場合(休暇ごとの業務ルールの違い。例:有給は最新の付与だけ変更・取消できる)は、
+  判定をAPI側に置き、画面は押せる/押せないと理由の表示だけを揃える。差と理由は変更セットに書く。
 
 ---
 
@@ -515,6 +539,7 @@ Buttonの外観変更      → ui-design-system のみ
 ## 5. Implementation Checklist
 
 - [ ] 同じ意味の操作が他画面と同じ位置・名称・挙動になっている
+- [ ] 休暇(有給・特別休暇・代休)の画面を変えた場合、残りの休暇の画面にも同じ変更が要るかを確かめ、操作感が揃っている(§2.25)
 - [ ] UI文言が§2.7の語彙に沿っている(「登録」を一般操作名に使っていない)
 - [ ] 強いPrimary Actionが1画面に1つ
 - [ ] 行クリックの挙動が同種の一覧と揃っている
@@ -523,6 +548,7 @@ Buttonの外観変更      → ui-design-system のみ
 - [ ] 保存後の遷移先が作成時/更新時で不自然に非対称になっていない
 - [ ] BackとCancelを区別している
 - [ ] 未保存の変更がある場合だけ離脱警告が出る
+- [ ] 一覧のページングの要否を検討した(件数が増え得るならAPIと画面の両方でページングしている)
 - [ ] Search / Filter / Sort / PageがURLに反映され、詳細から戻っても維持される
 - [ ] Dialog / Sheet / Page の選択が§2.11に沿っている
 - [ ] 戻せない削除に、対象名と不可逆であることを明示した確認がある

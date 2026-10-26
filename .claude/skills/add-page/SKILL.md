@@ -73,6 +73,12 @@ account/integrations/notifications等) にドメインごとに分けて置き�
    `locator('main')`/`locator('.fo-badge')`のようなCSS/クラスセレクタは
    role/labelでは表現できない場合の最終手段にとどめる)。
 
+   **e2eで画面を操作する前に、読み込みの完了を待つ。** ページを開いた直後に操作すると、上のカードの読み込みが
+   終わったときに操作中の要素が画面外へ押し出されることがある(ポップオーバーの候補が`position: fixed`のまま画面外に残り、
+   Playwrightが「element is outside of the viewport」で止まった)。`await expect(page.getByText('読み込み中...')).toHaveCount(0)`
+   (`LoadingState`の見えない文言)のように、画面上の読み込み中の表示が無くなるのを待ってから操作する。
+   `waitForLoadState('networkidle')`や`dispatchEvent('click')`での回避はしない。
+
 5. **Storyを書く**: ページがhookでデータ取得する場合、`QueryClient`を作って
    `queryClient.setQueryData(queryKey, データ)`で該当queryKeyに値を仕込んでから
    `QueryClientProvider`でラップする(実ネットワーク呼び出しをStorybook上で発生させない)。

@@ -327,6 +327,9 @@ docs/changesets/20260906-paid-leave-domain-redesign/spec.md)で、旧`paid_leave
 
 - `special_leave_account.grant_registered` → `SpecialLeaveAccountGrantRegistered`
   (grantId, specialLeaveTypeId, grantedOn, expiresOn, grantedDays, grantReason, userId)。付与の登録。
+- `special_leave_account.grant_amount_changed` → `SpecialLeaveAccountGrantAmountChanged`
+  (grantId, newGrantedDays, reason, changedByUserId)。管理者による付与日数の変更(変更前の日数は持たない)。
+  使用済みの日数を下回る日数・取消済みの付与は拒否し、同じ日数なら記録しない。増やしても未充当は充当し直さない。
 - `special_leave_account.grant_revoked` → `SpecialLeaveAccountGrantRevoked`(grantId, revokedByUserId, reason)。
 - `special_leave_account.usage_designated` → `SpecialLeaveAccountUsageDesignated`
   (usageId, requestId, specialLeaveTypeId, usedOn, usageType, usedDays, usedMinutes, userId)。

@@ -12,6 +12,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Pagination } from '../../components/Pagination/Pagination'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -281,52 +282,73 @@ function SpecialLeaveRequestForm() {
 }
 
 function MySpecialLeaveRequestList() {
-  const { data, isLoading, error } = useMySpecialLeaveRequests()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const pageParam = Number(searchParams.get('requestPage'))
+  const requestPage = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const { data, isLoading, error } = useMySpecialLeaveRequests({ page: requestPage })
   const cancelRequest = useCancelSpecialLeaveRequest()
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="特別休暇申請の取得に失敗しました。" />
 
-  const requests = data ?? []
+  const requests = data?.data ?? []
 
-  if (requests.length === 0) {
+  if (data?.meta.total === 0) {
     return <EmptyState title="特別休暇申請はまだありません。" description="特別休暇を申請すると、ここに一覧が表示されます。" />
   }
 
+  function handlePageChange(nextPage: number) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('requestPage', String(nextPage))
+      return next
+    })
+  }
+
   return (
-    <ul className="divide-y divide-border">
-      {requests.map((req) => {
-        const { label, tone } = paidLeaveRequestStatusLabel(req.status)
-        return (
-          <li key={req.id} className="flex items-center justify-between gap-3 py-3">
-            <div className="flex items-center gap-4 text-sm">
-              <span className="text-foreground">{req.target_date}</span>
-              <span className="text-muted-foreground">{req.special_leave_type_name}</span>
-              <span className="text-muted-foreground">{paidLeaveTypeLabel(req.leave_type)}</span>
-              <span className="text-muted-foreground">{req.requested_days}日</span>
-              <Badge tone={tone}>{label}</Badge>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              {req.status === 'returned' && <LeaveReturnedNotice workflowRequestId={req.workflow_request_id} />}
-              {/* 取消は元に戻せない操作(SKILL.md §2.12)のため、ConfirmActionDialogで結果を確認させる
-                  (WorkflowRequestDetailPageの取消確認と同じ扱い)。差し戻された申請も取消できる。 */}
-              {(req.status === 'submitted' || req.status === 'returned') && (
-                <ConfirmActionDialog
-                  triggerLabel="取消"
-                  triggerVariant="secondary"
-                  title={`${req.target_date}の特別休暇申請を取り消しますか?`}
-                  description="この操作は元に戻せません。申請は取消状態になります。"
-                  confirmLabel="取消する"
-                  isPending={cancelRequest.isPending && cancelRequest.variables === req.id}
-                  error={cancelRequest.variables === req.id ? cancelRequest.error : undefined}
-                  onConfirm={() => cancelRequest.mutateAsync(req.id)}
-                />
-              )}
-            </div>
-          </li>
-        )
-      })}
-    </ul>
+    <>
+      <ul className="divide-y divide-border">
+        {requests.map((req) => {
+          const { label, tone } = paidLeaveRequestStatusLabel(req.status)
+          return (
+            <li key={req.id} className="flex items-center justify-between gap-3 py-3">
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-foreground">{req.target_date}</span>
+                <span className="text-muted-foreground">{req.special_leave_type_name}</span>
+                <span className="text-muted-foreground">{paidLeaveTypeLabel(req.leave_type)}</span>
+                <span className="text-muted-foreground">{req.requested_days}日</span>
+                <Badge tone={tone}>{label}</Badge>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                {req.status === 'returned' && <LeaveReturnedNotice workflowRequestId={req.workflow_request_id} />}
+                {/* 取消は元に戻せない操作(SKILL.md §2.12)のため、ConfirmActionDialogで結果を確認させる
+                    (WorkflowRequestDetailPageの取消確認と同じ扱い)。差し戻された申請も取消できる。 */}
+                {(req.status === 'submitted' || req.status === 'returned') && (
+                  <ConfirmActionDialog
+                    triggerLabel="取消"
+                    triggerVariant="secondary"
+                    title={`${req.target_date}の特別休暇申請を取り消しますか?`}
+                    description="この操作は元に戻せません。申請は取消状態になります。"
+                    confirmLabel="取消する"
+                    isPending={cancelRequest.isPending && cancelRequest.variables === req.id}
+                    error={cancelRequest.variables === req.id ? cancelRequest.error : undefined}
+                    onConfirm={() => cancelRequest.mutateAsync(req.id)}
+                  />
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+      {data && (
+        <Pagination
+          currentPage={data.meta.current_page}
+          lastPage={data.meta.last_page}
+          total={data.meta.total}
+          onPageChange={handlePageChange}
+        />
+      )}
+    </>
   )
 }
 

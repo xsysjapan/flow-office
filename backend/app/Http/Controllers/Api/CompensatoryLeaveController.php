@@ -25,6 +25,7 @@ use App\Http\Resources\CompensatoryLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
 use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveGrantCancellation;
+use App\Models\CompensatoryLeaveGrantStatus;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveRequestStatus;
 use App\Models\CompensatoryLeaveUsage;
@@ -50,7 +51,8 @@ class CompensatoryLeaveController extends Controller
     #[OA\Get(
         path: '/compensatory-leave/grants/mine',
         operationId: 'compensatoryLeave.grants.mine',
-        summary: '自分の代休残数を取得する',
+        summary: '自分の代休残数を取得する(取り消した付与・残りの無い付与は含めない)',
+        description: '本人の残りのある(残日数または残分数が0より大きい)代休付与を返す。取消(status=cancelled)された付与は含めない。仮(draft)と確定(confirmed)の付与は返す。取消の記録は代休履歴で確認する。',
         tags: ['代休'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
@@ -58,6 +60,8 @@ class CompensatoryLeaveController extends Controller
     {
         $grants = CompensatoryLeaveGrant::query()
             ->where('user_id', $request->user()->id)
+            ->where('status', '!=', CompensatoryLeaveGrantStatus::CANCELLED)
+            ->where(fn ($query) => $query->where('remaining_days', '>', 0)->orWhere('remaining_minutes', '>', 0))
             ->orderByRaw('expires_on is null')
             ->orderBy('expires_on')
             ->get();
@@ -238,17 +242,29 @@ class CompensatoryLeaveController extends Controller
     #[OA\Get(
         path: '/compensatory-leave/requests/mine',
         operationId: 'compensatoryLeave.requests.mine',
-        summary: '自分の代休申請一覧を取得する',
+        summary: '自分の代休申請一覧を取得する(対象日の降順・20件ずつ)',
+        description: '本人の代休申請を対象日(target_date)の降順、同じ日はidの降順で20件ずつ返す。応答は{ data, links, meta }のページング形式。target_dateを指定するとその日の申請だけを返す。',
         tags: ['代休'],
+        parameters: [
+            new OA\Parameter(name: 'page', in: 'query', required: false, description: 'ページ番号(1以上、既定1)', schema: new OA\Schema(type: 'integer', minimum: 1)),
+            new OA\Parameter(name: 'target_date', in: 'query', required: false, description: '対象日(Y-m-d)。指定するとその日の申請だけを返す', schema: new OA\Schema(type: 'string', format: 'date')),
+        ],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function myRequests(Request $request, LeaveRequestWorkflowLinks $links): AnonymousResourceCollection
     {
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'target_date' => ['sometimes', 'date_format:Y-m-d'],
+        ]);
+
         $requests = CompensatoryLeaveRequest::query()
             ->with('user', 'approver')
             ->where('user_id', $request->user()->id)
+            ->when(isset($data['target_date']), fn ($query) => $query->whereDate('target_date', $data['target_date']))
             ->orderByDesc('target_date')
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(20);
         $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_COMPENSATORY, $requests);
 
         return CompensatoryLeaveRequestResource::collection($requests);

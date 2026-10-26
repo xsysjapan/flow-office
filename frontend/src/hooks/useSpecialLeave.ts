@@ -16,6 +16,7 @@ import {
   fetchSpecialLeaveTypes,
   fetchSpecialLeaveUsagesForUser,
   grantSpecialLeave,
+  changeSpecialLeaveGrantedDays,
   revokeSpecialLeaveGrant,
   updateSpecialLeaveType,
   type CreateSpecialLeaveGrantRuleInput,
@@ -23,6 +24,7 @@ import {
   type CreateSpecialLeaveTypeInput,
   type GrantSpecialLeaveInput,
   type UpdateSpecialLeaveTypeInput,
+  type FetchMySpecialLeaveRequestsParams,
 } from '../api/specialLeave'
 
 const TYPES_KEY = ['special-leave', 'types']
@@ -110,6 +112,19 @@ export function useGrantSpecialLeave() {
   })
 }
 
+export function useChangeSpecialLeaveGrantedDays() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ grantId, grantedDays, reason }: { grantId: string; grantedDays: number; reason?: string }) =>
+      changeSpecialLeaveGrantedDays(grantId, grantedDays, reason),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['special-leave', 'grants', 'user', data.user_id] })
+      void queryClient.invalidateQueries({ queryKey: ['special-leave', 'history', 'user', data.user_id] })
+    },
+  })
+}
+
 export function useRevokeSpecialLeaveGrant() {
   const queryClient = useQueryClient()
 
@@ -121,8 +136,8 @@ export function useRevokeSpecialLeaveGrant() {
   })
 }
 
-export function useMySpecialLeaveRequests() {
-  return useQuery({ queryKey: MY_REQUESTS_KEY, queryFn: fetchMySpecialLeaveRequests })
+export function useMySpecialLeaveRequests(params: FetchMySpecialLeaveRequestsParams = {}) {
+  return useQuery({ queryKey: [...MY_REQUESTS_KEY, params], queryFn: () => fetchMySpecialLeaveRequests(params) })
 }
 
 export function useCreateSpecialLeaveRequest() {

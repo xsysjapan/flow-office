@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
+import { pickUser } from './support/ui'
 import {
   approvePaidLeaveRequest,
   createPaidLeaveGrant,
@@ -106,13 +107,10 @@ test('最新の付与を取り消したあと、消化済みの古い付与も�
 
     // 画面: 有給付与ポリシー画面で小林 誠を個別に選ぶと「対象社員の有給付与状況」が出る。
     await adminPage.goto('/admin/paid-leave')
-    // 付与対象の複数選択ポップオーバーの候補は、ビューポートを広げてもPlaywrightが「画面外」と判定してクリックできない
-    // (pickUserが止まる)ため、検索結果の候補にclickイベントを直接送って選ぶ。
-    await adminPage.getByLabel('付与対象', { exact: true }).click()
-    await adminPage.getByPlaceholder('氏名またはメールアドレスで検索').fill(SCENARIO_USERS.accountingStaff)
-    await adminPage.getByRole('option', { name: `${SCENARIO_USERS.accountingStaff}(${APPLICANT_EMAIL})` }).dispatchEvent('click')
+    // 上のカード(付与ルールの対象社員の一覧)の読み込みが終わるまで待ってから付与対象を選ぶ。
+    await expect(adminPage.getByText('読み込み中...')).toHaveCount(0)
+    await pickUser(adminPage, '付与対象', SCENARIO_USERS.accountingStaff, APPLICANT_EMAIL, { exact: true })
     await expect(adminPage.getByRole('listitem').filter({ hasText: `${SCENARIO_USERS.accountingStaff}(${APPLICANT_EMAIL})` })).toBeVisible()
-    await adminPage.keyboard.press('Escape')
     await expect(adminPage.getByRole('heading', { name: '対象社員の有給付与状況' })).toBeVisible()
 
     const rowA = adminPage.locator('li', { hasText: `${grantedOnA} 〜` })

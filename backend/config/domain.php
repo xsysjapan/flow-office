@@ -372,11 +372,13 @@ use App\Domain\SpecialLeaveAccount\Commands\CancelSpecialLeaveUsage;
 use App\Domain\SpecialLeaveAccount\Commands\ConfirmSpecialLeaveUsage;
 use App\Domain\SpecialLeaveAccount\Commands\DesignateSpecialLeaveUsage;
 use App\Domain\SpecialLeaveAccount\Commands\RegisterSpecialLeaveGrant;
+use App\Domain\SpecialLeaveAccount\Commands\ChangeSpecialLeaveGrantAmount;
 use App\Domain\SpecialLeaveAccount\Commands\RevokeSpecialLeaveAccountGrant;
 use App\Domain\SpecialLeaveAccount\Handlers\CancelSpecialLeaveUsageHandler;
 use App\Domain\SpecialLeaveAccount\Handlers\ConfirmSpecialLeaveUsageHandler;
 use App\Domain\SpecialLeaveAccount\Handlers\DesignateSpecialLeaveUsageHandler;
 use App\Domain\SpecialLeaveAccount\Handlers\RegisterSpecialLeaveGrantHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\ChangeSpecialLeaveGrantAmountHandler;
 use App\Domain\SpecialLeaveAccount\Handlers\RevokeSpecialLeaveAccountGrantHandler;
 use App\Domain\UserManagement\Commands\AddMembership;
 use App\Domain\UserManagement\Commands\ApplyExternalHrImport;
@@ -689,6 +691,7 @@ return [
         RevokeSpecialLeaveGrant::class => RevokeSpecialLeaveGrantHandler::class,
         ResubmitSpecialLeaveRequest::class => ResubmitSpecialLeaveRequestHandler::class,
         RegisterSpecialLeaveGrant::class => RegisterSpecialLeaveGrantHandler::class,
+        ChangeSpecialLeaveGrantAmount::class => ChangeSpecialLeaveGrantAmountHandler::class,
         RevokeSpecialLeaveAccountGrant::class => RevokeSpecialLeaveAccountGrantHandler::class,
         DesignateSpecialLeaveUsage::class => DesignateSpecialLeaveUsageHandler::class,
         ConfirmSpecialLeaveUsage::class => ConfirmSpecialLeaveUsageHandler::class,

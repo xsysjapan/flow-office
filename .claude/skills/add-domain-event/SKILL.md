@@ -58,11 +58,21 @@ Projection Table の流れを守る (`docs/03-architecture.md`)。新しい業�
 - 同じイベント内ではProjectorがReactorより先に処理される。Projectorは行が無ければ何もしない(順序非依存。`findOrFail`を使わない)。
 - 連鎖全体を通すシナリオテストを書く(`.claude/skills/domain-test`)。
 
+## シーダー・前提データの投入
+
+シーダー(`database/seeders/`)・migration・運用コマンドでReadModel(Projectorが書くテーブル)の行を作るときも、Command(CommandBus)を
+発行してイベントを記録する。`Model::create`・`DB::table()->insert`等で直接書かない。直接書いた行はイベントから作り直せず、
+ReadModelの作り直しで消える(開発用の管理者・ロールの割り当て・機能の割り当てが消えた)。
+- 直接書いてよいのは、Projectorが書かない参照マスタ(`ReadModelTableLister`の対象外。雇用区分・経費区分等)だけ。
+- 再実行に耐えるよう、既にあれば何もしない(同じIDやメールで存在を確かめてからCommandを発行する)。
+- 確認:シーダーの後に作り直しの試し実行(`read-models:rebuild --dry-run`)をすると、変更のあるテーブルが0件になる。
+
 ## チェックリスト (実装後)
 
 - [ ] `docs/17-events.md` に新イベントを追記した
 - [ ] CommandHandler以外で正データを直接更新している箇所がない
 - [ ] イベントを書かずに状態だけ変える経路がない
 - [ ] Projectionはイベントから再生成可能 (直接書き換えていない)
+- [ ] シーダー・migration・運用コマンドでもReadModelの行をCommand経由で作っている
 - [ ] `docs/20-implementation-notes.md` のチェックリストに抵触していない
 - [ ] 他文脈のイベントに反応する場合、Reactor経由のCommandが冪等(`viaReactor`)で、他文脈のテーブルを読んでいない

@@ -31,7 +31,7 @@ class CompensatoryLeaveWorkflowRequestIdTest extends TestCase
         $this->assertNotNull($workflowRequestId);
 
         $this->actingAs($employee)->getJson('/api/compensatory-leave/requests/mine')
-            ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
+            ->assertOk()->assertJsonPath('data.0.workflow_request_id', $workflowRequestId);
         $this->actingAs($approver)->getJson('/api/compensatory-leave/requests/to-approve')
             ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
         $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")
@@ -72,6 +72,6 @@ class CompensatoryLeaveWorkflowRequestIdTest extends TestCase
         ])->assertCreated()->assertJsonPath('workflow_request_id', null);
 
         $this->actingAs($employee)->getJson('/api/compensatory-leave/requests/mine')
-            ->assertOk()->assertJsonPath('0.workflow_request_id', null);
+            ->assertOk()->assertJsonPath('data.0.workflow_request_id', null);
     }
 }

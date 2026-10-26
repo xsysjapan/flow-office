@@ -12,6 +12,7 @@ use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RevokeSpecialLeaveGrant;
 use App\Domain\SpecialLeaveAccount\Aggregates\SpecialLeaveAccountAggregate;
+use App\Domain\SpecialLeaveAccount\Commands\ChangeSpecialLeaveGrantAmount;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -28,6 +29,7 @@ use App\Models\LeaveRequestWorkflowLink;
 use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveGrantRule;
+use App\Models\SpecialLeaveGrantStatus;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
@@ -193,7 +195,8 @@ class SpecialLeaveController extends Controller
     #[OA\Get(
         path: '/special-leave/grants/mine',
         operationId: 'specialLeave.grants.mine',
-        summary: '自分の特別休暇残数を取得する',
+        summary: '自分の特別休暇残数を取得する(取り消した付与・残りの無い付与は含めない)',
+        description: '本人の有効な(status=active)で残日数のある特別休暇付与を返す。管理者により取り消された付与(status=revoked)は含めない。',
         tags: ['特別休暇'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
@@ -202,6 +205,8 @@ class SpecialLeaveController extends Controller
         $grants = SpecialLeaveGrant::query()
             ->with('specialLeaveType')
             ->where('user_id', $request->user()->id)
+            ->where('status', SpecialLeaveGrantStatus::ACTIVE)
+            ->where('remaining_days', '>', 0)
             ->orderByRaw('expires_on is null')
             ->orderBy('expires_on')
             ->get();
@@ -258,6 +263,37 @@ class SpecialLeaveController extends Controller
         ));
 
         return (new SpecialLeaveGrantResource($grant->load('specialLeaveType')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 管理者が特別休暇付与の付与日数を変更する。取消済み・使用済みの日数を下回る日数は口座集約が拒否する(422)。
+     * 日数が同じならイベントを記録しない。
+     */
+    #[OA\Put(
+        path: '/special-leave/grants/{grant}/granted-days',
+        operationId: 'specialLeave.grants.changeGrantedDays',
+        summary: '特別休暇付与の付与日数を変更する',
+        tags: ['特別休暇'],
+        parameters: [new OA\Parameter(name: 'grant', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['granted_days'], properties: [new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function changeGrantedDays(Request $request, SpecialLeaveGrant $grant, CommandBus $commandBus): SpecialLeaveGrantResource
+    {
+        $data = $request->validate([
+            'granted_days' => ['required', 'numeric', 'min:0.5'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $commandBus->dispatch(new ChangeSpecialLeaveGrantAmount(
+            userId: (string) $grant->user_id,
+            grantId: (string) $grant->id,
+            newGrantedDays: (float) $data['granted_days'],
+            changedByUserId: $request->user()->id,
+            reason: $data['reason'] ?? null,
+        ));
+
+        return new SpecialLeaveGrantResource($grant->refresh()->load('specialLeaveType'));
     }
 
     /**
@@ -384,17 +420,29 @@ class SpecialLeaveController extends Controller
     #[OA\Get(
         path: '/special-leave/requests/mine',
         operationId: 'specialLeave.requests.mine',
-        summary: '自分の特別休暇申請一覧を取得する',
+        summary: '自分の特別休暇申請一覧を取得する(対象日の降順・20件ずつ)',
+        description: '本人の特別休暇申請を対象日(target_date)の降順、同じ日はidの降順で20件ずつ返す。応答は{ data, links, meta }のページング形式。target_dateを指定するとその日の申請だけを返す。',
         tags: ['特別休暇'],
+        parameters: [
+            new OA\Parameter(name: 'page', in: 'query', required: false, description: 'ページ番号(1以上、既定1)', schema: new OA\Schema(type: 'integer', minimum: 1)),
+            new OA\Parameter(name: 'target_date', in: 'query', required: false, description: '対象日(Y-m-d)。指定するとその日の申請だけを返す', schema: new OA\Schema(type: 'string', format: 'date')),
+        ],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function myRequests(Request $request, LeaveRequestWorkflowLinks $links): AnonymousResourceCollection
     {
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'target_date' => ['sometimes', 'date_format:Y-m-d'],
+        ]);
+
         $requests = SpecialLeaveRequest::query()
             ->with('user', 'approver', 'specialLeaveType')
             ->where('user_id', $request->user()->id)
+            ->when(isset($data['target_date']), fn ($query) => $query->whereDate('target_date', $data['target_date']))
             ->orderByDesc('target_date')
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(20);
         $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, $requests);
 
         return SpecialLeaveRequestResource::collection($requests);

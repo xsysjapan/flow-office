@@ -25,6 +25,7 @@ import {
   grantPaidLeave,
   overridePaidLeaveScheduleAssessment,
   reassessPaidLeaveScheduleEntry,
+  changePaidLeaveGrantedDays,
   revokePaidLeaveGrant,
   startPaidLeaveScheduleAssessmentRun,
   updatePaidLeaveGrantRule,
@@ -34,6 +35,7 @@ import {
   type GrantPaidLeaveInput,
   type OverridePaidLeaveScheduleAssessmentInput,
   type PaidLeaveScheduleEntriesParams,
+  type FetchMyPaidLeaveRequestsParams,
 } from '../api/paidLeave'
 import type { PaidLeaveGrantPolicyStep, PaidLeaveProportionalGrantPolicyStep, PaidLeaveScheduleAssessmentRun } from '../api/types'
 
@@ -163,6 +165,20 @@ export function useGrantPaidLeave() {
   })
 }
 
+export function useChangePaidLeaveGrantedDays() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ grantId, grantedDays, reason }: { grantId: string; grantedDays: number; reason?: string }) =>
+      changePaidLeaveGrantedDays(grantId, grantedDays, reason),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grants', 'user', data.user_id] })
+      void queryClient.invalidateQueries({ queryKey: paidLeaveUsagesForUserKey(data.user_id) })
+      void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'history', 'user', data.user_id] })
+    },
+  })
+}
+
 export function useRevokePaidLeaveGrant() {
   const queryClient = useQueryClient()
 
@@ -175,8 +191,8 @@ export function useRevokePaidLeaveGrant() {
   })
 }
 
-export function useMyPaidLeaveRequests() {
-  return useQuery({ queryKey: MY_REQUESTS_KEY, queryFn: fetchMyPaidLeaveRequests })
+export function useMyPaidLeaveRequests(params: FetchMyPaidLeaveRequestsParams = {}) {
+  return useQuery({ queryKey: [...MY_REQUESTS_KEY, params], queryFn: () => fetchMyPaidLeaveRequests(params) })
 }
 
 export function useCreatePaidLeaveRequest() {

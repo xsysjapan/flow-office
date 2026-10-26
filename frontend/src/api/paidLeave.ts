@@ -1,5 +1,6 @@
 import { apiFetch } from './client'
 import type {
+  Paginated,
   PaidLeaveGrant,
   PaidLeaveGrantCycleType,
   PaidLeaveGrantPolicies,
@@ -100,13 +101,25 @@ export function grantPaidLeave(input: GrantPaidLeaveInput): Promise<PaidLeaveGra
   return apiFetch('/paid-leave/grants', { method: 'POST', body: input })
 }
 
+/** 最新の非取消付与の付与日数を変更する(最新でない・充当済みを下回る場合は422)。 */
+export function changePaidLeaveGrantedDays(grantId: string, grantedDays: number, reason?: string): Promise<PaidLeaveGrant> {
+  return apiFetch(`/paid-leave/grants/${grantId}/granted-days`, { method: 'PUT', body: { granted_days: grantedDays, reason } })
+}
+
 /** 使用日数が0の付与のみ取消可能(422で拒否される場合がある)。 */
 export function revokePaidLeaveGrant(grantId: string, reason?: string): Promise<PaidLeaveGrant> {
   return apiFetch(`/paid-leave/grants/${grantId}/revoke`, { method: 'POST', body: { reason } })
 }
 
-export function fetchMyPaidLeaveRequests(): Promise<PaidLeaveRequest[]> {
-  return apiFetch('/paid-leave/requests/mine')
+export interface FetchMyPaidLeaveRequestsParams {
+  page?: number
+  /** 指定するとその日(Y-m-d)の申請だけを返す。 */
+  targetDate?: string
+}
+
+/** 自分の申請一覧。対象日の降順に20件ずつのページング。 */
+export function fetchMyPaidLeaveRequests(params: FetchMyPaidLeaveRequestsParams = {}): Promise<Pick<Paginated<PaidLeaveRequest>, 'data' | 'meta'>> {
+  return apiFetch('/paid-leave/requests/mine', { query: { page: params.page, target_date: params.targetDate } })
 }
 
 export interface CreatePaidLeaveRequestInput {

@@ -1,13 +1,20 @@
 import { apiFetch } from './client'
-import type { CompensatoryLeaveGrant, CompensatoryLeaveRequest, CompensatoryLeaveUsage, PaidLeaveType, StoredEvent } from './types'
+import type { CompensatoryLeaveGrant, CompensatoryLeaveRequest, CompensatoryLeaveUsage, Paginated, PaidLeaveType, StoredEvent } from './types'
 
 /** UC相当: 自分の代休残数(付与)を取得する。付与は休日出勤の勤怠実績から自動導出されるため、付与のCRUDは無い。 */
 export function fetchMyCompensatoryLeaveGrants(): Promise<CompensatoryLeaveGrant[]> {
   return apiFetch('/compensatory-leave/grants/mine')
 }
 
-export function fetchMyCompensatoryLeaveRequests(): Promise<CompensatoryLeaveRequest[]> {
-  return apiFetch('/compensatory-leave/requests/mine')
+export interface FetchMyCompensatoryLeaveRequestsParams {
+  page?: number
+  /** 指定するとその日(Y-m-d)の申請だけを返す。 */
+  targetDate?: string
+}
+
+/** 自分の申請一覧。対象日の降順に20件ずつのページング。 */
+export function fetchMyCompensatoryLeaveRequests(params: FetchMyCompensatoryLeaveRequestsParams = {}): Promise<Pick<Paginated<CompensatoryLeaveRequest>, 'data' | 'meta'>> {
+  return apiFetch('/compensatory-leave/requests/mine', { query: { page: params.page, target_date: params.targetDate } })
 }
 
 export interface CreateCompensatoryLeaveRequestInput {

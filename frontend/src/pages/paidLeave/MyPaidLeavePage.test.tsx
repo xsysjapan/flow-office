@@ -42,10 +42,18 @@ const submittedRequest: PaidLeaveRequest = {
   workflow_request_id: null,
 }
 
-function renderPage(requests: PaidLeaveRequest[] = [], paidLeaveRequiresApproval = true, initialPath = '/paid-leave') {
+function renderPage(
+  requests: PaidLeaveRequest[] = [],
+  paidLeaveRequiresApproval = true,
+  initialPath = '/paid-leave',
+  requestsPaging = { last_page: 1, total: requests.length },
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
-  vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(requests)
+  vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockImplementation(async (params) => ({
+    data: requests,
+    meta: { current_page: params?.page ?? 1, ...requestsPaging },
+  }))
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -351,5 +359,29 @@ describe('MyPaidLeavePage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '取消する' }))
 
     await waitFor(() => expect(paidLeaveApi.cancelPaidLeaveRequest).toHaveBeenCalledWith(submittedRequest.id))
+  })
+
+  it('shows the pagination below the request list', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+
+    renderPage([], true, '/paid-leave', { last_page: 2, total: 21 })
+
+    expect(await screen.findByText('21件中 1 / 2 ページ')).toBeInTheDocument()
+  })
+
+  it('reads the requestPage URL query param and moves between pages', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+
+    renderPage([], true, '/paid-leave?requestPage=2&date=2026-08-20', { last_page: 2, total: 21 })
+
+    expect(await screen.findByText('21件中 2 / 2 ページ')).toBeInTheDocument()
+    expect(paidLeaveApi.fetchMyPaidLeaveRequests).toHaveBeenCalledWith({ page: 2 })
+
+    await userEvent.click(screen.getByRole('button', { name: '前のページ' }))
+
+    expect(await screen.findByText('21件中 1 / 2 ページ')).toBeInTheDocument()
+    expect(paidLeaveApi.fetchMyPaidLeaveRequests).toHaveBeenCalledWith({ page: 1 })
+    // 既存の date クエリは残る。
+    expect(screen.getByText('2026-08-20')).toBeInTheDocument()
   })
 })

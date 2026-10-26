@@ -18,7 +18,11 @@ export interface ConfirmActionDialogProps {
   title: string;
   description: ReactNode;
   confirmLabel: string;
-  onConfirm: () => void | Promise<unknown>;
+  /** 確定ボタンの見た目。既定は破壊的操作向けの`danger`。 */
+  confirmVariant?: ButtonVariant;
+  /** trueの間は確定ボタンを押せない(入力が不正な間など)。 */
+  confirmDisabled?: boolean;
+  onConfirm:() => void | Promise<unknown>;
   isPending?: boolean;
   error?: unknown;
   /** ダイアログの開閉時に呼ばれる(開いた際に呼び出し側のフォーム状態・ミューテーションをリセットする用途)。 */
@@ -38,6 +42,8 @@ export function ConfirmActionDialog({
   title,
   description,
   confirmLabel,
+  confirmVariant = "danger",
+  confirmDisabled = false,
   onConfirm,
   isPending = false,
   error,
@@ -86,7 +92,8 @@ export function ConfirmActionDialog({
             キャンセル
           </Button>
           <Button
-            variant="danger"
+            variant={confirmVariant}
+            disabled={confirmDisabled}
             isLoading={isPending}
             onClick={() => void handleConfirm()}
           >

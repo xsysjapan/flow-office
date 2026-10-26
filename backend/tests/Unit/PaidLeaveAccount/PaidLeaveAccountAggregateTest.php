@@ -489,6 +489,61 @@ class PaidLeaveAccountAggregateTest extends TestCase
             ]);
     }
 
+    public function test_grant_amount_change_to_the_same_days_records_no_event(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('g1', 10.0, '同じ', 'admin-1');
+            })
+            ->assertNothingRecorded();
+    }
+
+    public function test_grant_amount_change_of_a_revoked_grant_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantRevoked(self::USER, 'g1', 'admin-1', null),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantAmount('g1', 12.0, null, 'admin-1');
+            });
+    }
+
+    // ---- Grant: 最新の非取消付与のID(画面の is_latest) ----
+
+    public function test_latest_active_grant_id_is_the_latest_granted_on_and_the_last_recorded_among_the_same_day(): void
+    {
+        $aggregate = PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2026-04-01', '2028-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-04-01', '2028-04-01', 11.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g0', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+            ])->aggregateRoot();
+
+        $this->assertSame('g2', $aggregate->latestActiveGrantId());
+    }
+
+    public function test_latest_active_grant_id_skips_revoked_grants_and_is_null_without_active_grants(): void
+    {
+        $aggregate = PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated(self::USER, 'g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantCreated(self::USER, 'g2', '2026-04-01', '2028-04-01', 11.0, null, 'manual'),
+                new PaidLeaveGrantRevoked(self::USER, 'g2', 'admin-1', null),
+            ])->aggregateRoot();
+
+        $this->assertSame('g1', $aggregate->latestActiveGrantId());
+
+        $none = PaidLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)->aggregateRoot();
+        $this->assertNull($none->latestActiveGrantId());
+    }
+
     // ---- Grant: 有効期限短縮・延長 ----
 
     public function test_expiry_shortening_with_zero_allocations_is_allowed(): void

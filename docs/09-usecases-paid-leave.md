@@ -263,6 +263,11 @@ Handlerは勤怠の勤務予定を読んで拒否せず、休暇の申請・再�
 (提出中・承認済みが既にある場合)も拒否する。これらの重複申請チェックはPaidLeaveドメインの
 外側(Workflow・申請入口側)の判定として残る(CLAUDE.md原則14、spec.md「Command/Handler」節)。
 
+本人向けの付与一覧(`GET /paid-leave/grants/mine`)は、使える残りがある付与だけを返す(取り消した付与(status=revoked)と残日数0の付与は表示しない)。
+管理者向けの一覧(`GET /paid-leave/grants/user/{userId}`)は取消済みを含む。
+
+自分の申請一覧(`GET /paid-leave/requests/mine`)は、対象日の降順(同じ日はidの降順)に20件ずつのページングで返す(応答は`{ data, links, meta }`。`page`・`target_date`(`Y-m-d`。指定するとその日の申請だけ)を受ける)。画面のページ番号はURLの`requestPage`に載る。
+
 申請そのものの進行状況(`paid_leave_requests.status`: submitted → approved / returned /
 cancelled)は独立ステータス系列として引き続き管理するが、実際にGrantへどう充当するか
 (Allocation)を決めるのは常に`PaidLeaveAccountAggregate`である。申請時点では
@@ -544,6 +549,22 @@ Grantのみ」「取消時に全Allocationを解除して残高を復元」で�
 伴う意図的な仕様変更。「実装上のポイント」参照)。同じ構造の取消を特別休暇
 (`special_leave_grants`、`RevokeSpecialLeaveGrant`)にも実装する(こちらは旧ドメインの
 まま、対象外)。
+
+## UC-P008b: 有給の付与日数を変更する(変更セット`20261025-edit-leave-grant-days`)
+
+(仕様上の名称は「UC-P010」だが、同番号が既存のため`UC-P008b`として記載する。)
+
+1. 人事担当者・管理者(`leave.manage` Permission)が、有給付与ポリシー画面の「対象社員の有給付与状況」で、
+   最新の非取消付与の「日数を変更」を押す
+2. 新しい付与日数(0.5以上)と変更理由(任意)を入力して確定する
+3. `PUT /paid-leave/grants/{grant}/granted-days`が`ChangePaidLeaveGrantAmount` Commandを発行し、集約の
+   `changeGrantAmount`が検証する: 最新の非取消付与のみ(それ以外は422)、新しい日数は充当済みの合計を下回れない(422)。
+   日数が現在と同じならイベントを記録しない
+4. `PaidLeaveGrantAmountChanged`を記録し、`paid_leave_grants.granted_days`・`remaining_days`・`paid_leave_balances`を
+   Projectorが更新する。**日数を増やすと、未充当の消化を充当し直す**(「未充当Usageの自動再Allocation」)
+
+最新の判定は`GET /paid-leave/grants/user/{userId}`の各付与の`is_latest`(集約の判定)で行い、画面は日付を比べない
+(取消ボタンも同じ)。付与日・失効日の変更は対象外。
 
 ## UC-P009: 管理者が社員の有給申請を取り消す・消化明細を確認する
 
@@ -847,10 +868,16 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
   (`special_leave_account.*`)が持つ。申請時に消化記録を作り、承認時に付与へ充当し、差戻し・取消で消化記録を
   取り消す(Reactor: `SpecialLeaveUsageOnSpecialLeaveRequestReactor`)。
 - 付与は`special_leave_account.grant_registered`で登録し、取消は`special_leave_account.grant_revoked`で記録する。
+  本人向けの付与一覧(`GET /special-leave/grants/mine`)は取り消した付与(status=revoked)と残日数0の付与を表示しない。管理者向けの一覧は取消済みを「取消済み」として含む。
+  自分の申請一覧(`GET /special-leave/requests/mine`)も有給と同じく、対象日の降順・20件ずつのページング(`page`・`target_date`)。
   既存の付与・消化は、`stored_events`の作り直し(`leave:rebuild-event-store`)で口座のイベントに変換する(`docs/27-release-runbook.md` 3.1)。
 - 承認時に残数が不足していても承認は拒否せず、充当できた分だけ充当し、充当できなかった分は
   `unallocatedDays`として確定イベントに記録する(論点17)。
 - 差戻し・再申請・取消・締め・同じ日の衝突の扱いは「差戻し・再申請・取消(休暇の共通ルール)」のとおり。
+- 付与日数は管理者が`PUT /special-leave/grants/{grant}/granted-days`で変更できる
+  (`ChangeSpecialLeaveGrantAmount`・`special_leave_account.grant_amount_changed`)。取消済みの付与は変更できず、
+  使用済み(充当済み)の日数を下回れない。日数が同じならイベントを記録しない。**増やしても、確定済みの消化の
+  未充当(`unallocatedDays`)は充当し直さない**(特別休暇の口座に充当し直す仕組みが無いため)。付与の最新の制約は無い。
 - 休暇の有無は勤怠の休暇ビュー(`attendance_day_leaves`)で判定し、勤怠日の`work_type`は使わない。
 - 出勤率(自動付与の判定)は、特別休暇の出勤率ビュー(`special_leave_attendance_rate_days`・
   `special_leave_attendance_rate_leaves`)を読む。全休の特別休暇は出勤扱い、半休・時間休は分母に応じて数える
@@ -869,6 +896,8 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 代休は今回の有給ドメイン再設計の対象外で、引き続き従来通りの独立ドメインとして実装されている。
 付与の残数と消化記録(申請→作成、承認→充当、差戻し・取消→解除)は代休の口座集約が持つ。
 申請の状態は`compensatory_leave.*`(休暇申請文脈)が持つ。
+本人向けの付与一覧(`GET /compensatory-leave/grants/mine`)は取り消した付与(status=cancelled)と残りの無い付与(残日数・残分数とも0)を表示しない。仮(draft)・確定(confirmed)の付与は残りがあれば表示する(時間単位は日数0・分数ありでも表示)。管理者向けの一覧は取消済みを含む。
+自分の申請一覧(`GET /compensatory-leave/requests/mine`)も有給と同じく、対象日の降順・20件ずつのページング(`page`・`target_date`)。
 
 月次勤怠の提出(`AttendanceMonthSubmitted`)を受けて、対象月のdraft Grantを一括で
 `confirmed`に確定する(口座集約の`compensatory_leave_account.grant_confirmed`。月の判定は
@@ -882,6 +911,14 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 取消申請でき(`compensatory_leave_grant_cancellations`)、`compensatory_leave_requires_approval`
 の設定に応じて即時取消/承認要のいずれかになる。詳細は`docs/03-architecture.md`・
 `app/Domain/CompensatoryLeave/`を参照。
+
+### 代休の付与日数は画面で変更しない・取消は確定済みのみ
+
+代休の付与日数は休日出勤の勤怠から決まる(自動付与は勤怠の再計算で上書き、手動付与も日数は勤怠から算出)ため、
+日数だけを変える操作は設けない。管理画面の付与一覧には有給・特別休暇と同じ位置に「日数を変更」ボタンを出すが、
+常に押せず、理由「代休の日数は休日出勤の勤怠から決まるため、ここでは変更できません。勤怠を修正してください。」を示す。
+取消ボタンは確定済み(`confirmed`)の付与だけ押せる(APIの「確定済みのみ取消可」と同じ)。下書き(`draft`)は押せず、
+理由「月次の提出で確定する前の代休は取り消せません。」を示す(下書きと消化済みの両方に当たる場合は下書きの理由)。
 
 ### 代休の手動付与・管理者直接取消
 
