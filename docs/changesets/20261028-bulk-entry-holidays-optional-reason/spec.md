@@ -1,6 +1,6 @@
 # 一括入力(週次・月次)で休みの予定を表示し、確定理由を任意にする
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 週次、月次の一括入力画面で休みの予定がわかるようにできますか？
@@ -125,4 +125,12 @@
 - 上記のフロント(Vitest)・バックエンド(PHPUnit)テストが追加されPASSし、既存テスト・lint・型チェックもPASSする。
 
 ## 実装結果
-(実装後に追記)
+- backend: `AttendanceController::generateAttendancePattern`(reasonをnullable・OpenAPIのrequiredから除外)、
+  `GeneratePatternAttendanceDays`(`?string $reason`)、`GeneratePatternAttendanceDaysHandler`(`DEFAULT_REASON = '一括入力'`)。
+  テスト: `GeneratePatternAttendanceDaysTest` に省略・空白・指定の3件(9件PASS)。
+- frontend: `statusLabels.ts`(`attendanceDayOffBadges`)、`weekDates.ts`(`isoWeekdayOf`を共有化)、`WeekdayScheduleFields`(`rowBadges`)、
+  両モーダル(`dayOffBadgesByDate`・確定理由の任意化)、`WeekAttendancePage`・`AttendanceMonthDetailPage`、`api/attendance.ts`。
+  バッジはモバイルでは出退勤の下、md以上では行の最後の段(`md:order-last md:basis-full`)。
+  テスト: statusLabels・WeekdayScheduleFields・両モーダルに追加(vitest 174 passed)、両モーダルに`WithDayOffBadges` story。
+  360px・1280pxで横スクロールなし(scrollWidth 360/1280)をStorybook+Playwrightで確認。
+- docs: docs/07 UC-A006に「一括入力(週次・月次)」を追記。

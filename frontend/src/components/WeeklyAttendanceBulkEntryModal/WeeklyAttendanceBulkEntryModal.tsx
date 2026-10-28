@@ -3,6 +3,8 @@ import { useAuth } from '../../auth/useAuth'
 import { useGenerateAttendancePattern } from '../../hooks/useAttendance'
 import { attendancePatternResultMessage } from '../../utils/attendancePatternResultMessage'
 import { browserOffsetString } from '../../utils/offsetDateTime'
+import type { StatusMeta } from '../../utils/statusLabels'
+import { addDays, isoWeekdayOf } from '../../utils/weekDates'
 import { Button } from '../Button/Button'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
@@ -27,6 +29,8 @@ export interface WeeklyAttendanceBulkEntryModalProps {
   onOpenChange?: (open: boolean) => void
   /** 確定完了時に呼び出し元画面へ完了メッセージを渡す(モーダル自身は結果を表示せず閉じる)。 */
   onCompleted?: (message: string) => void
+  /** 日付(YYYY-MM-DD)ごとの休みバッジ(休日・祝日名・休暇)。「曜日ごとに設定」タブの該当曜日の行に表示する(表示のみ)。 */
+  dayOffBadgesByDate?: Record<string, StatusMeta[]>
 }
 
 /**
@@ -42,6 +46,7 @@ export function WeeklyAttendanceBulkEntryModal({
   open: controlledOpen,
   onOpenChange,
   onCompleted,
+  dayOffBadgesByDate,
 }: WeeklyAttendanceBulkEntryModalProps) {
   const { user } = useAuth()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -80,8 +85,18 @@ export function WeeklyAttendanceBulkEntryModal({
     setActiveTab('detailed')
   }
 
+  // 表示中の週(defaultFrom〜defaultTo)の各日を、ISO曜日をキーにした行バッジへ変換する。
+  const rowBadges: Record<number, StatusMeta[]> = {}
+  if (dayOffBadgesByDate) {
+    for (let date = defaultFrom; date <= defaultTo; date = addDays(date, 1)) {
+      const badges = dayOffBadgesByDate[date]
+      if (badges && badges.length > 0) rowBadges[isoWeekdayOf(date)] = badges
+    }
+  }
+
   const handleGenerate = () => {
-    if (!user || !reason) return
+    if (!user) return
+    const trimmedReason = reason.trim()
     generatePattern.mutate(
       {
         user_id: user.id,
@@ -90,7 +105,7 @@ export function WeeklyAttendanceBulkEntryModal({
         utc_offset: offset,
         weekly_pattern: buildWeeklyPattern(detailedPatternState),
         overwrite_mode: overwriteMode,
-        reason,
+        ...(trimmedReason ? { reason: trimmedReason } : {}),
       },
       {
         onSuccess: (data) => {
@@ -143,12 +158,21 @@ export function WeeklyAttendanceBulkEntryModal({
             </p>
           </TabsContent>
           <TabsContent value="detailed">
-            <WeekdayScheduleFields state={detailedPatternState} onChange={handleDetailedWeekdayChange} />
+            <WeekdayScheduleFields
+              state={detailedPatternState}
+              onChange={handleDetailedWeekdayChange}
+              rowBadges={rowBadges}
+            />
           </TabsContent>
         </Tabs>
 
-        <FormField label="確定理由" htmlFor="weekly-attendance-reason" required>
-          <Input id="weekly-attendance-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <FormField label="確定理由(任意)" htmlFor="weekly-attendance-reason">
+          <Input
+            id="weekly-attendance-reason"
+            value={reason}
+            placeholder="未入力時は『一括入力』と記録"
+            onChange={(e) => setReason(e.target.value)}
+          />
         </FormField>
 
         <FormField label="既存の実績がある日の扱い" htmlFor="weekly-attendance-overwrite-mode">
@@ -166,7 +190,7 @@ export function WeeklyAttendanceBulkEntryModal({
         {activeTab === 'simple' ? (
           <Button onClick={handleExpandToDetailed}>次へ(曜日ごとの内容を確認)</Button>
         ) : (
-          <Button isLoading={generatePattern.isPending} disabled={!user || !reason} onClick={handleGenerate}>
+          <Button isLoading={generatePattern.isPending} disabled={!user} onClick={handleGenerate}>
             確定する
           </Button>
         )}

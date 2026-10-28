@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { User } from '../../api/types'
+import type { StatusMeta } from '../../utils/statusLabels'
 import { pickTime } from '../../test-support/pickerInteractions'
 import { MonthlyAttendanceBulkEntryModal } from './MonthlyAttendanceBulkEntryModal'
 
@@ -21,11 +22,15 @@ vi.mock('../../auth/useAuth', () => ({
   useAuth: () => ({ user: currentUser }),
 }))
 
-function renderModal(onCompleted?: (message: string) => void) {
+function renderModal(onCompleted?: (message: string) => void, dayOffBadgesByDate?: Record<string, StatusMeta[]>) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MonthlyAttendanceBulkEntryModal yearMonth="2026-08" onCompleted={onCompleted} />
+      <MonthlyAttendanceBulkEntryModal
+        yearMonth="2026-08"
+        onCompleted={onCompleted}
+        dayOffBadgesByDate={dayOffBadgesByDate}
+      />
     </QueryClientProvider>,
   )
 }
@@ -72,7 +77,7 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
     expect(screen.getByRole('checkbox', { name: '08-03 (月)' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: '08-01 (土)' })).not.toBeChecked()
 
-    await userEvent.type(screen.getByLabelText('確定理由'), '出張中の実績をまとめて入力')
+    await userEvent.type(screen.getByLabelText('確定理由(任意)'), '出張中の実績をまとめて入力')
     await userEvent.click(screen.getByRole('button', { name: '確定する' }))
 
     const workday = { start_time: '09:00', end_time: '18:00', break_start_time: '12:00', break_end_time: '13:00' }
@@ -113,7 +118,7 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
     await pickTime(userEvent.setup(), '2026-08-04の退勤時刻', '15:00')
     await userEvent.click(screen.getByRole('checkbox', { name: '2026-08-04の休憩' }))
 
-    await userEvent.type(screen.getByLabelText('確定理由'), '出張中の実績をまとめて入力')
+    await userEvent.type(screen.getByLabelText('確定理由(任意)'), '出張中の実績をまとめて入力')
     await userEvent.click(screen.getByRole('button', { name: '確定する' }))
 
     const emptyWeeklyPattern = { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null, 7: null }
@@ -125,6 +130,67 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
           day_overrides: { '2026-08-04': { start_time: '10:00', end_time: '15:00' } },
         }),
       ),
+    )
+  }, 15000)
+
+  it('shows the day-off badges only on the row of the matching date in the day-by-day tab', async () => {
+    renderModal(undefined, {
+      '2026-08-11': [{ label: '山の日', tone: 'neutral' }],
+      '2026-08-16': [
+        { label: '法定休日', tone: 'danger' },
+        { label: '有給休暇(全休)', tone: 'info' },
+      ],
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
+    await userEvent.click(await screen.findByRole('tab', { name: '日にちごとに設定' }))
+
+    const rowOf = (name: string) => screen.getByRole('checkbox', { name }).closest('div.rounded-md') as HTMLElement
+    expect(within(rowOf('08-11 (火)')).getByText('山の日')).toBeInTheDocument()
+    expect(within(rowOf('08-16 (日)')).getByText('法定休日')).toBeInTheDocument()
+    expect(within(rowOf('08-16 (日)')).getByText('有給休暇(全休)')).toBeInTheDocument()
+    expect(within(rowOf('08-12 (水)')).queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('status')).toHaveLength(3)
+  })
+
+  it('can confirm without a reason and omits the reason key; sends the trimmed reason when entered', async () => {
+    vi.spyOn(attendanceApi, 'generateAttendancePattern').mockResolvedValue({
+      results: [],
+      created_count: 0,
+      updated_count: 0,
+      skipped_count: 0,
+      rejected_count: 0,
+    })
+    renderModal()
+
+    await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
+    await userEvent.click(await screen.findByRole('tab', { name: '日にちごとに設定' }))
+    expect(screen.getByLabelText('確定理由(任意)')).toHaveAttribute('placeholder', '未入力時は『一括入力』と記録')
+    await userEvent.type(screen.getByLabelText('確定理由(任意)'), '   ')
+    expect(screen.getByRole('button', { name: '確定する' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: '確定する' }))
+
+    await waitFor(() => expect(attendanceApi.generateAttendancePattern).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(attendanceApi.generateAttendancePattern).mock.calls[0][0]).not.toHaveProperty('reason')
+  }, 15000)
+
+  it('sends the trimmed reason when one is entered', async () => {
+    vi.spyOn(attendanceApi, 'generateAttendancePattern').mockResolvedValue({
+      results: [],
+      created_count: 0,
+      updated_count: 0,
+      skipped_count: 0,
+      rejected_count: 0,
+    })
+    renderModal()
+
+    await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
+    await userEvent.click(await screen.findByRole('tab', { name: '日にちごとに設定' }))
+    await userEvent.type(screen.getByLabelText('確定理由(任意)'), '  出張  ')
+    await userEvent.click(screen.getByRole('button', { name: '確定する' }))
+
+    await waitFor(() =>
+      expect(attendanceApi.generateAttendancePattern).toHaveBeenCalledWith(expect.objectContaining({ reason: '出張' })),
     )
   }, 15000)
 })

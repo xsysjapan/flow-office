@@ -20,6 +20,11 @@ export function addDays(dateStr: string, amount: number): string {
   return formatDate(d)
 }
 
+/** 日付("YYYY-MM-DD")のISO曜日(月=1〜日=7)を返す(ローカル日付として解釈するためタイムゾーンでずれない)。 */
+export function isoWeekdayOf(date: string): number {
+  return ((new Date(`${date}T00:00:00`).getDay() + 6) % 7) + 1
+}
+
 export function weekDates(weekStart: string): string[] {
   return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 }

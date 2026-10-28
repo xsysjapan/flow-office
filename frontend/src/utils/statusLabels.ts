@@ -25,7 +25,7 @@ import type {
   WorkLocationType,
 } from '../api/types'
 
-interface StatusMeta {
+export interface StatusMeta {
   label: string
   tone: BadgeTone
 }
@@ -205,6 +205,21 @@ export function attendanceScheduleHolidayLabel(schedule: ScheduleHolidayInfo | n
   if (schedule.is_legal_holiday) return { label: '法定休日', tone: 'danger' }
   if (schedule.is_company_holiday || schedule.is_working_day === false) return { label: '所定休日', tone: 'warning' }
   return null
+}
+
+/**
+ * 1日分の「休みの予定」バッジ。法定/所定休日 → 祝日名 → 休暇(申請中・承認済)の順。何もなければ空配列。
+ */
+export function attendanceDayOffBadges(
+  schedule: (ScheduleHolidayInfo & { public_holiday_name?: string | null }) | null | undefined,
+  leaves: AttendanceDayLeave[] | undefined,
+): StatusMeta[] {
+  const badges: StatusMeta[] = []
+  const holiday = attendanceScheduleHolidayLabel(schedule)
+  if (holiday) badges.push(holiday)
+  if (schedule?.public_holiday_name) badges.push({ label: schedule.public_holiday_name, tone: 'neutral' })
+  for (const label of attendanceDayLeaveLabels(leaves)) badges.push({ label, tone: 'info' })
+  return badges
 }
 
 interface AttendanceDayRecordInfo {

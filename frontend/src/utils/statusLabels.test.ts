@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from '../api/types'
 import {
   attendanceDayDisplayLabel,
+  attendanceDayOffBadges,
   attendanceDayStatusLabel,
   attendanceMonthStatusLabel,
   attendanceRowDisplayLabel,
@@ -223,5 +224,41 @@ describe('statusLabels', () => {
     expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_warning_raised', { message: '有給が失効間近です' }))).toBe(
       '有給が失効間近です',
     )
+  })
+
+  describe('attendanceDayOffBadges', () => {
+    const leave = (leave_kind: 'paid' | 'compensatory', unit: 'full' | 'am_half') => ({
+      leave_kind,
+      unit,
+      hours: null,
+      minutes: null,
+      special_leave_type_id: null,
+      request_id: 'req-1',
+      workflow_request_id: null,
+      request_status: 'approved' as const,
+    })
+
+    it('returns an empty array when there is nothing planned', () => {
+      expect(attendanceDayOffBadges(undefined, undefined)).toEqual([])
+      expect(attendanceDayOffBadges({ is_working_day: true }, [])).toEqual([])
+    })
+
+    it('returns the legal holiday badge only', () => {
+      expect(attendanceDayOffBadges({ is_legal_holiday: true }, undefined)).toEqual([{ label: '法定休日', tone: 'danger' }])
+    })
+
+    it('returns the company holiday followed by the public holiday name', () => {
+      expect(attendanceDayOffBadges({ is_company_holiday: true, public_holiday_name: '文化の日' }, undefined)).toEqual([
+        { label: '所定休日', tone: 'warning' },
+        { label: '文化の日', tone: 'neutral' },
+      ])
+    })
+
+    it('returns every leave of the day as info badges', () => {
+      expect(attendanceDayOffBadges(null, [leave('paid', 'full'), leave('compensatory', 'am_half')])).toEqual([
+        { label: '有給休暇(全休)', tone: 'info' },
+        { label: '代休(午前半休)', tone: 'info' },
+      ])
+    })
   })
 })

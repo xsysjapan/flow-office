@@ -3,7 +3,9 @@ import { useAuth } from '../../auth/useAuth'
 import { useGenerateAttendancePattern } from '../../hooks/useAttendance'
 import { attendancePatternResultMessage } from '../../utils/attendancePatternResultMessage'
 import { browserOffsetString } from '../../utils/offsetDateTime'
-import { datesInMonth } from '../../utils/weekDates'
+import type { StatusMeta } from '../../utils/statusLabels'
+import { datesInMonth, isoWeekdayOf } from '../../utils/weekDates'
+import { Badge } from '../Badge/Badge'
 import { Button } from '../Button/Button'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
@@ -37,11 +39,6 @@ function emptyWeeklyPattern(): WeeklyAttendancePattern {
   return pattern
 }
 
-/** 日付("YYYY-MM-DD")のISO曜日(月=1〜日=7)を返す。 */
-function isoWeekdayOf(date: string): number {
-  return ((new Date(`${date}T00:00:00`).getDay() + 6) % 7) + 1
-}
-
 /** 「まとめて設定」の内容を、対象月の日にちごとの行(「日にちごとに設定」タブの状態)に展開する。 */
 function expandSimplePatternToDayOverrides(
   state: SimplePatternState,
@@ -71,6 +68,8 @@ export interface MonthlyAttendanceBulkEntryModalProps {
   disabled?: boolean
   /** 確定完了時に呼び出し元画面へ完了メッセージを渡す(モーダル自身は結果を表示せず閉じる)。 */
   onCompleted?: (message: string) => void
+  /** 日付(YYYY-MM-DD)ごとの休みバッジ(休日・祝日名・休暇)。「日にちごとに設定」タブの該当日の行に表示する(表示のみ)。 */
+  dayOffBadgesByDate?: Record<string, StatusMeta[]>
 }
 
 /**
@@ -86,6 +85,7 @@ export function MonthlyAttendanceBulkEntryModal({
   onOpenChange,
   disabled = false,
   onCompleted,
+  dayOffBadgesByDate,
 }: MonthlyAttendanceBulkEntryModalProps) {
   const { user } = useAuth()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -147,7 +147,8 @@ export function MonthlyAttendanceBulkEntryModal({
   }
 
   const handleGenerate = () => {
-    if (!user || !from || !to || !reason) return
+    if (!user || !from || !to) return
+    const trimmedReason = reason.trim()
     generatePattern.mutate(
       {
         user_id: user.id,
@@ -157,7 +158,7 @@ export function MonthlyAttendanceBulkEntryModal({
         weekly_pattern: emptyWeeklyPattern(),
         day_overrides: buildDayOverrides(),
         overwrite_mode: overwriteMode,
-        reason,
+        ...(trimmedReason ? { reason: trimmedReason } : {}),
       },
       {
         onSuccess: (data) => {
@@ -221,6 +222,7 @@ export function MonthlyAttendanceBulkEntryModal({
                   breakEndTime: '13:00',
                 }
                 const weekdayLabel = WEEKDAYS[isoWeekdayOf(date) - 1].label
+                const badges = dayOffBadgesByDate?.[date] ?? []
                 return (
                   <div
                     key={date}
@@ -252,6 +254,15 @@ export function MonthlyAttendanceBulkEntryModal({
                         />
                       </div>
                     </div>
+                    {badges.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pl-4 md:order-last md:basis-full md:pl-0">
+                        {badges.map((badge, index) => (
+                          <Badge key={`${badge.label}-${index}`} tone={badge.tone}>
+                            {badge.label}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 pl-4 md:pl-0">
                       <label className="flex items-center gap-2 text-xs w-20 text-foreground md:text-sm">
                         <Checkbox
@@ -287,8 +298,13 @@ export function MonthlyAttendanceBulkEntryModal({
           </TabsContent>
         </Tabs>
 
-        <FormField label="確定理由" htmlFor="monthly-attendance-reason" required>
-          <Input id="monthly-attendance-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <FormField label="確定理由(任意)" htmlFor="monthly-attendance-reason">
+          <Input
+            id="monthly-attendance-reason"
+            value={reason}
+            placeholder="未入力時は『一括入力』と記録"
+            onChange={(e) => setReason(e.target.value)}
+          />
         </FormField>
 
         <FormField label="既存の実績がある日の扱い" htmlFor="monthly-attendance-overwrite-mode">
@@ -310,7 +326,7 @@ export function MonthlyAttendanceBulkEntryModal({
         ) : (
           <Button
             isLoading={generatePattern.isPending}
-            disabled={!user || !from || !to || !reason}
+            disabled={!user || !from || !to}
             onClick={handleGenerate}
           >
             確定する
