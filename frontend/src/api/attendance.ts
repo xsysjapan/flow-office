@@ -163,7 +163,8 @@ export function previewAttendancePattern(
 export interface GenerateAttendancePatternInput extends PreviewAttendancePatternInput {
   user_id: string
   overwrite_mode?: 'skip_existing' | 'overwrite_existing'
-  reason: string
+  /** 省略時はバックエンドが「一括入力」を記録する。 */
+  reason?: string
 }
 
 export type AttendancePatternResultStatus = 'created' | 'updated' | 'skipped_existing' | 'rejected'

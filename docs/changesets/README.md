@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261028-bulk-entry-holidays-optional-reason](./20261028-bulk-entry-holidays-optional-reason/spec.md) | 一括入力(週次・月次)で休みの予定を表示し、確定理由を任意にする | 完了 |
 | [20261025-fix-e2e-paid-leave-retry](./20261025-fix-e2e-paid-leave-retry/spec.md) | e2e(scenario-03)の有給申請の再試行で前の対象日が残って失敗し続ける不具合の修正 | 完了 |
 | [20261025-paginate-my-leave-requests](./20261025-paginate-my-leave-requests/spec.md) | 自分の休暇申請の一覧(有給・特別休暇・代休)を対象日の降順でページングする | 完了 |
 | [20261025-edit-leave-grant-days](./20261025-edit-leave-grant-days/spec.md) | 有給・特別休暇の付与日数を管理画面から変更する(代休は変更できない理由を出す) | 完了 |

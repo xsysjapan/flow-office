@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { buildWeeklyPattern, defaultWeeklyPatternState, WeekdayScheduleFields } from './WeekdayScheduleFields'
@@ -28,5 +28,20 @@ describe('WeekdayScheduleFields', () => {
 
     expect(screen.getByLabelText('土曜日の出勤時刻')).toBeDisabled()
     expect(screen.getByLabelText('月曜日の出勤時刻')).toBeEnabled()
+  })
+
+  it('shows the row badges only on the matching weekday row', () => {
+    render(
+      <WeekdayScheduleFields
+        state={defaultWeeklyPatternState()}
+        onChange={vi.fn()}
+        rowBadges={{ 2: [{ label: '文化の日', tone: 'neutral' }, { label: '法定休日', tone: 'danger' }] }}
+      />,
+    )
+
+    expect(screen.getAllByText('文化の日')).toHaveLength(1)
+    expect(screen.getAllByText('法定休日')).toHaveLength(1)
+    const tuesdayRow = screen.getByRole('checkbox', { name: '火曜日' }).closest('div.rounded-md') as HTMLElement
+    expect(within(tuesdayRow).getByText('文化の日')).toBeInTheDocument()
   })
 })

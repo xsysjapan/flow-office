@@ -520,7 +520,7 @@ class AttendanceController extends Controller
         operationId: 'attendance.days.generatePattern',
         summary: '週次・月次パターンから実績を一括作成・更新する',
         tags: ['勤怠'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'from', 'to', 'utc_offset', 'weekly_pattern', 'reason'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date'), new OA\Property(property: 'utc_offset', type: 'string'), new OA\Property(property: 'weekly_pattern', type: 'object'), new OA\Property(property: 'day_overrides', type: 'object', nullable: true), new OA\Property(property: 'overwrite_mode', type: 'string', nullable: true), new OA\Property(property: 'reason', type: 'string')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'from', 'to', 'utc_offset', 'weekly_pattern'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date'), new OA\Property(property: 'utc_offset', type: 'string'), new OA\Property(property: 'weekly_pattern', type: 'object'), new OA\Property(property: 'day_overrides', type: 'object', nullable: true), new OA\Property(property: 'overwrite_mode', type: 'string', nullable: true), new OA\Property(property: 'reason', type: 'string', nullable: true, description: '確定理由。未入力(空白のみを含む)のときは「一括入力」を記録する')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function generateAttendancePattern(Request $request, CommandBus $commandBus): JsonResponse
@@ -532,7 +532,7 @@ class AttendanceController extends Controller
                 GeneratePatternAttendanceDays::OVERWRITE_MODE_SKIP_EXISTING,
                 GeneratePatternAttendanceDays::OVERWRITE_MODE_OVERWRITE_EXISTING,
             ])],
-            'reason' => ['required', 'string'],
+            'reason' => ['nullable', 'string'],
         ]);
 
         $this->abortUnlessOwnerOrAdmin($request, $data['user_id'], '他の社員の実績を一括入力する権限がありません。');
@@ -545,7 +545,7 @@ class AttendanceController extends Controller
             dayOverrides: $data['day_overrides'] ?? [],
             utcOffset: $data['utc_offset'],
             overwriteMode: $data['overwrite_mode'] ?? GeneratePatternAttendanceDays::OVERWRITE_MODE_SKIP_EXISTING,
-            reason: $data['reason'],
+            reason: $data['reason'] ?? null,
             actingUserId: $request->user()->id,
         ));
 

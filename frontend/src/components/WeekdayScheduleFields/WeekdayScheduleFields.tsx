@@ -1,5 +1,7 @@
+import { Badge } from '../Badge/Badge'
 import { Checkbox } from '../ui/checkbox'
 import { TimePicker } from '../TimePicker/TimePicker'
+import type { StatusMeta } from '../../utils/statusLabels'
 import type { AttendanceWeekdayEntry, WeeklyAttendancePattern } from '../../api/attendance'
 
 export const WEEKDAYS: { iso: number; label: string }[] = [
@@ -66,14 +68,18 @@ export function weekdayEntry(row: {
 export function WeekdayScheduleFields({
   state,
   onChange,
+  rowBadges,
 }: {
   state: Record<number, WeekdayRowState>
   onChange: (iso: number, patch: Partial<WeekdayRowState>) => void
+  /** ISO曜日(1〜7)ごとの休みバッジ(休日・祝日名・休暇)。表示のみ。 */
+  rowBadges?: Record<number, StatusMeta[]>
 }) {
   return (
     <div className="grid grid-cols-1 gap-2">
       {WEEKDAYS.map(({ iso, label }) => {
         const row = state[iso]
+        const badges = rowBadges?.[iso] ?? []
         return (
           <div
             key={iso}
@@ -105,6 +111,15 @@ export function WeekdayScheduleFields({
                 />
               </div>
             </div>
+            {badges.length > 0 && (
+              <div className="flex flex-wrap gap-1 pl-4 md:order-last md:basis-full md:pl-0">
+                {badges.map((badge, index) => (
+                  <Badge key={`${badge.label}-${index}`} tone={badge.tone}>
+                    {badge.label}
+                  </Badge>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-2 pl-4 md:pl-0">
               <label className="flex items-center gap-2 text-xs w-20 text-foreground md:text-sm">
                 <Checkbox

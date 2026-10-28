@@ -26,7 +26,12 @@ import { useRequestTypes } from '../../hooks/useRequestTypes'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { employmentYearMonths } from '../../utils/employmentPeriod'
-import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../utils/statusLabels'
+import {
+  attendanceDayOffBadges,
+  attendanceMonthStatusLabel,
+  legalHolidayWarningLabel,
+  type StatusMeta,
+} from '../../utils/statusLabels'
 import { datesInMonth, formatDate } from '../../utils/weekDates'
 
 /**
@@ -186,6 +191,11 @@ export function AttendanceMonthDetailPage() {
   const daysByDate = new Map((data?.days ?? []).map((day) => [day.work_date, day]))
   const scheduleByDate = new Map((data?.schedule ?? []).map((entry) => [entry.work_date, entry]))
   const dates = datesInMonth(yearMonth)
+  const dayOffBadgesByDate: Record<string, StatusMeta[]> = {}
+  for (const date of dates) {
+    const badges = attendanceDayOffBadges(scheduleByDate.get(date), daysByDate.get(date)?.leaves)
+    if (badges.length > 0) dayOffBadgesByDate[date] = badges
+  }
   const today = formatDate(new Date())
 
   function toggleDate(date: string) {
@@ -311,6 +321,7 @@ export function AttendanceMonthDetailPage() {
                   yearMonth={yearMonth}
                   disabled={bulkEntryLocked}
                   onCompleted={setBulkEntryMessage}
+                  dayOffBadgesByDate={dayOffBadgesByDate}
                 />
               </div>
             )

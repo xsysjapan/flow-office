@@ -16,6 +16,7 @@ import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
+import { attendanceDayOffBadges, type StatusMeta } from '../../utils/statusLabels'
 import { addDays, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
 
 /**
@@ -53,6 +54,11 @@ export function WeekAttendancePage() {
   const { data: schedule } = useShiftAssignments(user?.id ?? '', dates[0], dates[6])
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
   const scheduleByDate = new Map((schedule ?? []).map((entry) => [entry.work_date, entry]))
+  const dayOffBadgesByDate: Record<string, StatusMeta[]> = {}
+  for (const date of dates) {
+    const badges = attendanceDayOffBadges(scheduleByDate.get(date), daysByDate.get(date)?.leaves)
+    if (badges.length > 0) dayOffBadgesByDate[date] = badges
+  }
   const specialLeaveTypeNames = new Map((specialLeaveTypes ?? []).map((type) => [type.id, type.name]))
   const { totals: weeklyTotals, absenceDays, workedDays, specialLeaveBreakdown } = weeklyAttendanceTotals(
     data ?? [],
@@ -224,6 +230,7 @@ export function WeekAttendancePage() {
                   defaultFrom={dates[0]}
                   defaultTo={dates[6]}
                   onCompleted={setBulkEntryMessage}
+                  dayOffBadgesByDate={dayOffBadgesByDate}
                 />
               </div>
             )
