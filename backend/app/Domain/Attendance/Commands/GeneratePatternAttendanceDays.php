@@ -30,7 +30,7 @@ class GeneratePatternAttendanceDays implements Command
         public readonly array $dayOverrides,
         public readonly string $utcOffset,
         public readonly string $overwriteMode,
-        public readonly string $reason,
+        public readonly ?string $reason,
         public readonly string $actingUserId,
     ) {}
 }

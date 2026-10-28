@@ -30,6 +30,11 @@ use Illuminate\Support\Carbon;
  */
 class GeneratePatternAttendanceDaysHandler implements CommandHandler
 {
+    /**
+     * 確定理由が未入力(null・空白のみ)のときに日次イベントへ記録する固定文言。
+     */
+    private const DEFAULT_REASON = '一括入力';
+
     public function __construct(
         private readonly CommandBus $commandBus,
     ) {}
@@ -43,6 +48,7 @@ class GeneratePatternAttendanceDaysHandler implements CommandHandler
 
         $resolver = new WeeklyPatternResolver($command->weeklyPattern, $command->dayOverrides);
         $offsetMinutes = $this->parseOffsetMinutes($command->utcOffset);
+        $reason = $this->resolveReason($command->reason);
 
         $period = Carbon::parse($command->from)->toPeriod(Carbon::parse($command->to));
         $results = [];
@@ -100,7 +106,7 @@ class GeneratePatternAttendanceDaysHandler implements CommandHandler
                         workType: null,
                         note: null,
                         leaveSegments: [],
-                        reason: $command->reason,
+                        reason: $reason,
                         createdByUserId: $command->actingUserId,
                     ));
                     $results[] = ['date' => $date->toDateString(), 'status' => 'created', 'message' => null];
@@ -114,7 +120,7 @@ class GeneratePatternAttendanceDaysHandler implements CommandHandler
                         workType: null,
                         note: null,
                         leaveSegments: [],
-                        reason: $command->reason,
+                        reason: $reason,
                         editedByUserId: $command->actingUserId,
                     ));
                     $results[] = ['date' => $date->toDateString(), 'status' => 'updated', 'message' => null];
@@ -133,6 +139,18 @@ class GeneratePatternAttendanceDaysHandler implements CommandHandler
             'skipped_count' => $counts['skipped_existing'],
             'rejected_count' => $counts['rejected'],
         ];
+    }
+
+    /**
+     * 未入力(null・空白のみ)なら固定文言を返す。入力があればそのまま返す。
+     */
+    private function resolveReason(?string $reason): string
+    {
+        if ($reason === null || trim($reason) === '') {
+            return self::DEFAULT_REASON;
+        }
+
+        return $reason;
     }
 
     /**

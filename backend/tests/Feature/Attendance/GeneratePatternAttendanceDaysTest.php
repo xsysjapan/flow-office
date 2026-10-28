@@ -8,6 +8,7 @@ use App\Models\AttendanceMonth;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -168,6 +169,84 @@ class GeneratePatternAttendanceDaysTest extends TestCase
         $this->assertGreaterThan(0, $response->json('created_count'));
         $this->assertSame(0, AttendanceDay::query()->whereBetween('work_date', ['2026-08-01', '2026-08-31'])->count());
         $this->assertGreaterThan(0, AttendanceDay::query()->whereBetween('work_date', ['2026-09-01', '2026-09-06'])->count());
+    }
+
+    /**
+     * stored_eventsの attendance_day.created の理由(event_properties.reason)を勤務日ごとに返す。
+     *
+     * @return array<string, string>
+     */
+    private function createdReasonsByWorkDate(): array
+    {
+        $reasons = [];
+        foreach (DB::table('stored_events')->where('event_class', 'attendance_day.created')->get() as $row) {
+            $properties = json_decode($row->event_properties, true);
+            $reasons[$properties['workDate']] = $properties['reason'];
+        }
+
+        return $reasons;
+    }
+
+    public function test_omitting_reason_records_default_reason_on_created_days(): void
+    {
+        $employee = User::factory()->create();
+
+        $response = $this->actingAs($employee)->postJson('/api/attendance/days/generate-pattern', [
+            'user_id' => $employee->id,
+            'from' => '2026-08-01',
+            'to' => '2026-08-09',
+            'utc_offset' => '+09:00',
+            'weekly_pattern' => $this->weekdayPattern(),
+        ]);
+
+        $response->assertOk();
+        $this->assertSame(5, $response->json('created_count'));
+
+        $reasons = $this->createdReasonsByWorkDate();
+        $this->assertCount(5, $reasons);
+        foreach ($reasons as $reason) {
+            $this->assertSame('一括入力', $reason);
+        }
+    }
+
+    public function test_blank_reason_records_default_reason_on_created_days(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/days/generate-pattern', [
+            'user_id' => $employee->id,
+            'from' => '2026-08-01',
+            'to' => '2026-08-09',
+            'utc_offset' => '+09:00',
+            'weekly_pattern' => $this->weekdayPattern(),
+            'reason' => '  ',
+        ])->assertOk();
+
+        $reasons = $this->createdReasonsByWorkDate();
+        $this->assertCount(5, $reasons);
+        foreach ($reasons as $reason) {
+            $this->assertSame('一括入力', $reason);
+        }
+    }
+
+    public function test_given_reason_is_recorded_on_created_days(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/days/generate-pattern', [
+            'user_id' => $employee->id,
+            'from' => '2026-08-01',
+            'to' => '2026-08-09',
+            'utc_offset' => '+09:00',
+            'weekly_pattern' => $this->weekdayPattern(),
+            'reason' => '週次一括入力',
+        ])->assertOk();
+
+        $reasons = $this->createdReasonsByWorkDate();
+        $this->assertCount(5, $reasons);
+        foreach ($reasons as $reason) {
+            $this->assertSame('週次一括入力', $reason);
+        }
     }
 
     public function test_generating_for_another_users_days_requires_admin_role(): void
