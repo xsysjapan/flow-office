@@ -10,6 +10,8 @@
 > 所定労働時間は減らさない方向に変更して下さい。そのうえで、画面表示上は所定労働時間ではなく、所定内労働時間に変更して下さい。
 >
 > 所定内労働時間は所定内法定内労働時間+所定内法定外労働時間、残業時間は所定外法定内労働時間+所定外法定外労働時間でお願いします。
+>
+> 詳細の方に所定労働日数と、所定労働時間を表示するように変更してください。対比するように労働日数→実労働日数、実労働時間を表示するようにへんこうしてください。
 
 ## 背景・目的
 法律上の所定労働時間は、就業規則・労働契約で定めた労働義務の時間であり、休暇を取っても減らない。
@@ -133,6 +135,38 @@
   - 本番での実行は運用で行う。
 - 未確定・要確認事項: なし
 
+### 論点7: 詳しく表示の「所定労働日数」「所定労働時間」と「実労働日数」「実労働時間」
+- 選択肢(所定の数え方):
+  - A. 勤務予定から数える(対象期間の全日について勤務予定を解決し、未入力の労働日も含める)
+  - B. 入力済みの勤怠日(休暇だけの日を含む)の日次計算だけで数える
+- 決定: A(ユーザー確認済み)
+- 理由: 法律上の所定労働日数・時間は勤務予定で決まり、入力の進み具合に左右されない。Excel出力の所定日数
+  (`AttendanceExcelBuilder` の `$requiredDays`)と同じ考え方。
+- 定義(期間 = 月または週の各日 d):
+  - 予定 S(d) = `EffectiveScheduleResolver::resolve()`(日次計算と同じ。勤務予定→働き方のフォールバック→土日の扱い)
+  - 所定労働日 = S(d) があり、`is_working_day` が true で、`LegalHolidayResolver::isLegalHoliday(S(d))` が false、
+    `is_company_holiday` が false の日
+  - 所定労働日数 = 所定労働日の数
+  - 所定労働時間 = 所定労働日について、その日の日次計算があれば `prescribed_work_minutes`(手動補正を含む)、
+    無ければ S(d) の働き方(無ければ `WorkStyleFallbackResolver`)の `prescribed_daily_minutes` を合計したもの
+  - 休暇(全休・半休・時間休)では減らない(論点1)
+- 置き場所: 新しいサービス `App\Domain\Attendance\Services\PrescribedScheduleTotalsCalculator::calculate(userId, from, to)`
+  が `['prescribed_work_days' => int, 'scheduled_prescribed_work_minutes' => int]` を返す。
+  - 月: `MonthlyOvertimeCalculator::calculateCategoryTotals()` の戻り値にこの2キーを追加する(既存の
+    `prescribed_work_minutes`(入力済みの日の合計)は給与連携・CSVが使っているため変えない)。提出時の snapshot にも入る。
+  - 週: `GET /attendance/week` の応答に `meta.prescribed_totals`(同じ2キー)を追加する(`AttendanceDayResource::collection(...)->additional(...)`)。
+  - 日: 新しい値は使わず、その日の日次計算の `prescribed_work_minutes` を所定労働時間として出す(所定労働日数は出さない)。
+- 表示(`AttendanceCalculationSummary`):
+  - ラベル「労働日数」→「実労働日数」(簡易表示・詳しく表示とも。値は従来どおり `worked_days`/`workDays`)。
+  - 詳しく表示の先頭を、所定と実績を左右に並べる。
+    - 「所定労働日数」|「実労働日数」
+    - 「所定労働時間」|「実労働時間」
+  - 所定の値が渡されない場合はその項目を出さない(日次は所定労働日数を出さない)。
+  - 新しい props: `prescribedWorkDays?: number`・`prescribedWorkMinutes?: number`。月次の各画面は totals の2キーを、
+    週次の各画面は `meta.prescribed_totals` を、日次の各画面は `calculation.prescribed_work_minutes` を渡す。
+  - 対象の画面: `AttendanceMonthDetailPage`・`WeekAttendancePage`・`AttendanceDayPage`・`AttendanceReferencePage`(月・週・日)。
+- 未確定・要確認事項: なし
+
 ## 仕様確定事項(まとめ)
 1. `LeaveCalculationInput`
    - `effectivePrescribedMinutes` を廃止し、次の2つを持つ。
@@ -151,10 +185,15 @@
 3. `MonthlyOvertimeCalculator`: 変更しない。
    - 月の `prescribed_work_minutes` 合計は、半休の日も P で合算される。
    - 半休+残り半日欠勤の日は、終日欠勤に数えなくなる。
+3-2. `PrescribedScheduleTotalsCalculator` を追加し、月次 totals・週次応答の meta に所定労働日数・所定労働時間を載せる(論点7)。
+   テスト: 勤務予定どおりの月(土日休み・祝日あり)、未入力の労働日を含む月、全休・半休の日(減らない)、
+   日次を手動補正した日(補正値を使う)、勤務予定が無く働き方のフォールバックだけの月、法定休日・所定休日の勤務(数えない)。
 4. `AttendanceCalculationSummary` の簡易表示
    - 「所定労働時間」→ ラベル「所定内労働時間」、値 `prescribedWithin + prescribedExcess`
    - 「残業時間」→ 値 `nonPrescribedWithin + nonPrescribedExcess`
-   - 詳しく表示・他の項目は変えない。story の説明文とテストを更新する。
+   - 「労働日数」→「実労働日数」(両方の表示)。
+   - 詳しく表示に所定労働日数・所定労働時間を実労働日数・実労働時間と並べて出す(論点7)。他の項目は変えない。
+   - story の説明文とテストを更新する。
 5. 日次の手動補正フォーム(`AttendanceDayPage`「所定労働時間(分)」)は所定労働時間そのものを補正する項目のため、名前を変えない。
 6. テスト
    - `HalfDayLeavePrescribedMinutesTest` を新ルールに更新する。
@@ -170,6 +209,8 @@
 - 半休が1つだけの日の日次計算で `prescribed_work_minutes` が P になり、残業・5区分・深夜の値は変更前と同じ。
 - 全休・時間休・休暇なしの日の計算結果が変わらない(フレックス・管理監督者を除く)。
 - フレックス・管理監督者の日の「残業時間」が0になり、週40時間超の週があっても月次提出が止まらない。
+- 詳しく表示に「所定労働日数」「所定労働時間」が「実労働日数」「実労働時間」と並んで表示され、月の途中でも勤務予定上の
+  月全体の所定(未入力の労働日を含む)が出る。「労働日数」の表示は「実労働日数」になる。
 - `attendance:recalculate-days --skip-manual-weekly-allocations` が所定内からの手動振分けがある日を除外する。
 - 勤怠集計の簡易表示に「所定労働時間」が無く、「所定内労働時間」(=所定内法定内+所定内法定外)と
   「残業時間」(=所定外法定内+所定外法定外)が表示される。
@@ -181,6 +222,7 @@
   なお今後提出する月の snapshot では、半休の日の所定労働時間が P で合算される。
 - 半休の日の残業判定基準そのものの変更(論点2のB)。
 - 1か月単位変形・シフト時刻ありの日の planned を使う判定(変更なし)。
+- 月次 totals・snapshot の既存キー `prescribed_work_minutes`(入力済みの日の合計)と、それを使う給与連携・CSVの値。
 - 本番データの再計算の実行(手順は論点6のとおり。実行は運用で行う)。
 - 日次の手動補正(`AttendanceDailyCalculationProjector` が補正した所定労働時間を所定内法定内に入れる互換変換)の見直し。
   補正した日は所定内労働時間が義務の時間で表示される既存の挙動のまま。
@@ -190,6 +232,8 @@
 ## ドキュメントへの影響
 - `docs/07-usecases-attendance.md`: 「同じ日の休暇の衝突」の半休の記述を、所定労働時間は P のまま・残業判定の基準のみ P/2 と直す。
   UC-A007 の集計の説明に、簡易表示の所定内労働時間・残業時間の定義を追記する。
+  UC-A007 に所定労働日数・所定労働時間(勤務予定ベース)の定義を追記する。
+  `docs/16-database-schema.md` の `monthly_calculation_totals` の説明に2キーを追記する。
   「フレックスタイム制」「裁量労働制・管理監督者」の節に、5区分は全て所定内・週40時間の判定対象外であることを追記する。
 - `docs/16-database-schema.md`: `prescribed_work_minutes` に「その日の所定労働時間(労働義務の時間)。休暇で減らさない。法定休日・所定休日は0」を追記する。
 
@@ -201,6 +245,10 @@
 - `backend/app/Domain/Attendance/Services/AttendanceCalculator.php`
 - `backend/app/Domain/Attendance/Services/WeeklyOvertimeCalculator.php`
 - `backend/app/Console/Commands/RecalculateAttendanceDaysCommand.php`
+- `backend/app/Domain/Attendance/Services/PrescribedScheduleTotalsCalculator.php`(新規)、`MonthlyOvertimeCalculator.php`、
+  `backend/app/Http/Controllers/Api/AttendanceController.php`(week)
+- `frontend/src/api/types.ts`・`frontend/src/api/attendance.ts`・`frontend/src/hooks/useAttendance.ts`(週次応答の meta)
+- `frontend/src/pages/attendance/`(AttendanceMonthDetailPage・WeekAttendancePage・AttendanceDayPage・AttendanceReferencePage)
 - 上記のテスト(既存のフレックス・管理監督者・週40時間・再計算コマンドのテストの期待値の更新を含む)
 - `backend/tests/Unit/Attendance/LeaveCalculationInputTest.php`
 - `backend/tests/Feature/Attendance/HalfDayLeavePrescribedMinutesTest.php`
@@ -221,6 +269,8 @@
   - 【低】週40時間を所定内から振り分けた分の表示 → 論点3の補足に追記
   - 【低】旧データのフォールバック → 対象外に明記
   - 問題なしとされた点: 半休の日の5区分・残業・深夜が変わらないこと、他の読み手(LeaveDayConflictPolicy・FlexSettlementSummaryCalculator・Excelの所定日数)への影響なし
+- ユーザー追加要望(2026-11-14): 詳しく表示に所定労働日数・所定労働時間を出し、労働日数を実労働日数にする → 論点7を追加
+  (所定は勤務予定から数える。ユーザー確認済み)
 
 ## 実装結果
 未着手
