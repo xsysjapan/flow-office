@@ -28,7 +28,7 @@ class GenericAttendanceCsvFormat implements AttendanceCsvFormat
             $month->user?->name,
             $yearMonth,
             $snapshot['work_minutes'] ?? 0,
-            $snapshot['prescribed_work_minutes'] ?? 0,
+            $this->scheduledPrescribedMinutes($snapshot),
             $snapshot['statutory_within_overtime_minutes'] ?? 0,
             $snapshot['statutory_excess_overtime_minutes'] ?? 0,
             $snapshot['late_night_work_minutes'] ?? 0,
@@ -50,5 +50,19 @@ class GenericAttendanceCsvFormat implements AttendanceCsvFormat
     public function fileExtension(): string
     {
         return 'csv';
+    }
+
+    /**
+     * 所定労働時間(勤務予定ベース)。キーが無い古いsnapshotは従来の prescribed_work_minutes を使う。
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function scheduledPrescribedMinutes(array $snapshot): int
+    {
+        if (array_key_exists('scheduled_prescribed_work_minutes', $snapshot)) {
+            return (int) $snapshot['scheduled_prescribed_work_minutes'];
+        }
+
+        return (int) ($snapshot['prescribed_work_minutes'] ?? 0);
     }
 }
