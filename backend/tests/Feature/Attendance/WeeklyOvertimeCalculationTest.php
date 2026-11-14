@@ -145,6 +145,31 @@ class WeeklyOvertimeCalculationTest extends TestCase
         $this->assertSame(120, $week['weekly_statutory_excess_overtime_minutes']);
     }
 
+    public function test_flex_and_manager_supervisor_days_are_excluded_from_the_weekly_forty_hour_judgement(): void
+    {
+        $calendar = $this->makeCalendar();
+        foreach ([WorkStyle::WORK_TIME_SYSTEM_FLEX, WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR] as $system) {
+            $workStyle = WorkStyle::query()->create([
+                'code' => 'ex-'.uniqid(), 'name' => $system, 'work_time_system' => $system,
+                'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+                'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
+            ]);
+            $user = User::factory()->create();
+
+            // 2026-06-01(月)〜06-05(金)を各540分(週45時間)働く。
+            foreach (['06-01', '06-02', '06-03', '06-04', '06-05'] as $day) {
+                $this->recordDay($user, $workStyle, "2026-{$day}", '09:00', '19:00');
+            }
+
+            // 未振分けが出ないため、振分け無しで月次提出できる。
+            $week = $this->weekReference($this->submitMonth($user, '2026-06'), '2026-06-01');
+
+            $this->assertSame(0, $week['weekly_statutory_excess_overtime_minutes'], $system);
+            $this->assertSame(0, $week['unallocated_weekly_statutory_excess_overtime_minutes'], $system);
+            $this->assertSame(0, $week['work_minutes'], $system);
+        }
+    }
+
     public function test_daily_and_weekly_statutory_overtime_are_not_double_counted(): void
     {
         $calendar = $this->makeCalendar();

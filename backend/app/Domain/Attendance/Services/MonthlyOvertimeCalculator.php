@@ -40,6 +40,7 @@ class MonthlyOvertimeCalculator
     public function __construct(
         private readonly WeeklyOvertimeCalculator $weeklyOvertimeCalculator,
         private readonly AttendanceDayLeaves $attendanceDayLeaves,
+        private readonly PrescribedScheduleTotalsCalculator $prescribedScheduleTotalsCalculator,
     ) {}
 
     /**
@@ -85,7 +86,7 @@ class MonthlyOvertimeCalculator
      * 月次確認画面・月次提出スナップショット向けの、対象月全体の集計(9区分の合計に加え、
      * 欠勤・有給・特別休暇の月次集計。docs/07-usecases-attendance.md「不就労時間の処理区分」参照)。
      *
-     * @return array{work_minutes: int, payroll_work_minutes: int, prescribed_work_minutes: int, statutory_within_overtime_minutes: int, statutory_excess_overtime_minutes: int, statutory_excess_overtime_within_60h_minutes: int, statutory_excess_overtime_over_60h_minutes: int, weekly_statutory_excess_overtime_minutes: int, late_night_work_minutes: int, late_night_prescribed_work_minutes: int, late_night_statutory_within_overtime_minutes: int, late_night_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int, prescribed_holiday_work_minutes: int, late_night_legal_holiday_work_minutes: int, late_night_prescribed_holiday_work_minutes: int, absence_days: int, absence_minutes: int, paid_leave_days: float, paid_leave_minutes: int, special_leave_days: float, special_leave_minutes: int, worked_days: int, work_days_weekday: int, work_days_prescribed_holiday: int, work_days_legal_holiday: int, weekday_regular_work_minutes: int, weekday_statutory_within_overtime_minutes: int, weekday_statutory_excess_overtime_minutes: int, weekday_late_night_prescribed_work_minutes: int, weekday_late_night_statutory_within_overtime_minutes: int, weekday_late_night_statutory_excess_overtime_minutes: int, prescribed_holiday_statutory_within_overtime_minutes: int, prescribed_holiday_statutory_excess_overtime_minutes: int, prescribed_holiday_late_night_prescribed_work_minutes: int, prescribed_holiday_late_night_statutory_excess_overtime_minutes: int}
+     * @return array{work_minutes: int, payroll_work_minutes: int, prescribed_work_minutes: int, statutory_within_overtime_minutes: int, statutory_excess_overtime_minutes: int, statutory_excess_overtime_within_60h_minutes: int, statutory_excess_overtime_over_60h_minutes: int, weekly_statutory_excess_overtime_minutes: int, late_night_work_minutes: int, late_night_prescribed_work_minutes: int, late_night_statutory_within_overtime_minutes: int, late_night_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int, prescribed_holiday_work_minutes: int, late_night_legal_holiday_work_minutes: int, late_night_prescribed_holiday_work_minutes: int, absence_days: int, absence_minutes: int, paid_leave_days: float, paid_leave_minutes: int, special_leave_days: float, special_leave_minutes: int, prescribed_work_days: int, scheduled_prescribed_work_minutes: int, worked_days: int, work_days_weekday: int, work_days_prescribed_holiday: int, work_days_legal_holiday: int, weekday_regular_work_minutes: int, weekday_statutory_within_overtime_minutes: int, weekday_statutory_excess_overtime_minutes: int, weekday_late_night_prescribed_work_minutes: int, weekday_late_night_statutory_within_overtime_minutes: int, weekday_late_night_statutory_excess_overtime_minutes: int, prescribed_holiday_statutory_within_overtime_minutes: int, prescribed_holiday_statutory_excess_overtime_minutes: int, prescribed_holiday_late_night_prescribed_work_minutes: int, prescribed_holiday_late_night_statutory_excess_overtime_minutes: int}
      */
     public function calculateCategoryTotals(string $userId, string $yearMonth): array
     {
@@ -120,6 +121,14 @@ class MonthlyOvertimeCalculator
         $prescribedHolidayCalcs = $this->calculationsForClassification($byClassification, DayClassification::PRESCRIBED_HOLIDAY);
         $legalHolidayCalcs = $this->calculationsForClassification($byClassification, DayClassification::LEGAL_HOLIDAY);
 
+        // 勤務予定ベースの所定労働日数・所定労働時間(対象月の1日〜末日。未入力の労働日も含む)。
+        $monthStart = Carbon::createFromFormat('Y-m-d', "{$yearMonth}-01")->startOfMonth();
+        $prescribedTotals = $this->prescribedScheduleTotalsCalculator->calculate(
+            $userId,
+            $monthStart->toDateString(),
+            $monthStart->copy()->endOfMonth()->toDateString(),
+        );
+
         return [
             'work_minutes' => (int) $calculations->sum('work_minutes'),
             'payroll_work_minutes' => (int) $calculations->sum('payroll_work_minutes'),
@@ -151,6 +160,8 @@ class MonthlyOvertimeCalculator
             'paid_leave_minutes' => (int) $calculations->sum('paid_leave_minutes'),
             'special_leave_days' => (float) $calculations->sum('special_leave_days'),
             'special_leave_minutes' => (int) $calculations->sum('special_leave_minutes'),
+            'prescribed_work_days' => $prescribedTotals['prescribed_work_days'],
+            'scheduled_prescribed_work_minutes' => $prescribedTotals['scheduled_prescribed_work_minutes'],
             // 労働日数(実際に勤務した日数)。休日区分を問わず、work_minutes > 0 の日を数える
             // (work_days_weekday/prescribed_holiday/legal_holidayの合計と一致する)。
             'worked_days' => $calculations->filter(fn ($calculation) => $calculation->work_minutes > 0)->count(),

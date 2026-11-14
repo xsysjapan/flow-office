@@ -25,6 +25,8 @@ use Illuminate\Support\Carbon;
  *   を除いた「日8時間以内の労働時間」だけを週単位で合計し、40時間を超えた分のみを
  *   weekly_statutory_excess_overtime_minutes とする(日8時間判定との二重計上を避けるため)。
  * - 法定休日労働はこの週40時間の判定に含めない(法定休日労働は別枠の休日割増で扱う)。
+ * - フレックスタイム制・管理監督者の日(その日の働き方が flex / manager_supervisor)は、週の労働時間・
+ *   日8時間以内の合計・法定休日労働の合計から除く(日・週ごとの残業を持たないため週40時間超は出ない)。
  * - 1か月単位変形労働時間制(work_time_system=monthly_variable)で、あらかじめ40時間を
  *   超える所定労働時間を設定した週は、その時間を超えた部分のみが週40時間超の法定時間外になる。
  * - 法定休日「決めない方式」(work_styles.legal_holiday_rule=undetermined)は、
@@ -38,6 +40,7 @@ class WeeklyOvertimeCalculator
     public function __construct(
         private readonly LegalHolidayResolver $legalHolidayResolver,
         private readonly EffectiveScheduleResolver $effectiveScheduleResolver,
+        private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
     ) {}
 
     /**
@@ -94,13 +97,19 @@ class WeeklyOvertimeCalculator
                 continue;
             }
 
-            $legalHolidayWorkMinutes += $calculation->legal_holiday_work_minutes;
-
             $schedule = $this->effectiveScheduleResolver->resolve(
                 $day->user_id,
                 $day->work_date->copy(),
                 $day->calendarEntry,
             );
+
+            // フレックス・管理監督者の日は週40時間の判定の対象外(日次の5区分も全て所定内。AttendanceCalculator参照)。
+            $workStyle = $schedule?->workStyle ?? $this->workStyleFallbackResolver->resolveForUser($day->user_id, $day->work_date->copy());
+            if (in_array($workStyle?->work_time_system, [WorkStyle::WORK_TIME_SYSTEM_FLEX, WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR], true)) {
+                continue;
+            }
+
+            $legalHolidayWorkMinutes += $calculation->legal_holiday_work_minutes;
 
             if ($schedule !== null && $this->legalHolidayResolver->isLegalHoliday($schedule)) {
                 continue;

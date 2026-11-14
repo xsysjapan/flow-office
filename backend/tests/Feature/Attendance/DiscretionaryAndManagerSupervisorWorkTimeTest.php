@@ -193,4 +193,52 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $this->assertSame(0, $calculation->statutory_excess_overtime_minutes, '8時間を超えても管理監督者には残業代を計算しない');
         $this->assertSame(0, $calculation->statutory_within_overtime_minutes);
     }
+
+    public function test_manager_supervisor_weekday_beyond_the_prescribed_time_is_all_prescribed_statutory_within(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeManagerSupervisorWorkStyle($calendar);
+        $user = User::factory()->create();
+        $shift = $this->makeCalendarEntry($user, $workStyle, '2026-06-01');
+
+        $day = AttendanceDay::query()->create([
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'calendar_entry_id' => $shift->id,
+            'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
+        ]);
+
+        $this->editDay($user, $day, '2026-06-01', '09:00', '19:00');
+
+        $calculation = $day->refresh()->calculation;
+        $this->assertSame(540, $calculation->work_minutes);
+        $this->assertSame(480, $calculation->prescribed_work_minutes);
+        $this->assertSame(540, $calculation->prescribed_statutory_within_work_minutes);
+        $this->assertSame(0, $calculation->non_prescribed_statutory_within_work_minutes);
+        $this->assertSame(0, $calculation->prescribed_statutory_excess_work_minutes);
+        $this->assertSame(0, $calculation->non_prescribed_statutory_excess_work_minutes);
+    }
+
+    public function test_manager_supervisor_work_on_a_prescribed_holiday_is_prescribed_statutory_within(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeManagerSupervisorWorkStyle($calendar);
+        $user = User::factory()->create();
+        $shift = EmployeeCalendarEntry::query()->create([
+            'user_id' => $user->id, 'work_date' => '2026-06-06', 'work_style_id' => $workStyle->id,
+            'day_type' => 'company_holiday', 'is_working_day' => false, 'is_legal_holiday' => false,
+            'is_company_holiday' => true, 'planned_break_minutes' => 0,
+        ]);
+
+        $day = AttendanceDay::query()->create([
+            'user_id' => $user->id, 'work_date' => '2026-06-06', 'calendar_entry_id' => $shift->id,
+            'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
+        ]);
+
+        $this->editDay($user, $day, '2026-06-06', '10:00', '15:00', break: null);
+
+        $calculation = $day->refresh()->calculation;
+        $this->assertSame(300, $calculation->work_minutes);
+        $this->assertSame(0, $calculation->non_prescribed_statutory_within_work_minutes);
+        $this->assertSame(300, $calculation->prescribed_statutory_within_work_minutes);
+        $this->assertSame(0, $calculation->prescribed_holiday_work_minutes, '管理監督者は休日規定の適用除外(従来どおり0)');
+    }
 }
