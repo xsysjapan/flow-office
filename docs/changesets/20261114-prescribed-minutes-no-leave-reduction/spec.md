@@ -179,8 +179,10 @@
   - 欠勤日数(freee `num_absences`・MoneyForward・Excel)は論点4の新ルールに従う(ユーザー確認済み)。
 - 決定:
   - freee API `total_normal_work_mins` と freee CSV「所定労働時間」(freeeの取込列名のためヘッダーは変えない)の値:
-    `prescribed_statutory_within_work_minutes`(所定内法定内)。所定内法定外は `total_overtime_work_mins`(=`statutory_excess_overtime_minutes`)
-    に含まれるため、二重計上を避けて含めない。キーが無い古い snapshot は従来どおり `prescribed_work_minutes`。
+    `weekday_prescribed_statutory_within_work_minutes`(平日の所定内法定内。無ければ `prescribed_statutory_within_work_minutes`、それも無ければ
+    `prescribed_work_minutes`)。freeeは 総勤務時間 = 所定内労働 + 法定内残業 + 時間外労働 + 所定休日労働 + 法定休日労働 であり、
+    所定内法定外は時間外労働(`statutory_excess_overtime_minutes`)に、フレックス・管理監督者の所定休日勤務は所定休日労働に
+    含まれるため、二重計上を避けて平日の所定内法定内だけを送る(通常の勤務形態では休日の所定内法定内は0)。
   - 汎用CSV・汎用TSVの所定労働時間の列: 名前どおり法律上の所定労働時間を出す。値を `scheduled_prescribed_work_minutes`(勤務予定ベース。論点7)に
     する。キーが無い古い snapshot は `prescribed_work_minutes`。列の並び・ヘッダーは変えない。
   - Excel「必要出勤日数」: snapshot の `prescribed_work_days` があればそれを使い、無ければ従来の式。
