@@ -1,6 +1,6 @@
 # 所定労働時間を休暇で減らさず、勤怠集計の表示を「所定内労働時間」「残業時間」に揃える
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 月次集計で、今月の集計の所定労働時間について仕様を教えてください。有給休暇(有給休暇・特別休暇・代休)がある場合には、所定労働時間は減るべきと思うのですが、所定労働時間の計算がおかしい気がします。
@@ -303,4 +303,23 @@
 - 承認(2026-11-14): 実装に着手。ユーザーの追加指示で給与連携・CSV出力の修正を範囲に含める(論点8。調査後に追記)。週の所定は `GET /attendance/week/overtime` に載せる形に変更(週の応答の形を変えないため)。
 
 ## 実装結果
-未着手
+- コミット: 5e990fe(frontend)、13deb46(backend 計算・集計)、bcd7ee2(出力)、5cfca8b(docs/07・docs/16)
+- 主な変更ファイル:
+  - backend: `LeaveCalculationInput`(prescribedMinutes/workBaselineMinutes)、`AttendanceCalculator`、`WeeklyOvertimeCalculator`、
+    `MonthlyOvertimeCalculator`、新規 `PrescribedScheduleTotalsCalculator`、`AttendanceController::weekOvertime`、`RecalculateAttendanceDaysCommand`
+    (`--skip-manual-weekly-allocations`。管理画面の実行UIにもチェックボックスを追加)
+  - 出力: `FreeeAttendanceApiPayloadBuilder`・`FreeeAttendanceCsvFormat`(平日の所定内法定内→所定内法定内→prescribed_work_minutes)、
+    汎用CSV/SJIS/TSV(scheduled_prescribed_work_minutes→prescribed_work_minutes)、`AttendanceExcelBuilder`(必要出勤日数)
+  - frontend: `AttendanceCalculationSummary`(本体・stories・test)、`api/types.ts`・`api/attendance.ts`、勤怠4画面
+  - docs: `docs/07-usecases-attendance.md`(休暇の衝突・UC-A007の集計表示・管理監督者/フレックスの5区分)、`docs/16-database-schema.md`
+- テスト結果:
+  - backend: CIと同じ条件(`.env`+`key:generate`+`php artisan test`)で 2277件中2276件PASS。失敗1件は
+    `ReadModelFingerprintCommandTest`(出力のタブ区切り。今回の変更を退避しても同じく失敗する既存の不具合)。
+  - frontend: `npx tsc -p tsconfig.app.json --noEmit` 成功、unit 1128件PASS、storybook 336件PASS
+    (`VITEST_CHROMIUM_EXECUTABLE_PATH=/opt/pw-browsers/chromium` で実行)。
+- 受け入れ条件: 半休の日の所定=P・他の値は不変(HalfDayLeavePrescribedMinutesTest)、表示(AttendanceCalculationSummary.test)、
+  フレックス・管理監督者の残業0と週40h非対象・月次提出可(FlexWorkTimeTest・DiscretionaryAndManagerSupervisorWorkTimeTest・WeeklyOvertimeCalculationTest)、
+  所定労働日数・時間(PrescribedScheduleTotalsCalculatorTest)、出力(AttendanceExportTest・AttendanceApiPayloadBuilderTest)、
+  再計算コマンドの除外(RecalculateAttendanceDaysCommandTest)で確認。
+- 運用(ユーザーが実施): `php artisan attendance:recalculate-days --from=... --to=... --skip-manual-weekly-allocations`(試し実行→`--apply`)。
+  提出済み月の汎用CSV/TSV・Excelに新しい値を出す場合のみ `attendance:recalculate-month-snapshots`。
