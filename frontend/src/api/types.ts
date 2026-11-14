@@ -623,6 +623,10 @@ export interface AttendanceMonthlyCalculationTotals {
   special_leave_minutes?: number;
   /** 労働日数(実際に勤務した日数。休日区分を問わずwork_minutes > 0の日を数える)。 */
   worked_days?: number;
+  /** 所定労働日数(勤務予定ベース。未入力の労働日も含む月全体の数)。 */
+  prescribed_work_days?: number;
+  /** 所定労働時間(勤務予定ベース。未入力の労働日も含む月全体の分数。休暇では減らさない)。 */
+  scheduled_prescribed_work_minutes?: number;
 }
 
 export type AttendanceDaySource = "live" | "manual" | "punch";

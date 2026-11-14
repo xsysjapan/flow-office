@@ -198,6 +198,8 @@ export function WeekAttendancePage() {
               absenceDays={absenceDays}
               workDays={workedDays}
               specialLeaveBreakdown={specialLeaveBreakdown}
+              prescribedWorkDays={weeklyOvertime?.prescribed_work_days}
+              prescribedWorkMinutes={weeklyOvertime?.scheduled_prescribed_work_minutes}
               showAllLeaveTotals
             />
           </div>

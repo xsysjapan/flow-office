@@ -31,7 +31,8 @@ describe('AttendanceCalculationSummary', () => {
     )
 
     expect(screen.getByRole('heading', { name: '今週の集計' })).toBeInTheDocument()
-    expect(screen.getByText('所定労働時間')).toBeInTheDocument()
+    expect(screen.getByText('所定内労働時間')).toBeInTheDocument()
+    expect(screen.queryByText('所定労働時間')).not.toBeInTheDocument()
     expect(screen.getByText('残業時間')).toBeInTheDocument()
     expect(screen.getByText('法定休日労働時間')).toBeInTheDocument()
     expect(screen.getByText('うち深夜作業時間')).toBeInTheDocument()
@@ -51,6 +52,62 @@ describe('AttendanceCalculationSummary', () => {
 
     // 60分 + 120分 = 3時間
     expect(screen.getByText('残業時間').nextElementSibling).toHaveTextContent('3時間3:00')
+  })
+
+  it('shows 所定内労働時間 = 所定内法定内+所定内法定外 and 残業時間 = 所定外法定内+所定外法定外 in the default view', () => {
+    render(
+      <AttendanceCalculationSummary
+        title="今月の集計"
+        totals={{
+          ...totals,
+          prescribed_statutory_within_work_minutes: 420,
+          prescribed_statutory_excess_work_minutes: 60,
+          non_prescribed_statutory_within_work_minutes: 30,
+          non_prescribed_statutory_excess_work_minutes: 90,
+          statutory_within_overtime_minutes: 30,
+          statutory_excess_overtime_minutes: 150,
+        }}
+      />,
+    )
+
+    // 420+60 = 480分(8時間) / 30+90 = 120分(2時間)
+    expect(screen.getByText('所定内労働時間').nextElementSibling).toHaveTextContent('8時間8:00')
+    expect(screen.getByText('残業時間').nextElementSibling).toHaveTextContent('2時間2:00')
+  })
+
+  it('labels the worked-day count as 実労働日数 in the default view', () => {
+    render(<AttendanceCalculationSummary title="今月の集計" totals={{ ...totals, worked_days: 20 }} />)
+
+    expect(screen.getByText('実労働日数').nextElementSibling).toHaveTextContent('20日')
+    expect(screen.queryByText('労働日数')).not.toBeInTheDocument()
+  })
+
+  it('shows 所定労働日数 and 所定労働時間 next to 実労働日数 and 実労働時間 in the detail view', async () => {
+    render(
+      <AttendanceCalculationSummary
+        title="今月の集計"
+        totals={{ ...totals, work_minutes: 9600, worked_days: 20 }}
+        prescribedWorkDays={21}
+        prescribedWorkMinutes={10080}
+      />,
+    )
+    await openDetails()
+
+    expect(screen.getByText('所定労働日数').nextElementSibling).toHaveTextContent('21日')
+    expect(screen.getByText('実労働日数').nextElementSibling).toHaveTextContent('20日')
+    expect(screen.getByText('所定労働時間').nextElementSibling).toHaveTextContent('168時間')
+    expect(screen.getByText('所定労働時間').nextElementSibling).toHaveTextContent('168:00')
+    expect(screen.getByText('実労働時間').nextElementSibling).toHaveTextContent('160:00')
+    expect(screen.queryByText('労働日数')).not.toBeInTheDocument()
+  })
+
+  it('does not show 所定労働日数 or 所定労働時間 in the detail view when they are not provided', async () => {
+    render(<AttendanceCalculationSummary title="今日の集計" totals={{ ...totals, worked_days: 1 }} />)
+    await openDetails()
+
+    expect(screen.queryByText('所定労働日数')).not.toBeInTheDocument()
+    expect(screen.queryByText('所定労働時間')).not.toBeInTheDocument()
+    expect(screen.getByText('実労働日数')).toBeInTheDocument()
   })
 
   it('sums late-night minutes across every category for the default late-night total', () => {
