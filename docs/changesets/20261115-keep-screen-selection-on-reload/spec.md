@@ -1,6 +1,6 @@
 # 画面の選択状態(対象社員・年月・絞り込み・ページ)をリロード後も保つ
 
-ステータス: 検討中
+ステータス: レビュー中
 
 ## 変更要望(原文)
 > 勤怠参照画面で対象社員、年月を選択した状態で画面をリロードすると、選択が外れてしまいます。
@@ -23,6 +23,9 @@ URL共有で失われないことが`ui-interaction-patterns` §2.10の規則。
     Browser Back・URL共有・編集画面の初期値)は社員名が空欄**になる。プレースホルダーも出ないため
     「選択が外れた」ように見える。
 - 原因の分類: 実装のミス(部品が「親から値だけ渡される」経路を想定していない)。データ設計の問題ではない。
+- リロードでクエリが落ちる経路がないことも確認済み(`RequireAuth`・ログイン復帰・`redirectTarget`・
+  `.htaccess`はいずれも`search`を保持する)。年月はURLから復元される。サイドバーの「勤怠参照」を押し直すと
+  クエリなしのURLへ遷移して初期化されるのは仕様(メニューは画面の入口)。
 
 ### 同じ部品を使う画面(同じ症状が出得る)
 `UserPicker`はURLから社員を復元する画面(勤怠参照・有給付与設定`PaidLeavePolicyPage`・特別休暇管理
@@ -39,9 +42,15 @@ URL共有で失われないことが`ui-interaction-patterns` §2.10の規則。
 | 勤務カレンダー一覧 `WorkCalendarListPage` | ページ | `useState` |
 | 働き方一覧 `WorkStylesPage` | 一覧のページ | `useState` |
 | 管理範囲 `UserManagementAccessPage` | グループ種別の絞り込み | `useState` |
-| 有給付与設定 `PaidLeavePolicyPage` / 特別休暇管理 `SpecialLeaveAdminPage` | 付与ルールの氏名絞り込み | `useState`(社員は`?userId=`でURL済み) |
-| 運用コマンド `AdminCommandsPage` | 選んだコマンド | `useState` |
-| 端末一覧 `DeviceListPage` | 詳細パネルの対象端末 | 承認一覧は`?requestId=`でURL化済み |
+| 端末一覧 `DeviceListPage` | 詳細パネルの対象端末 | 参照実装: 承認一覧の`?requestId=` |
+
+`useState`だが今回の対象外とするもの(論点3): 有給付与設定・特別休暇管理の付与ルールごとの氏名絞り込み
+(展開した行の中にあり複数同時に開ける)、運用コマンドの選択(実行パラメータの入力フォームの一部)、
+シフト画面の3交代制シフト表の対象部署・対象月(登録・公開フォームの一部)。
+
+同種の部品: `MultiUserPicker`(`components/MultiUserPicker/MultiUserPicker.tsx:31,102`)も名前を知らない
+IDはUUIDのまま表示するが、現在の利用箇所(`GrantTargetPicker`の新規フォーム)は初期値が常に空で、
+症状が出ない。
 
 URL化済み画面間の不統一:
 - 履歴: 大半(承認・利用者・資産・監査ログ等13画面)は`replace`、勤怠参照・勤怠月次一覧・ロール定義・
@@ -107,12 +116,15 @@ URL化済み画面間の不統一:
   対象ごとの判断:
   - 週次勤怠: 移動した週を`?start=YYYY-MM-DD`へ書く(今週ならキーを消す)。
   - 勤務カレンダー一覧・働き方一覧: `?page=`。
-  - 管理範囲: グループ種別の絞り込みを`?groupTypeId=`。
-  - 有給付与設定・特別休暇管理: 付与ルールの氏名絞り込みを`?q=`。
-  - 運用コマンド: 選んだコマンドを`?command=`(コマンド名)。
+  - 管理範囲: グループ種別の絞り込みを`?group_type_id=`(利用者一覧と同じキー名)。
   - 端末一覧: 詳細パネルの対象端末を`?deviceId=`(承認一覧の`requestId`と同じ扱い)。
-  - 対象外(フォーム入力中): 勤怠出力・カレンダー一括操作・シフト登録・働き方の月次割当・資産の一括操作・
-    システム設定・各種新規/編集画面。対象外(一時的な選択): 一括操作のチェック・行の展開。
+  - 対象外(フォーム入力中): 勤怠出力・カレンダー一括操作・シフト登録・3交代制シフト表・働き方の月次割当・
+    資産の一括操作・運用コマンド(コマンド選択で実行パラメータが切り替わる入力フォーム)・システム設定・
+    各種新規/編集画面。対象外(一時的な選択): 一括操作のチェック・行の展開と、展開した行の中の絞り込み
+    (有給付与設定・特別休暇管理の付与ルールごとの氏名絞り込み。複数の行を同時に開けるため1つのキーに
+    対応せず、展開状態を残さない以上リロード後に効果が見えない)。
+  - `MultiUserPicker`: 対象外。初期値付きで使う画面がなく症状が出ない。将来初期値付きで使う場合は
+    §2.10の追記(ID選択入力の名前表示)に従って直す。
 - 未確定・要確認事項: なし
 
 ### 論点4: URLの書き方の統一(履歴・キー名・不正値・既定値)
@@ -123,12 +135,18 @@ URL化済み画面間の不統一:
 - 決定: A。統一規則は次のとおり。
   1. 履歴は`replace`(絞り込み・ページ・社員・年月の変更で履歴を積まない。Browser Backは前の画面へ戻る)。
      勤怠参照・勤怠月次一覧・ロール定義・経費プリセット一覧・休暇申請一覧のページを`push`から`replace`へ。
-  2. 社員のキー名は`userId`。勤怠参照の`user`を`userId`へ改める(旧`?user=`は読み込み時に
-     `userId`として扱い、URLを`userId`へ置き換える)。その他の既存キー名(`requestPage`・snake_caseの
-     API由来のキー等)は変えない。
-  3. 年月は`YYYY-MM`、日付は`YYYY-MM-DD`。不正値は既定値として表示し、URLからそのキーを消す
-     (表示とURLを一致させる)。承認一覧の`yearMonth`もこの検証を入れる。
-  4. 既定値(今月・1ページ目・既定のステータス等)はURLに書かない。
+  2. キー名は、既存画面に同じ概念のキーがあればその名前に合わせる(例: グループ種別は`group_type_id`)。
+     新しい概念はcamelCase。画面の対象社員は`userId`とし、勤怠参照の`user`を`userId`へ改める
+     (旧`?user=`は読み込み時に`userId`として扱い、URLを`userId`へ置き換える。現状`?user=`を組み立てる
+     リンク・e2eはないことを確認済み)。その他の既存キー名(`requestPage`・監査ログの`user_id`等の
+     API由来のsnake_case)は変えない。
+  3. 年は`YYYY`、年月は`YYYY-MM`、日付は`YYYY-MM-DD`、ページは1以上の整数。不正値は既定値として表示し、
+     URLからそのキーを消す(表示とURLを一致させる)。承認一覧の`yearMonth`・勤怠月次一覧の`year`にも
+     この検証を入れる。
+  4. 固定の既定値(1ページ目・既定のステータス等)はURLに書かない(書かれていたら消す。休暇申請一覧の
+     `requestPage=1`も消す)。日付で変わる既定値(今月・今週)は、キーがない初期表示ではURLに書かないが、
+     利用者が選んだ(「今月」ボタン・前後移動で今週に戻った場合を含む)ときは書く。URL共有・翌日以降の
+     リロードで別の月・週に変わらないようにするため。
   5. 絞り込みを変えたら`page`を消す(既存の承認一覧と同じ)。
   - 共通hook `frontend/src/hooks/useSearchParamsState.ts`(仮称)を設け、「キーごとの読み取り(検証・
     既定値)」「部分更新(nullで削除、`replace`)」を提供する。今回変更する画面はこのhookを使う。
@@ -142,45 +160,55 @@ URL化済み画面間の不統一:
 
 ### backend
 - `GET /users/search`に`ids[]`(UUIDの配列、最大100件)を追加。指定時は`id IN (ids)`で絞り込み、
-  `q`・`permission`と併用可。権限・応答形式(`UserSearchResource`)は変えない。OpenAPI注釈を更新。
+  `q`・`permission`と併用可。`ids`指定時は`per_page`の既定値を`ids`の件数にする(1ページで全件返す)。
+  権限・応答形式(`UserSearchResource`)は変えない(`q`を空にすれば既に全社員を取得できるため、公開範囲は
+  広がらない)。OpenAPI注釈を更新。
 - テスト(`backend/tests/Feature/UserManagement/UserSearchAndAccessTest.php`):
   ids指定で該当者だけ返る / 存在しないIDは無視される / 不正なUUID・101件以上は422 / 一般社員でも使える。
 
 ### frontend
-- `api/users.ts`の`searchUsers`と`hooks/useUsers.ts`に、ID指定で社員を取得する関数・hook
-  (`useUsersByIds(ids)`)を追加(`add-api-hook`スキル)。
+- `api/users.ts`の`searchUsers`に省略可能な第4引数`ids?: string[]`を足して再利用する(新しいAPI関数は
+  作らない。既存のページテストが`vi.spyOn(usersApi, 'searchUsers')`でモックしているため、同じ関数なら
+  既存テストのモックがそのまま効く)。`hooks/useUsers.ts`に`useUsersByIds(ids)`を追加
+  (クエリキー`['users', 'by-ids', ids]`、`ids`が空なら無効)。名前の取得では`permission`を渡さない
+  (選んだ後に権限を失った社員も名前が出るようにする)。
 - `UserPicker`:
   - 一覧から選んだときの名前はそのまま表示する(今と同じ)。
   - `value`があり、その社員の名前を知らない(初回表示・親から値が変わった)ときは`useUsersByIds([value])`で
     取得し「氏名(メール)」を表示。取得中は「読み込み中…」、該当なしは「不明な社員」。
   - `value`が未指定のときはプレースホルダー(今と同じ)。
   - テスト: value付きで描画すると取得した氏名が出る / 取得中表示 / 該当なしで「不明な社員」/
-    一覧から選んだ名前が出る(既存)/ valueが外から変わると新しい社員名になる。storyにvalue付きを追加。
+    一覧から選んだ名前が出る(既存)/ valueが外から変わると新しい社員名になる。storyにvalue付きを追加
+    (既存storyと同じくクエリキー`['users','by-ids',[id]]`へデータを差し込む)。
+  - 既存のページテストで`searchUsers`のモックが`ids`指定の呼び出しに対象社員を返さず「不明な社員」になる
+    場合は、モックを`ids`に応じて返すよう直す(アサーションは弱めない)。
 - 共通hook `hooks/useSearchParamsState.ts`(論点4の規則1・4・5を既定の動作にする)とテスト。
 - 画面ごとの変更(論点3・4):
 
 | 画面 | 変更 |
 |---|---|
-| 勤怠参照 | `user`→`userId`(旧キーを読み替え)、replace、不正な年月はURLから消す |
-| 週次勤怠 | 週の移動を`?start=`へ書く(今週はキーなし)、不正な日付は今週 |
-| 勤怠月次一覧 | push→replace |
+| 勤怠参照 | `user`→`userId`(旧キーを読み替え)、replace、不正な年月はURLから消す。年月の変更(「今月」ボタン含む)は常に`yearMonth`を書く(規則4) |
+| 週次勤怠 | 前週/次週/今週への移動で`?start=`(その週の月曜)を書く。月曜以外の正しい日付は月曜に寄せてURLも書き換える。不正な日付は今週としてキーを消す。週が変わったら選択中の日・一括入力の下書きは今と同じくリセット |
+| 勤怠月次一覧 | push→replace、`year`の検証 |
 | 承認一覧 | `yearMonth`の検証(不正ならキーを消して既定の表示) |
 | 勤務カレンダー一覧・働き方一覧 | `?page=` |
-| 管理範囲 | `?groupTypeId=` |
-| 有給付与設定・特別休暇管理 | 氏名絞り込みを`?q=` |
-| 代休管理 | 変更なし(UserPickerの修正で社員名が出る) |
-| 運用コマンド | `?command=`(存在しないコマンド名は先頭のコマンド) |
+| 管理範囲 | `?group_type_id=` |
+| 有給付与設定・特別休暇管理・代休管理 | 変更なし(UserPickerの修正で社員名が出る) |
 | 端末一覧 | `?deviceId=`(パネルを閉じたらキーを消す) |
-| ロール定義・経費プリセット一覧・休暇申請一覧3種のページ | push→replace |
+| ロール定義・経費プリセット一覧・休暇申請一覧3種のページ | push→replace(休暇申請一覧は`requestPage=1`を書かない) |
 
 - 各画面のテスト: `MemoryRouter`の`initialEntries`にURLを与えて、選択状態が復元されることを確認する
-  (勤怠参照は社員名と年月が表示されること)。
+  (勤怠参照は社員名と年月が表示されること)。URLの書き換え(`user`→`userId`・不正なキーの削除・
+  月曜への寄せ)は、テスト内で`useLocation()`の`search`を表示する小さな部品を一緒に描画して検証する。
+- e2e `frontend/e2e/scenario-06-attendance-corrections.spec.ts:164`付近の「`?start=`が無いと当週から
+  表示し直す」旨のコメントを新しい挙動に合わせて直す(テスト本体は変えない)。
 - `ui-interaction-patterns` §2.10に論点4の規則・共通hook・「社員などIDで選ぶ入力は、IDだけ渡されても
   名前を表示できること」を追記。
 
 ## 受け入れ条件
 - 勤怠参照で社員・年月を選んでリロードすると、社員名・年月・勤怠が選んだまま表示される。
 - 有給付与設定・特別休暇管理・代休管理でも、社員を選んでリロードすると社員名が表示される。
+- 承認者に権限で絞った`UserPicker`でも、選んだ社員の名前は権限に関係なく表示される。
 - 論点3の各画面で、表の状態がリロード後も保たれる。
 - 旧URL`/admin/attendance?user=<id>`を開くと同じ社員が表示され、URLが`userId`になる。
 - 不正な年月・日付のURLを開くと既定の表示になり、URLからそのキーが消える。
@@ -189,6 +217,8 @@ URL化済み画面間の不統一:
 
 ## 対象外
 - 月次/週次/日次の共通タブ(`AttendanceMonthReferenceTabs`)のタブ・週・日のURL化(論点3)。
+- 付与ルールの展開とその中の氏名絞り込み、運用コマンドの選択、3交代制シフト表の対象部署・対象月(論点3)。
+- `MultiUserPicker`の名前表示(論点3)。
 - フォーム入力中の値・一括操作のチェック・行の展開状態の保持。
 - 既に規則どおりの画面の共通hookへの書き換え、既存のキー名(snake_case・`requestPage`等)の改名。
 - e2eの追加(既存e2eが壊れていないかの確認のみ)。
@@ -210,10 +240,10 @@ URL化済み画面間の不統一:
   - `src/pages/attendance/`(AttendanceReferencePage・WeekAttendancePage・AttendanceMonthsPage)
   - `src/pages/approvals/ApprovalsPage.tsx`
   - `src/pages/workCalendar/`(WorkCalendarListPage・WorkStylesPage)
-  - `src/pages/admin/`(UserManagementAccessPage・AdminCommandsPage・DeviceListPage・RoleDefinitionPage)
-  - `src/pages/paidLeave/PaidLeavePolicyPage.tsx`、`src/pages/specialLeave/SpecialLeaveAdminPage.tsx`
+  - `src/pages/admin/`(UserManagementAccessPage・DeviceListPage・RoleDefinitionPage)
   - `src/pages/expense/ExpenseEntryPresetListPage.tsx`、休暇申請一覧3種(MyPaidLeave・MySpecialLeave・MyCompensatoryLeave)
-  - 上記各画面のテスト
+  - 上記各画面のテスト、`searchUsers`をモックしている既存テストのうち必要なもの
+  - `e2e/scenario-06-attendance-corrections.spec.ts`(コメントのみ)
 - `.claude/skills/ui-interaction-patterns/SKILL.md`
 
 ## 検証方法
@@ -223,6 +253,17 @@ URL化済み画面間の不統一:
 
 ## レビュー履歴
 - 2026-11-15 初版
+- 2026-11-15 独立設計レビュー(反証)の指摘を反映。原因特定(UserPicker)とクエリが落ちる経路がないことは
+  妥当と確認された。対応:
+  - 有給付与設定・特別休暇管理の氏名絞り込み`?q=`を撤回し対象外へ(展開した行ごとの絞り込みで、1キーに
+    対応しない)。運用コマンド`?command=`も入力フォームの一部として対象外へ。3交代制シフト表・
+    `MultiUserPicker`を対象外として明記。
+  - キー名規則を「既存の同概念キーに合わせる」に改め、管理範囲を`group_type_id`へ。
+  - 既定値の規則4を、日付で変わる既定値(今月・今週)は選んだら書く、に修正(URL共有で月がずれるため)。
+  - `/users/search`の`ids`指定時の`per_page`、名前取得で`permission`を渡さないことを明記。
+  - `searchUsers`に引数を足して再利用する(既存テストのモックを生かす)、クエリキー・storyの差し込み方を明記。
+  - 週次勤怠の月曜への寄せと下書きのリセット、`year`の検証、`requestPage=1`の削除、URL書き換えのテスト方法、
+    e2eコメントの修正を追記。
 
 ## 実装結果
 未着手
