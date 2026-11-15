@@ -25,6 +25,7 @@ import {
   usePunches,
   useReopenMonth,
   useWeek,
+  useWeekOvertime,
 } from '../../hooks/useAttendance'
 import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { useSpecialLeaveTypeNames } from '../../hooks/useSpecialLeave'
@@ -216,6 +217,8 @@ export function MonthlyReferenceView({
                   weeklyStatutoryExcessOvertimeMinutes={data.monthly_calculation_totals.weekly_statutory_excess_overtime_minutes}
                   absenceDays={data.monthly_calculation_totals.absence_days ?? 0}
                   specialLeaveBreakdown={data.special_leave_breakdown}
+                  prescribedWorkDays={data.monthly_calculation_totals.prescribed_work_days}
+                  prescribedWorkMinutes={data.monthly_calculation_totals.scheduled_prescribed_work_minutes}
                   showAllLeaveTotals
                 />
               </div>
@@ -319,6 +322,7 @@ export function WeeklyReferenceView({
   const [weekStart, setWeekStart] = useState(() => initialWeekStart ?? formatDate(mondayOf(new Date())))
   const currentWeekStart = formatDate(mondayOf(new Date()))
   const { data, isLoading, error } = useWeek(weekStart, userId)
+  const { data: weeklyOvertime } = useWeekOvertime(weekStart, userId)
 
   const dates = weekDates(weekStart)
   const { data: schedule } = useShiftAssignments(userId, dates[0], dates[6])
@@ -377,6 +381,8 @@ export function WeeklyReferenceView({
               absenceDays={absenceDays}
               workDays={workedDays}
               specialLeaveBreakdown={specialLeaveBreakdown}
+              prescribedWorkDays={weeklyOvertime?.prescribed_work_days}
+              prescribedWorkMinutes={weeklyOvertime?.scheduled_prescribed_work_minutes}
               showAllLeaveTotals
             />
           </div>
@@ -564,6 +570,7 @@ export function DailyReferenceView({
               totals={day.calculation}
               absenceDays={day.calculation.absence_minutes ? 1 : undefined}
               specialLeaveBreakdown={specialLeaveTypeBreakdown([day], specialLeaveTypeNames)}
+              prescribedWorkMinutes={day.calculation.prescribed_work_minutes}
             />
           )}
         </div>

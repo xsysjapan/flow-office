@@ -15,8 +15,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * 半休の日は所定労働時間を所定労働時間の半分とする(AttendanceCalculator・LeaveCalculationInput参照)。
- * 全休・午前+午後の半休・通常勤務日・時間単位休暇は変更しない。
+ * 半休の日も保存する所定労働時間(prescribed_work_minutes)はPのまま減らさない。残業・5区分の判定基準のみ
+ * P/2(LeaveCalculationInput::workBaselineMinutes。AttendanceCalculator参照)。
  * 休暇は休暇申請のイベント(有給は申請API、特別休暇は申請集約)で作り、休暇ビューから計算に読まれることを確認する
  * (work_typeの休暇値は計算に使わない)。.claude/skills/attendance-calc-review 参照。
  */
@@ -106,7 +106,7 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         return $day->refresh();
     }
 
-    public function test_special_leave_pm_half_halves_the_prescribed_work_minutes(): void
+    public function test_special_leave_pm_half_keeps_the_full_prescribed_work_minutes(): void
     {
         $workStyle = $this->makeWorkStyle(480);
         $user = User::factory()->create();
@@ -115,14 +115,14 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
 
         $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
 
-        $this->assertSame(240, $response->json('calculation.prescribed_work_minutes'));
+        $this->assertSame(480, $response->json('calculation.prescribed_work_minutes'));
         $this->assertSame(180, $response->json('calculation.work_minutes'));
         // 3時間しか働いていないため、半分の所定(240分)にも届かず残業は発生しない。
         $this->assertSame(0, $response->json('calculation.statutory_within_overtime_minutes'));
         $this->assertSame(0, $response->json('calculation.statutory_excess_overtime_minutes'));
     }
 
-    public function test_paid_leave_am_half_halves_the_prescribed_work_minutes(): void
+    public function test_paid_leave_am_half_keeps_the_full_prescribed_work_minutes(): void
     {
         $workStyle = $this->makeWorkStyle(480);
         $user = User::factory()->create();
@@ -131,10 +131,61 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
 
         $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
 
-        $this->assertSame(240, $response->json('calculation.prescribed_work_minutes'));
+        $this->assertSame(480, $response->json('calculation.prescribed_work_minutes'));
         $this->assertSame(240, $response->json('calculation.work_minutes'));
         $this->assertSame(0, $response->json('calculation.statutory_within_overtime_minutes'));
         $this->assertSame(0, $response->json('calculation.statutory_excess_overtime_minutes'));
+    }
+
+    /**
+     * 半休の日に残り半日を超えて働くと、超えた分は所定外になる(判定の基準は従来どおり P/2)。
+     * 保存する prescribed_work_minutes が P になっても5区分・残業の値は変わらないことの確認。
+     */
+    public function test_am_half_day_with_extended_work_keeps_the_half_baseline_for_overtime_and_categories(): void
+    {
+        $workStyle = $this->makeWorkStyle(480);
+        $user = User::factory()->create();
+
+        $day = $this->recordDay($user, $workStyle, '2026-08-03', '13:00', '18:00', 'paid', 'am_half');
+
+        $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
+
+        $this->assertSame(480, $response->json('calculation.prescribed_work_minutes'));
+        $this->assertSame(300, $response->json('calculation.work_minutes'));
+        $this->assertSame(240, $response->json('calculation.prescribed_statutory_within_work_minutes'));
+        $this->assertSame(60, $response->json('calculation.non_prescribed_statutory_within_work_minutes'));
+        $this->assertSame(0, $response->json('calculation.prescribed_statutory_excess_work_minutes'));
+        $this->assertSame(0, $response->json('calculation.non_prescribed_statutory_excess_work_minutes'));
+        $this->assertSame(60, $response->json('calculation.statutory_within_overtime_minutes'));
+        $this->assertSame(0, $response->json('calculation.statutory_excess_overtime_minutes'));
+    }
+
+    /**
+     * 半休+残り半日の欠勤の日は、終日欠勤(absence_days)に数えない(保存値Pに対して欠勤が半分のため)。
+     */
+    public function test_half_day_leave_with_the_remaining_half_absent_is_not_an_absence_day(): void
+    {
+        $workStyle = $this->makeWorkStyle(480);
+        $user = User::factory()->create();
+
+        $day = $this->recordDay($user, $workStyle, '2026-08-03', null, null, 'paid', 'am_half');
+        // 午後の半日(13:00-17:00 = 240分)を欠勤として処理する。
+        $this->actingAs($user)->putJson("/api/attendance/days/{$day->id}", [
+            'work_type' => null,
+            'reason' => 'テストデータ投入',
+            'leave_segments' => [[
+                'start' => '2026-08-03T13:00:00+09:00', 'end' => '2026-08-03T17:00:00+09:00',
+            ]],
+        ])->assertOk();
+
+        $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
+        $this->assertSame(240, $response->json('calculation.absence_minutes'));
+        $this->assertSame(480, $response->json('calculation.prescribed_work_minutes'));
+
+        $totals = $this->actingAs($user)->getJson('/api/attendance/months/2026-08')->assertOk()
+            ->json('monthly_calculation_totals');
+        $this->assertSame(240, $totals['absence_minutes']);
+        $this->assertEquals(0, $totals['absence_days']);
     }
 
     public function test_full_day_leave_keeps_the_full_prescribed_work_minutes(): void
@@ -175,9 +226,9 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
 
     /**
      * 月次確認画面の集計(MonthlyOvertimeCalculator::calculateCategoryTotals)の
-     * prescribed_work_minutes合計に、半休日の按分後の値が正しく反映されることを確認する。
+     * prescribed_work_minutes合計に、半休日もPのまま合算されることを確認する。
      */
-    public function test_monthly_totals_reflect_the_halved_prescribed_minutes_for_a_half_day_leave_day(): void
+    public function test_monthly_totals_sum_the_full_prescribed_minutes_for_a_half_day_leave_day(): void
     {
         $workStyle = $this->makeWorkStyle(480);
         $user = User::factory()->create();
@@ -188,6 +239,6 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         $response = $this->actingAs($user)->getJson('/api/attendance/months/2026-08')->assertOk();
         $totals = $response->json('monthly_calculation_totals');
 
-        $this->assertSame(480 + 240, $totals['prescribed_work_minutes']);
+        $this->assertSame(480 + 480, $totals['prescribed_work_minutes']);
     }
 }

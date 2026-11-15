@@ -287,6 +287,8 @@ export function AttendanceMonthDetailPage() {
               weeklyStatutoryExcessOvertimeMinutes={data.monthly_calculation_totals.weekly_statutory_excess_overtime_minutes}
               absenceDays={data.monthly_calculation_totals.absence_days ?? 0}
               specialLeaveBreakdown={data.special_leave_breakdown}
+              prescribedWorkDays={data.monthly_calculation_totals.prescribed_work_days}
+              prescribedWorkMinutes={data.monthly_calculation_totals.scheduled_prescribed_work_minutes}
               showAllLeaveTotals
             />
           </div>

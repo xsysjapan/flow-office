@@ -53,8 +53,10 @@ class FreeeAttendanceApiPayloadBuilder implements AttendanceApiPayloadBuilder
             'company_id' => (int) $externalCompanyId,
             // 総労働時間
             'total_work_mins' => (int) ($snapshot['work_minutes'] ?? 0),
-            // 所定労働時間
-            'total_normal_work_mins' => (int) ($snapshot['prescribed_work_minutes'] ?? 0),
+            // 所定内労働時間(所定内法定内)。所定内法定外は total_overtime_work_mins に含まれるため含めない。
+            // 平日の所定内法定内を優先するのは、freeeの総勤務時間が「所定内労働+法定内残業+時間外+所定休日労働+法定休日労働」で
+            // 構成され、所定休日勤務の所定内法定内を全体の所定内に入れると所定休日労働と二重計上になるため。
+            'total_normal_work_mins' => $this->prescribedNormalMinutes($snapshot),
             // 給与計算に用いる法定内残業時間
             'total_excess_statutory_work_mins' => (int) ($snapshot['statutory_within_overtime_minutes'] ?? 0),
             // 実労働時間ベースの法定内残業時間(flow-officeは給与計算用と実労働ベースを区別しないため同値を使う)
@@ -74,5 +76,22 @@ class FreeeAttendanceApiPayloadBuilder implements AttendanceApiPayloadBuilder
             // 有給取得日数
             'num_paid_holidays' => (float) ($snapshot['paid_leave_days'] ?? 0),
         ];
+    }
+
+    /**
+     * 所定内労働時間。平日(working_day)の所定内法定内を第一に使い、キーが無い古いsnapshotは
+     * 所定内法定内の全体値、さらに無ければ従来の所定労働時間(prescribed_work_minutes)を使う。
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function prescribedNormalMinutes(array $snapshot): int
+    {
+        foreach (['weekday_prescribed_statutory_within_work_minutes', 'prescribed_statutory_within_work_minutes', 'prescribed_work_minutes'] as $key) {
+            if (array_key_exists($key, $snapshot)) {
+                return (int) $snapshot[$key];
+            }
+        }
+
+        return 0;
     }
 }

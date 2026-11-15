@@ -113,9 +113,12 @@ class AttendanceExcelBuilder
 
         $lateCount = $days->filter(fn (AttendanceDay $day) => $this->isLate($day))->count();
         $earlyCount = $days->filter(fn (AttendanceDay $day) => $this->isEarly($day))->count();
-        $requiredDays = $shifts->isNotEmpty()
-            ? $shifts->where('is_working_day', true)->count()
-            : $days->filter(fn (AttendanceDay $day) => ($day->calculation?->prescribed_work_minutes ?? 0) > 0)->count();
+        // 必要出勤日数は snapshot の prescribed_work_days(勤務予定ベース)を優先する。キーが無い古いsnapshotは従来の式。
+        $requiredDays = array_key_exists('prescribed_work_days', $snapshot)
+            ? (int) $snapshot['prescribed_work_days']
+            : ($shifts->isNotEmpty()
+                ? $shifts->where('is_working_day', true)->count()
+                : $days->filter(fn (AttendanceDay $day) => ($day->calculation?->prescribed_work_minutes ?? 0) > 0)->count());
         $actualDays = $days->filter(fn (AttendanceDay $day) => ($day->calculation?->work_minutes ?? 0) > 0)->count();
         $paidLeaveDays = (float) ($snapshot['paid_leave_days'] ?? 0);
         $monthEnd = Carbon::parse($yearMonth.'-01')->endOfMonth();

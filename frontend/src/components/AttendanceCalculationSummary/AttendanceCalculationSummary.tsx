@@ -62,6 +62,10 @@ export interface AttendanceCalculationSummaryProps {
    *  一致する場合は表示しない(表示の重複を避けるため呼び出し側で判定せず、本コンポーネントに
    *  常に渡してよい)。 */
   payrollWorkMinutes?: number
+  /** 所定労働日数(勤務予定ベース)。詳しく表示のみに出す。未指定の場合は出さない(日次は未指定)。 */
+  prescribedWorkDays?: number
+  /** 所定労働時間(勤務予定ベース・分)。詳しく表示のみに出す。未指定の場合は出さない。 */
+  prescribedWorkMinutes?: number
 }
 
 /** 通常はdt+ddの1組が2列(ラベル・値)を占める。`fullWidth`を指定すると、後続の項目が
@@ -91,6 +95,8 @@ export function AttendanceCalculationSummary({
   showAllLeaveTotals = false,
   specialLeaveBreakdown,
   payrollWorkMinutes,
+  prescribedWorkDays,
+  prescribedWorkMinutes,
 }: AttendanceCalculationSummaryProps) {
   // デフォルトは主要4項目のみ表示し、五分類等の内訳は「詳しく表示」を押した場合のみ見せる
   // (五分類化で表示項目が増え分かりにくいというフィードバックへの対応)。画面遷移でリセットされて
@@ -98,12 +104,6 @@ export function AttendanceCalculationSummary({
   // (ui-interaction-patterns スキル参照)。
   const [showDetails, setShowDetails] = useState(false)
 
-  // 「残業時間」は法定内残業(statutory_within_overtime_minutes)と法定外残業
-  // (statutory_excess_overtime_minutes)の合計。五分類のうち「所定内法定内」を除いた
-  // 所定外労働(法定内・法定外の両方)を指し、prescribed_statutory_excess_work_minutes等の
-  // 所定/非所定内訳が渡された場合もこの2つのトップレベル値がその合計と一致するため
-  // (内訳フィールドはこの合計を所定/所定外にさらに分解したものであり、二重計上にはならない)。
-  const overtimeMinutes = totals.statutory_within_overtime_minutes + totals.statutory_excess_overtime_minutes
   // 「うち深夜作業時間」は深夜時間帯(22:00-05:00)の労働をカテゴリ横断で合計したもの。
   // late_night_prescribed_work_minutes + late_night_statutory_within_overtime_minutes +
   // late_night_statutory_excess_overtime_minutes の3つで所定労働日の深夜時間の総量に一致し
@@ -164,11 +164,18 @@ export function AttendanceCalculationSummary({
 
       {showDetails ? (
         <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
-          {totals.work_minutes !== undefined && (
-            <SummaryItem label="実労働時間" fullWidth><Duration minutes={totals.work_minutes} /></SummaryItem>
+          {/* 先頭は「所定労働日数|実労働日数」「所定労働時間|実労働時間」の2行(sm以上は左右2組、モバイルは1列で上から順) */}
+          {prescribedWorkDays !== undefined && (
+            <SummaryItem label="所定労働日数">{prescribedWorkDays}日</SummaryItem>
           )}
           {(workDays ?? totals.worked_days) !== undefined && (
-            <SummaryItem label="労働日数" fullWidth>{workDays ?? totals.worked_days}日</SummaryItem>
+            <SummaryItem label="実労働日数">{workDays ?? totals.worked_days}日</SummaryItem>
+          )}
+          {prescribedWorkMinutes !== undefined && (
+            <SummaryItem label="所定労働時間"><Duration minutes={prescribedWorkMinutes} /></SummaryItem>
+          )}
+          {totals.work_minutes !== undefined && (
+            <SummaryItem label="実労働時間"><Duration minutes={totals.work_minutes} /></SummaryItem>
           )}
           {showPayrollWorkMinutes && (
             <SummaryItem label="給与計算上の労働時間" fullWidth><Duration minutes={payrollWorkMinutes} /></SummaryItem>
@@ -198,10 +205,10 @@ export function AttendanceCalculationSummary({
             <SummaryItem label="実労働時間"><Duration minutes={totals.work_minutes} /></SummaryItem>
           )}
           {(workDays ?? totals.worked_days) !== undefined && (
-            <SummaryItem label="労働日数">{workDays ?? totals.worked_days}日</SummaryItem>
+            <SummaryItem label="実労働日数">{workDays ?? totals.worked_days}日</SummaryItem>
           )}
-          <SummaryItem label="所定労働時間"><Duration minutes={totals.prescribed_work_minutes} /></SummaryItem>
-          <SummaryItem label="残業時間"><Duration minutes={overtimeMinutes} /></SummaryItem>
+          <SummaryItem label="所定内労働時間"><Duration minutes={prescribedWithin + prescribedExcess} /></SummaryItem>
+          <SummaryItem label="残業時間"><Duration minutes={nonPrescribedWithin + nonPrescribedExcess} /></SummaryItem>
           <SummaryItem label="法定休日労働時間"><Duration minutes={totals.legal_holiday_work_minutes} /></SummaryItem>
           <SummaryItem label="うち深夜作業時間"><Duration minutes={lateNightMinutes} /></SummaryItem>
           {totals.paid_leave_days !== undefined && (

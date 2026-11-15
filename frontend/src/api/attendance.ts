@@ -37,6 +37,10 @@ export interface AttendanceWeekOvertime {
   weekly_statutory_excess_overtime_minutes: number
   allocated_weekly_statutory_excess_overtime_minutes?: number
   unallocated_weekly_statutory_excess_overtime_minutes?: number
+  /** 対象週の所定労働日数(勤務予定ベース)。 */
+  prescribed_work_days?: number
+  /** 対象週の所定労働時間(勤務予定ベース・分。休暇では減らさない)。 */
+  scheduled_prescribed_work_minutes?: number
 }
 
 export function fetchWeekOvertime(startDate: string, userId?: string): Promise<AttendanceWeekOvertime> {

@@ -171,6 +171,64 @@ class RecalculateAttendanceDaysCommandTest extends TestCase
         $this->assertSame('0.00', $this->storedPaidLeaveDays($dayId));
     }
 
+    /**
+     * 週42時間(6日×7時間)の週を作り、最終日に週40時間超を「所定内から」手動で振り分ける。振分けのある日のIDを返す。
+     */
+    private function dayWithManualPrescribedWeeklyAllocation(User $employee): string
+    {
+        $dates = ['2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05', '2026-06-06'];
+        $lastDayId = '';
+        foreach ($dates as $date) {
+            $this->workingDay($employee, $date);
+            $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+                'user_id' => $employee->id, 'work_date' => $date, 'reason' => '登録',
+            ])->assertCreated()->json('id');
+            $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+                'actual_start_at' => "{$date}T09:00:00+09:00",
+                'actual_end_at' => "{$date}T17:00:00+09:00",
+                'breaks' => [['start' => "{$date}T12:00:00+09:00", 'end' => "{$date}T13:00:00+09:00"]],
+                'reason' => 'テストデータ投入',
+            ])->assertOk();
+            $lastDayId = $dayId;
+        }
+
+        $this->actingAs($employee)->putJson('/api/attendance/weeks/2026-06-01/overtime-allocations', [
+            'allocations' => [[
+                'attendance_day_id' => $lastDayId,
+                'prescribed_minutes' => 120,
+                'non_prescribed_minutes' => 0,
+                'late_night_prescribed_minutes' => 0,
+                'late_night_non_prescribed_minutes' => 0,
+            ]],
+        ])->assertOk();
+
+        return $lastDayId;
+    }
+
+    public function test_skip_manual_weekly_allocations_excludes_days_allocated_from_prescribed_minutes(): void
+    {
+        $employee = User::factory()->create();
+        $dayId = $this->dayWithManualPrescribedWeeklyAllocation($employee);
+
+        $this->artisan('attendance:recalculate-days', [
+            '--from' => '2026-06-01', '--to' => '2026-06-30', '--skip-manual-weekly-allocations' => true,
+        ])
+            ->expectsOutputToContain("[除外] {$employee->id} / 2026-06-06 (attendance_days.id={$dayId}): 週40時間の手動振分けがあるため対象外")
+            ->expectsOutputToContain('手動調整済みで除外 1 件')
+            ->assertSuccessful();
+    }
+
+    public function test_without_the_skip_option_days_with_manual_weekly_allocations_are_still_targets(): void
+    {
+        $employee = User::factory()->create();
+        $this->dayWithManualPrescribedWeeklyAllocation($employee);
+
+        $this->artisan('attendance:recalculate-days', ['--from' => '2026-06-01', '--to' => '2026-06-30'])
+            ->doesntExpectOutputToContain('週40時間の手動振分けがあるため対象外')
+            ->expectsOutputToContain('手動調整済みで除外 0 件')
+            ->assertSuccessful();
+    }
+
     public function test_the_user_option_limits_the_target_to_the_given_users(): void
     {
         $approver = User::factory()->create();

@@ -2,11 +2,14 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\Export\Services\AttendanceApi\FreeeAttendanceApiPayloadBuilder;
 use App\Domain\Export\Services\AttendanceExcelBuilder;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceDayStatus;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\CompanyCalendar;
@@ -1160,6 +1163,164 @@ class AttendanceExportTest extends TestCase
             'year_month' => '2026-06',
             'status' => $status,
             'snapshot_json' => $snapshot,
+        ]);
+    }
+
+    /**
+     * 全休(有給)の日を含む月の出力。実績は 6/1・6/3 が 9:00〜17:00(休憩記録なし=実労働480分=所定480分)、
+     * 6/2 は全休(実労働0・所定480分のまま)。月次の prescribed_work_minutes は 480×3=1440、
+     * 所定内法定内(prescribed_statutory_within_work_minutes)は 480×2=960(全休の日は含まない)。
+     */
+    public function test_freee_outputs_exclude_the_full_leave_day_from_prescribed_statutory_within(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '全休社員']);
+        $month = $this->buildLeaveMonthWithRealDays($employee, $admin);
+
+        $this->assertSame(1440, $month->snapshot_json['prescribed_work_minutes']);
+        $this->assertSame(960, $month->snapshot_json['prescribed_statutory_within_work_minutes']);
+        $this->assertSame(960, $month->snapshot_json['weekday_prescribed_statutory_within_work_minutes']);
+
+        $csv = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06&format=freee')->streamedContent();
+        $columns = explode(',', explode("\n", trim($csv))[1]);
+        // freeeの「所定労働時間」列(index 3)は所定内法定内(960)。義務の時間(1440)にはならない。
+        $this->assertSame((string) $employee->id, $columns[0]);
+        $this->assertSame('960', $columns[3]);
+
+        $payload = app(FreeeAttendanceApiPayloadBuilder::class)->build($month, '1', '100');
+        $this->assertSame(960, $payload['total_normal_work_mins']);
+    }
+
+    /**
+     * 同じ全休の月を汎用CSVで出すと、所定労働時間は勤務予定ベース(scheduled_prescribed_work_minutes)。
+     * 勤務予定の労働日は 6/1・6/2・6/3 の3日(各480分)で、全休の日も予定上の所定労働日として数える。
+     */
+    public function test_generic_csv_outputs_the_scheduled_prescribed_work_minutes(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '勤務予定社員']);
+        $month = $this->buildLeaveMonthWithRealDays($employee, $admin);
+
+        $this->assertSame(3, $month->snapshot_json['prescribed_work_days']);
+        $this->assertSame(1440, $month->snapshot_json['scheduled_prescribed_work_minutes']);
+
+        $csv = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06')->streamedContent();
+        $columns = explode(',', explode("\n", trim($csv))[1]);
+        // header: user_id, user_name, year_month, work_minutes, prescribed_work_minutes(index 4)
+        $this->assertSame('1440', $columns[4]);
+    }
+
+    /**
+     * 必要出勤日数は snapshot の prescribed_work_days(勤務予定ベースの所定労働日数=3)と一致する。
+     */
+    public function test_excel_required_days_equals_the_snapshot_prescribed_work_days(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '必要出勤社員']);
+        $month = $this->buildLeaveMonthWithRealDays($employee, $admin);
+
+        $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06');
+        $response->assertSuccessful();
+
+        $sheet = $this->loadSingleSheetWorkbook($response->getContent());
+        // サマリーの1項目目「必要出勤日数」は A6(見出し)・A7(値)。
+        $this->assertSame('必要出勤日数', $sheet->getCell('A6')->getValue());
+        $this->assertSame($month->snapshot_json['prescribed_work_days'], $sheet->getCell('A7')->getValue());
+        $this->assertSame(3, $sheet->getCell('A7')->getValue());
+    }
+
+    /**
+     * 新しいキーを持たない古いsnapshot(提出済み月の既存データ相当)は従来値で出る。
+     * freeeは prescribed_work_minutes(9600)、汎用CSVも prescribed_work_minutes(9600)。
+     */
+    public function test_old_snapshot_without_new_keys_keeps_the_previous_prescribed_values(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '古いsnapshot社員']);
+        AttendanceMonth::query()->create([
+            'user_id' => $employee->id,
+            'year_month' => '2026-06',
+            'status' => 'approved',
+            'snapshot_json' => $this->submittedSnapshot(),
+        ]);
+
+        $freee = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06&format=freee')->streamedContent();
+        $this->assertSame('9600', explode(',', explode("\n", trim($freee))[1])[3]);
+
+        $generic = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06')->streamedContent();
+        $this->assertSame('9600', explode(',', explode("\n", trim($generic))[1])[4]);
+    }
+
+    /**
+     * 6/1・6/3 を 9:00〜17:00 で勤務、6/2 を全休(有給)とした2026-06の承認済み月を作り、
+     * 日次計算から snapshot を再計算した結果を返す(提出・承認の状態は fixture、集計は実績から)。
+     */
+    private function buildLeaveMonthWithRealDays(User $employee, User $admin): AttendanceMonth
+    {
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+
+        $this->recordExportDay($employee, '2026-06-01');
+        $this->recordLeaveDay($employee, $admin, '2026-06-02');
+        $this->recordExportDay($employee, '2026-06-03');
+
+        $month = AttendanceMonth::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $employee->id,
+            'year_month' => '2026-06',
+            'status' => 'approved',
+            'approver_user_id' => $admin->id,
+            'submitted_at' => now(),
+            'snapshot_json' => ['work_minutes' => 0],
+        ]);
+        app(CommandBus::class)->dispatch(new RecalculateAttendanceMonthSnapshot($month->id));
+
+        return $month->fresh();
+    }
+
+    /** 9:00〜17:00の勤務(休憩記録なし=480分)を日次の実績として記録する。 */
+    private function recordExportDay(User $employee, string $workDate): void
+    {
+        $this->createWorkingDayShift($employee, $workDate);
+        $day = $this->attendanceDayFor($employee, $workDate);
+
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$day->id}", [
+            'actual_start_at' => "{$workDate}T09:00:00+09:00",
+            'actual_end_at' => "{$workDate}T17:00:00+09:00",
+            'reason' => 'テストデータ投入',
+        ])->assertOk();
+    }
+
+    /** 全休(有給)を申請・承認し、日次は実績なし(休暇の日として計算させる)。 */
+    private function recordLeaveDay(User $employee, User $admin, string $workDate): void
+    {
+        $this->approvePaidLeave($employee, $admin, $workDate, 'full');
+        // 休暇の承認を受けて勤怠日は休暇のReactorが作るため、既存の日を使う。
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->firstOrFail();
+
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$day->id}", [
+            'work_type' => null,
+            'reason' => 'テストデータ投入',
+        ])->assertOk();
+    }
+
+    private function attendanceDayFor(User $employee, string $workDate): AttendanceDay
+    {
+        $entry = EmployeeCalendarEntry::query()
+            ->where('user_id', $employee->id)
+            ->whereDate('work_date', $workDate)
+            ->firstOrFail();
+
+        return AttendanceDay::query()->create([
+            'user_id' => $employee->id,
+            'work_date' => $workDate,
+            'calendar_entry_id' => $entry->id,
+            'status' => AttendanceDayStatus::NOT_STARTED,
+            'source' => 'manual',
+            'utc_offset_minutes' => 540,
         ]);
     }
 

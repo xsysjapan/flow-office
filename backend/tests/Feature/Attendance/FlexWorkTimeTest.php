@@ -84,6 +84,54 @@ class FlexWorkTimeTest extends TestCase
         $this->assertSame(0, $calculation->statutory_within_overtime_minutes);
     }
 
+    public function test_flex_weekday_beyond_the_prescribed_time_is_all_prescribed_statutory_within(): void
+    {
+        $workStyle = $this->makeFlexWorkStyle();
+        $user = User::factory()->create();
+        $this->assignForMonth($user, $workStyle, '2026-06');
+        $day = $this->makeDay($user, '2026-06-01');
+
+        $this->actingAs($user)->putJson("/api/attendance/days/{$day->id}", [
+            'actual_start_at' => '2026-06-01T09:00:00+09:00',
+            'actual_end_at' => '2026-06-01T19:00:00+09:00',
+            'breaks' => [['start' => '2026-06-01T12:00:00+09:00', 'end' => '2026-06-01T13:00:00+09:00']],
+            'reason' => 'テストデータ投入',
+        ])->assertOk();
+
+        $calculation = $day->refresh()->calculation;
+        $this->assertSame(540, $calculation->work_minutes);
+        $this->assertSame(480, $calculation->prescribed_work_minutes);
+        $this->assertSame(540, $calculation->prescribed_statutory_within_work_minutes);
+        $this->assertSame(0, $calculation->non_prescribed_statutory_within_work_minutes);
+        $this->assertSame(0, $calculation->prescribed_statutory_excess_work_minutes);
+        $this->assertSame(0, $calculation->non_prescribed_statutory_excess_work_minutes);
+    }
+
+    public function test_flex_work_on_a_prescribed_holiday_is_prescribed_statutory_within(): void
+    {
+        $workStyle = $this->makeFlexWorkStyle();
+        $user = User::factory()->create();
+        $this->assignForMonth($user, $workStyle, '2026-06');
+        // 2026-06-06は土曜(会社カレンダー無しのフォールバックでは所定休日)。
+        $day = $this->makeDay($user, '2026-06-06');
+
+        $this->actingAs($user)->putJson("/api/attendance/days/{$day->id}", [
+            'actual_start_at' => '2026-06-06T10:00:00+09:00',
+            'actual_end_at' => '2026-06-06T15:00:00+09:00',
+            'breaks' => [],
+            'reason' => 'テストデータ投入',
+        ])->assertOk();
+
+        $calculation = $day->refresh()->calculation;
+        $this->assertSame(300, $calculation->work_minutes);
+        $this->assertSame(0, $calculation->prescribed_work_minutes);
+        $this->assertSame(300, $calculation->prescribed_holiday_work_minutes);
+        $this->assertSame(300, $calculation->prescribed_statutory_within_work_minutes);
+        $this->assertSame(0, $calculation->non_prescribed_statutory_within_work_minutes);
+        $this->assertSame(0, $calculation->prescribed_statutory_excess_work_minutes);
+        $this->assertSame(0, $calculation->non_prescribed_statutory_excess_work_minutes);
+    }
+
     public function test_leaving_before_core_time_ends_is_a_violation(): void
     {
         $workStyle = $this->makeFlexWorkStyle();

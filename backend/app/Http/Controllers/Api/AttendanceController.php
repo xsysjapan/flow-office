@@ -24,6 +24,7 @@ use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\FlexSettlementSummaryCalculator;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\Attendance\Services\PaidLeaveApprovalGuard;
+use App\Domain\Attendance\Services\PrescribedScheduleTotalsCalculator;
 use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
 use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
@@ -207,8 +208,11 @@ class AttendanceController extends Controller
         return AttendanceDayResource::collection($days);
     }
 
-    public function weekOvertime(Request $request, WeeklyOvertimeCalculator $calculator): JsonResponse
-    {
+    public function weekOvertime(
+        Request $request,
+        WeeklyOvertimeCalculator $calculator,
+        PrescribedScheduleTotalsCalculator $prescribedScheduleTotalsCalculator,
+    ): JsonResponse {
         $data = $request->validate([
             'start_date' => ['required', 'date'],
             'user_id' => ['nullable', 'string', 'exists:users,id'],
@@ -228,7 +232,10 @@ class AttendanceController extends Controller
             '他の社員の週次勤怠を閲覧する権限がありません。',
         );
 
-        return response()->json($calculator->calculateWeek($targetUserId, $start->toDateString(), $end->toDateString()));
+        return response()->json(array_merge(
+            $calculator->calculateWeek($targetUserId, $start->toDateString(), $end->toDateString()),
+            $prescribedScheduleTotalsCalculator->calculate($targetUserId, $start->toDateString(), $end->toDateString()),
+        ));
     }
 
     public function allocateWeekOvertime(

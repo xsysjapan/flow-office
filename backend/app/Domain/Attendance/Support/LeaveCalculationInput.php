@@ -11,9 +11,9 @@ use App\Models\PaidLeaveType;
  * 現行 AttendanceCalculator::calculate の休暇まわり(AttendanceCalculator.php:125-161)と同じ値になるように定める。
  * - 有給・特別の日数: 全休1.0・半休0.5。代休は日数に数えない。
  * - 有給・特別の時間休分数: 時間休(hourly)のminutesの合計。代休は数えない。
- * - 所定労働時間: 全休がある日、または午前半休と午後半休がそろう日はP(全休と同じ扱い)。
- *   半休が1つだけ(種類を問わず)の日は intdiv(P,2)。それ以外はP。
- *   (現行は work_type が `_am_half`/`_pm_half` で終わる日を intdiv(P,2) としていた。単一休暇ではこれと同じ値になる)
+ * - 所定労働時間(prescribedMinutes): 休暇の有無にかかわらず常にP(労働義務の時間は休暇で減らさない)。
+ * - 残業・所定内外の判定の基準(workBaselineMinutes): 半休が1つだけ(種類を問わず)の日は intdiv(P,2)。
+ *   全休・午前半休と午後半休がそろう日・時間休・休暇なしの日はP。
  * - isFullDayLeave: 全休がある、または午前半休と午後半休がそろう(全休・打刻・警告の判定に使う)。
  *
  * 各休暇は ['leave_kind' => paid|special|compensatory, 'unit' => full|am_half|pm_half|hourly, 'minutes' => ?int]
@@ -26,7 +26,8 @@ final class LeaveCalculationInput
         public readonly float $specialLeaveDays,
         public readonly int $paidLeaveMinutes,
         public readonly int $specialLeaveMinutes,
-        public readonly int $effectivePrescribedMinutes,
+        public readonly int $prescribedMinutes,
+        public readonly int $workBaselineMinutes,
         public readonly bool $isFullDayLeave,
     ) {}
 
@@ -76,7 +77,7 @@ final class LeaveCalculationInput
         $isFullDayLeave = FullDayLeavePolicy::isFullDay($activeLeaves);
         $halfCount = $amHalfCount + $pmHalfCount;
 
-        $effectivePrescribedMinutes = match (true) {
+        $workBaselineMinutes = match (true) {
             $isFullDayLeave => $prescribedMinutes,
             $halfCount === 1 => intdiv($prescribedMinutes, 2),
             default => $prescribedMinutes,
@@ -87,7 +88,8 @@ final class LeaveCalculationInput
             specialLeaveDays: $specialLeaveDays,
             paidLeaveMinutes: $paidLeaveMinutes,
             specialLeaveMinutes: $specialLeaveMinutes,
-            effectivePrescribedMinutes: $effectivePrescribedMinutes,
+            prescribedMinutes: $prescribedMinutes,
+            workBaselineMinutes: $workBaselineMinutes,
             isFullDayLeave: $isFullDayLeave,
         );
     }

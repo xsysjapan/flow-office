@@ -29,7 +29,7 @@ class FreeeAttendanceCsvFormat implements AttendanceCsvFormat
             $month->user_id,
             $startOfMonth->format('Y/m/d'),
             $endOfMonth->format('Y/m/d'),
-            $snapshot['prescribed_work_minutes'] ?? 0,
+            $this->prescribedNormalMinutes($snapshot),
             $snapshot['statutory_within_overtime_minutes'] ?? 0,
             $snapshot['statutory_excess_overtime_minutes'] ?? 0,
             $snapshot['late_night_work_minutes'] ?? 0,
@@ -51,5 +51,23 @@ class FreeeAttendanceCsvFormat implements AttendanceCsvFormat
     public function fileExtension(): string
     {
         return 'csv';
+    }
+
+    /**
+     * 所定内労働時間。平日(working_day)の所定内法定内を第一に使い、キーが無い古いsnapshotは
+     * 所定内法定内の全体値、さらに無ければ従来の所定労働時間(prescribed_work_minutes)を使う。
+     * 所定休日勤務の所定内法定内は所定休日労働と二重計上になるため含めない(APIのペイロードと同じ理由)。
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function prescribedNormalMinutes(array $snapshot): int
+    {
+        foreach (['weekday_prescribed_statutory_within_work_minutes', 'prescribed_statutory_within_work_minutes', 'prescribed_work_minutes'] as $key) {
+            if (array_key_exists($key, $snapshot)) {
+                return (int) $snapshot[$key];
+            }
+        }
+
+        return 0;
     }
 }

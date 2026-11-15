@@ -882,7 +882,8 @@ docs/30-usecases-expense.md参照。MoneyForwardクラウド経費APIの`ex_item
   「裁量労働制・管理監督者」参照)
 - payroll_work_minutes (給与計算上使用する労働時間。通常はwork_minutesと同じだが、
   裁量労働制はdeemed_work_minutesを採用する)
-- prescribed_work_minutes
+- prescribed_work_minutes (その日の所定労働時間=労働義務の時間。働き方の`prescribed_daily_minutes`で、休暇(全休・半休・時間休)では
+  減らさない。法定休日・所定休日は0。半休の日の残業判定の基準値(所定の半分)は保存しない。フレックス・管理監督者は5区分を全て所定内法定内にする)
 - statutory_within_overtime_minutes
 - statutory_excess_overtime_minutes
 - prescribed_statutory_within_work_minutes / non_prescribed_statutory_within_work_minutes
@@ -976,7 +977,8 @@ SQLだけで推測変換しないため、日次実績とイベント履歴か�
 深夜法定休日労働時間)に加え、欠勤日数(absence_days)・欠勤時間(absence_minutes)・
 有給日数(paid_leave_days)・有給時間(paid_leave_minutes)・その他特別休暇時間
 (special_leave_days)・その他特別休暇時間(special_leave_minutes)を合算した結果を
-`monthly_calculation_totals`として都度計算して返す(`AttendanceController::month()`。
+`monthly_calculation_totals`として都度計算して返す(勤務予定ベースの所定労働日数`prescribed_work_days`・所定労働時間
+`scheduled_prescribed_work_minutes`も含む。既存の`prescribed_work_minutes`は入力済みの日の日次の合計)(`AttendanceController::month()`。
 提出前でも進捗の目安として表示する)。欠勤日数は、欠勤時間がその日の所定労働時間以上に
 なった日を「終日欠勤」として数える(1時間の欠勤を1日欠勤として扱わないため)。
 特別休暇日数も、特別休暇時間がその日の所定労働時間以上になった日を数える。

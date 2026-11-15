@@ -1388,6 +1388,7 @@ export function AttendanceDayPage() {
                   totals={day.calculation}
                   absenceDays={day.calculation.absence_minutes ? absenceDays : undefined}
                   specialLeaveBreakdown={specialLeaveTypeBreakdown([day], specialLeaveTypeNames)}
+                  prescribedWorkMinutes={day.calculation.prescribed_work_minutes}
                 />
 
                 <div className="flex items-center gap-2">

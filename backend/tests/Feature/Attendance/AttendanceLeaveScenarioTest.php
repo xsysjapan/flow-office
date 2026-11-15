@@ -216,7 +216,7 @@ class AttendanceLeaveScenarioTest extends TestCase
         $this->assertSame('approved', $this->leaveStatus($requestId));
         $calc = $this->calcOn($employee, '2026-08-10');
         $this->assertEquals(0.5, $calc->paid_leave_days);
-        $this->assertEquals(240, $calc->prescribed_work_minutes);
+        $this->assertEquals(480, $calc->prescribed_work_minutes);
         $this->assertEquals(240, $calc->work_minutes);
     }
 

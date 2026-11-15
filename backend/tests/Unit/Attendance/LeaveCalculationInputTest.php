@@ -16,7 +16,8 @@ use PHPUnit\Framework\TestCase;
  * (LeaveCalculationInput のdocblock参照)で定める:
  * - 有給・特別の日数: 全休=1.0、午前・午後の半休=0.5。代休は日数に数えない。
  * - 有給・特別の時間休分数: 時間休(hourly)のminutesの合計。代休は数えない。
- * - 所定労働時間: 半休が1つだけの日は intdiv(P, 2)。全休・午前+午後の半休がそろう日・時間休・通常日はPのまま。
+ * - 所定労働時間(prescribedMinutes): 休暇にかかわらず常にP。
+ * - 残業判定の基準(workBaselineMinutes): 半休が1つだけの日は intdiv(P, 2)。全休・午前+午後の半休がそろう日・時間休・通常日はP。
  */
 class LeaveCalculationInputTest extends TestCase
 {
@@ -24,7 +25,7 @@ class LeaveCalculationInputTest extends TestCase
 
     /**
      * 単一休暇の期待値 [paidLeaveDays, specialLeaveDays, paidLeaveMinutes, specialLeaveMinutes,
-     * effectivePrescribedMinutes, isFullDayLeave]。
+     * workBaselineMinutes, isFullDayLeave](prescribedMinutesは全ケースP)。
      *
      * @return array<string, array{0: string, 1: string, 2: ?int, 3: array{0: float, 1: float, 2: int, 3: int, 4: int, 5: bool}}>
      */
@@ -47,7 +48,7 @@ class LeaveCalculationInputTest extends TestCase
             'special pm_half' => [$special, PaidLeaveType::PM_HALF, null, [0.0, 0.5, 0, 0, 240, false]],
             'special hourly 60 minutes' => [$special, PaidLeaveType::HOURLY, 60, [0.0, 0.0, 0, 60, 480, false]],
 
-            // 代休: 日数・時間休分数に数えない。全休・半休の所定労働時間の扱いは他の休暇と同じ
+            // 代休: 日数・時間休分数に数えない。全休・半休の所定労働時間・基準の扱いは他の休暇と同じ
             'compensatory full' => [$compensatory, PaidLeaveType::FULL, null, [0.0, 0.0, 0, 0, 480, true]],
             'compensatory am_half' => [$compensatory, PaidLeaveType::AM_HALF, null, [0.0, 0.0, 0, 0, 240, false]],
             'compensatory pm_half' => [$compensatory, PaidLeaveType::PM_HALF, null, [0.0, 0.0, 0, 0, 240, false]],
@@ -70,7 +71,8 @@ class LeaveCalculationInputTest extends TestCase
         $this->assertSame($expected[1], $input->specialLeaveDays);
         $this->assertSame($expected[2], $input->paidLeaveMinutes);
         $this->assertSame($expected[3], $input->specialLeaveMinutes);
-        $this->assertSame($expected[4], $input->effectivePrescribedMinutes);
+        $this->assertSame(self::P, $input->prescribedMinutes);
+        $this->assertSame($expected[4], $input->workBaselineMinutes);
         $this->assertSame($expected[5], $input->isFullDayLeave);
     }
 
@@ -85,7 +87,8 @@ class LeaveCalculationInputTest extends TestCase
         $this->assertSame(0.5, $input->paidLeaveDays);
         $this->assertSame(0.0, $input->specialLeaveDays);
         $this->assertSame(0, $input->paidLeaveMinutes);
-        $this->assertSame(self::P, $input->effectivePrescribedMinutes);
+        $this->assertSame(self::P, $input->prescribedMinutes);
+        $this->assertSame(self::P, $input->workBaselineMinutes);
         $this->assertTrue($input->isFullDayLeave);
     }
 
@@ -97,7 +100,8 @@ class LeaveCalculationInputTest extends TestCase
         ], self::P);
 
         $this->assertSame(1.0, $input->paidLeaveDays);
-        $this->assertSame(self::P, $input->effectivePrescribedMinutes);
+        $this->assertSame(self::P, $input->prescribedMinutes);
+        $this->assertSame(self::P, $input->workBaselineMinutes);
         $this->assertTrue($input->isFullDayLeave);
     }
 
@@ -111,7 +115,8 @@ class LeaveCalculationInputTest extends TestCase
 
         $this->assertSame(1.0, $input->paidLeaveDays);
         $this->assertSame(90, $input->paidLeaveMinutes);
-        $this->assertSame(self::P, $input->effectivePrescribedMinutes);
+        $this->assertSame(self::P, $input->prescribedMinutes);
+        $this->assertSame(self::P, $input->workBaselineMinutes);
         $this->assertTrue($input->isFullDayLeave);
     }
 
@@ -127,7 +132,8 @@ class LeaveCalculationInputTest extends TestCase
         $this->assertSame(0.0, $input->paidLeaveDays);
         $this->assertSame(30, $input->paidLeaveMinutes);
         $this->assertSame(0, $input->specialLeaveMinutes);
-        $this->assertSame(self::P, $input->effectivePrescribedMinutes);
+        $this->assertSame(self::P, $input->prescribedMinutes);
+        $this->assertSame(self::P, $input->workBaselineMinutes);
         $this->assertTrue($input->isFullDayLeave);
     }
 
@@ -140,7 +146,8 @@ class LeaveCalculationInputTest extends TestCase
 
         $this->assertSame(60, $input->paidLeaveMinutes);
         $this->assertSame(30, $input->specialLeaveMinutes);
-        $this->assertSame(self::P, $input->effectivePrescribedMinutes);
+        $this->assertSame(self::P, $input->prescribedMinutes);
+        $this->assertSame(self::P, $input->workBaselineMinutes);
         $this->assertFalse($input->isFullDayLeave);
     }
 
@@ -151,7 +158,8 @@ class LeaveCalculationInputTest extends TestCase
             ['leave_kind' => AttendanceDayLeave::KIND_PAID, 'unit' => PaidLeaveType::AM_HALF, 'minutes' => null],
         ], 481);
 
-        $this->assertSame(240, $input->effectivePrescribedMinutes);
+        $this->assertSame(481, $input->prescribedMinutes);
+        $this->assertSame(240, $input->workBaselineMinutes);
     }
 
     public function test_no_leaves(): void
@@ -162,7 +170,8 @@ class LeaveCalculationInputTest extends TestCase
         $this->assertSame(0.0, $input->specialLeaveDays);
         $this->assertSame(0, $input->paidLeaveMinutes);
         $this->assertSame(0, $input->specialLeaveMinutes);
-        $this->assertSame(self::P, $input->effectivePrescribedMinutes);
+        $this->assertSame(self::P, $input->prescribedMinutes);
+        $this->assertSame(self::P, $input->workBaselineMinutes);
         $this->assertFalse($input->isFullDayLeave);
     }
 }

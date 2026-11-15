@@ -66,11 +66,16 @@ use Illuminate\Support\Carbon;
  *   場合は実績の内側)。実績と重なる部分だけを休憩と同様に労働時間・深夜時間から控除し、
  *   区間そのものの合計時間(実績の有無・重なりにかかわらず)を`absence_minutes`として
  *   集計する。
- * - 半休の日(休暇ビューの有効な休暇が半休1つ。種類は有給・特別・代休を問わない)は、所定労働時間
- *   (`prescribed_work_minutes`)を`work_styles.prescribed_daily_minutes`の半分とする(半休で労働する
- *   残り半日分に対する残業・不足判定の基準値を正しくするための調整)。午前半休と午後半休がそろう日・
- *   全休・時間単位休暇・休暇なしの日は変更せず、フルの所定労働時間のままとする(LeaveCalculationInput)。
- *   この調整は`prescribed_work_minutes`という基準値のみに影響する。
+ * - 保存する所定労働時間(`prescribed_work_minutes`)は、休暇(全休・半休・時間休)の有無にかかわらず
+ *   `work_styles.prescribed_daily_minutes`(P)のままとする(労働義務の時間は休暇で減らさない。法定休日・
+ *   所定休日は0)。一方、半休の日(休暇ビューの有効な休暇が半休1つ。種類は有給・特別・代休を問わない)は、
+ *   半休で労働する残り半日分に対する残業・所定内外の判定の基準値だけをPの半分とする
+ *   (LeaveCalculationInput::workBaselineMinutes)。午前半休と午後半休がそろう日・全休・時間単位休暇・
+ *   休暇なしの日の基準値はPのまま。
+ * - フレックスタイム制・管理監督者は、法定休日でない日(所定休日を含む)の労働を全て所定内法定内
+ *   (`prescribed_statutory_within_work_minutes`)とし、所定外・法定外の区分(5区分の他の4つ)と
+ *   深夜の所定外・法定外の内数は0とする(日・週ごとの残業を持たないため。週40時間の判定からも
+ *   WeeklyOvertimeCalculatorが除外する)。深夜は全て所定内法定内の内数になる。
  * - 休暇(有給・特別・代休)は`attendance_leave_segments`の対象外で、休暇ビュー
  *   (`attendance_day_leaves`)の申請中・承認済みの行から`paid_leave_days`/`special_leave_days`
  *   (全休=1.0・半休=0.5。代休は0)・`paid_leave_minutes`/`special_leave_minutes`(時間休の分数)を
@@ -128,12 +133,14 @@ class AttendanceCalculator
 
         // 休暇(有給・特別・代休)は休暇ビュー(attendance_day_leaves)の有効な休暇から読む。
         // 消化記録(paid_leave_usages・special_leave_usages)・work_typeは読まない。半休の日の
-        // 所定労働時間の調整(半休が1つだけならP/2、午前+午後の半休は全休と同じくP)もこの入力で決める。
+        // 残業判定の基準値(半休が1つだけならP/2、午前+午後の半休は全休と同じくP)もこの入力で決める。
+        // 保存する所定労働時間は休暇で減らさずP。
         $leave = LeaveCalculationInput::from(
             $this->attendanceDayLeaves->activeFor($day->user_id, $day->work_date->toDateString()),
             $workStyle?->prescribed_daily_minutes ?? 0,
         );
-        $prescribedWorkMinutes = $leave->effectivePrescribedMinutes;
+        $prescribedWorkMinutes = $leave->prescribedMinutes;
+        $workBaselineMinutes = $leave->workBaselineMinutes;
 
         $plannedWorkMinutes = $shift?->plannedWorkMinutes() ?? 0;
 
@@ -174,7 +181,7 @@ class AttendanceCalculator
         if (! $isLegalHoliday) {
             $statutoryExcessOvertimeMinutes = max(0, $workMinutes - $legalDailyLimitMinutes);
             if (! $isCompanyHoliday) {
-                $overtimeBaselineMinutes = $isMonthlyVariable ? $plannedWorkMinutes : $prescribedWorkMinutes;
+                $overtimeBaselineMinutes = $isMonthlyVariable ? $plannedWorkMinutes : $workBaselineMinutes;
                 $withinLegalMinutes = min($workMinutes, $legalDailyLimitMinutes);
                 $statutoryWithinOvertimeMinutes = max(0, $withinLegalMinutes - $overtimeBaselineMinutes);
             }
@@ -240,13 +247,29 @@ class AttendanceCalculator
         // 所定休日には予定枠が無いため全量を所定外として扱う。
         $prescribedBaselineMinutes = $isCompanyHoliday
             ? 0
-            : ($plannedWorkMinutes > 0 ? $plannedWorkMinutes : $prescribedWorkMinutes);
+            : ($plannedWorkMinutes > 0 ? $plannedWorkMinutes : $workBaselineMinutes);
         $prescribedTotalMinutes = $isLegalHoliday ? 0 : min($workMinutes, $prescribedBaselineMinutes);
         $nonPrescribedTotalMinutes = $isLegalHoliday ? 0 : max(0, $workMinutes - $prescribedTotalMinutes);
         $nonPrescribedStatutoryExcessMinutes = min($statutoryExcessOvertimeMinutes, $nonPrescribedTotalMinutes);
         $prescribedStatutoryExcessMinutes = max(0, $statutoryExcessOvertimeMinutes - $nonPrescribedStatutoryExcessMinutes);
         $lateNightNonPrescribedStatutoryExcessMinutes = min($lateNightStatutoryExcessOvertimeMinutes, $nonPrescribedStatutoryExcessMinutes);
         $lateNightPrescribedStatutoryExcessMinutes = max(0, $lateNightStatutoryExcessOvertimeMinutes - $lateNightNonPrescribedStatutoryExcessMinutes);
+
+        $prescribedStatutoryWithinMinutes = max(0, $prescribedTotalMinutes - $prescribedStatutoryExcessMinutes);
+        $nonPrescribedStatutoryWithinMinutes = max(0, $nonPrescribedTotalMinutes - $nonPrescribedStatutoryExcessMinutes);
+        $lateNightPrescribedStatutoryWithinMinutes = $lateNightPrescribedWorkMinutes;
+        $lateNightNonPrescribedStatutoryWithinMinutes = $lateNightStatutoryWithinOvertimeMinutes;
+
+        // フレックス・管理監督者は日・週ごとの残業を持たないため、法定休日以外の労働は全て所定内法定内にする。
+        if (($isFlex || $isManagerSupervisor) && ! $isLegalHoliday) {
+            $prescribedStatutoryWithinMinutes = $workMinutes;
+            $nonPrescribedStatutoryWithinMinutes = 0;
+            $prescribedStatutoryExcessMinutes = 0;
+            $nonPrescribedStatutoryExcessMinutes = 0;
+            $lateNightNonPrescribedStatutoryWithinMinutes = 0;
+            $lateNightPrescribedStatutoryExcessMinutes = 0;
+            $lateNightNonPrescribedStatutoryExcessMinutes = 0;
+        }
 
         return [
             'day_classification' => $dayClassification,
@@ -258,16 +281,16 @@ class AttendanceCalculator
             'prescribed_work_minutes' => ($isLegalHoliday || $isCompanyHoliday) ? 0 : $prescribedWorkMinutes,
             'statutory_within_overtime_minutes' => $statutoryWithinOvertimeMinutes,
             'statutory_excess_overtime_minutes' => $statutoryExcessOvertimeMinutes,
-            'prescribed_statutory_within_work_minutes' => max(0, $prescribedTotalMinutes - $prescribedStatutoryExcessMinutes),
-            'non_prescribed_statutory_within_work_minutes' => max(0, $nonPrescribedTotalMinutes - $nonPrescribedStatutoryExcessMinutes),
+            'prescribed_statutory_within_work_minutes' => $prescribedStatutoryWithinMinutes,
+            'non_prescribed_statutory_within_work_minutes' => $nonPrescribedStatutoryWithinMinutes,
             'prescribed_statutory_excess_work_minutes' => $prescribedStatutoryExcessMinutes,
             'non_prescribed_statutory_excess_work_minutes' => $nonPrescribedStatutoryExcessMinutes,
             'late_night_work_minutes' => ($isLegalHoliday || $isCompanyHoliday) ? 0 : $lateNightWorkMinutes,
             'late_night_prescribed_work_minutes' => $lateNightPrescribedWorkMinutes,
             'late_night_statutory_within_overtime_minutes' => $lateNightStatutoryWithinOvertimeMinutes,
             'late_night_statutory_excess_overtime_minutes' => $lateNightStatutoryExcessOvertimeMinutes,
-            'late_night_prescribed_statutory_within_work_minutes' => $lateNightPrescribedWorkMinutes,
-            'late_night_non_prescribed_statutory_within_work_minutes' => $lateNightStatutoryWithinOvertimeMinutes,
+            'late_night_prescribed_statutory_within_work_minutes' => $lateNightPrescribedStatutoryWithinMinutes,
+            'late_night_non_prescribed_statutory_within_work_minutes' => $lateNightNonPrescribedStatutoryWithinMinutes,
             'late_night_prescribed_statutory_excess_work_minutes' => $lateNightPrescribedStatutoryExcessMinutes,
             'late_night_non_prescribed_statutory_excess_work_minutes' => $lateNightNonPrescribedStatutoryExcessMinutes,
             'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,

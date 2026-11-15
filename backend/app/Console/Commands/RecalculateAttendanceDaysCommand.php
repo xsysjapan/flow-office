@@ -9,6 +9,7 @@ use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\CommandBus;
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceWeeklyOvertimeAllocation;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -22,6 +23,11 @@ use Illuminate\Support\Carbon;
  * - 締め・提出済みの日も対象に含める(日次計算のみ更新し、提出時の月次スナップショットは変えない)。
  *   締め・提出済みの日は一覧に印を付ける。
  * - 変化のない日は何もしない(再実行しても結果は同じ)。
+ * - --skip-manual-weekly-allocations を付けると、週40時間の手動振分け(その日の
+ *   attendance_weekly_overtime_allocations の prescribed_minutes または late_night_prescribed_minutes が
+ *   0より大きい日)がある日も対象外とし、手動調整済みと同じく除外件数に数えて一覧に出す。再計算すると
+ *   振分けが削除され、自動配賦は所定外からしか移さないため所定内からの手動振分けは戻らないことへの備え。
+ *   未指定時の挙動は変わらない。
  */
 #[AdminExecutable(
     label: '日次勤怠の一括再計算',
@@ -31,12 +37,14 @@ use Illuminate\Support\Carbon;
         'user' => ['nullable', 'array'],
         'user.*' => ['string'],
         'apply' => ['nullable', 'boolean'],
+        'skip-manual-weekly-allocations' => ['nullable', 'boolean'],
     ],
     ui: [
         'from' => ['control' => 'text'],
         'to' => ['control' => 'text'],
         'user' => ['control' => 'text'],
         'apply' => ['control' => 'checkbox'],
+        'skip-manual-weekly-allocations' => ['control' => 'checkbox'],
     ],
 )]
 class RecalculateAttendanceDaysCommand extends Command
@@ -45,7 +53,8 @@ class RecalculateAttendanceDaysCommand extends Command
         {--from= : 対象期間の開始日(YYYY-MM-DD。必須)}
         {--to= : 対象期間の終了日(YYYY-MM-DD。必須)}
         {--user=* : 対象の社員ID(複数指定可)。省略または * で全社員}
-        {--apply : 変わる日の日次計算を実際に記録する(指定しなければ試し実行)}';
+        {--apply : 変わる日の日次計算を実際に記録する(指定しなければ試し実行)}
+        {--skip-manual-weekly-allocations : 週40時間の手動振分け(所定内からの振分け)がある日を対象外にする}';
 
     protected $description = '指定期間の勤怠日の日次計算を現在のロジックで再計算し、変わる値を一覧する(既定は試し実行)';
 
@@ -80,6 +89,7 @@ class RecalculateAttendanceDaysCommand extends Command
         ));
         $allUsers = $userIds === [] || in_array('*', $userIds, true);
         $apply = (bool) $this->option('apply');
+        $skipManualWeeklyAllocations = (bool) $this->option('skip-manual-weekly-allocations');
 
         $days = AttendanceDay::query()
             ->with(['breaks', 'leaveSegments', 'calendarEntry.workStyle'])
@@ -102,6 +112,13 @@ class RecalculateAttendanceDaysCommand extends Command
             if ($stored !== null && $stored->is_manually_adjusted) {
                 $excludedCount++;
                 $this->line("[除外] {$label}: 手動調整済みのため対象外");
+
+                continue;
+            }
+
+            if ($skipManualWeeklyAllocations && $this->hasManualWeeklyAllocation($day->id)) {
+                $excludedCount++;
+                $this->line("[除外] {$label}: 週40時間の手動振分けがあるため対象外");
 
                 continue;
             }
@@ -131,6 +148,15 @@ class RecalculateAttendanceDaysCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /** 自動配賦は所定内を使わないため、所定内(深夜含む)の振分けがあれば手動の振分けとみなす。 */
+    private function hasManualWeeklyAllocation(string|int $attendanceDayId): bool
+    {
+        return AttendanceWeeklyOvertimeAllocation::query()
+            ->where('attendance_day_id', $attendanceDayId)
+            ->where(fn ($query) => $query->where('prescribed_minutes', '>', 0)->orWhere('late_night_prescribed_minutes', '>', 0))
+            ->exists();
     }
 
     /** YYYY-MM-DD形式の実在する日付なら、その文字列を返す。それ以外はnull。 */
