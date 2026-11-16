@@ -97,6 +97,93 @@ class UserSearchAndAccessTest extends TestCase
         $response->assertJsonPath('data.0.id', $someone->id);
     }
 
+    public function test_search_by_ids_returns_only_the_specified_users(): void
+    {
+        $employee = User::factory()->create();
+        $first = User::factory()->create(['name' => 'ID指定一郎']);
+        $second = User::factory()->create(['name' => 'ID指定二郎']);
+        $third = User::factory()->create(['name' => 'ID指定三郎']);
+
+        $response = $this->actingAs($employee)->getJson('/api/users/search?'.http_build_query([
+            'ids' => [$first->id, $second->id],
+        ]));
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertCount(2, $ids);
+        $this->assertTrue($ids->contains($first->id));
+        $this->assertTrue($ids->contains($second->id));
+        $this->assertFalse($ids->contains($third->id));
+    }
+
+    public function test_search_by_ids_ignores_well_formed_uuids_that_do_not_exist(): void
+    {
+        $employee = User::factory()->create();
+        $existing = User::factory()->create(['name' => 'ID存在確認太郎']);
+        $missing = (string) Str::uuid();
+
+        $response = $this->actingAs($employee)->getJson('/api/users/search?'.http_build_query([
+            'ids' => [$missing, $existing->id],
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.id', $existing->id);
+    }
+
+    public function test_search_by_ids_rejects_malformed_uuid_with_422(): void
+    {
+        $employee = User::factory()->create();
+        $existing = User::factory()->create();
+
+        $response = $this->actingAs($employee)->getJson('/api/users/search?'.http_build_query([
+            'ids' => [$existing->id, 'not-a-uuid'],
+        ]));
+
+        $response->assertStatus(422);
+    }
+
+    public function test_search_by_ids_rejects_more_than_100_ids_with_422(): void
+    {
+        $employee = User::factory()->create();
+        $ids = [];
+        for ($i = 0; $i < 101; $i++) {
+            $ids[] = (string) Str::uuid();
+        }
+
+        $response = $this->actingAs($employee)->getJson('/api/users/search?'.http_build_query(['ids' => $ids]));
+
+        $response->assertStatus(422);
+    }
+
+    public function test_a_plain_employee_can_search_by_ids(): void
+    {
+        $employee = User::factory()->create();
+        $target = User::factory()->create(['name' => 'ID検索対象花子']);
+
+        $response = $this->actingAs($employee)->getJson('/api/users/search?'.http_build_query([
+            'ids' => [$target->id],
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('data.0.id', $target->id);
+        $response->assertJsonPath('data.0.name', $target->name);
+    }
+
+    public function test_search_by_ids_defaults_per_page_to_the_number_of_ids(): void
+    {
+        $employee = User::factory()->create();
+        $users = User::factory()->count(60)->create();
+        $ids = $users->pluck('id')->all();
+
+        $response = $this->actingAs($employee)->getJson('/api/users/search?'.http_build_query(['ids' => $ids]));
+
+        $response->assertOk();
+        $response->assertJsonCount(60, 'data');
+        $response->assertJsonPath('meta.per_page', 60);
+        $response->assertJsonPath('meta.total', 60);
+    }
+
     /**
      * grantSelfPermission()はself scopeでEmployee共有ロールへ付与するため、globalスコープの
      * 絞り込みテストには使えない。専用RoleでglobalスコープのRoleAssignmentを作る。
