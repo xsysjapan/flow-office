@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261115-keep-screen-selection-on-reload](./20261115-keep-screen-selection-on-reload/spec.md) | 画面の選択状態(対象社員・年月・絞り込み・ページ)をリロード後も保つ | レビュー中 |
+| [20261115-keep-screen-selection-on-reload](./20261115-keep-screen-selection-on-reload/spec.md) | 画面の選択状態(対象社員・年月・絞り込み・ページ)をリロード後も保つ | 実装中 |
 | [20261114-prescribed-minutes-no-leave-reduction](./20261114-prescribed-minutes-no-leave-reduction/spec.md) | 所定労働時間を休暇で減らさず、勤怠集計の表示を「所定内労働時間」「残業時間」に揃える | 完了 |
 | [20261028-bulk-entry-holidays-optional-reason](./20261028-bulk-entry-holidays-optional-reason/spec.md) | 一括入力(週次・月次)で休みの予定を表示し、確定理由を任意にする | 完了 |
 | [20261025-fix-e2e-paid-leave-retry](./20261025-fix-e2e-paid-leave-retry/spec.md) | e2e(scenario-03)の有給申請の再試行で前の対象日が残って失敗し続ける不具合の修正 | 完了 |

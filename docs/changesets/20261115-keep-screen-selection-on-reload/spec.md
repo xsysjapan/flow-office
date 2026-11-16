@@ -1,6 +1,6 @@
 # 画面の選択状態(対象社員・年月・絞り込み・ページ)をリロード後も保つ
 
-ステータス: レビュー中
+ステータス: 実装中
 
 ## 変更要望(原文)
 > 勤怠参照画面で対象社員、年月を選択した状態で画面をリロードすると、選択が外れてしまいます。
@@ -101,59 +101,39 @@ URL化済み画面間の不統一:
   選び直せる。
 - 未確定・要確認事項: なし
 
-### 論点3: URLへ移す状態の範囲(横展開)
+### 論点3: 対応する状態の範囲(横展開)
 - 選択肢:
   - A. 勤怠参照の社員名だけ直す。
-  - B. 「画面に何を表示するか」を決める状態はすべてURLへ移す(上表の全画面)。フォーム入力中の値・
-    一括操作のチェック・行の展開状態はURLに載せない。
-  - C. Bに加えて、勤怠参照・承認等で共通の月次/週次/日次タブ(`AttendanceMonthReferenceTabs`)の
-    タブ・表示中の週/日もURLへ移す。
+  - B. 現在URLパラメーターに載っている項目だけを対象に、既存のURL同期の書き方を揃える。URLに載って
+    いない状態(`useState`のみ)を新たにURLへ移すことはしない。
+  - C. 「画面に何を表示するか」を決める状態はすべてURLへ移す(週次勤怠の週・勤務カレンダー一覧と働き方一覧の
+    ページ・管理範囲の絞り込み・端末一覧の詳細パネル等)。
 - 決定: B
-- 理由: 依頼の「他の画面でも一貫性がない状態がないように」に応え、§2.10の対象(絞り込み・ページ・
-  詳細パネルの対象ID・タブ)に当たる取りこぼしを揃える。Cの共通タブは承認一覧の詳細パネル・
-  バックオフィスタスク詳細・申請詳細にも埋め込まれ、1画面に複数並ぶ・他画面のURLキーと衝突するため、
-  コメントで「URL化しない」と明記された既存の判断を維持する(リロードで月次タブへ戻るのは仕様)。
-  対象ごとの判断:
-  - 週次勤怠: 移動した週を`?start=YYYY-MM-DD`へ書く(今週ならキーを消す)。
-  - 勤務カレンダー一覧・働き方一覧: `?page=`。
-  - 管理範囲: グループ種別の絞り込みを`?group_type_id=`(利用者一覧と同じキー名)。
-  - 端末一覧: 詳細パネルの対象端末を`?deviceId=`(承認一覧の`requestId`と同じ扱い)。
-  - 対象外(フォーム入力中): 勤怠出力・カレンダー一括操作・シフト登録・3交代制シフト表・働き方の月次割当・
-    資産の一括操作・運用コマンド(コマンド選択で実行パラメータが切り替わる入力フォーム)・システム設定・
-    各種新規/編集画面。対象外(一時的な選択): 一括操作のチェック・行の展開と、展開した行の中の絞り込み
-    (有給付与設定・特別休暇管理の付与ルールごとの氏名絞り込み。複数の行を同時に開けるため1つのキーに
-    対応せず、展開状態を残さない以上リロード後に効果が見えない)。
-  - `MultiUserPicker`: 対象外。初期値付きで使う画面がなく症状が出ない。将来初期値付きで使う場合は
-    §2.10の追記(ID選択入力の名前表示)に従って直す。
+- 理由: ユーザー指示(2026-11-16)「現在、URLパラメーターに設定している項目のみ対応。既存実装の中で整合性を
+  保つ対応」。初版ではCとしていたが撤回した。
+  - 週次勤怠の`?start=`は読み取りのみで画面から書いていないため、「URLに設定している項目」に含めず対象外。
+  - `useState`のみで持つ状態(上表の週次勤怠の移動・ページ・絞り込み・詳細パネル等)は対象外。
 - 未確定・要確認事項: なし
 
-### 論点4: URLの書き方の統一(履歴・キー名・不正値・既定値)
+### 論点4: URL同期済み画面の書き方の統一(履歴・キー名・不正値)
 - 選択肢:
-  - A. §2.10に統一規則を追記し、共通hookで実装をそろえる。既存画面は今回の対象画面と、規則から外れて
-    いる画面(push・キー名・不正値)を合わせる。
-  - B. 規則だけ追記し、実装は今回触る画面だけ直す。
-- 決定: A。統一規則は次のとおり。
-  1. 履歴は`replace`(絞り込み・ページ・社員・年月の変更で履歴を積まない。Browser Backは前の画面へ戻る)。
-     勤怠参照・勤怠月次一覧・ロール定義・経費プリセット一覧・休暇申請一覧のページを`push`から`replace`へ。
-  2. キー名は、既存画面に同じ概念のキーがあればその名前に合わせる(例: グループ種別は`group_type_id`)。
-     新しい概念はcamelCase。画面の対象社員は`userId`とし、勤怠参照の`user`を`userId`へ改める
+  - A. 共通hookを新設して書き方を揃える。
+  - B. 共通hookは作らず、既存の参照実装(承認一覧`ApprovalsPage`の`updateParams`: `setSearchParams`の関数形式で
+    `prev`を複製し、`{ replace: true }`)に各画面を合わせる。
+- 決定: B。揃える規則は次のとおり。
+  1. 履歴は`replace`(既存の多数派・参照実装と同じ)。`push`になっている勤怠参照・勤怠月次一覧・ロール定義・
+     経費プリセット一覧・休暇申請一覧3種(有給・特別休暇・代休)のページ`requestPage`を`replace`へ。
+  2. 画面の対象社員のキー名は`userId`(休暇の管理画面3つと同じ)。勤怠参照の`user`を`userId`へ改める
      (旧`?user=`は読み込み時に`userId`として扱い、URLを`userId`へ置き換える。現状`?user=`を組み立てる
      リンク・e2eはないことを確認済み)。その他の既存キー名(`requestPage`・監査ログの`user_id`等の
      API由来のsnake_case)は変えない。
-  3. 年は`YYYY`、年月は`YYYY-MM`、日付は`YYYY-MM-DD`、ページは1以上の整数。不正値は既定値として表示し、
-     URLからそのキーを消す(表示とURLを一致させる)。承認一覧の`yearMonth`・勤怠月次一覧の`year`にも
-     この検証を入れる。
-  4. 固定の既定値(1ページ目・既定のステータス等)はURLに書かない(書かれていたら消す。休暇申請一覧の
-     `requestPage=1`も消す)。日付で変わる既定値(今月・今週)は、キーがない初期表示ではURLに書かないが、
-     利用者が選んだ(「今月」ボタン・前後移動で今週に戻った場合を含む)ときは書く。URL共有・翌日以降の
-     リロードで別の月・週に変わらないようにするため。
-  5. 絞り込みを変えたら`page`を消す(既存の承認一覧と同じ)。
-  - 共通hook `frontend/src/hooks/useSearchParamsState.ts`(仮称)を設け、「キーごとの読み取り(検証・
-    既定値)」「部分更新(nullで削除、`replace`)」を提供する。今回変更する画面はこのhookを使う。
-    既に規則どおりに動いている画面(利用者一覧・資産一覧・監査ログ等)は書き換えない。
-- 理由: 規則がなかったことが不統一の原因で、規則だけでは次の画面でまたばらつく。共通hookで既定の動作を
-  規則どおりにする。正しく動いている画面の書き換えは回帰リスクに見合わないため行わない。
-  `replace`は既存の多数派で、承認一覧(参照実装)と同じ。
+  3. 年は`YYYY`、年月は`YYYY-MM`。不正値は既定値として表示し、URLからそのキーを消す(表示とURLを一致させる)。
+     対象: 勤怠参照の`yearMonth`(現在は表示だけ既定値でURLはそのまま)、承認一覧の`yearMonth`(現在は検証なし
+     でAPIへ渡す。不正なら絞り込みなしとして扱う)、勤怠月次一覧の`year`(現在は検証なし。不正なら今年)。
+  4. 既定値の書き方は各画面の現状を維持する(勤怠参照の「今月」ボタンで`yearMonth`を書く挙動等は変えない)。
+     休暇申請一覧の`requestPage`は1ページ目に戻すときにキーを消す(他の一覧の`page`と同じ)。
+- 理由: ユーザー指示「既存実装の中で整合性を保つ」に沿い、新しい仕組みは足さず参照実装に合わせる。
+  `replace`は既存の多数派。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
@@ -182,51 +162,48 @@ URL化済み画面間の不統一:
     (既存storyと同じくクエリキー`['users','by-ids',[id]]`へデータを差し込む)。
   - 既存のページテストで`searchUsers`のモックが`ids`指定の呼び出しに対象社員を返さず「不明な社員」になる
     場合は、モックを`ids`に応じて返すよう直す(アサーションは弱めない)。
-- 共通hook `hooks/useSearchParamsState.ts`(論点4の規則1・4・5を既定の動作にする)とテスト。
-- 画面ごとの変更(論点3・4):
+- 画面ごとの変更(論点4。書き方は`ApprovalsPage`の`updateParams`に合わせる):
 
 | 画面 | 変更 |
 |---|---|
-| 勤怠参照 | `user`→`userId`(旧キーを読み替え)、replace、不正な年月はURLから消す。年月の変更(「今月」ボタン含む)は常に`yearMonth`を書く(規則4) |
-| 週次勤怠 | 前週/次週/今週への移動で`?start=`(その週の月曜)を書く。月曜以外の正しい日付は月曜に寄せてURLも書き換える。不正な日付は今週としてキーを消す。週が変わったら選択中の日・一括入力の下書きは今と同じくリセット |
-| 勤怠月次一覧 | push→replace、`year`の検証 |
-| 承認一覧 | `yearMonth`の検証(不正ならキーを消して既定の表示) |
-| 勤務カレンダー一覧・働き方一覧 | `?page=` |
-| 管理範囲 | `?group_type_id=` |
+| 勤怠参照 `pages/attendance/AttendanceReferencePage.tsx` | `user`→`userId`(旧キーを読み替えてURLを置き換え)、replace、不正な`yearMonth`はURLから消す |
+| 勤怠月次一覧 `pages/attendance/AttendanceMonthsPage.tsx` | push→replace、不正な`year`はURLから消して今年 |
+| 承認一覧 `pages/approvals/ApprovalsPage.tsx` | 不正な`yearMonth`はURLから消して絞り込みなし(APIへ渡さない) |
+| ロール定義 `pages/admin/RoleDefinitionPage.tsx` | push→replace |
+| 経費プリセット一覧 `pages/expense/ExpenseEntryPresetListPage.tsx` | push→replace |
+| 休暇申請一覧3種(`MyPaidLeavePage`・`MySpecialLeavePage`・`MyCompensatoryLeavePage`) | `requestPage`をpush→replace、1ページ目はキーを消す |
 | 有給付与設定・特別休暇管理・代休管理 | 変更なし(UserPickerの修正で社員名が出る) |
-| 端末一覧 | `?deviceId=`(パネルを閉じたらキーを消す) |
-| ロール定義・経費プリセット一覧・休暇申請一覧3種のページ | push→replace(休暇申請一覧は`requestPage=1`を書かない) |
 
-- 各画面のテスト: `MemoryRouter`の`initialEntries`にURLを与えて、選択状態が復元されることを確認する
-  (勤怠参照は社員名と年月が表示されること)。URLの書き換え(`user`→`userId`・不正なキーの削除・
-  月曜への寄せ)は、テスト内で`useLocation()`の`search`を表示する小さな部品を一緒に描画して検証する。
-- e2e `frontend/e2e/scenario-06-attendance-corrections.spec.ts:164`付近の「`?start=`が無いと当週から
-  表示し直す」旨のコメントを新しい挙動に合わせて直す(テスト本体は変えない)。
-- `ui-interaction-patterns` §2.10に論点4の規則・共通hook・「社員などIDで選ぶ入力は、IDだけ渡されても
-  名前を表示できること」を追記。
+- 各画面のテスト: `MemoryRouter`の`initialEntries`にURLを与えて状態が復元されることを確認する(勤怠参照は
+  社員名と年月が表示されること)。URLの書き換え(`user`→`userId`・不正なキーの削除)は、テスト内で
+  `useLocation()`の`search`を表示する小さな部品を一緒に描画して検証する。push/replaceの違いは
+  テストで直接確かめにくいため、`setSearchParams`呼び出しに`{ replace: true }`を渡していることをコード
+  レビューで確認する。
+- `ui-interaction-patterns` §2.10に論点4の規則(replace・社員は`userId`・不正値はキーを消す・参照実装は
+  `ApprovalsPage`の`updateParams`)と「社員などIDで選ぶ入力は、IDだけ渡されても名前を表示できること」を追記。
 
 ## 受け入れ条件
 - 勤怠参照で社員・年月を選んでリロードすると、社員名・年月・勤怠が選んだまま表示される。
 - 有給付与設定・特別休暇管理・代休管理でも、社員を選んでリロードすると社員名が表示される。
 - 承認者に権限で絞った`UserPicker`でも、選んだ社員の名前は権限に関係なく表示される。
-- 論点3の各画面で、表の状態がリロード後も保たれる。
 - 旧URL`/admin/attendance?user=<id>`を開くと同じ社員が表示され、URLが`userId`になる。
-- 不正な年月・日付のURLを開くと既定の表示になり、URLからそのキーが消える。
-- 社員・年月・絞り込み・ページを変えてもBrowser Backで1つ前の選択に戻らず、前の画面へ戻る。
+- 不正な年月・年のURL(勤怠参照・承認一覧・勤怠月次一覧)を開くと既定の表示になり、URLからそのキーが消える。
+- 論点4の対象画面で、URLに載る選択・ページを変えてもBrowser Backで1つ前の選択に戻らず、前の画面へ戻る。
 - backend・frontendの関連テスト、`npm run build`(型チェック)、lintがPASSする。
 
 ## 対象外
-- 月次/週次/日次の共通タブ(`AttendanceMonthReferenceTabs`)のタブ・週・日のURL化(論点3)。
-- 付与ルールの展開とその中の氏名絞り込み、運用コマンドの選択、3交代制シフト表の対象部署・対象月(論点3)。
-- `MultiUserPicker`の名前表示(論点3)。
-- フォーム入力中の値・一括操作のチェック・行の展開状態の保持。
-- 既に規則どおりの画面の共通hookへの書き換え、既存のキー名(snake_case・`requestPage`等)の改名。
+- 現在URLに載っていない状態(`useState`のみ)のURL化: 週次勤怠の週の移動(`?start=`は読み取りのみのまま)、
+  勤務カレンダー一覧・働き方一覧のページ、管理範囲の絞り込み、端末一覧の詳細パネル、月次/週次/日次の
+  共通タブ、付与ルールの展開と氏名絞り込み、運用コマンドの選択、3交代制シフト表、フォーム入力中の値・
+  一括操作のチェック(論点3)。
+- 共通hookの新設、既に規則どおりの画面の書き換え、既存のキー名(snake_case・`requestPage`等)の改名。
+- `MultiUserPicker`の名前表示(初期値付きで使う画面がなく症状が出ない)。
 - e2eの追加(既存e2eが壊れていないかの確認のみ)。
 
 ## ドキュメントへの影響
-- `.claude/skills/ui-interaction-patterns/SKILL.md` §2.10: 統一規則・共通hook・ID選択入力の名前表示を追記。
-- `docs/15-usecases-admin.md` 等のユースケース: 画面のURL形式は記載がないため変更なし(実装時に
-  `grep`で`?user=`の記載がないことを確認する)。
+- `.claude/skills/ui-interaction-patterns/SKILL.md` §2.10: 論点4の規則とID選択入力の名前表示を追記。
+- `docs/`配下のユースケース: 画面のURL形式は記載がないため変更なし(実装時に`grep`で`?user=`の記載がない
+  ことを確認する)。
 - API仕様: OpenAPI注釈(`/users/search`の`ids[]`)を更新。
 
 ## モック・アセット
@@ -235,21 +212,19 @@ URL化済み画面間の不統一:
 ## 実装対象
 - backend: `app/Http/Controllers/Api/UserController.php`(search)、`tests/Feature/UserManagement/UserSearchAndAccessTest.php`
 - frontend:
-  - `src/api/users.ts`、`src/hooks/useUsers.ts`、`src/hooks/useSearchParamsState.ts`(新規)+テスト
+  - `src/api/users.ts`、`src/hooks/useUsers.ts`
   - `src/components/UserPicker/`(本体・story・test)
-  - `src/pages/attendance/`(AttendanceReferencePage・WeekAttendancePage・AttendanceMonthsPage)
+  - `src/pages/attendance/`(AttendanceReferencePage・AttendanceMonthsPage)
   - `src/pages/approvals/ApprovalsPage.tsx`
-  - `src/pages/workCalendar/`(WorkCalendarListPage・WorkStylesPage)
-  - `src/pages/admin/`(UserManagementAccessPage・DeviceListPage・RoleDefinitionPage)
-  - `src/pages/expense/ExpenseEntryPresetListPage.tsx`、休暇申請一覧3種(MyPaidLeave・MySpecialLeave・MyCompensatoryLeave)
+  - `src/pages/admin/RoleDefinitionPage.tsx`、`src/pages/expense/ExpenseEntryPresetListPage.tsx`
+  - `src/pages/paidLeave/MyPaidLeavePage.tsx`、`src/pages/specialLeave/MySpecialLeavePage.tsx`、
+    `src/pages/compensatoryLeave/MyCompensatoryLeavePage.tsx`
   - 上記各画面のテスト、`searchUsers`をモックしている既存テストのうち必要なもの
-  - `e2e/scenario-06-attendance-corrections.spec.ts`(コメントのみ)
 - `.claude/skills/ui-interaction-patterns/SKILL.md`
 
 ## 検証方法
 - `cd backend && php artisan test --filter=UserSearchAndAccessTest`
-- `cd frontend && npm run test`(変更画面・UserPicker・共通hook)、`npm run build`、`npm run lint`
-- e2eのうち勤怠参照・休暇管理・承認を通るspecの実行(環境が許せば)
+- `cd frontend && npm run test`、`npm run build`、`npm run lint`
 
 ## レビュー履歴
 - 2026-11-15 初版
@@ -264,6 +239,10 @@ URL化済み画面間の不統一:
   - `searchUsers`に引数を足して再利用する(既存テストのモックを生かす)、クエリキー・storyの差し込み方を明記。
   - 週次勤怠の月曜への寄せと下書きのリセット、`year`の検証、`requestPage=1`の削除、URL書き換えのテスト方法、
     e2eコメントの修正を追記。
+- 2026-11-16 ユーザー指示「現在、URLパラメーターに設定している項目のみ対応。既存実装の中で整合性を保つ対応」
+  により範囲を縮小。論点3をB(URL済みの項目のみ)に変更し、`useState`のみの状態のURL化(週次勤怠の週・
+  ページ・管理範囲・端末一覧の詳細パネル)と共通hookの新設を撤回。論点4は参照実装`ApprovalsPage`に合わせる
+  方針とし、既定値の扱いは各画面の現状維持とした。ユーザー承認済みとして実装中へ。
 
 ## 実装結果
 未着手
