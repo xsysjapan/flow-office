@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { AttendanceMonth, User } from '../../api/types'
@@ -37,12 +37,18 @@ const notSubmittedMonth: AttendanceMonth = {
   legal_holiday_warnings: [],
 }
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage(initialEntries?: string[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <AttendanceMonthsPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -126,4 +132,14 @@ describe('AttendanceMonthsPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('network down')
   })
+  it('treats an invalid year query param as unspecified (default display) and removes it from the URL', async () => {
+    vi.spyOn(attendanceApi, 'fetchMyMonths').mockResolvedValue([])
+
+    renderPage(['/attendance/months?year=abc'])
+
+    expect(await screen.findByLabelText('表示する年')).toHaveValue('')
+    expect(await screen.findByText('2026-07')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('location-search').textContent).not.toContain('year'))
+  })
+
 })

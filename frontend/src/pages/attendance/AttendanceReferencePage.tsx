@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
@@ -636,28 +636,54 @@ export function AttendanceMonthReferenceTabs({ userId, yearMonth }: { userId: st
  * `AttendanceMonthReferenceTabs`(承認画面・バックオフィスタスク詳細・申請詳細と共通の
  * 月次/週次/日次タブ切り替えコンポーネント)を表示する。週次・日次への切り替えやCSV/Excel出力・
  * 状態変更(締める/締めを取り消す、権限がある場合)の挙動は他の画面と完全に同一になる。
- * 対象社員・対象年月はURLに反映し、Browser Back・リロード・URL共有で状態を維持する
+ * 対象社員(`userId`)・対象年月(`yearMonth`)はURLに反映し、Browser Back・リロード・URL共有で状態を維持する
  * (`ui-interaction-patterns` §2.10)。月次/週次/日次のタブ切り替え自体は他の画面と同様、
  * 既存のナビゲーション的な状態としてURL化しない。
  */
 export function AttendanceReferencePage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const userId = searchParams.get('user') ?? undefined
+  // 旧キー`user`は`userId`として扱い、URLも`userId`へ置き換える
+  const legacyUser = searchParams.get('user')
+  const userId = searchParams.get('userId') ?? legacyUser ?? undefined
   const yearMonthParam = searchParams.get('yearMonth')
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
-  const yearMonth = yearMonthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonthParam) ? yearMonthParam : currentYearMonth
+  const isInvalidYearMonth = yearMonthParam !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonthParam)
+  const yearMonth = yearMonthParam !== null && !isInvalidYearMonth ? yearMonthParam : currentYearMonth
+
+  /** 指定したキーだけをURLクエリパラメータへ反映する(値`null`は削除)。履歴は積まない(`replace`)。 */
+  const updateParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          for (const [key, value] of Object.entries(patch)) {
+            if (value === null) next.delete(key)
+            else next.set(key, value)
+          }
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
+  useEffect(() => {
+    const patch: Record<string, string | null> = {}
+    if (legacyUser !== null) {
+      patch.user = null
+      if (!searchParams.has('userId')) patch.userId = legacyUser
+    }
+    if (isInvalidYearMonth) patch.yearMonth = null
+    if (Object.keys(patch).length > 0) updateParams(patch)
+  }, [legacyUser, isInvalidYearMonth, searchParams, updateParams])
 
   const setUserId = (id: string | undefined) => {
-    const next = new URLSearchParams(searchParams)
-    if (id) next.set('user', id)
-    else next.delete('user')
-    setSearchParams(next)
+    updateParams({ userId: id ?? null, user: null })
   }
 
   const setYearMonth = (ym: string) => {
-    const next = new URLSearchParams(searchParams)
-    next.set('yearMonth', ym)
-    setSearchParams(next)
+    updateParams({ yearMonth: ym })
   }
 
   return (

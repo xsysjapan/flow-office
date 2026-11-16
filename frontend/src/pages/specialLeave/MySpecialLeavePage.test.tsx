@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
@@ -46,6 +46,11 @@ const submittedRequest: SpecialLeaveRequest = {
   workflow_request_id: null,
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
 function renderPage(
   requests: SpecialLeaveRequest[] = [],
   types: SpecialLeaveType[] = [birthdayType],
@@ -83,6 +88,7 @@ function renderPage(
       >
         <MemoryRouter initialEntries={[initialPath]}>
           <MySpecialLeavePage />
+          <LocationProbe />
         </MemoryRouter>
       </AppSettingsContext.Provider>
     </QueryClientProvider>,
@@ -354,5 +360,20 @@ describe('MySpecialLeavePage', () => {
     expect(specialLeaveApi.fetchMySpecialLeaveRequests).toHaveBeenCalledWith({ page: 1 })
     // 既存の date クエリは残る。
     expect(screen.getByText('2026-08-20')).toBeInTheDocument()
+  })
+
+  it('drops the requestPage query param when returning to the first page', async () => {
+    vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
+
+    renderPage([], [birthdayType], true, '/special-leave?requestPage=2&date=2026-08-20', { last_page: 2, total: 21 })
+
+    expect(await screen.findByText('21件中 2 / 2 ページ')).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).toHaveTextContent('requestPage=2')
+
+    await userEvent.click(screen.getByRole('button', { name: '前のページ' }))
+
+    expect(await screen.findByText('21件中 1 / 2 ページ')).toBeInTheDocument()
+    expect(screen.getByTestId('location-search').textContent).not.toContain('requestPage')
+    expect(screen.getByTestId('location-search').textContent).toContain('date=2026-08-20')
   })
 })

@@ -73,11 +73,14 @@ export function RoleDefinitionPage() {
   );
 
   const selectRole = (role: AccessRole) => {
-    setSearchParams((params) => {
-      const next = new URLSearchParams(params);
-      next.set("roleId", String(role.id));
-      return next;
-    });
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        next.set("roleId", String(role.id));
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   const openCreateDialog = () => {

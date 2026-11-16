@@ -78,14 +78,17 @@ export function ExpenseEntryPresetListPage() {
       : canManageShared;
 
   const updateParams = (patch: Record<string, string | null>) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      for (const [key, value] of Object.entries(patch)) {
-        if (value === null) next.delete(key);
-        else next.set(key, value);
-      }
-      return next;
-    });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === null) next.delete(key);
+          else next.set(key, value);
+        }
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   const changeSearch = (value: string) => updateParams({ q: value || null, page: null });

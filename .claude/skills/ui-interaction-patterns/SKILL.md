@@ -203,6 +203,16 @@ Navigation、Cancel、実装可能な範囲でのタブクローズ。**変更�
 一覧 → 詳細 → 一覧と戻ったとき、検索条件・フィルター・ソート・ページを可能な限り維持する。
 `react-router-dom`の`useSearchParams`を使う。
 
+URL同期の書き方は次の規則で揃える(参照実装: `ApprovalsPage`の`updateParams`)。
+
+- 更新は`setSearchParams`の関数形式で`prev`を複製し、値`null`でキーを削除、`{ replace: true }`で
+  履歴を積まない(Browser Backで1つ前の選択ではなく前の画面へ戻る)。
+- 画面の対象社員のキーは`userId`。既存に同じ概念のキーがあればその名前に合わせる。
+- 年月`YYYY-MM`・年`YYYY`などの不正値は既定値で表示し、URLからそのキーを消す(表示とURLを一致させる)。
+  消す処理は不正値のときだけ動かし、ループさせない。
+- 社員などIDで選ぶ入力は、IDだけ渡されても名前を表示できること(`UserPicker`参照。URL復元・リロード・
+  親からの値変更でも空欄にしない)。
+
 ### 2.11 Dialog / Sheet / Page の使い分け
 
 | 用途 | 使うもの |

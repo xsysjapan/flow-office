@@ -274,11 +274,15 @@ function MyPaidLeaveRequestList() {
   }
 
   function handlePageChange(nextPage: number) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      next.set('requestPage', String(nextPage))
-      return next
-    })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (nextPage <= 1) next.delete('requestPage')
+        else next.set('requestPage', String(nextPage))
+        return next
+      },
+      { replace: true },
+    )
   }
 
   return (

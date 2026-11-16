@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
@@ -27,8 +28,23 @@ export function AttendanceMonthsPage() {
   const allYearMonths = employmentYearMonths(user?.hire_date, user?.termination_date, currentYearMonth)
   const years = [...new Set(allYearMonths.map((yearMonth) => yearMonth.slice(0, 4)))].reverse()
   const [searchParams, setSearchParams] = useSearchParams()
-  const selectedYear = searchParams.get('year') ?? ''
+  const yearParam = searchParams.get('year')
+  const isInvalidYear = yearParam !== null && !/^\d{4}$/.test(yearParam)
+  // 不正な年は未指定(キー無しの既定表示)として扱い、URLからもキーを消す(表示とURLを一致させる)
+  const selectedYear = yearParam === null || isInvalidYear ? '' : yearParam
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
+
+  useEffect(() => {
+    if (!isInvalidYear) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('year')
+        return next
+      },
+      { replace: true },
+    )
+  }, [isInvalidYear, setSearchParams])
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="月次勤怠の取得に失敗しました。" />
@@ -47,14 +63,14 @@ export function AttendanceMonthsPage() {
     if (year) next.set('year', year)
     else next.delete('year')
     next.delete('page')
-    setSearchParams(next)
+    setSearchParams(next, { replace: true })
   }
 
   const handlePageChange = (nextPage: number) => {
     const next = new URLSearchParams(searchParams)
     if (nextPage <= 1) next.delete('page')
     else next.set('page', String(nextPage))
-    setSearchParams(next)
+    setSearchParams(next, { replace: true })
   }
 
   return (

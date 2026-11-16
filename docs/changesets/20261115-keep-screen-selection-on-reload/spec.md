@@ -1,6 +1,6 @@
 # 画面の選択状態(対象社員・年月・絞り込み・ページ)をリロード後も保つ
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 勤怠参照画面で対象社員、年月を選択した状態で画面をリロードすると、選択が外れてしまいます。
@@ -129,7 +129,7 @@ URL化済み画面間の不統一:
      API由来のsnake_case)は変えない。
   3. 年は`YYYY`、年月は`YYYY-MM`。不正値は既定値として表示し、URLからそのキーを消す(表示とURLを一致させる)。
      対象: 勤怠参照の`yearMonth`(現在は表示だけ既定値でURLはそのまま)、承認一覧の`yearMonth`(現在は検証なし
-     でAPIへ渡す。不正なら絞り込みなしとして扱う)、勤怠月次一覧の`year`(現在は検証なし。不正なら今年)。
+     でAPIへ渡す。不正なら絞り込みなしとして扱う)、勤怠月次一覧の`year`(現在は検証なし。不正ならキーなしと同じ「すべての年」)。
   4. 既定値の書き方は各画面の現状を維持する(勤怠参照の「今月」ボタンで`yearMonth`を書く挙動等は変えない)。
      休暇申請一覧の`requestPage`は1ページ目に戻すときにキーを消す(他の一覧の`page`と同じ)。
 - 理由: ユーザー指示「既存実装の中で整合性を保つ」に沿い、新しい仕組みは足さず参照実装に合わせる。
@@ -167,7 +167,7 @@ URL化済み画面間の不統一:
 | 画面 | 変更 |
 |---|---|
 | 勤怠参照 `pages/attendance/AttendanceReferencePage.tsx` | `user`→`userId`(旧キーを読み替えてURLを置き換え)、replace、不正な`yearMonth`はURLから消す |
-| 勤怠月次一覧 `pages/attendance/AttendanceMonthsPage.tsx` | push→replace、不正な`year`はURLから消して今年 |
+| 勤怠月次一覧 `pages/attendance/AttendanceMonthsPage.tsx` | push→replace、不正な`year`はURLから消して「すべての年」(キーなしの既定表示) |
 | 承認一覧 `pages/approvals/ApprovalsPage.tsx` | 不正な`yearMonth`はURLから消して絞り込みなし(APIへ渡さない) |
 | ロール定義 `pages/admin/RoleDefinitionPage.tsx` | push→replace |
 | 経費プリセット一覧 `pages/expense/ExpenseEntryPresetListPage.tsx` | push→replace |
@@ -243,6 +243,24 @@ URL化済み画面間の不統一:
   により範囲を縮小。論点3をB(URL済みの項目のみ)に変更し、`useState`のみの状態のURL化(週次勤怠の週・
   ページ・管理範囲・端末一覧の詳細パネル)と共通hookの新設を撤回。論点4は参照実装`ApprovalsPage`に合わせる
   方針とし、既定値の扱いは各画面の現状維持とした。ユーザー承認済みとして実装中へ。
+- 2026-11-16 実装中の修正: 勤怠月次一覧の不正な`year`を「今年」としていたが、キーなしの既定表示は
+  「すべての年」であり、キーを消すと表示とURLが一致しなくなるため「すべての年」に改めた(規則3どおり)。
 
 ## 実装結果
-未着手
+- コミット: `132ff6a`(backend)、本変更セットを完了にしたコミット(frontend・スキル)
+- backend: `app/Http/Controllers/Api/UserController.php`(search に`ids[]`、OA注釈)、
+  `tests/Feature/UserManagement/UserSearchAndAccessTest.php`(6件追加)
+- frontend: `api/users.ts`・`hooks/useUsers.ts`(`useUsersByIds`)、`components/UserPicker/`(本体・story `WithValue`・
+  test 6件)、`pages/attendance/AttendanceReferencePage`・`AttendanceMonthsPage`、`pages/approvals/ApprovalsPage`、
+  `pages/admin/RoleDefinitionPage`、`pages/expense/ExpenseEntryPresetListPage`、休暇申請一覧3種(各テスト追加)
+- `.claude/skills/ui-interaction-patterns/SKILL.md` §2.10に規則4点を追記
+- 検証:
+  - `./vendor/bin/phpunit tests/Feature/UserManagement/UserSearchAndAccessTest.php`: 12 passed
+  - `npx vitest run --project unit`: 149ファイル、1142 passed / 2 skipped / 失敗0
+  - `npx tsc -p tsconfig.app.json --noEmit`: エラー0、`npm run lint`: error 0(warningは変更前と同じ20件)
+  - storybookプロジェクト(ブラウザ実行)はこの環境で起動できず未実行。story `WithValue`は型チェックのみ
+- 受け入れ条件との対応: 勤怠参照のリロード後の社員名・年月(AttendanceReferencePage.test)、休暇管理3画面と
+  権限で絞ったUserPickerの名前表示(UserPicker.test: permissionを渡さずidsで取得)、旧`?user=`の置き換え・
+  不正な年月/年のキー削除(各ページテストのLocationProbe)、replace化(コードレビューで全`setSearchParams`に
+  `{ replace: true }`を確認)。
+- ドキュメント: `docs/`配下で`?user=`を参照するのは過去の変更セット(20260829)の記録のみで、変更不要。
