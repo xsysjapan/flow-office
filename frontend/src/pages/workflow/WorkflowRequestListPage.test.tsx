@@ -244,7 +244,9 @@ describe('WorkflowRequestListPage', () => {
     await userEvent.click(dialog.getByRole('button', { name: /経費精算/ }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(navigate).toHaveBeenCalledWith('/expenses/new')
+    expect(navigate).toHaveBeenCalledWith('/expenses/new', {
+      state: { backTo: { pathname: '/', search: '', hash: '' } },
+    })
   })
 
   it('filters by status and subject type via URL params', async () => {

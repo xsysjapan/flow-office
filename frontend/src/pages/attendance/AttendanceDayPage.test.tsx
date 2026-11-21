@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
@@ -112,7 +112,12 @@ function leavePage<T>(data: T[]) {
   return { data, meta: { current_page: 1, last_page: 1, total: data.length } }
 }
 
-function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date, shiftSwapRequiresApproval = true) {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location">{location.pathname + location.search}</div>
+}
+
+function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date, shiftSwapRequiresApproval = true, initialState?: unknown) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
   vi.spyOn(employeeShiftAssignmentsApi, 'fetchShiftAssignments').mockResolvedValue([])
@@ -137,9 +142,10 @@ function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date, shi
           isLoading: false,
         }}
       >
-        <MemoryRouter initialEntries={[`/attendance/days/${routeDate}`]}>
+        <MemoryRouter initialEntries={[{ pathname: `/attendance/days/${routeDate}`, state: initialState }]}>
           <Routes>
             <Route path="/attendance/days/:date" element={<AttendanceDayPage />} />
+            <Route path="/attendance/week" element={<LocationProbe />} />
           </Routes>
         </MemoryRouter>
       </AppSettingsContext.Provider>
@@ -202,6 +208,19 @@ describe('AttendanceDayPage', () => {
     await waitFor(() =>
       expect(attendanceApi.updateAttendanceDay).toHaveBeenCalledWith('day-1', expect.objectContaining({ reason: '打刻ミスの修正' })),
     )
+  })
+
+  it('returns to the recorded origin after deleting the day', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'deleteAttendanceDay').mockResolvedValue({ deleted: true })
+    renderPage([recordedDay], date, true, { backTo: { pathname: '/attendance/week', search: '?start=2026-07-06', hash: '' } })
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+    await userEvent.type(screen.getByLabelText('削除理由'), '二重入力の削除')
+    await userEvent.selectOptions(screen.getByLabelText('打刻ログの扱い'), 'delete_punches')
+    await userEvent.click(screen.getByRole('button', { name: '削除する' }))
+
+    expect(await screen.findByTestId('location')).toHaveTextContent('/attendance/week?start=2026-07-06')
   })
 
   it('shows a back link to the month of the day when opened directly', async () => {
