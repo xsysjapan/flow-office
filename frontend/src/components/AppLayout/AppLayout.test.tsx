@@ -19,7 +19,7 @@ const mockUser: User = {
   last_login_at: null,
 }
 
-function renderLayout(logout = vi.fn(), user: User = mockUser, specialLeaveTypes: SpecialLeaveType[] = []) {
+function renderLayout(logout = vi.fn(), user: User = mockUser, specialLeaveTypes: SpecialLeaveType[] = [], initialPath = '/') {
   const authValue: AuthContextValue = {
     user,
     status: 'authenticated',
@@ -34,10 +34,11 @@ function renderLayout(logout = vi.fn(), user: User = mockUser, specialLeaveTypes
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authValue}>
-        <MemoryRouter initialEntries={['/']}>
+        <MemoryRouter initialEntries={[initialPath]}>
           <Routes>
             <Route path="/" element={<AppLayout />}>
               <Route index element={<p>今日の勤怠画面</p>} />
+              <Route path="*" element={<p>配下の画面</p>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -188,5 +189,51 @@ describe('AppLayout', () => {
 
     const mobileHeader = within(screen.getByRole('banner'))
     expect(mobileHeader.getByRole('link', { name: 'ホームに戻る' })).toHaveAttribute('href', '/')
+  })
+
+  it('lights the 月次勤怠 item on a past month page', () => {
+    renderLayout(vi.fn(), mockUser, [], '/attendance/months/2024-03')
+
+    expect(sidebar().getByRole('link', { name: '月次勤怠' })).toHaveClass('bg-accent')
+    expect(sidebar().getByRole('link', { name: '日次勤怠' })).not.toHaveClass('bg-accent')
+    expect(sidebar().getByRole('link', { name: 'ホーム' })).not.toHaveClass('bg-accent')
+  })
+
+  it('lights the 日次勤怠 item (not 月次勤怠) on any day page', () => {
+    renderLayout(vi.fn(), mockUser, [], '/attendance/days/2024-03-05')
+
+    expect(sidebar().getByRole('link', { name: '日次勤怠' })).toHaveClass('bg-accent')
+    expect(sidebar().getByRole('link', { name: '月次勤怠' })).not.toHaveClass('bg-accent')
+  })
+
+  it('lights the parent item on a sub page and only home on "/"', () => {
+    const { unmount } = renderLayout(vi.fn(), mockUser, [], '/paid-leave/history')
+    expect(sidebar().getByRole('link', { name: '有給' })).toHaveClass('bg-accent')
+    unmount()
+
+    renderLayout()
+    expect(sidebar().getByRole('link', { name: 'ホーム' })).toHaveClass('bg-accent')
+    expect(sidebar().getByRole('link', { name: '有給' })).not.toHaveClass('bg-accent')
+  })
+
+  it('sets document.title from the page hierarchy', () => {
+    renderLayout(vi.fn(), mockUser, [], '/paid-leave/history')
+
+    expect(document.title).toBe('有給履歴 | flow-office')
+  })
+
+  it('falls back to the app name as document.title for an unregistered page', () => {
+    renderLayout(vi.fn(), mockUser, [], '/not-registered')
+
+    expect(document.title).toBe('flow-office')
+  })
+
+  it('lights 管理メニュー on admin sub pages and sets aria-current on the active item', () => {
+    renderLayout(vi.fn(), { ...mockUser, effective_features: ['attendance.entry', 'administration.users'], effective_permissions: ['user.view'] }, [], '/admin/users/u1')
+
+    const admin = sidebar().getByRole('link', { name: '管理メニュー' })
+    expect(admin).toHaveClass('bg-accent')
+    expect(admin).toHaveAttribute('aria-current', 'page')
+    expect(sidebar().getByRole('link', { name: 'ホーム' })).not.toHaveAttribute('aria-current')
   })
 })

@@ -1,6 +1,6 @@
 import { ArrowLeft, Menu } from "lucide-react";
 import { useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { Button } from "../Button/Button";
 import {
@@ -12,6 +12,7 @@ import {
   SheetTrigger,
 } from "../ui/sheet";
 import { cn } from "../../lib/utils";
+import { findActiveNavPath } from "../../routes/pageHierarchy";
 import { adminNavGroups, canAccessAdminItem } from "./adminNavGroups";
 
 type NavigationProps = {
@@ -20,6 +21,11 @@ type NavigationProps = {
 };
 
 function AdminNavigation({ groups, onNavigate }: NavigationProps) {
+  const { pathname } = useLocation();
+  const activePaths = findActiveNavPath(pathname, [
+    "/admin",
+    ...groups.flatMap((group) => group.items.map((item) => item.to)),
+  ], ["/admin"]);
   return (
     <nav className="flex flex-col gap-5" aria-label="管理メニュー">
       <Link
@@ -36,22 +42,23 @@ function AdminNavigation({ groups, onNavigate }: NavigationProps) {
             {group.label}
           </span>
           <div className="flex flex-col gap-0.5">
-            {group.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={!item.matchPrefix}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  cn(
+            {group.items.map((item) => {
+              const isActive = activePaths.includes(item.to);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={onNavigate}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
                     "rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
                     isActive && "bg-accent font-semibold text-foreground",
-                  )
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </div>
         </div>
       ))}
