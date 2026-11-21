@@ -405,4 +405,11 @@ describe('MyPaidLeavePage', () => {
     expect(screen.getByTestId('location-search').textContent).not.toContain('requestPage')
     expect(screen.getByTestId('location-search').textContent).toContain('date=2026-08-20')
   })
+
+  it('removes an invalid requestPage from the URL and keeps the date prefill', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+    renderPage([], true, '/paid-leave?requestPage=abc&date=2026-08-20')
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?date=2026-08-20$/))
+  })
 })

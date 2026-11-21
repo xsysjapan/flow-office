@@ -161,8 +161,8 @@ test('§5-12: 日次勤怠の削除(承認前は削除できるが、承認後�
     await employeePage.getByRole('button', { name: '削除する' }).click()
 
     // 削除後、週次画面へ戻る(AttendanceDayPageのonDeletedがnavigate(-1)するため)。
-    // 週次画面は`?start=`が無いと当週から表示し直すため(WeekAttendancePageの初期状態)、
-    // 対象日を含む週まで改めて移動する。
+    // 週次画面の表示中の週はURLの`?start=`で決まる(WeekAttendancePage)。navigate(-1)で戻った先の
+    // URLに`start`が無ければ当週の表示のため、対象日を含む週まで改めて移動する。
     await expect(employeePage).toHaveURL(/\/attendance\/week/)
     await goToAttendanceWeekContaining(employeePage, deletableDate)
     await expect(dayRow(employeePage, deletableDate)).toContainText('未入力')

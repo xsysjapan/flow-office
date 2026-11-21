@@ -19,6 +19,7 @@ import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/type
 import { fetchWorkflowRequest, type FetchWorkflowRequestsToApproveOptions } from '../../api/workflowRequests'
 import { useApproveApprovalItem, useReturnApprovalItem } from '../../hooks/useApprovals'
 import { useWorkflowRequest, useWorkflowRequestsToApprove } from '../../hooks/useWorkflowRequests'
+import { isValidPageParam } from '../../utils/searchParamValidators'
 import { attendanceMonthStatusLabel, expenseClaimStatusLabel, workflowRequestStatusLabel } from '../../utils/statusLabels'
 
 const DEFAULT_STATUS: NonNullable<FetchWorkflowRequestsToApproveOptions['status']> = 'submitted'
@@ -127,8 +128,8 @@ export function ApprovalsPage() {
   const isInvalidYearMonth = yearMonthParam !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonthParam)
   // 不正な年月は絞り込みなしとして扱い、URLからもキーを消す(表示とURLを一致させる)
   const yearMonth = yearMonthParam !== null && !isInvalidYearMonth ? yearMonthParam : undefined
-  const pageParam = Number(searchParams.get('page'))
-  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const pageParam = searchParams.get('page')
+  const page = isValidPageParam(pageParam) ? Number(pageParam) : 1
   const selectedId = searchParams.get('requestId')
 
   const { data, isLoading, error } = useWorkflowRequestsToApprove({ status, yearMonth, page })
@@ -160,6 +161,18 @@ export function ApprovalsPage() {
       { replace: true },
     )
   }, [isInvalidYearMonth, setSearchParams])
+
+  useEffect(() => {
+    if (pageParam === null || isValidPageParam(pageParam)) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }, [pageParam, setSearchParams])
 
   function setSelectedId(id: string | null) {
     updateParams({ requestId: id })

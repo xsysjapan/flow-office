@@ -468,4 +468,16 @@ describe('ApprovalsPage', () => {
     }
   })
 
+
+  it('removes an invalid page from the URL', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue({
+      data: [],
+      meta: { current_page: 1, last_page: 1, total: 0 },
+      links: { next: null, prev: null },
+    } as Paginated<WorkflowRequest>)
+
+    renderPage(['/approvals?page=0&status=approved'])
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?status=approved$/))
+  })
 })

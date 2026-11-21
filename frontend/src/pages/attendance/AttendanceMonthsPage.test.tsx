@@ -142,4 +142,39 @@ describe('AttendanceMonthsPage', () => {
     await waitFor(() => expect(screen.getByTestId('location-search').textContent).not.toContain('year'))
   })
 
+
+  it('removes a year that is not among the options from the URL', async () => {
+    vi.spyOn(attendanceApi, 'fetchMyMonths').mockResolvedValue([])
+
+    renderPage(['/attendance/months?year=1999'])
+
+    expect(await screen.findByText('2026-07')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/))
+  })
+
+  it('keeps a year that is among the options', async () => {
+    vi.spyOn(attendanceApi, 'fetchMyMonths').mockResolvedValue([])
+
+    renderPage(['/attendance/months?year=2026'])
+
+    expect(await screen.findByText('2026-07')).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?year=2026')
+  })
+
+  it('adjusts a page beyond the last page to the last page, and removes an invalid page', async () => {
+    vi.spyOn(attendanceApi, 'fetchMyMonths').mockResolvedValue([])
+    currentUser.hire_date = '2025-01-15'
+
+    renderPage(['/attendance/months?page=99'])
+    await waitFor(() => expect(screen.getByTestId('location-search').textContent).toMatch(/^\?page=\d+$/))
+    expect(screen.getByTestId('location-search').textContent).not.toBe('?page=99')
+  })
+
+  it('removes an invalid page from the URL', async () => {
+    vi.spyOn(attendanceApi, 'fetchMyMonths').mockResolvedValue([])
+
+    renderPage(['/attendance/months?page=abc'])
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/))
+  })
 })

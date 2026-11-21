@@ -545,4 +545,21 @@ describe('PaidLeaveSchedulePage', () => {
     await waitFor(() => expect(bulkSpy).toHaveBeenCalledWith(expect.arrayContaining(['pair-6', 'pair-18'])))
     expect(bulkSpy.mock.calls[0][0]).toHaveLength(2)
   })
+
+  it('removes an invalid filter and invalid dates from the URL', async () => {
+    renderPage({ initialPath: '/admin/paid-leave/schedule?filter=bogus&scheduled_on_from=2026-02-30&scheduled_on_to=abc&user_name=taro' })
+
+    await waitFor(() => expect(currentLocation()).toBe('/admin/paid-leave/schedule?user_name=taro'))
+    expect(currentLocation()).not.toContain('filter')
+    expect(currentLocation()).not.toContain('scheduled_on')
+  })
+
+  it('keeps valid dates in the URL', async () => {
+    renderPage({ initialPath: '/admin/paid-leave/schedule?scheduled_on_from=2026-11-01&scheduled_on_to=2026-11-30' })
+
+    await waitFor(() => expect(paidLeaveApi.fetchPaidLeaveScheduleEntries).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduled_on_from: '2026-11-01', scheduled_on_to: '2026-11-30' }),
+    ))
+    expect(currentLocation()).toContain('scheduled_on_from=2026-11-01&scheduled_on_to=2026-11-30')
+  })
 })

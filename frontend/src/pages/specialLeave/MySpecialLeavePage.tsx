@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
@@ -26,6 +26,7 @@ import {
   useMySpecialLeaveRequests,
   useSpecialLeaveTypes,
 } from '../../hooks/useSpecialLeave'
+import { isValidPageParam } from '../../utils/searchParamValidators'
 import { paidLeaveRequestStatusLabel, paidLeaveTypeLabel } from '../../utils/statusLabels'
 import { addDays } from '../../utils/weekDates'
 
@@ -283,10 +284,22 @@ function SpecialLeaveRequestForm() {
 
 function MySpecialLeaveRequestList() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const pageParam = Number(searchParams.get('requestPage'))
-  const requestPage = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const requestPageParam = searchParams.get('requestPage')
+  const requestPage = isValidPageParam(requestPageParam) ? Number(requestPageParam) : 1
   const { data, isLoading, error } = useMySpecialLeaveRequests({ page: requestPage })
   const cancelRequest = useCancelSpecialLeaveRequest()
+
+  useEffect(() => {
+    if (requestPageParam === null || isValidPageParam(requestPageParam)) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('requestPage')
+        return next
+      },
+      { replace: true },
+    )
+  }, [requestPageParam, setSearchParams])
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="特別休暇申請の取得に失敗しました。" />

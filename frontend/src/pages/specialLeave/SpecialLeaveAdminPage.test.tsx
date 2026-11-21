@@ -34,7 +34,7 @@ const rule: SpecialLeaveGrantRule = {
 }
 
 const targetUser: User = {
-  id: 'user-3',
+  id: '11111111-1111-4111-8111-111111111111',
   name: '対象社員',
   email: 'taisho@example.com',
   department: null,
@@ -123,7 +123,7 @@ describe('SpecialLeaveAdminPage', () => {
     vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantsForUser').mockResolvedValue([])
     vi.spyOn(specialLeaveApi, 'grantSpecialLeave').mockResolvedValue({
       id: 'grant-1',
-      user_id: 'user-3',
+      user_id: '11111111-1111-4111-8111-111111111111',
       special_leave_type_id: birthdayType.id,
       special_leave_type_name: birthdayType.name,
       granted_on: '2026-07-01',
@@ -151,7 +151,7 @@ describe('SpecialLeaveAdminPage', () => {
 
     await waitFor(() =>
       expect(specialLeaveApi.grantSpecialLeave).toHaveBeenCalledWith({
-        user_id: 'user-3',
+        user_id: '11111111-1111-4111-8111-111111111111',
         special_leave_type_id: birthdayType.id,
         granted_on: '2026-07-01',
         expires_on: undefined,
@@ -164,7 +164,7 @@ describe('SpecialLeaveAdminPage', () => {
   it('shows the selected users usage records from the ?userId= URL query param', async () => {
     const usage: SpecialLeaveUsage = {
       id: 'usage-1',
-      user_id: 'user-3',
+      user_id: '11111111-1111-4111-8111-111111111111',
       used_on: '2026-07-10',
       used_days: 1,
       used_minutes: null,
@@ -176,16 +176,16 @@ describe('SpecialLeaveAdminPage', () => {
     }
     vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveUsagesForUser').mockResolvedValue([usage])
 
-    renderPage([birthdayType], [rule], '/admin/special-leave?userId=user-3')
+    renderPage([birthdayType], [rule], '/admin/special-leave?userId=11111111-1111-4111-8111-111111111111')
 
     expect(await screen.findByText('2026-07-10')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
-    expect(specialLeaveApi.fetchSpecialLeaveUsagesForUser).toHaveBeenCalledWith('user-3')
+    expect(specialLeaveApi.fetchSpecialLeaveUsagesForUser).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111')
   })
 
   it('shows the target users of a grant rule, filters by name, and toggles auto-grant instantly', async () => {
     const targetUsers: SpecialLeaveGrantRuleTargetUser[] = [
-      { id: 'user-3', name: '鈴木一郎', work_style: '通常勤務', special_leave_auto_grant_enabled: true },
+      { id: '11111111-1111-4111-8111-111111111111', name: '鈴木一郎', work_style: '通常勤務', special_leave_auto_grant_enabled: true },
       { id: 'user-4', name: '他の社員', work_style: null, special_leave_auto_grant_enabled: false },
     ]
     vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantRuleTargetUsers').mockResolvedValue(targetUsers)
@@ -218,7 +218,7 @@ describe('SpecialLeaveAdminPage', () => {
     function grantOf(overrides: Partial<SpecialLeaveGrant>): SpecialLeaveGrant {
       return {
         id: 'grant-1',
-        user_id: 'user-3',
+        user_id: '11111111-1111-4111-8111-111111111111',
         special_leave_type_id: birthdayType.id,
         special_leave_type_name: birthdayType.name,
         granted_on: '2026-07-01',

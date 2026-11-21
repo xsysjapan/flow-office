@@ -11,6 +11,7 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { NativeSelect } from '../../components/ui/native-select'
 import { useMyMonths } from '../../hooks/useAttendance'
 import { employmentYearMonths } from '../../utils/employmentPeriod'
+import { isValidPageParam, isValidYearParam } from '../../utils/searchParamValidators'
 import { formatDate } from '../../utils/weekDates'
 import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../utils/statusLabels'
 
@@ -29,22 +30,34 @@ export function AttendanceMonthsPage() {
   const years = [...new Set(allYearMonths.map((yearMonth) => yearMonth.slice(0, 4)))].reverse()
   const [searchParams, setSearchParams] = useSearchParams()
   const yearParam = searchParams.get('year')
-  const isInvalidYear = yearParam !== null && !/^\d{4}$/.test(yearParam)
+  const pageParam = searchParams.get('page')
+  // 選択肢・ページ数は入社日から決まる。ログインユーザーが取得できるまでは年・ページの判定をしない
+  const isReady = user != null
+  const isInvalidYear = yearParam !== null && (!isValidYearParam(yearParam) || (isReady && !years.includes(yearParam)))
   // 不正な年は未指定(キー無しの既定表示)として扱い、URLからもキーを消す(表示とURLを一致させる)
   const selectedYear = yearParam === null || isInvalidYear ? '' : yearParam
-  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
+  const page = isValidPageParam(pageParam) ? Number(pageParam) : 1
+  const filteredCount = allYearMonths.filter((yearMonth) => selectedYear === '' || yearMonth.startsWith(`${selectedYear}-`)).length
+  const pageCount = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  // 不正なpage、または最終ページを超えるpageは、最終ページ(1ならキー無し)に合わせる
+  const isInvalidPage = pageParam !== null && (!isValidPageParam(pageParam) || (isReady && page > pageCount))
 
   useEffect(() => {
-    if (!isInvalidYear) return
+    if (!isInvalidYear && !isInvalidPage) return
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        next.delete('year')
+        if (isInvalidYear) next.delete('year')
+        if (isInvalidPage) {
+          if (currentPage <= 1 || !isValidPageParam(pageParam)) next.delete('page')
+          else next.set('page', String(currentPage))
+        }
         return next
       },
       { replace: true },
     )
-  }, [isInvalidYear, setSearchParams])
+  }, [isInvalidYear, isInvalidPage, currentPage, pageParam, setSearchParams])
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="月次勤怠の取得に失敗しました。" />
@@ -54,23 +67,31 @@ export function AttendanceMonthsPage() {
     .filter((yearMonth) => selectedYear === '' || yearMonth.startsWith(`${selectedYear}-`))
     .reverse()
     .map((yearMonth) => ({ year_month: yearMonth, month: monthsByYearMonth.get(yearMonth) }))
-  const pageCount = Math.max(1, Math.ceil(months.length / PAGE_SIZE))
-  const currentPage = Math.min(page, pageCount)
   const displayedMonths = months.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const handleYearChange = (year: string) => {
-    const next = new URLSearchParams(searchParams)
-    if (year) next.set('year', year)
-    else next.delete('year')
-    next.delete('page')
-    setSearchParams(next, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (year) next.set('year', year)
+        else next.delete('year')
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
   }
 
   const handlePageChange = (nextPage: number) => {
-    const next = new URLSearchParams(searchParams)
-    if (nextPage <= 1) next.delete('page')
-    else next.set('page', String(nextPage))
-    setSearchParams(next, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (nextPage <= 1) next.delete('page')
+        else next.set('page', String(nextPage))
+        return next
+      },
+      { replace: true },
+    )
   }
 
   return (

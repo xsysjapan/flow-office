@@ -41,6 +41,7 @@ import {
   punchTypeLabel,
 } from '../../utils/statusLabels'
 import { addDays, addMonths, datesInMonth, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
+import { isValidUuidParam } from '../../utils/searchParamValidators'
 
 export type ViewMode = 'month' | 'week' | 'day'
 
@@ -644,7 +645,11 @@ export function AttendanceReferencePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   // 旧キー`user`は`userId`として扱い、URLも`userId`へ置き換える
   const legacyUser = searchParams.get('user')
-  const userId = searchParams.get('userId') ?? legacyUser ?? undefined
+  const userIdParam = searchParams.get('userId')
+  const userIdRaw = userIdParam ?? legacyUser
+  const isInvalidUserId = userIdRaw !== null && !isValidUuidParam(userIdRaw)
+  // 不正なIDは未選択として扱い、URLからもキーを消す
+  const userId = userIdRaw !== null && !isInvalidUserId ? userIdRaw : undefined
   const yearMonthParam = searchParams.get('yearMonth')
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const isInvalidYearMonth = yearMonthParam !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonthParam)
@@ -672,11 +677,12 @@ export function AttendanceReferencePage() {
     const patch: Record<string, string | null> = {}
     if (legacyUser !== null) {
       patch.user = null
-      if (!searchParams.has('userId')) patch.userId = legacyUser
+      if (!searchParams.has('userId')) patch.userId = isValidUuidParam(legacyUser) ? legacyUser : null
     }
+    if (isInvalidUserId && userIdParam !== null) patch.userId = null
     if (isInvalidYearMonth) patch.yearMonth = null
     if (Object.keys(patch).length > 0) updateParams(patch)
-  }, [legacyUser, isInvalidYearMonth, searchParams, updateParams])
+  }, [legacyUser, isInvalidYearMonth, isInvalidUserId, userIdParam, searchParams, updateParams])
 
   const setUserId = (id: string | undefined) => {
     updateParams({ userId: id ?? null, user: null })

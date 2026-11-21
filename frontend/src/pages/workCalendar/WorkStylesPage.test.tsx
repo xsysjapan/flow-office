@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { pickYearMonth } from '../../test-support/pickerInteractions'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import * as userWorkStyleMonthlyAssignmentsApi from '../../api/userWorkStyleMonthlyAssignments'
@@ -70,7 +71,12 @@ const targetUser: User = {
   last_login_at: null,
 }
 
-function renderPage({ workStyles = [workStyle] }: { workStyles?: WorkStyle[] } = {}) {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage({ workStyles = [workStyle], entry = '/admin/work-styles' }: { workStyles?: WorkStyle[]; entry?: string } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(workStylesApi, 'fetchWorkStyles').mockResolvedValue(workStyles)
   vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
@@ -78,7 +84,10 @@ function renderPage({ workStyles = [workStyle] }: { workStyles?: WorkStyle[] } =
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <WorkStylesPage />
+      <MemoryRouter initialEntries={[entry]}>
+        <WorkStylesPage />
+        <LocationProbe />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -317,6 +326,34 @@ describe('WorkStylesPage', () => {
 
     expect(await within(table).findByText('勤務形態10')).toBeInTheDocument()
     expect(within(table).queryByText('勤務形態0')).not.toBeInTheDocument()
+  })
+
+  it('shows the page from the URL and writes the page to the URL when paging', async () => {
+    const manyWorkStyles = Array.from({ length: 12 }, (_, i) => ({
+      ...workStyle,
+      id: `work-style-${i}`,
+      code: `code-${i}`,
+      name: `勤務形態${i}`,
+      is_default: i === 0,
+    }))
+    renderPage({ workStyles: manyWorkStyles, entry: '/admin/work-styles?page=2' })
+
+    const table = await screen.findByRole('table')
+    expect(await within(table).findByText('勤務形態10')).toBeInTheDocument()
+    expect(within(table).queryByText('勤務形態0')).not.toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?page=2')
+
+    await userEvent.click(screen.getByRole('button', { name: '前のページ' }))
+
+    expect(await within(table).findByText('勤務形態0')).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/)
+  })
+
+  it('removes an invalid page from the URL', async () => {
+    renderPage({ entry: '/admin/work-styles?page=0' })
+
+    await screen.findByRole('table')
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/))
   })
 
   it('assigns a monthly work style to a user and shows the assignment history', async () => {
