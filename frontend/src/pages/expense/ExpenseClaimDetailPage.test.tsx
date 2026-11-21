@@ -159,7 +159,7 @@ describe('ExpenseClaimDetailPage', () => {
   it('links back to the expense claim list', async () => {
     renderPage(inReviewClaim)
 
-    expect(await screen.findByRole('link', { name: '← 経費精算一覧へ戻る' })).toHaveAttribute('href', '/expenses')
+    expect(await screen.findByRole('link', { name: '経費精算一覧に戻る' })).toHaveAttribute('href', '/expenses')
   })
 
   it('cancels the claim with a reason after confirming in the dialog', async () => {

@@ -128,7 +128,7 @@ describe('BackOfficeTaskDetailPage', () => {
     expect(screen.getByText('workflow_request #10')).toBeInTheDocument()
     expect(screen.getByText('未着手', { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '更新する' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '← タスク一覧に戻る' })).toHaveAttribute('href', '/backoffice-tasks')
+    expect(screen.getByRole('link', { name: 'タスク一覧に戻る' })).toHaveAttribute('href', '/backoffice-tasks')
   })
 
   it('shows the assignee picker when the task has no assignee', async () => {
