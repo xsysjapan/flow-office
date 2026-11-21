@@ -87,13 +87,13 @@ const baseTask: BackOfficeTask = {
   created_at: '2026-07-01T00:00:00+09:00',
 }
 
-function renderPage(task: BackOfficeTask) {
+function renderPage(task: BackOfficeTask, state?: unknown) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(backOfficeTasksApi, 'fetchBackOfficeTask').mockResolvedValue(task)
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/backoffice-tasks/${task.id}`]}>
+      <MemoryRouter initialEntries={[{ pathname: `/backoffice-tasks/${task.id}`, state }]}>
         <Routes>
           <Route path="/backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
         </Routes>
@@ -118,6 +118,15 @@ describe('BackOfficeTaskDetailPage', () => {
     )
 
     expect(await screen.findByText(/権限がありません/)).toBeInTheDocument()
+  })
+
+  it('returns to the originating list with its filters when opened with a back state', async () => {
+    renderPage(baseTask, { backTo: { pathname: '/backoffice-tasks', search: '?status=processing&page=2', hash: '' } })
+
+    expect(await screen.findByRole('link', { name: 'タスク一覧に戻る' })).toHaveAttribute(
+      'href',
+      '/backoffice-tasks?status=processing&page=2',
+    )
   })
 
   it('shows task details and the status change control', async () => {
