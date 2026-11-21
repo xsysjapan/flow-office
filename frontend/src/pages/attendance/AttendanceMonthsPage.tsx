@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { useAuth } from '../../auth/useAuth'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -29,6 +30,7 @@ export function AttendanceMonthsPage() {
   const allYearMonths = employmentYearMonths(user?.hire_date, user?.termination_date, currentYearMonth)
   const years = [...new Set(allYearMonths.map((yearMonth) => yearMonth.slice(0, 4)))].reverse()
   const [searchParams, setSearchParams] = useSearchParams()
+  const forwardState = useForwardState()
   const yearParam = searchParams.get('year')
   const pageParam = searchParams.get('page')
   // 選択肢・ページ数は入社日から決まる。ログインユーザーが取得できるまでは年・ページの判定をしない
@@ -121,6 +123,7 @@ export function AttendanceMonthsPage() {
                 <li key={year_month}>
                   <Link
                     to={`/attendance/months/${year_month}`}
+                    state={forwardState}
                     className="flex flex-wrap items-center gap-2.5 rounded-md px-2 py-3 transition-colors hover:bg-accent"
                   >
                     <span className="text-sm font-semibold text-foreground">{year_month}</span>

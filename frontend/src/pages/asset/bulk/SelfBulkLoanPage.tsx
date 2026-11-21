@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BackLink } from '../../../components/BackLink/BackLink'
+import { useBackTarget } from '../../../navigation/backState'
 import { useAuth } from '../../../auth/useAuth'
 import { AssetPicker } from '../../../components/AssetPicker/AssetPicker'
 import { Badge } from '../../../components/Badge/Badge'
@@ -19,6 +21,7 @@ import type { AssetBulkOperationResult } from '../../../api/asset'
  */
 export function SelfBulkLoanPage() {
   const navigate = useNavigate()
+  const backTarget = useBackTarget()
   const { user } = useAuth()
   const resolveAsset = useResolveAssetForBulk()
   const bulkOperation = useBulkAssetOperation()
@@ -66,74 +69,77 @@ export function SelfBulkLoanPage() {
   }
 
   return (
-    <Card title="セルフ一括貸出">
-      <div className="flex flex-col gap-6">
-        <p className="text-sm text-muted-foreground">
-          {user?.name ?? '自分'}自身への一括貸出です。セルフサービス方式の備品のみ対象にできます。
-        </p>
+    <>
+      <BackLink />
+      <Card title="セルフ一括貸出">
+        <div className="flex flex-col gap-6">
+          <p className="text-sm text-muted-foreground">
+            {user?.name ?? '自分'}自身への一括貸出です。セルフサービス方式の備品のみ対象にできます。
+          </p>
 
-        <AssetPicker
-          id="self-bulk-loan-scan"
-          label="貸出対象に追加する備品"
-          onSubmit={handleScan}
-          isPending={resolveAsset.isPending}
-        />
-        {scanError && <ErrorMessage error={new Error(scanError)} />}
+          <AssetPicker
+            id="self-bulk-loan-scan"
+            label="貸出対象に追加する備品"
+            onSubmit={handleScan}
+            isPending={resolveAsset.isPending}
+          />
+          {scanError && <ErrorMessage error={new Error(scanError)} />}
 
-        {targets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">まだ対象がありません。管理番号またはQRトークンを入力してください。</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>管理番号</TableHead>
-                <TableHead>名称</TableHead>
-                <TableHead aria-label="操作" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {targets.map((asset) => (
-                <TableRow key={asset.id}>
-                  <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
-                  <TableCell>{asset.name}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="secondary" size="sm" onClick={() => removeTarget(asset.id)}>
-                      取り消す
-                    </Button>
-                  </TableCell>
+          {targets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">まだ対象がありません。管理番号またはQRトークンを入力してください。</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>管理番号</TableHead>
+                  <TableHead>名称</TableHead>
+                  <TableHead aria-label="操作" />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+              </TableHeader>
+              <TableBody>
+                {targets.map((asset) => (
+                  <TableRow key={asset.id}>
+                    <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
+                    <TableCell>{asset.name}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="secondary" size="sm" onClick={() => removeTarget(asset.id)}>
+                        取り消す
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
 
-        {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括貸出に失敗しました。" />}
+          {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括貸出に失敗しました。" />}
 
-        {result && (
-          <div className="flex flex-col gap-2 rounded-md border border-border p-4">
-            <p className="text-sm font-medium text-foreground">
-              成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
-            </p>
-            <ul className="flex flex-col gap-1 text-sm">
-              {result.results.map((r) => (
-                <li key={r.asset_id} className="flex items-center gap-2">
-                  <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
-                  <span className="text-muted-foreground">{r.success ? '貸出しました。' : r.error}</span>
-                </li>
-              ))}
-            </ul>
+          {result && (
+            <div className="flex flex-col gap-2 rounded-md border border-border p-4">
+              <p className="text-sm font-medium text-foreground">
+                成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
+              </p>
+              <ul className="flex flex-col gap-1 text-sm">
+                {result.results.map((r) => (
+                  <li key={r.asset_id} className="flex items-center gap-2">
+                    <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
+                    <span className="text-muted-foreground">{r.success ? '貸出しました。' : r.error}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
+              キャンセル
+            </Button>
+            <Button onClick={handleConfirm} disabled={targets.length === 0} isLoading={bulkOperation.isPending}>
+              {targets.length}件を確定
+            </Button>
           </div>
-        )}
-
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => navigate('/assets')}>
-            戻る
-          </Button>
-          <Button onClick={handleConfirm} disabled={targets.length === 0} isLoading={bulkOperation.isPending}>
-            {targets.length}件を確定
-          </Button>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </>
   )
 }

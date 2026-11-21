@@ -140,6 +140,14 @@ describe("UserRoleEditPage", () => {
     expect(screen.queryByText("認証キー")).not.toBeInTheDocument();
   });
 
+  it("shows a back link to the user list", async () => {
+    renderPage(targetUser);
+
+    expect(
+      await screen.findByRole("link", { name: "ユーザーに戻る" }),
+    ).toHaveAttribute("href", "/admin/users");
+  });
+
   it("adds the user to a group", async () => {
     vi.spyOn(userManagementApi, "applyMembershipChangeNow").mockResolvedValue(
       undefined,

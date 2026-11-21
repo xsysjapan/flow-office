@@ -58,7 +58,11 @@ const historyEntry: WorkflowRequestHistoryEntry = {
   occurred_at: '2026-07-01T00:00:00+09:00',
 }
 
-function renderPage(request: WorkflowRequest, attachments: Attachment[] = []) {
+function renderPage(
+  request: WorkflowRequest,
+  attachments: Attachment[] = [],
+  entry: string | { pathname: string; state: unknown } = `/requests/${request.id}`,
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockResolvedValue(request)
   vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestHistory').mockResolvedValue([historyEntry])
@@ -66,7 +70,7 @@ function renderPage(request: WorkflowRequest, attachments: Attachment[] = []) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/requests/${request.id}`]}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/requests/:id" element={<WorkflowRequestDetailPage />} />
         </Routes>
@@ -81,10 +85,31 @@ describe('WorkflowRequestDetailPage', () => {
     currentUser = applicant
   })
 
-  it('shows a back link to the request list', async () => {
+  it('shows a back link to the request list when opened directly', async () => {
     renderPage(submittedRequest)
 
-    expect(await screen.findByRole('link', { name: '← 一覧へ戻る' })).toHaveAttribute('href', '/requests')
+    expect(await screen.findByRole('link', { name: '申請一覧に戻る' })).toHaveAttribute('href', '/requests')
+  })
+
+  it('returns to the origin screen with its query when opened from the request list', async () => {
+    renderPage(submittedRequest, [], {
+      pathname: `/requests/${submittedRequest.id}`,
+      state: { backTo: { pathname: '/requests', search: '?status=pending&page=2', hash: '' } },
+    })
+
+    expect(await screen.findByRole('link', { name: '申請一覧に戻る' })).toHaveAttribute(
+      'href',
+      '/requests?status=pending&page=2',
+    )
+  })
+
+  it('returns to the paid leave screen when opened from it', async () => {
+    renderPage(submittedRequest, [], {
+      pathname: `/requests/${submittedRequest.id}`,
+      state: { backTo: { pathname: '/paid-leave', search: '', hash: '' } },
+    })
+
+    expect(await screen.findByRole('link', { name: '有給に戻る' })).toHaveAttribute('href', '/paid-leave')
   })
 
   it('shows a permission denied state instead of a generic error on 403', async () => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -404,6 +405,7 @@ function DeleteRuleButton({ ruleId, ruleName, isActive }: { ruleId: number; rule
 }
 
 function PaidLeaveGrantRulesCard() {
+  const forwardState = useForwardState()
   const { data: rules, isLoading, error } = usePaidLeaveGrantRules()
   const { data: policies, isLoading: isLoadingPolicies, error: policiesError } = usePaidLeaveGrantPolicies()
   const createRule = useCreatePaidLeaveGrantRule()
@@ -485,7 +487,9 @@ function PaidLeaveGrantRulesCard() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button asChild variant="secondary" size="sm">
-                    <Link to={`/admin/paid-leave/rules/${rule.id}/edit`}>編集</Link>
+                    <Link to={`/admin/paid-leave/rules/${rule.id}/edit`} state={forwardState}>
+                      編集
+                    </Link>
                   </Button>
                   <DeleteRuleButton ruleId={rule.id} ruleName={rule.name} isActive={rule.is_active} />
                 </div>
@@ -891,6 +895,7 @@ function PaidLeaveUsageCard() {
  * 件数の取得に失敗してもリンクは出す(導線を止めない)。
  */
 function PaidLeaveScheduleLink() {
+  const forwardState = useForwardState()
   const { data: overdueEntries } = usePaidLeaveScheduleEntries({ filter: 'overdue' })
   const overdueCount = overdueEntries?.length ?? 0
 
@@ -898,6 +903,7 @@ function PaidLeaveScheduleLink() {
     <Button asChild variant="secondary" size="sm">
       <Link
         to="/admin/paid-leave/schedule"
+        state={forwardState}
         aria-label={overdueCount > 0 ? `付与予定を確認(付与予定日超過 ${overdueCount}件)` : undefined}
       >
         付与予定を確認

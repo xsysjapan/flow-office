@@ -36,6 +36,7 @@ function renderLayout(user: User = mockUser, initialPath = "/admin") {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<p>管理メニューの中身</p>} />
             <Route path="paid-leave/schedule" element={<p>付与予定の中身</p>} />
+            <Route path="users/:id" element={<p>利用者詳細の中身</p>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -107,12 +108,26 @@ describe("AdminLayout", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps 有給休暇 active on the paid-leave schedule page while other items stay exact-match", () => {
+  it("keeps 有給休暇 active on the paid-leave schedule page while other items stay inactive", () => {
     renderLayout(mockUser, "/admin/paid-leave/schedule");
 
     expect(screen.getByRole("link", { name: "有給休暇" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "ユーザー" })).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("link", { name: "勤務形態" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("keeps ユーザー active on a user detail page", () => {
+    renderLayout(mockUser, "/admin/users/u1");
+
+    expect(screen.getByRole("link", { name: "ユーザー" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "グループ" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("does not activate other items on the 管理メニュー top page", () => {
+    renderLayout(mockUser, "/admin");
+
+    expect(screen.getByRole("link", { name: "ユーザー" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "有給休暇" })).not.toHaveAttribute("aria-current");
   });
 
   it("has a link back to the main app", () => {

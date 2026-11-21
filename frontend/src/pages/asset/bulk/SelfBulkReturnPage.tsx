@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BackLink } from '../../../components/BackLink/BackLink'
+import { useBackTarget } from '../../../navigation/backState'
 import { useAuth } from '../../../auth/useAuth'
 import type { AssetBulkOperationResult } from '../../../api/asset'
 import type { Asset } from '../../../api/types'
@@ -18,6 +20,7 @@ import { useBulkAssetOperation, useResolveAssetForBulk } from '../../../hooks/us
  */
 export function SelfBulkReturnPage() {
   const navigate = useNavigate()
+  const backTarget = useBackTarget()
   const { user } = useAuth()
   const resolveAsset = useResolveAssetForBulk()
   const bulkOperation = useBulkAssetOperation()
@@ -63,82 +66,85 @@ export function SelfBulkReturnPage() {
   const groups = groupByLocation(targets)
 
   return (
-    <Card title="セルフ一括返却">
-      <div className="flex flex-col gap-6">
-        <p className="text-sm text-muted-foreground">
-          自分が現在借用中の備品を一括返却します。返却先(通常配置場所)ごとにグループ表示します。
-        </p>
+    <>
+      <BackLink />
+      <Card title="セルフ一括返却">
+        <div className="flex flex-col gap-6">
+          <p className="text-sm text-muted-foreground">
+            自分が現在借用中の備品を一括返却します。返却先(通常配置場所)ごとにグループ表示します。
+          </p>
 
-        <AssetPicker
-          id="self-bulk-return-scan"
-          label="返却対象に追加する備品"
-          onSubmit={handleScan}
-          isPending={resolveAsset.isPending}
-        />
-        {scanError && <ErrorMessage error={new Error(scanError)} />}
+          <AssetPicker
+            id="self-bulk-return-scan"
+            label="返却対象に追加する備品"
+            onSubmit={handleScan}
+            isPending={resolveAsset.isPending}
+          />
+          {scanError && <ErrorMessage error={new Error(scanError)} />}
 
-        {targets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">まだ対象がありません。管理番号またはQRトークンを入力してください。</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {groups.map(([location, assets]) => (
-              <div key={location} className="flex flex-col gap-2">
-                <p className="text-sm font-medium text-foreground">返却先: {location}</p>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>管理番号</TableHead>
-                      <TableHead>名称</TableHead>
-                      <TableHead aria-label="操作" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {assets.map((asset) => (
-                      <TableRow key={asset.id}>
-                        <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
-                        <TableCell>{asset.name}</TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="secondary" size="sm" onClick={() => removeTarget(asset.id)}>
-                            取り消す
-                          </Button>
-                        </TableCell>
+          {targets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">まだ対象がありません。管理番号またはQRトークンを入力してください。</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {groups.map(([location, assets]) => (
+                <div key={location} className="flex flex-col gap-2">
+                  <p className="text-sm font-medium text-foreground">返却先: {location}</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>管理番号</TableHead>
+                        <TableHead>名称</TableHead>
+                        <TableHead aria-label="操作" />
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括返却に失敗しました。" />}
-
-        {result && (
-          <div className="flex flex-col gap-2 rounded-md border border-border p-4">
-            <p className="text-sm font-medium text-foreground">
-              成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
-            </p>
-            <ul className="flex flex-col gap-1 text-sm">
-              {result.results.map((r) => (
-                <li key={r.asset_id} className="flex items-center gap-2">
-                  <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
-                  <span className="text-muted-foreground">{r.success ? '返却しました。' : r.error}</span>
-                </li>
+                    </TableHeader>
+                    <TableBody>
+                      {assets.map((asset) => (
+                        <TableRow key={asset.id}>
+                          <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
+                          <TableCell>{asset.name}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="secondary" size="sm" onClick={() => removeTarget(asset.id)}>
+                              取り消す
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               ))}
-            </ul>
-          </div>
-        )}
+            </div>
+          )}
 
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => navigate('/assets')}>
-            戻る
-          </Button>
-          <Button onClick={handleConfirm} disabled={targets.length === 0} isLoading={bulkOperation.isPending}>
-            {targets.length}件を確定
-          </Button>
+          {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括返却に失敗しました。" />}
+
+          {result && (
+            <div className="flex flex-col gap-2 rounded-md border border-border p-4">
+              <p className="text-sm font-medium text-foreground">
+                成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
+              </p>
+              <ul className="flex flex-col gap-1 text-sm">
+                {result.results.map((r) => (
+                  <li key={r.asset_id} className="flex items-center gap-2">
+                    <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
+                    <span className="text-muted-foreground">{r.success ? '返却しました。' : r.error}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
+              キャンセル
+            </Button>
+            <Button onClick={handleConfirm} disabled={targets.length === 0} isLoading={bulkOperation.isPending}>
+              {targets.length}件を確定
+            </Button>
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </>
   )
 }
 

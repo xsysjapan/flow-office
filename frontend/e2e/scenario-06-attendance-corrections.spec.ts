@@ -160,9 +160,8 @@ test('§5-12: 日次勤怠の削除(承認前は削除できるが、承認後�
     // 打刻ログの扱いは既定の「そのまま残す」のままで削除する。
     await employeePage.getByRole('button', { name: '削除する' }).click()
 
-    // 削除後、週次画面へ戻る(AttendanceDayPageのonDeletedがnavigate(-1)するため)。
-    // 週次画面の表示中の週はURLの`?start=`で決まる(WeekAttendancePage)。navigate(-1)で戻った先の
-    // URLに`start`が無ければ当週の表示のため、対象日を含む週まで改めて移動する。
+    // 削除後は遷移元の週次画面へ戻る(週次の行から来たため、AttendanceDayPageが記録済みの戻り先へ
+    // replaceで遷移する)。戻り先は`?start=`付きの週次だが、念のため対象日を含む週まで改めて移動する。
     await expect(employeePage).toHaveURL(/\/attendance\/week/)
     await goToAttendanceWeekContaining(employeePage, deletableDate)
     await expect(dayRow(employeePage, deletableDate)).toContainText('未入力')

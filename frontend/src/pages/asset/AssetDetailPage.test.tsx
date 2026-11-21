@@ -82,11 +82,11 @@ const history: StoredEvent[] = [
   },
 ]
 
-function renderPage(id = 'asset-1') {
+function renderPage(id = 'asset-1', state?: unknown) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/assets/${id}`]}>
+      <MemoryRouter initialEntries={[{ pathname: `/assets/${id}`, state }]}>
         <Routes>
           <Route path="/assets/:id" element={<AssetDetailPage />} />
         </Routes>
@@ -107,7 +107,16 @@ describe('AssetDetailPage', () => {
 
     renderPage()
 
-    expect(await screen.findByRole('link', { name: '← 一覧へ戻る' })).toHaveAttribute('href', '/assets')
+    expect(await screen.findByRole('link', { name: '備品管理に戻る' })).toHaveAttribute('href', '/assets')
+  })
+
+  it('returns to the originating list with its filters when opened with a back state', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(lendingAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage('asset-1', { backTo: { pathname: '/assets', search: '?q=pc&page=2', hash: '' } })
+
+    expect(await screen.findByRole('link', { name: '備品管理に戻る' })).toHaveAttribute('href', '/assets?q=pc&page=2')
   })
 
   it('shows a permission denied state instead of a generic error on 403', async () => {

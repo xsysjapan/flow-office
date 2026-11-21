@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
+import {
+  useBackTarget,
+  useForwardState,
+  useKeepBackState,
+  useSearchParamsKeepingBackState,
+} from '../../navigation/backState'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -111,6 +118,7 @@ function otherCategoryNotice(preset: ExpenseEntryPreset, categoryId: number): st
 function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (rows: SaveExpenseItemInput[]) => void }) {
   const { data: presets, isLoading, error } = useExpenseEntryPresets({ category_id: categoryId, perPage: 50 })
   const applyPreset = useApplyExpenseEntryPreset()
+  const forwardState = useForwardState()
 
   const applicablePresets = (presets?.data ?? [])
     .map((preset) => ({ preset, items: presetItemsForCategory(preset, categoryId) }))
@@ -127,7 +135,11 @@ function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (r
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-foreground">プリセットから追加</span>
-        <Link className="text-xs text-muted-foreground underline" to={`/expenses/presets?category_id=${categoryId}`}>
+        <Link
+          className="text-xs text-muted-foreground underline"
+          to={`/expenses/presets?category_id=${categoryId}`}
+          state={forwardState}
+        >
           プリセットを管理する
         </Link>
       </div>
@@ -174,6 +186,7 @@ function SinglePresetPicker({
 }) {
   const { data: presets, isLoading, error } = useExpenseEntryPresets({ category_id: categoryId, perPage: 50 })
   const applyPreset = useApplyExpenseEntryPreset()
+  const forwardState = useForwardState()
 
   const applicablePresets = (presets?.data ?? [])
     .map((preset) => ({ preset, item: presetItemsForCategory(preset, categoryId)[0] }))
@@ -193,7 +206,11 @@ function SinglePresetPicker({
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-foreground">プリセットから入力</span>
-        <Link className="text-xs text-muted-foreground underline" to={`/expenses/presets?category_id=${categoryId}`}>
+        <Link
+          className="text-xs text-muted-foreground underline"
+          to={`/expenses/presets?category_id=${categoryId}`}
+          state={forwardState}
+        >
           プリセットを管理する
         </Link>
       </div>
@@ -393,11 +410,22 @@ function suggestIndividualTitle(categoryName: string | undefined, usageDate: str
  * 今回は見送っている(`known-gaps.md`参照)。
  */
 export function ExpenseClaimNewPage() {
+  return (
+    <>
+      <BackLink />
+      <ExpenseClaimNewContent />
+    </>
+  )
+}
+
+function ExpenseClaimNewContent() {
   const { systemSettings } = useAppSettings()
   const approvalRequired = systemSettings.expense_claim_requires_approval
   const navigate = useNavigate()
   const { id: routeClaimId } = useParams<{ id?: string }>()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
+  const backTarget = useBackTarget()
+  const keepBackState = useKeepBackState()
   const categoryCodeParam = searchParams.get('category')
   const modeParam = searchParams.get('mode')
   const [claimId, setClaimId] = useState<string | undefined>(routeClaimId)
@@ -568,10 +596,36 @@ export function ExpenseClaimNewPage() {
     }
   }
 
+  // 保存後の遷移: 遷移先が戻り先と同じ画面なら戻り先(絞り込み付き)へ、違えば現在の遷移元を引き継ぐ。
+  function navigateAfterSave(path: string) {
+    if (backTarget && backTarget.to.split(/[?#]/)[0] === path) {
+      navigate(backTarget.to, { state: backTarget.state })
+    } else {
+      navigate(path, { state: keepBackState })
+    }
+  }
+
+  // 削除後は戻り先へ。ただし戻り先が削除した経費精算自身の詳細(編集画面の親・遷移元)なら存在しないので、
+  // その詳細が記録していた戻り先があればそこへ、無ければ一覧へ。
+  function navigateAfterDelete() {
+    const deletedDetailPath = claimId ? `/expenses/${claimId}` : undefined
+    if (backTarget && backTarget.to.split(/[?#]/)[0] !== deletedDetailPath) {
+      navigate(backTarget.to, { state: backTarget.state, replace: true })
+    } else if (backTarget?.state?.backTo) {
+      const backTo = backTarget.state.backTo
+      navigate(backTo.pathname + backTo.search + backTo.hash, {
+        state: backTo.backTo ? { backTo: backTo.backTo } : undefined,
+        replace: true,
+      })
+    } else {
+      navigate('/expenses', { replace: true })
+    }
+  }
+
   const handleSubmit = async () => {
     if (!claimId || (approvalRequired && !approverUserId)) return
     await submitClaim.mutateAsync(approverUserId)
-    navigate(`/expenses/${claimId}`)
+    navigateAfterSave(`/expenses/${claimId}`)
   }
 
   if (claimId && isLoadingClaim) return <LoadingState />
@@ -583,7 +637,7 @@ export function ExpenseClaimNewPage() {
         <p className="text-sm text-muted-foreground">
           申請済み・承認済み・取消済みの経費精算は明細を編集できません。詳細画面から状態を確認してください。
         </p>
-        <Button className="mt-3" variant="secondary" onClick={() => navigate(`/expenses/${claimId}`)}>
+        <Button className="mt-3" variant="secondary" onClick={() => navigateAfterSave(`/expenses/${claimId}`)}>
           詳細画面へ
         </Button>
       </Card>
@@ -628,7 +682,7 @@ export function ExpenseClaimNewPage() {
             deleteItem={deleteItem}
             onSubmit={() => void handleSubmit()}
             onDeleteClaim={() => {
-              deleteClaimMutation.mutate(claim.id, { onSuccess: () => navigate('/expenses') })
+              deleteClaimMutation.mutate(claim.id, { onSuccess: navigateAfterDelete })
             }}
             deleteClaimMutation={deleteClaimMutation}
             submitClaim={submitClaim}
@@ -733,7 +787,7 @@ export function ExpenseClaimNewPage() {
           onSubmit={() => void handleSubmit()}
           submitClaim={submitClaim}
           onDeleteClaim={() => {
-            deleteClaimMutation.mutate(claim.id, { onSuccess: () => navigate('/expenses') })
+            deleteClaimMutation.mutate(claim.id, { onSuccess: navigateAfterDelete })
           }}
           deleteClaimMutation={deleteClaimMutation}
         />

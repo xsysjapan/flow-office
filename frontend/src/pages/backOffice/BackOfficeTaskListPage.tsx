@@ -1,5 +1,6 @@
 import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { ApiError } from '../../api/client'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -35,6 +36,7 @@ interface BackOfficeTaskTableProps {
 /** selectedIds/onToggleRowを渡した場合のみ、行選択用のチェックボックス列を表示する。 */
 function BackOfficeTaskTable({ tasks, selectedIds, onToggleRow, onToggleAll, isRowSelectable }: BackOfficeTaskTableProps) {
   const navigate = useNavigate()
+  const forwardState = useForwardState()
   const selectable = Boolean(selectedIds && onToggleRow)
   const selectableTasks = tasks.filter((task) => isRowSelectable?.(task) ?? true)
   const selectedOnPage = selectableTasks.filter((task) => selectedIds?.has(task.id)).length
@@ -71,7 +73,7 @@ function BackOfficeTaskTable({ tasks, selectedIds, onToggleRow, onToggleAll, isR
             <ClickableTableRow
               key={task.id}
               data-state={selected ? 'selected' : undefined}
-              onRowClick={() => navigate(`/backoffice-tasks/${task.id}`)}
+              onRowClick={() => navigate(`/backoffice-tasks/${task.id}`, { state: forwardState })}
               rowLabel={`${task.title}の詳細を開く`}
             >
               {selectable && (
@@ -87,6 +89,7 @@ function BackOfficeTaskTable({ tasks, selectedIds, onToggleRow, onToggleAll, isR
               <TableCell>
                 <Link
                   to={`/backoffice-tasks/${task.id}`}
+                  state={forwardState}
                   className="font-medium text-foreground hover:text-primary hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BackLink } from '../../../components/BackLink/BackLink'
+import { useBackTarget } from '../../../navigation/backState'
 import { useAuth } from '../../../auth/useAuth'
 import type { AssetBulkOperationResult } from '../../../api/asset'
 import type { Asset } from '../../../api/types'
@@ -20,6 +22,7 @@ import { useBulkAssetOperation, useResolveAssetForBulk } from '../../../hooks/us
  */
 export function BulkRelocatePage() {
   const navigate = useNavigate()
+  const backTarget = useBackTarget()
   const { user } = useAuth()
   const canManage = user?.effective_permissions?.includes('asset.manage') ?? false
 
@@ -72,92 +75,95 @@ export function BulkRelocatePage() {
   }
 
   return (
-    <Card title="備品の一括移設">
-      <div className="flex flex-col gap-6">
-        <div className="w-full max-w-sm">
-          <FormField label="移設先" htmlFor="bulk-relocate-location" required>
-            <Input
-              id="bulk-relocate-location"
-              value={locationText}
-              onChange={(e) => {
-                setLocationText(e.target.value)
-                setResult(null)
-              }}
-              placeholder="例: 3階会議室B"
-            />
-          </FormField>
-        </div>
-
-        <AssetPicker
-          id="bulk-relocate-scan"
-          label="移設対象に追加する備品"
-          onSubmit={handleScan}
-          isPending={resolveAsset.isPending}
-          disabled={!locationText.trim()}
-          disabledReason="先に移設先を入力してください。"
-        />
-        {scanError && <ErrorMessage error={new Error(scanError)} />}
-
-        {targets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">まだ対象がありません。</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>管理番号</TableHead>
-                <TableHead>名称</TableHead>
-                <TableHead>現在の設置場所</TableHead>
-                <TableHead aria-label="操作" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {targets.map((asset) => (
-                <TableRow key={asset.id}>
-                  <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
-                  <TableCell>{asset.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{asset.current_placement?.location_text ?? '-'}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="secondary" size="sm" onClick={() => removeTarget(asset.id)}>
-                      取り消す
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-
-        {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括移設に失敗しました。" />}
-
-        {result && (
-          <div className="flex flex-col gap-2 rounded-md border border-border p-4">
-            <p className="text-sm font-medium text-foreground">
-              成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
-            </p>
-            <ul className="flex flex-col gap-1 text-sm">
-              {result.results.map((r) => (
-                <li key={r.asset_id} className="flex items-center gap-2">
-                  <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
-                  <span className="text-muted-foreground">{r.success ? '移設しました。' : r.error}</span>
-                </li>
-              ))}
-            </ul>
+    <>
+      <BackLink />
+      <Card title="備品の一括移設">
+        <div className="flex flex-col gap-6">
+          <div className="w-full max-w-sm">
+            <FormField label="移設先" htmlFor="bulk-relocate-location" required>
+              <Input
+                id="bulk-relocate-location"
+                value={locationText}
+                onChange={(e) => {
+                  setLocationText(e.target.value)
+                  setResult(null)
+                }}
+                placeholder="例: 3階会議室B"
+              />
+            </FormField>
           </div>
-        )}
 
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => navigate('/assets')}>
-            戻る
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={targets.length === 0 || !locationText.trim()}
-            isLoading={bulkOperation.isPending}
-          >
-            {targets.length}件を確定
-          </Button>
+          <AssetPicker
+            id="bulk-relocate-scan"
+            label="移設対象に追加する備品"
+            onSubmit={handleScan}
+            isPending={resolveAsset.isPending}
+            disabled={!locationText.trim()}
+            disabledReason="先に移設先を入力してください。"
+          />
+          {scanError && <ErrorMessage error={new Error(scanError)} />}
+
+          {targets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">まだ対象がありません。</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>管理番号</TableHead>
+                  <TableHead>名称</TableHead>
+                  <TableHead>現在の設置場所</TableHead>
+                  <TableHead aria-label="操作" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {targets.map((asset) => (
+                  <TableRow key={asset.id}>
+                    <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
+                    <TableCell>{asset.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{asset.current_placement?.location_text ?? '-'}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="secondary" size="sm" onClick={() => removeTarget(asset.id)}>
+                        取り消す
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括移設に失敗しました。" />}
+
+          {result && (
+            <div className="flex flex-col gap-2 rounded-md border border-border p-4">
+              <p className="text-sm font-medium text-foreground">
+                成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
+              </p>
+              <ul className="flex flex-col gap-1 text-sm">
+                {result.results.map((r) => (
+                  <li key={r.asset_id} className="flex items-center gap-2">
+                    <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
+                    <span className="text-muted-foreground">{r.success ? '移設しました。' : r.error}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
+              キャンセル
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={targets.length === 0 || !locationText.trim()}
+              isLoading={bulkOperation.isPending}
+            >
+              {targets.length}件を確定
+            </Button>
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </>
   )
 }

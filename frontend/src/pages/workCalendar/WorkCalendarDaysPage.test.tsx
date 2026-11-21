@@ -82,6 +82,16 @@ describe('WorkCalendarDaysPage', () => {
     vi.clearAllMocks()
   })
 
+  it('labels the back link with the calendar name and points at the calendar detail', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+    renderPage()
+
+    expect(await screen.findByRole('link', { name: `${calendar.name}に戻る` })).toHaveAttribute(
+      'href',
+      '/admin/work-calendars/calendar-1',
+    )
+  })
+
   it('loads existing days and renders them in the grid with correct status coloring', async () => {
     const days = buildAprilDays()
     days[3] = {

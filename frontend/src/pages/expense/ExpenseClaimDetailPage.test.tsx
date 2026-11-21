@@ -88,7 +88,7 @@ const attendanceDay: AttendanceDay = {
   calculation: null,
 }
 
-function renderPage(claim: ExpenseClaim) {
+function renderPage(claim: ExpenseClaim, state?: unknown) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(claim)
   vi.spyOn(expenseClaimsApi, 'fetchExpenseClaimHistory').mockResolvedValue([historyEntry])
@@ -97,7 +97,7 @@ function renderPage(claim: ExpenseClaim) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/expenses/${claim.id}`]}>
+      <MemoryRouter initialEntries={[{ pathname: `/expenses/${claim.id}`, state }]}>
         <Routes>
           <Route path="/expenses/:id" element={<ExpenseClaimDetailPage />} />
         </Routes>
@@ -159,7 +159,13 @@ describe('ExpenseClaimDetailPage', () => {
   it('links back to the expense claim list', async () => {
     renderPage(inReviewClaim)
 
-    expect(await screen.findByRole('link', { name: '← 経費精算一覧へ戻る' })).toHaveAttribute('href', '/expenses')
+    expect(await screen.findByRole('link', { name: '経費精算に戻る' })).toHaveAttribute('href', '/expenses')
+  })
+
+  it('returns to the originating list when opened with a back state', async () => {
+    renderPage(inReviewClaim, { backTo: { pathname: '/expenses', search: '?page=2', hash: '' } })
+
+    expect(await screen.findByRole('link', { name: '経費精算に戻る' })).toHaveAttribute('href', '/expenses?page=2')
   })
 
   it('cancels the claim with a reason after confirming in the dialog', async () => {

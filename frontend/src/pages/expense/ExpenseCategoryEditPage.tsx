@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -9,12 +10,15 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Textarea } from '../../components/ui/textarea'
+import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import type { ExpenseCategoryEntryMode, ExpenseCategoryFieldDefinition, ExpenseEvidenceType } from '../../api/types'
 import {
   useCreateExpenseCategory,
   useExpenseCategories,
   useUpdateExpenseCategory,
 } from '../../hooks/useExpenseCategories'
+
+const LIST_PATH = '/admin/expense-categories'
 
 const evidenceTypeOptions: { value: ExpenseEvidenceType; label: string }[] = [
   { value: 'fact_reference_available', label: '実績参照のみ' },
@@ -47,6 +51,8 @@ function newFieldRow(): ExpenseCategoryFieldDefinition & { rowId: number } {
 export function ExpenseCategoryEditPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const backTarget = useBackTarget()
+  const keepBackState = useKeepBackState()
   const isCreate = !id || id === 'new'
 
   const { data: categories, isLoading, error: listError } = useExpenseCategories(true)
@@ -122,149 +128,164 @@ export function ExpenseCategoryEditPage() {
       await updateCategory.mutateAsync({ id: existing.id, input })
     }
 
-    navigate('/admin/expense-categories')
+    if (backTarget && backTarget.to.split(/[?#]/)[0] === LIST_PATH) {
+      navigate(backTarget.to, { state: backTarget.state })
+    } else {
+      navigate(LIST_PATH, { state: keepBackState })
+    }
+  }
+
+  const handleCancel = () => {
+    if (backTarget) {
+      navigate(backTarget.to, { state: backTarget.state, replace: true })
+    } else {
+      navigate(LIST_PATH)
+    }
   }
 
   return (
-    <Card title={isCreate ? '経費区分の新規作成' : '経費区分の編集'}>
-      {error && <ErrorMessage error={error} />}
+    <>
+      <BackLink />
+      <Card title={isCreate ? '経費区分の新規作成' : '経費区分の編集'}>
+        {error && <ErrorMessage error={error} />}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="コード" htmlFor="code" required>
-          <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
-        </FormField>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="コード" htmlFor="code" required>
+            <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
+          </FormField>
 
-        <FormField label="名称" htmlFor="name" required>
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-        </FormField>
-      </div>
-
-      <FormField label="説明" htmlFor="description">
-        <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </FormField>
-
-      <FormField label="証憑タイプ既定" htmlFor="evidence-type-default" required>
-        <NativeSelect
-          id="evidence-type-default"
-          value={evidenceTypeDefault}
-          onChange={(e) => setEvidenceTypeDefault(e.target.value as ExpenseEvidenceType)}
-        >
-          {evidenceTypeOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </NativeSelect>
-      </FormField>
-
-      <FormField label="入力方式" htmlFor="entry-mode" required>
-        <NativeSelect
-          id="entry-mode"
-          value={entryMode}
-          onChange={(e) => setEntryMode(e.target.value as ExpenseCategoryEntryMode)}
-        >
-          {entryModeOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </NativeSelect>
-      </FormField>
-
-      <div className="mb-4 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-foreground">追加入力項目(任意)</span>
-          <Button variant="secondary" size="sm" onClick={addFieldDefinitionRow}>
-            項目を追加
-          </Button>
+          <FormField label="名称" htmlFor="name" required>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+          </FormField>
         </div>
-        <p className="text-xs text-muted-foreground">
-          この区分で明細に追加入力させたい項目を定義します。ここで定義したキーだけが保存できます。
-        </p>
-        {fieldDefinitions.map((row, index) => (
-          <div key={row.rowId} className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-5">
-            <Input
-              aria-label={`${index + 1}番目の項目のキー`}
-              placeholder="キー(例: origin)"
-              value={row.key}
-              onChange={(e) => updateFieldDefinitionRow(row.rowId, { key: e.target.value })}
-            />
-            <Input
-              aria-label={`${index + 1}番目の項目の表示名`}
-              placeholder="表示名(例: 出発地)"
-              value={row.label}
-              onChange={(e) => updateFieldDefinitionRow(row.rowId, { label: e.target.value })}
-            />
-            <NativeSelect
-              aria-label={`${index + 1}番目の項目の種類`}
-              value={row.type}
-              onChange={(e) =>
-                updateFieldDefinitionRow(row.rowId, { type: e.target.value as ExpenseCategoryFieldDefinition['type'] })
-              }
-            >
-              {fieldTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <Checkbox
-                checked={row.required ?? false}
-                onCheckedChange={(checked) => updateFieldDefinitionRow(row.rowId, { required: checked === true })}
-              />
-              必須
-            </label>
-            <Button variant="danger" size="sm" onClick={() => removeFieldDefinitionRow(row.rowId)}>
-              削除
+
+        <FormField label="説明" htmlFor="description">
+          <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </FormField>
+
+        <FormField label="証憑タイプ既定" htmlFor="evidence-type-default" required>
+          <NativeSelect
+            id="evidence-type-default"
+            value={evidenceTypeDefault}
+            onChange={(e) => setEvidenceTypeDefault(e.target.value as ExpenseEvidenceType)}
+          >
+            {evidenceTypeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="入力方式" htmlFor="entry-mode" required>
+          <NativeSelect
+            id="entry-mode"
+            value={entryMode}
+            onChange={(e) => setEntryMode(e.target.value as ExpenseCategoryEntryMode)}
+          >
+            {entryModeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <div className="mb-4 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">追加入力項目(任意)</span>
+            <Button variant="secondary" size="sm" onClick={addFieldDefinitionRow}>
+              項目を追加
             </Button>
           </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="レシート必須しきい値(円・任意)" htmlFor="receipt-required-threshold">
-          <Input
-            id="receipt-required-threshold"
-            type="number"
-            min={0}
-            value={receiptRequiredThreshold}
-            onChange={(e) => setReceiptRequiredThreshold(e.target.value)}
-          />
-        </FormField>
-
-        <FormField label="承認省略しきい値(円・任意)" htmlFor="approval-skip-threshold">
-          <Input
-            id="approval-skip-threshold"
-            type="number"
-            min={0}
-            value={approvalSkipThreshold}
-            onChange={(e) => setApprovalSkipThreshold(e.target.value)}
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            この金額以下の明細は承認を1段階省略できます
+          <p className="text-xs text-muted-foreground">
+            この区分で明細に追加入力させたい項目を定義します。ここで定義したキーだけが保存できます。
           </p>
-        </FormField>
-      </div>
-
-      <label className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
-        <Checkbox id="is-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
-        有効
-      </label>
-
-      <div className="mt-5 flex flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => navigate('/admin/expense-categories')}>
-            キャンセル
-          </Button>
-          <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
-            {isCreate ? '作成' : '保存'}
-          </Button>
+          {fieldDefinitions.map((row, index) => (
+            <div key={row.rowId} className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-5">
+              <Input
+                aria-label={`${index + 1}番目の項目のキー`}
+                placeholder="キー(例: origin)"
+                value={row.key}
+                onChange={(e) => updateFieldDefinitionRow(row.rowId, { key: e.target.value })}
+              />
+              <Input
+                aria-label={`${index + 1}番目の項目の表示名`}
+                placeholder="表示名(例: 出発地)"
+                value={row.label}
+                onChange={(e) => updateFieldDefinitionRow(row.rowId, { label: e.target.value })}
+              />
+              <NativeSelect
+                aria-label={`${index + 1}番目の項目の種類`}
+                value={row.type}
+                onChange={(e) =>
+                  updateFieldDefinitionRow(row.rowId, { type: e.target.value as ExpenseCategoryFieldDefinition['type'] })
+                }
+              >
+                {fieldTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </NativeSelect>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <Checkbox
+                  checked={row.required ?? false}
+                  onCheckedChange={(checked) => updateFieldDefinitionRow(row.rowId, { required: checked === true })}
+                />
+                必須
+              </label>
+              <Button variant="danger" size="sm" onClick={() => removeFieldDefinitionRow(row.rowId)}>
+                削除
+              </Button>
+            </div>
+          ))}
         </div>
-        {(!code || !name) && (
-          <p className="text-xs text-muted-foreground">コードと名称を入力してください</p>
-        )}
-      </div>
-    </Card>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="レシート必須しきい値(円・任意)" htmlFor="receipt-required-threshold">
+            <Input
+              id="receipt-required-threshold"
+              type="number"
+              min={0}
+              value={receiptRequiredThreshold}
+              onChange={(e) => setReceiptRequiredThreshold(e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="承認省略しきい値(円・任意)" htmlFor="approval-skip-threshold">
+            <Input
+              id="approval-skip-threshold"
+              type="number"
+              min={0}
+              value={approvalSkipThreshold}
+              onChange={(e) => setApprovalSkipThreshold(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              この金額以下の明細は承認を1段階省略できます
+            </p>
+          </FormField>
+        </div>
+
+        <label className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
+          <Checkbox id="is-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
+          有効
+        </label>
+
+        <div className="mt-5 flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={handleCancel}>
+              キャンセル
+            </Button>
+            <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
+              {isCreate ? '作成' : '保存'}
+            </Button>
+          </div>
+          {(!code || !name) && (
+            <p className="text-xs text-muted-foreground">コードと名称を入力してください</p>
+          )}
+        </div>
+      </Card>
+    </>
   )
 }

@@ -15,8 +15,6 @@ export interface AdminNavItem {
   feature?: string;
   permission?: string;
   permissions?: string[];
-  /** trueのとき、配下のパス(例: /admin/paid-leave/schedule)でも点灯する(NavLinkの前方一致)。 */
-  matchPrefix?: boolean;
 }
 
 export interface AdminNavGroup {
@@ -98,7 +96,6 @@ export const adminNavGroups: AdminNavGroup[] = [
         description: "有給の付与・消化ルールを管理する",
         feature: "paid_leave.requests",
         permission: "leave.manage",
-        matchPrefix: true,
       },
       {
         to: "/admin/special-leave",

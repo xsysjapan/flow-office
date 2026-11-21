@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import { Badge } from '../../components/Badge/Badge'
@@ -168,12 +169,7 @@ export function BackOfficeTaskDetailPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Link
-        to="/backoffice-tasks"
-        className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-      >
-        ← タスク一覧に戻る
-      </Link>
+      <BackLink />
       <Card title={task.title} actions={<Badge tone={tone}>{label}</Badge>}>
         {actionError && <ErrorMessage error={actionError} />}
 

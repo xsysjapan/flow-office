@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -7,6 +8,7 @@ import { FormField } from '../../components/FormField/FormField'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
+import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { useCreateHolidayCalendarSource, useHolidayCalendarSources } from '../../hooks/useHolidayCalendarSources'
 import { useCreateWorkCalendar } from '../../hooks/useWorkCalendars'
 import type { WeekdayHolidayPattern, WeekdayHolidayPatternDayType } from '../../api/types'
@@ -82,6 +84,8 @@ function emptyFormState() {
  */
 export function WorkCalendarCreatePage() {
   const navigate = useNavigate()
+  const backTarget = useBackTarget()
+  const keepBackState = useKeepBackState()
   const { data: sourcesData } = useHolidayCalendarSources()
   const sources = sourcesData ?? []
   const createCalendar = useCreateWorkCalendar()
@@ -130,21 +134,15 @@ export function WorkCalendarCreatePage() {
       },
       {
         // 作成後は作成された会社カレンダーの詳細画面(正史画面)へ遷移する(SKILL.md §2.5)。
-        onSuccess: (created) => navigate(`/admin/work-calendars/${created.id}`),
+        onSuccess: (created) =>
+          navigate(`/admin/work-calendars/${created.id}`, { state: keepBackState }),
       },
     )
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link
-          to="/admin/work-calendars"
-          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-        >
-          ← 会社カレンダー一覧に戻る
-        </Link>
-      </div>
+      <BackLink className="mb-0" />
 
       <Card title="会社カレンダーを作成">
         {createCalendar.error && <ErrorMessage error={createCalendar.error} />}
@@ -331,7 +329,11 @@ export function WorkCalendarCreatePage() {
 
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap gap-3">
-            <Button variant="secondary" onClick={() => navigate('/admin/work-calendars')}>
+            <Button variant="secondary" onClick={() =>
+                backTarget
+                  ? navigate(backTarget.to, { state: backTarget.state, replace: true })
+                  : navigate('/admin/work-calendars')
+              }>
               キャンセル
             </Button>
             <Button isLoading={createCalendar.isPending} disabled={!form.name} onClick={handleSubmit}>

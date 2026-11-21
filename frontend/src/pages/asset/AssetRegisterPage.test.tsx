@@ -95,7 +95,7 @@ describe('AssetRegisterPage', () => {
     expect(registerSpy).toHaveBeenCalledWith(
       expect.objectContaining({ asset_no: 'EQ-00999', name: 'MacBook Air', category: 'ノートPC' }),
     )
-    expect(navigate).toHaveBeenCalledWith('/assets/asset-new')
+    expect(navigate).toHaveBeenCalledWith('/assets/asset-new', { state: undefined })
   })
 
   it('switches the asset-no field to read-only and sends asset_no=null when the category matches an enabled rule', async () => {

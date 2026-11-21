@@ -79,6 +79,6 @@ describe('AssetEditPage', () => {
       serial_number: 'SN-001',
       notes: '付属品: 充電器',
     })
-    expect(navigate).toHaveBeenCalledWith('/assets/asset-1')
+    expect(navigate).toHaveBeenCalledWith('/assets/asset-1', { state: undefined })
   })
 })

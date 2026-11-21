@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -349,6 +350,7 @@ function MyPaidLeaveRequestList() {
  * UC-P003: 有給を申請する。
  */
 export function MyPaidLeavePage() {
+  const forwardState = useForwardState()
   const { data, isLoading, error } = useMyPaidLeaveGrants()
 
   if (isLoading) return <LoadingState />
@@ -363,7 +365,7 @@ export function MyPaidLeavePage() {
         title="自分の有給"
         actions={
           <Button asChild variant="secondary">
-            <Link to="/paid-leave/history">履歴を見る</Link>
+            <Link to="/paid-leave/history" state={forwardState}>履歴を見る</Link>
           </Button>
         }
       >

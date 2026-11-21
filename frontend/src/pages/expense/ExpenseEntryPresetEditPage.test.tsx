@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as expenseEntryPresetsApi from '../../api/expenseEntryPresets'
@@ -66,7 +66,12 @@ const preset: ExpenseEntryPreset = {
   created_by: 'applicant-1',
 }
 
-function renderPage(initialPath: string, existing: ExpenseEntryPreset = preset) {
+function PresetListProbe() {
+  const location = useLocation()
+  return <p>入力プリセット一覧ページ{location.search}</p>
+}
+
+function renderPage(initialPath: string | { pathname: string; state?: unknown }, existing: ExpenseEntryPreset = preset) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPreset').mockResolvedValue(existing)
   vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockImplementation((includeInactive) =>
@@ -78,7 +83,7 @@ function renderPage(initialPath: string, existing: ExpenseEntryPreset = preset) 
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
           <Route path="/expenses/presets/:id" element={<ExpenseEntryPresetEditPage />} />
-          <Route path="/expenses/presets" element={<p>入力プリセット一覧ページ</p>} />
+          <Route path="/expenses/presets" element={<PresetListProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -219,5 +224,20 @@ describe('ExpenseEntryPresetEditPage', () => {
 
     await screen.findByLabelText('名称')
     expect(screen.queryByRole('option', { name: /旧タクシー/ })).not.toBeInTheDocument()
+  })
+
+  it('cancels back to the originating list with its filter and replaces the history entry', async () => {
+    renderPage({
+      pathname: '/expenses/presets/1',
+      state: { backTo: { pathname: '/expenses/presets', search: '?category_id=3', hash: '' } },
+    })
+
+    expect(await screen.findByRole('link', { name: '入力プリセットに戻る' })).toHaveAttribute(
+      'href',
+      '/expenses/presets?category_id=3',
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
+
+    expect(await screen.findByText('入力プリセット一覧ページ?category_id=3')).toBeInTheDocument()
   })
 })

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import type { RequestType } from '../../api/types'
+import { BackLink } from '../../components/BackLink/BackLink'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
@@ -10,6 +11,7 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
+import { useBackTarget, useKeepBackState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { useRequestTypes } from '../../hooks/useRequestTypes'
 import { useCreateWorkflowRequest, useSubmitWorkflowRequest } from '../../hooks/useWorkflowRequests'
 
@@ -44,7 +46,7 @@ function buildInitial(searchParams: URLSearchParams, requestTypes: RequestType[]
  * URLクエリ(`type`・`title`・form_schemaの各key)で初期値を受け取れる。
  */
 export function WorkflowRequestNewPage() {
-  const [searchParams] = useSearchParams()
+  const [searchParams] = useSearchParamsKeepingBackState()
   const { data: requestTypes, isLoading: isLoadingTypes, error: typesError } = useRequestTypes()
 
   if (isLoadingTypes) return <LoadingState />
@@ -56,6 +58,8 @@ export function WorkflowRequestNewPage() {
 
 function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: RequestType[]; initial: RequestNewInitial }) {
   const navigate = useNavigate()
+  const keepState = useKeepBackState()
+  const backTarget = useBackTarget()
 
   const [requestTypeCode, setRequestTypeCode] = useState(() => initial.requestTypeCode)
   const [title, setTitle] = useState(() => initial.title)
@@ -85,16 +89,12 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
       await submitRequest.mutateAsync({ id: created.id, approverUserId })
     }
 
-    navigate(`/requests/${created.id}`)
+    navigate(`/requests/${created.id}`, { state: keepState })
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link to="/requests" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-          ← 一覧に戻る
-        </Link>
-      </div>
+      <BackLink />
 
       <Card title="新規申請">
         {error && <ErrorMessage error={error} />}
@@ -145,7 +145,9 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
         </FormField>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="secondary" disabled={isBusy} onClick={() => navigate('/requests')}>
+          <Button variant="secondary" disabled={isBusy} onClick={() =>
+              backTarget ? navigate(backTarget.to, { state: backTarget.state, replace: true }) : navigate('/requests')
+            }>
             キャンセル
           </Button>
           <Button

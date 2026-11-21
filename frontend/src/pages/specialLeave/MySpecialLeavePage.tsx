@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -374,6 +375,7 @@ function MySpecialLeaveRequestList() {
  * 種別ごと(誕生日休暇など)に残高を管理する点が異なる。
  */
 export function MySpecialLeavePage() {
+  const forwardState = useForwardState()
   const { data, isLoading, error } = useMySpecialLeaveGrants()
 
   if (isLoading) return <LoadingState />
@@ -392,7 +394,7 @@ export function MySpecialLeavePage() {
         title="自分の特別休暇"
         actions={
           <Button asChild variant="secondary">
-            <Link to="/special-leave/history">履歴を見る</Link>
+            <Link to="/special-leave/history" state={forwardState}>履歴を見る</Link>
           </Button>
         }
       >

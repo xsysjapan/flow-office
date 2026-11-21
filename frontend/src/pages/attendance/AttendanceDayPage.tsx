@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, ChevronLeft, ChevronRight, MoreVertical } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useBackTarget, useForwardState, useKeepBackState } from '../../navigation/backState'
 import { useAuth } from '../../auth/useAuth'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { Badge } from '../../components/Badge/Badge'
@@ -1229,6 +1231,9 @@ function ShiftSwapRequestDialog({
 export function AttendanceDayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
+  const forwardState = useForwardState()
+  const keepState = useKeepBackState()
+  const backTarget = useBackTarget()
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
   const [isAdjustingCalculation, setIsAdjustingCalculation] = useState(false)
@@ -1276,6 +1281,7 @@ export function AttendanceDayPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <BackLink />
       <Card
         title="日次勤怠"
         actions={
@@ -1288,7 +1294,7 @@ export function AttendanceDayPage() {
         navigation={
           <div className="flex gap-2">
             <Button asChild variant="secondary" size="icon" title="前日" aria-label="前日">
-              <Link to={`/attendance/days/${addDays(date, -1)}`}>
+              <Link to={`/attendance/days/${addDays(date, -1)}`} state={keepState}>
                 <ChevronLeft aria-hidden="true" />
               </Link>
             </Button>
@@ -1298,17 +1304,17 @@ export function AttendanceDayPage() {
               </Button>
             ) : (
               <Button asChild variant="secondary">
-                <Link to={`/attendance/days/${today}`}>今日</Link>
+                <Link to={`/attendance/days/${today}`} state={keepState}>今日</Link>
               </Button>
             )}
             <Button asChild variant="secondary" title="この週で見る">
-              <Link to={`/attendance/week?start=${monday}`}>
+              <Link to={`/attendance/week?start=${monday}`} state={forwardState}>
                 <CalendarRange aria-hidden="true" />
                 週次
               </Link>
             </Button>
             <Button asChild variant="secondary" size="icon" title="翌日" aria-label="翌日">
-              <Link to={`/attendance/days/${addDays(date, 1)}`}>
+              <Link to={`/attendance/days/${addDays(date, 1)}`} state={keepState}>
                 <ChevronRight aria-hidden="true" />
               </Link>
             </Button>
@@ -1324,13 +1330,13 @@ export function AttendanceDayPage() {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to={`/paid-leave?date=${date}`}>有給休暇を申請する</Link>
+                  <Link to={`/paid-leave?date=${date}`} state={forwardState}>有給休暇を申請する</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link to={`/special-leave?date=${date}`}>特別休暇を申請する</Link>
+                  <Link to={`/special-leave?date=${date}`} state={forwardState}>特別休暇を申請する</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link to={`/compensatory-leave?date=${date}`}>代休を申請する</Link>
+                  <Link to={`/compensatory-leave?date=${date}`} state={forwardState}>代休を申請する</Link>
                 </DropdownMenuItem>
                 {hasApprovedLeaveToCancel && <DropdownMenuSeparator />}
                 {approvedPaidLeave && (
@@ -1495,7 +1501,9 @@ export function AttendanceDayPage() {
                 <DeleteDayDialog
                   day={day}
                   onDeleted={(punchLogAction) => {
-                    if (punchLogAction !== 'recreate_from_punches') navigate(-1)
+                    if (punchLogAction === 'recreate_from_punches') return
+                    if (backTarget) navigate(backTarget.to, { state: backTarget.state, replace: true })
+                    else navigate('/attendance/months', { replace: true })
                   }}
                 />
               </div>

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as specialLeaveApi from '../../api/specialLeave'
 import type { StoredEvent } from '../../api/types'
@@ -11,12 +12,20 @@ function renderPage(events: StoredEvent[]) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MySpecialLeaveHistoryPage />
+      <MemoryRouter initialEntries={['/special-leave/history']}>
+        <MySpecialLeaveHistoryPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
 describe('MySpecialLeaveHistoryPage', () => {
+  it('shows a back link to the special leave screen', async () => {
+    renderPage([])
+
+    expect(await screen.findByRole('link', { name: '特別休暇に戻る' })).toHaveAttribute('href', '/special-leave')
+  })
+
   it('shows an empty state when there is no history', async () => {
     renderPage([])
 

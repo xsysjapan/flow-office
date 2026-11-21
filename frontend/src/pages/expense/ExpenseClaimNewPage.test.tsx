@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
@@ -77,9 +77,13 @@ function LocationSearchProbe() {
   return <div data-testid="location-search">{searchParams.toString()}</div>
 }
 
+function ListSearchProbe() {
+  return <p data-testid="list-search">{useLocation().search}</p>
+}
+
 function renderPage(
   categories: ExpenseCategory[] = [transportCategory, lodgingCategory],
-  initialPath = '/expenses/new',
+  initialPath: string | { pathname: string; state?: unknown } = '/expenses/new',
   presets: ExpenseEntryPreset[] = [],
   expenseClaimRequiresApproval = true,
 ) {
@@ -126,7 +130,15 @@ function renderPage(
       >
         <MemoryRouter initialEntries={[initialPath]}>
           <Routes>
-            <Route path="/expenses" element={<p>経費精算一覧</p>} />
+            <Route
+              path="/expenses"
+              element={
+                <>
+                  <p>経費精算一覧</p>
+                  <ListSearchProbe />
+                </>
+              }
+            />
             <Route
               path="/expenses/new"
               element={
@@ -929,6 +941,47 @@ describe('ExpenseClaimNewPage', () => {
 
     await waitFor(() => expect(deleteClaim).toHaveBeenCalledWith('claim-1'))
     expect(await screen.findByText('経費精算一覧')).toBeInTheDocument()
+  })
+
+  it('returns to the back target recorded by the deleted detail after deleting a draft opened from it', async () => {
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
+      draftClaim({
+        items: [
+          {
+            id: 'item-1',
+            category_id: 2,
+            usage_date: '2026-07-10',
+            description: 'ホテルABC',
+            amount: 12000,
+            project_id: null,
+            evidence_type: 'receipt_required',
+            fact_reference_type: null,
+            fact_reference_id: null,
+            commuting_deduction_amount: null,
+          },
+        ],
+      }),
+    )
+    const deleteClaim = vi.spyOn(expenseClaimsApi, 'deleteExpenseClaim').mockResolvedValue(undefined)
+
+    renderPage([transportCategory, lodgingCategory], {
+      pathname: '/expenses/claim-1/edit',
+      state: {
+        backTo: {
+          pathname: '/expenses/claim-1',
+          search: '',
+          hash: '',
+          backTo: { pathname: '/expenses', search: '?page=2', hash: '' },
+        },
+      },
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'この下書きを削除する' }))
+    await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
+
+    await waitFor(() => expect(deleteClaim).toHaveBeenCalledWith('claim-1'))
+    expect(await screen.findByText('経費精算一覧')).toBeInTheDocument()
+    expect(screen.getByTestId('list-search')).toHaveTextContent('?page=2')
   })
 
   it('asks for confirmation before deleting a saved expense item, and deletes it once confirmed', async () => {

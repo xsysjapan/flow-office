@@ -39,6 +39,10 @@ account/integrations/notifications等) にドメインごとに分けて置き�
      `AppLayout` の子ルートとして追加する。
    - 一覧→詳細の画面がある場合、詳細は `:id` パラメータのルートにする
      (`react-router-dom`の`useParams`で読む)。
+   - **`frontend/src/routes/pageHierarchy.ts`に画面名と親画面を登録する**(未登録だと網羅テストが落ちる)。
+     親が`null`でない(第2階層以下の)画面は、本文の最上部に`components/BackLink`を置く。画面内から別の画面へ進む
+     リンク・`navigate`には`useForwardState()`の`state`を渡し、キャンセル・削除後は`useBackTarget()`の戻り先へ
+     `replace: true`で戻る(`ui-interaction-patterns` §2.26)。
 
 4. **ナビゲーションが必要なら追加する**:
    - 一般ユーザー向け画面は`frontend/src/components/AppLayout/AppLayout.tsx`の
@@ -99,6 +103,7 @@ account/integrations/notifications等) にドメインごとに分けて置き�
 - [ ] `ui-interaction-patterns`のImplementation Checklistを通した(用語・保存/キャンセル/
       戻る・Empty/Error/Permission・URL状態・行クリック挙動)
 - [ ] `App.tsx`にルートを追加し、認証が必要なら`RequireAuth`配下に置いた
+- [ ] `pageHierarchy.ts`に画面名・親を登録し、第2階層以下なら`BackLink`を置いた
 - [ ] 必要なら`AppLayout`の`navGroups`または`AdminLayout`の`adminNavGroups`に追加した
 - [ ] ナビのラベル/構造を変えた場合、`frontend/e2e/`を該当ラベルでgrepし、
       影響するe2eスペックを修正した(`npx tsc --noEmit -p e2e/tsconfig.json`で

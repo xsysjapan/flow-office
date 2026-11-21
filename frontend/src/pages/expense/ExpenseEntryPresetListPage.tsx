@@ -1,5 +1,10 @@
 import { useEffect } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { BackLink } from "../../components/BackLink/BackLink";
+import {
+  useForwardState,
+  useSearchParamsKeepingBackState,
+} from "../../navigation/backState";
 import { useAuth } from "../../auth/useAuth";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
@@ -53,7 +58,8 @@ const visibilityLabel: Record<ExpenseEntryPresetVisibility, string> = {
 export function ExpenseEntryPresetListPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const forwardState = useForwardState();
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState();
   const rawCategoryId = searchParams.get("category_id");
   const rawPage = searchParams.get("page");
   // 不正な値は既定(すべて / 1ページ目)で表示し、下のuseEffectでURLからキーを消す。
@@ -122,11 +128,13 @@ export function ExpenseEntryPresetListPage() {
   const list = presets?.data ?? [];
 
   return (
-    <Card
+    <>
+      <BackLink />
+      <Card
       title="入力プリセット"
       actions={
         <Button asChild>
-          <Link to="/expenses/presets/new">新規作成</Link>
+          <Link to="/expenses/presets/new" state={forwardState}>新規作成</Link>
         </Button>
       }
     >
@@ -217,13 +225,14 @@ export function ExpenseEntryPresetListPage() {
                   <ClickableTableRow
                     key={preset.id}
                     disabled={!editable}
-                    onRowClick={() => navigate(`/expenses/presets/${preset.id}`)}
+                    onRowClick={() => navigate(`/expenses/presets/${preset.id}`, { state: forwardState })}
                     rowLabel={`${preset.name}の詳細を開く`}
                   >
                     <TableCell>
                       {editable ? (
                         <Link
                           to={`/expenses/presets/${preset.id}`}
+                          state={forwardState}
                           className="font-medium text-foreground hover:text-primary hover:underline"
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -290,5 +299,6 @@ export function ExpenseEntryPresetListPage() {
         </>
       )}
     </Card>
+    </>
   );
 }

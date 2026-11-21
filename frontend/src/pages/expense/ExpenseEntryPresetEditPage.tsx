@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useBackTarget } from '../../navigation/backState'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -61,8 +63,18 @@ function newDefinitionRow(): DefinitionRow {
  * 入力(表形式)用にdescriptionも同じ整形ルールで自動生成して一緒に保存する。
  */
 export function ExpenseEntryPresetEditPage() {
+  return (
+    <>
+      <BackLink />
+      <ExpenseEntryPresetEditContent />
+    </>
+  )
+}
+
+function ExpenseEntryPresetEditContent() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const backTarget = useBackTarget()
   const isCreate = !id || id === 'new'
 
   const { data: existing, isLoading, error: loadError } = useExpenseEntryPreset(isCreate ? undefined : Number(id))
@@ -150,14 +162,19 @@ export function ExpenseEntryPresetEditPage() {
       await updatePreset.mutateAsync({ id: existing.id, input })
     }
 
-    navigate('/expenses/presets')
+    // 保存後は一覧へ戻る(遷移先が戻り先と同じ画面なので、絞り込み付きの戻り先とその遷移元を引き継ぐ)。
+    if (backTarget && backTarget.to.split(/[?#]/)[0] === '/expenses/presets') {
+      navigate(backTarget.to, { state: backTarget.state })
+    } else {
+      navigate('/expenses/presets')
+    }
   }
 
   return (
     <Card
       title={isCreate ? 'プリセットの新規作成' : 'プリセットの編集'}
       actions={
-        <Button variant="secondary" onClick={() => navigate('/expenses/presets')}>
+        <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/expenses/presets', { state: backTarget?.state, replace: true })}>
           キャンセル
         </Button>
       }

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { useSpecialLeaveTypes } from "../../hooks/useSpecialLeave";
@@ -12,12 +12,12 @@ import {
 import {
   buildNavGroups,
   HOME_PATH,
-  isPathActive,
   navGroupMeta,
   requiredFeaturesForPath,
   type NavContext,
   type ResolvedNavGroup,
 } from "../../routes/routeManifest";
+import { findActiveNavPath, resolvePage } from "../../routes/pageHierarchy";
 import { Button } from "../Button/Button";
 import { NotificationBell } from "../NotificationBell/NotificationBell";
 import {
@@ -37,6 +37,10 @@ interface SidebarProps {
  *  グループ見出し+項目一覧を常時展開して表示する(AdminLayoutの構造を踏襲)。 */
 function NavSections({ groups, onNavigate }: SidebarProps) {
   const { pathname } = useLocation();
+  const activePaths = findActiveNavPath(pathname, [
+    HOME_PATH,
+    ...groups.flatMap((group) => group.items.map((item) => item.matchPath)),
+  ], [HOME_PATH]);
   return (
     <nav className="flex flex-col gap-5" aria-label="メインナビゲーション">
       <Link
@@ -44,7 +48,7 @@ function NavSections({ groups, onNavigate }: SidebarProps) {
         onClick={onNavigate}
         className={cn(
           "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent",
-          pathname === HOME_PATH
+          activePaths.includes(HOME_PATH)
             ? "bg-accent text-foreground"
             : "text-muted-foreground hover:text-foreground",
         )}
@@ -60,18 +64,21 @@ function NavSections({ groups, onNavigate }: SidebarProps) {
           </span>
           <div className="flex flex-col gap-0.5">
             {group.items.map((item) => (
-              <NavLink
+              <Link
                 key={item.to}
                 to={item.to}
                 onClick={onNavigate}
+                aria-current={
+                  activePaths.includes(item.matchPath) ? "page" : undefined
+                }
                 className={cn(
                   "rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                  isPathActive(pathname, item.to) &&
+                  activePaths.includes(item.matchPath) &&
                     "bg-accent font-medium text-foreground",
                 )}
               >
                 {item.label}
-              </NavLink>
+              </Link>
             ))}
           </div>
         </div>
@@ -136,6 +143,10 @@ export function AppLayout() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
   const today = formatDate(new Date());
+  const pageTitle = resolvePage(pathname)?.title;
+  useEffect(() => {
+    document.title = pageTitle ? `${pageTitle} | flow-office` : "flow-office";
+  }, [pageTitle]);
   const currentYearMonth = today.slice(0, 7);
   const { data: specialLeaveTypes } = useSpecialLeaveTypes(
     user?.effective_features === undefined ||

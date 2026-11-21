@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -121,7 +122,7 @@ function pairPartnerOf(entry: PaidLeaveScheduleEntry, rows: PaidLeaveScheduleEnt
  * 詳細Sheetを開く。Eligible行だけ選択して一括付与できる管理者向け画面。
  */
 export function PaidLeaveSchedulePage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
   const filterParam = searchParams.get('filter')
   const filter = parseFilter(filterParam)
   const userName = searchParams.get('user_name') ?? ''
@@ -270,11 +271,7 @@ export function PaidLeaveSchedulePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <Link to="/admin/paid-leave" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-          ← 有給休暇
-        </Link>
-      </div>
+      <BackLink className="mb-0" />
       <Card title="付与予定">
         <PaidLeaveScheduleAssessmentRunCard
           status={runStatus.data}

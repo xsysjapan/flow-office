@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { CategoryCombobox } from '../../components/CategoryCombobox/CategoryCombobox'
@@ -37,6 +39,8 @@ function resolveAutoNumberingRule(category: string, rules: AssetNumberRule[]): A
  */
 export function AssetRegisterPage() {
   const navigate = useNavigate()
+  const backTarget = useBackTarget()
+  const keepBackState = useKeepBackState()
   const registerAsset = useRegisterAsset()
   const numberRules = useAssetNumberRules()
   const numberRuleCategories = useAssetNumberRuleCategories()
@@ -71,107 +75,110 @@ export function AssetRegisterPage() {
       default_location_text: isLending && defaultLocationText ? defaultLocationText : null,
       notes: notes || null,
     })
-    navigate(`/assets/${asset.id}`)
+    navigate(`/assets/${asset.id}`, { state: keepBackState })
   }
 
   return (
-    <Card title="備品を登録">
-      {registerAsset.error && <ErrorMessage error={registerAsset.error} />}
+    <>
+      <BackLink />
+      <Card title="備品を登録">
+        {registerAsset.error && <ErrorMessage error={registerAsset.error} />}
 
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="管理番号" htmlFor="asset-no" required={!isAutoNumbered}>
-            <Input
-              id="asset-no"
-              value={isAutoNumbered ? '' : assetNo}
-              onChange={(e) => setAssetNo(e.target.value)}
-              placeholder={isAutoNumbered ? '保存時に自動採番されます' : '例: EQ-00121'}
-              disabled={isAutoNumbered}
-              readOnly={isAutoNumbered}
-            />
-          </FormField>
-          <FormField label="名称" htmlFor="asset-name" required>
-            <Input id="asset-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例: ThinkPad X1" />
-          </FormField>
-        </div>
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="管理番号" htmlFor="asset-no" required={!isAutoNumbered}>
+              <Input
+                id="asset-no"
+                value={isAutoNumbered ? '' : assetNo}
+                onChange={(e) => setAssetNo(e.target.value)}
+                placeholder={isAutoNumbered ? '保存時に自動採番されます' : '例: EQ-00121'}
+                disabled={isAutoNumbered}
+                readOnly={isAutoNumbered}
+              />
+            </FormField>
+            <FormField label="名称" htmlFor="asset-name" required>
+              <Input id="asset-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例: ThinkPad X1" />
+            </FormField>
+          </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="カテゴリ" htmlFor="asset-category" required>
-            <CategoryCombobox
-              id="asset-category"
-              value={category}
-              onChange={setCategory}
-              suggestions={numberRuleCategories.data ?? []}
-              placeholder="例: ノートPC"
-            />
-          </FormField>
-          <FormField label="シリアル番号" htmlFor="asset-serial">
-            <Input id="asset-serial" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
-          </FormField>
-        </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="カテゴリ" htmlFor="asset-category" required>
+              <CategoryCombobox
+                id="asset-category"
+                value={category}
+                onChange={setCategory}
+                suggestions={numberRuleCategories.data ?? []}
+                placeholder="例: ノートPC"
+              />
+            </FormField>
+            <FormField label="シリアル番号" htmlFor="asset-serial">
+              <Input id="asset-serial" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
+            </FormField>
+          </div>
 
-        <FormField label="管理区分" htmlFor="asset-management-type" required>
-          <NativeSelect
-            id="asset-management-type"
-            value={managementType}
-            onChange={(e) => setManagementType(e.target.value as AssetManagementType)}
-          >
-            {MANAGEMENT_TYPE_OPTIONS.map((value) => (
-              <option key={value} value={value}>
-                {assetManagementTypeLabel(value)}
-              </option>
-            ))}
-          </NativeSelect>
-        </FormField>
-
-        {isLending && (
-          <FormField label="貸出方式" htmlFor="asset-lending-method" required>
+          <FormField label="管理区分" htmlFor="asset-management-type" required>
             <NativeSelect
-              id="asset-lending-method"
-              value={lendingMethod}
-              onChange={(e) => setLendingMethod(e.target.value as AssetLendingMethod)}
+              id="asset-management-type"
+              value={managementType}
+              onChange={(e) => setManagementType(e.target.value as AssetManagementType)}
             >
-              {LENDING_METHOD_OPTIONS.map((value) => (
+              {MANAGEMENT_TYPE_OPTIONS.map((value) => (
                 <option key={value} value={value}>
-                  {assetLendingMethodLabel(value)}
+                  {assetManagementTypeLabel(value)}
                 </option>
               ))}
             </NativeSelect>
           </FormField>
-        )}
 
-        {isLending && (
-          <FormField label="通常配置場所" htmlFor="asset-default-location" required={requiresDefaultLocation}>
-            <Input
-              id="asset-default-location"
-              value={defaultLocationText}
-              onChange={(e) => setDefaultLocationText(e.target.value)}
-              placeholder="例: 本社4F 備品庫"
-            />
-            {requiresDefaultLocation && (
-              <p className="mt-1 text-xs text-muted-foreground">セルフ貸出方式では通常配置場所の設定が必須です。</p>
-            )}
-          </FormField>
-        )}
-
-        <FormField label="備考" htmlFor="asset-notes">
-          <Textarea id="asset-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </FormField>
-
-        <div className="mt-1 flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => navigate('/assets')}>
-              キャンセル
-            </Button>
-            <Button isLoading={registerAsset.isPending} disabled={!isValid} onClick={() => void handleSave()}>
-              作成
-            </Button>
-          </div>
-          {requiresDefaultLocation && !defaultLocationText && (
-            <p className="text-xs text-muted-foreground">通常配置場所を入力してください。</p>
+          {isLending && (
+            <FormField label="貸出方式" htmlFor="asset-lending-method" required>
+              <NativeSelect
+                id="asset-lending-method"
+                value={lendingMethod}
+                onChange={(e) => setLendingMethod(e.target.value as AssetLendingMethod)}
+              >
+                {LENDING_METHOD_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {assetLendingMethodLabel(value)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
           )}
+
+          {isLending && (
+            <FormField label="通常配置場所" htmlFor="asset-default-location" required={requiresDefaultLocation}>
+              <Input
+                id="asset-default-location"
+                value={defaultLocationText}
+                onChange={(e) => setDefaultLocationText(e.target.value)}
+                placeholder="例: 本社4F 備品庫"
+              />
+              {requiresDefaultLocation && (
+                <p className="mt-1 text-xs text-muted-foreground">セルフ貸出方式では通常配置場所の設定が必須です。</p>
+              )}
+            </FormField>
+          )}
+
+          <FormField label="備考" htmlFor="asset-notes">
+            <Textarea id="asset-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </FormField>
+
+          <div className="mt-1 flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
+                キャンセル
+              </Button>
+              <Button isLoading={registerAsset.isPending} disabled={!isValid} onClick={() => void handleSave()}>
+                作成
+              </Button>
+            </div>
+            {requiresDefaultLocation && !defaultLocationText && (
+              <p className="text-xs text-muted-foreground">通常配置場所を入力してください。</p>
+            )}
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </>
   )
 }

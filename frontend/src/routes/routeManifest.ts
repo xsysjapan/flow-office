@@ -215,6 +215,8 @@ export function isEntryVisible(
 export interface ResolvedNavItem {
   to: string;
   label: string;
+  /** サイドバー点灯判定用の正規化パス(= entry.to)。リンク先`to`は今日・今月などに変わり得る。 */
+  matchPath: string;
 }
 
 export interface ResolvedNavGroup {
@@ -249,6 +251,7 @@ export function buildNavGroups(
         .map((entry) => ({
           to: entry.buildTo ? entry.buildTo(ctx) : entry.to,
           label: entry.label,
+          matchPath: entry.to,
         })),
     }))
     .filter((group) => group.items.length > 0);

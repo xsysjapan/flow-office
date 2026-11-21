@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { useForwardState } from '../../navigation/backState'
 import { useCancelWorkflowRequest, useMyWorkflowRequests } from '../../hooks/useWorkflowRequests'
 import {
   attendanceMonthStatusLabel,
@@ -49,6 +50,7 @@ const NEW_REQUEST_OPTIONS = [
  *  作成ページへ遷移する2段階フロー(§2.11: 短時間で完了する選択操作はDialog)。 */
 function NewRequestDialog() {
   const navigate = useNavigate()
+  const forwardState = useForwardState()
   const [open, setOpen] = useState(false)
 
   return (
@@ -65,7 +67,7 @@ function NewRequestDialog() {
               type="button"
               onClick={() => {
                 setOpen(false)
-                navigate(option.to)
+                navigate(option.to, { state: forwardState })
               }}
               className="flex items-start gap-3 rounded-md border border-border p-3 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
@@ -181,6 +183,7 @@ function rowStatusMeta(request: WorkflowRequest) {
  */
 export function WorkflowRequestListPage() {
   const navigate = useNavigate()
+  const forwardState = useForwardState()
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -409,7 +412,7 @@ export function WorkflowRequestListPage() {
                 <ClickableTableRow
                   key={request.id}
                   data-state={selected ? 'selected' : undefined}
-                  onRowClick={() => navigate(`/requests/${request.id}`)}
+                  onRowClick={() => navigate(`/requests/${request.id}`, { state: forwardState })}
                   rowLabel={`${request.title}の詳細を開く`}
                 >
                   <TableCell onClick={(e) => e.stopPropagation()}>
@@ -427,6 +430,7 @@ export function WorkflowRequestListPage() {
                   <TableCell>
                     <Link
                       to={`/requests/${request.id}`}
+                      state={forwardState}
                       className="font-medium text-foreground hover:text-primary hover:underline"
                       onClick={(e) => e.stopPropagation()}
                     >

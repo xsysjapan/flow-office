@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { ArrowRight, CheckCircle2, ClipboardList, Inbox, type LucideIcon } from 'lucide-react'
 import { Card } from '../../components/Card/Card'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -33,6 +34,7 @@ function DashboardCard({
   icon: LucideIcon
   children: ReactNode
 }) {
+  const forwardState = useForwardState()
   return (
     <Card
       title={
@@ -44,6 +46,7 @@ function DashboardCard({
       navigation={
         <Link
           to={to}
+          state={forwardState}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           詳しく見る

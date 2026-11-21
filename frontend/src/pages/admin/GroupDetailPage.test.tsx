@@ -230,7 +230,9 @@ describe("GroupDetailPage", () => {
 
     expect(await screen.findByText("総務部の詳細")).toBeInTheDocument();
     expect(screen.queryByLabelText("コード")).not.toBeInTheDocument();
-    expect(screen.queryByText("← グループ一覧へ戻る")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: "グループに戻る" }),
+    ).toHaveAttribute("href", "/admin/groups");
     await userEvent.clear(screen.getByLabelText("名称"));
     await userEvent.type(screen.getByLabelText("名称"), "総務・人事部");
     await userEvent.selectOptions(
