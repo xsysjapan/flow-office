@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { BackLink } from "../../components/BackLink/BackLink";
 import {
   useForwardState,
   useSearchParamsKeepingBackState,
@@ -127,7 +128,9 @@ export function ExpenseEntryPresetListPage() {
   const list = presets?.data ?? [];
 
   return (
-    <Card
+    <>
+      <BackLink />
+      <Card
       title="入力プリセット"
       actions={
         <Button asChild>
@@ -296,5 +299,6 @@ export function ExpenseEntryPresetListPage() {
         </>
       )}
     </Card>
+    </>
   );
 }

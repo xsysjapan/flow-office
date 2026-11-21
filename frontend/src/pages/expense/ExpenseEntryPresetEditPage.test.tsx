@@ -232,7 +232,7 @@ describe('ExpenseEntryPresetEditPage', () => {
       state: { backTo: { pathname: '/expenses/presets', search: '?category_id=3', hash: '' } },
     })
 
-    expect(await screen.findByRole('link', { name: '明細プリセット一覧に戻る' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: '入力プリセットに戻る' })).toHaveAttribute(
       'href',
       '/expenses/presets?category_id=3',
     )

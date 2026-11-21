@@ -1503,7 +1503,7 @@ export function AttendanceDayPage() {
                   onDeleted={(punchLogAction) => {
                     if (punchLogAction === 'recreate_from_punches') return
                     if (backTarget) navigate(backTarget.to, { state: backTarget.state, replace: true })
-                    else navigate(-1)
+                    else navigate('/attendance/months', { replace: true })
                   }}
                 />
               </div>

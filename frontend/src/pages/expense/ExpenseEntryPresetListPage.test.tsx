@@ -163,6 +163,13 @@ describe('ExpenseEntryPresetListPage', () => {
     await waitFor(() => expect(deletePreset).toHaveBeenCalledWith(1))
   })
 
+  it('links back to the expense claim list when opened directly', async () => {
+    renderPage([])
+
+    await screen.findByText('入力プリセットはまだありません。')
+    expect(screen.getByRole('link', { name: '経費精算に戻る' })).toHaveAttribute('href', '/expenses')
+  })
+
   it('shows the new-preset link', async () => {
     renderPage([])
 

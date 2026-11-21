@@ -605,11 +605,18 @@ function ExpenseClaimNewContent() {
     }
   }
 
-  // 削除後は戻り先へ。ただし戻り先が削除した経費精算自身の詳細(編集画面の親・遷移元)なら存在しないので一覧へ。
+  // 削除後は戻り先へ。ただし戻り先が削除した経費精算自身の詳細(編集画面の親・遷移元)なら存在しないので、
+  // その詳細が記録していた戻り先があればそこへ、無ければ一覧へ。
   function navigateAfterDelete() {
     const deletedDetailPath = claimId ? `/expenses/${claimId}` : undefined
     if (backTarget && backTarget.to.split(/[?#]/)[0] !== deletedDetailPath) {
       navigate(backTarget.to, { state: backTarget.state, replace: true })
+    } else if (backTarget?.state?.backTo) {
+      const backTo = backTarget.state.backTo
+      navigate(backTo.pathname + backTo.search + backTo.hash, {
+        state: backTo.backTo ? { backTo: backTo.backTo } : undefined,
+        replace: true,
+      })
     } else {
       navigate('/expenses', { replace: true })
     }

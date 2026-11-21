@@ -93,6 +93,15 @@ describe('SelfBulkLoanPage', () => {
     navigate.mockClear()
   })
 
+  it('「戻る」ボタンは無く「キャンセル」で備品一覧へreplace遷移する', async () => {
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: '戻る' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+
+    expect(navigate).toHaveBeenCalledWith('/assets', { state: undefined, replace: true })
+  })
+
   it('スキャン入力で有効な備品が対象リストに追加される', async () => {
     vi.spyOn(assetApi, 'resolveAssetByScanInput').mockResolvedValue(asset)
 

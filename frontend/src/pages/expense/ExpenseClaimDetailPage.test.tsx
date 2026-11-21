@@ -159,13 +159,13 @@ describe('ExpenseClaimDetailPage', () => {
   it('links back to the expense claim list', async () => {
     renderPage(inReviewClaim)
 
-    expect(await screen.findByRole('link', { name: '経費精算一覧に戻る' })).toHaveAttribute('href', '/expenses')
+    expect(await screen.findByRole('link', { name: '経費精算に戻る' })).toHaveAttribute('href', '/expenses')
   })
 
   it('returns to the originating list when opened with a back state', async () => {
     renderPage(inReviewClaim, { backTo: { pathname: '/expenses', search: '?page=2', hash: '' } })
 
-    expect(await screen.findByRole('link', { name: '経費精算一覧に戻る' })).toHaveAttribute('href', '/expenses?page=2')
+    expect(await screen.findByRole('link', { name: '経費精算に戻る' })).toHaveAttribute('href', '/expenses?page=2')
   })
 
   it('cancels the claim with a reason after confirming in the dialog', async () => {

@@ -99,6 +99,15 @@ describe('BulkRelocatePage', () => {
     currentUser = { id: 'manager-1', effective_permissions: ['asset.manage'] }
   })
 
+  it('「戻る」ボタンは無く「キャンセル」で備品一覧へreplace遷移する', async () => {
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: '戻る' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+
+    expect(navigate).toHaveBeenCalledWith('/assets', { state: undefined, replace: true })
+  })
+
   it('asset.manageを持たないユーザーには権限エラーが表示される', () => {
     currentUser = { id: 'user-1', effective_permissions: [] }
     renderPage()

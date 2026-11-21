@@ -118,7 +118,7 @@ describe('AssetListPage', () => {
     const button = await screen.findByRole('button', { name: '新規登録' })
     await userEvent.click(button)
 
-    expect(navigate).toHaveBeenCalledWith('/assets/new', { state: { backTo: expect.objectContaining({ pathname: '/assets' }) } })
+    expect(navigate).toHaveBeenCalledWith('/assets/new', { state: { backTo: expect.objectContaining({ pathname: '/' }) } })
   })
 
   it('hides the register button for users without asset.manage', async () => {
@@ -162,7 +162,7 @@ describe('AssetListPage', () => {
     const row = await screen.findByRole('row', { name: /ThinkPad X1の詳細を開く/ })
     await userEvent.click(row)
 
-    expect(navigate).toHaveBeenCalledWith('/assets/asset-1', { state: { backTo: expect.objectContaining({ pathname: '/assets' }) } })
+    expect(navigate).toHaveBeenCalledWith('/assets/asset-1', { state: { backTo: expect.objectContaining({ pathname: '/' }) } })
   })
 
   it('sends search filters to the API', async () => {
