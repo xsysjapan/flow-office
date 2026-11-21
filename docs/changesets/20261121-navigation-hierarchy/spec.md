@@ -1,6 +1,6 @@
 # 画面階層と戻る導線のガイドライン策定と全画面への適用
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > flow-officeでは多段的な画面階層がたくさんあるのですが、有給画面から履歴に飛んだ場合などに戻れないなどのナビゲーション課題が多々あります。
@@ -304,6 +304,57 @@ investigatorによる全画面調査の要約(根拠はファイル:行)。
     進む先が第1階層でも渡す、に統一。
   - `state`が失われる経路を明記、`setSearchParams`のラッパーを追加、`replace`必須の記述を削除(履歴の積み方は変えない)。
   - `ResolvedNavItem.matchPath`の追加、検証コマンドをpackage.jsonに合わせた、`known-gaps.md`参照4か所を明記。
+- 2026-11-21 ユーザー承認(「対応をお願いします」)、実装中へ。
+- 2026-11-21 実装中の追記(完了レビューで判明した点):
+  - 「完全一致のみ」で点灯判定するナビ項目は呼び出し側で指定する(一般サイドバーは`/`、管理画面のサイドバーは`/admin`)。
+    一般サイドバーの「管理メニュー」は`/admin/*`全体で点灯させる(論点6の補足)。
+  - BackLinkを置く画面に`/expenses/presets`(明細プリセット一覧。親は`/expenses`)を追加(「各画面への適用」の列挙漏れ)。
+  - 削除後の戻り先が削除した対象自身の詳細になる場合(経費の編集画面で下書きを削除)は、その詳細が記録していた戻り先へ、
+    無ければ一覧(`/expenses`)へ`replace`で戻る(論点5の補足)。
+  - 画面名は既存の見出し・ナビ表示名を優先した(下の実装結果の表)。
 
 ## 実装結果
-未着手
+
+### コミット
+`50a1bf2`・`f40ea79`(変更セット)、`5d618b6`(ガイドライン・スキル・docs)、`a57b5d9`(共通部品・サイドバー点灯・タブ名)、
+`892941c`・`755959b`・`6a1e0f5`・`01ce9b5`・`f6cfaf2`(各画面への適用と取りこぼしの修正)、および本更新のコミット。
+
+### 変更ファイル(要点)
+- 新規: `frontend/src/routes/pageHierarchy.ts`(+test。App.tsxの全ルートの登録を網羅テスト)、`frontend/src/navigation/backState.ts`(+test)、
+  `frontend/src/components/BackLink/`(component・stories・test)
+- 変更: `AppLayout`(点灯・`document.title`・`NavLink`→`Link`)、`AdminLayout`・`adminNavGroups.ts`(`matchPrefix`廃止)、`routeManifest.ts`(`matchPath`)、
+  `AttendanceDayRow`・`TodayAttendancePanel`・`LeaveReturnedNotice`、pages配下(勤怠・申請・休暇・通知・経費・備品・バックオフィス・管理)の
+  各画面とそのテスト、`e2e/scenario-06`(コメントのみ)
+- ドキュメント: `.claude/skills/ui-interaction-patterns/SKILL.md`(§2.26追加、§1-13、§2.4、§4.1、§5、`known-gaps.md`参照4か所を削除)、
+  `.claude/skills/add-page/SKILL.md`、`docs/18-ui-guidelines.md`、`docs/changesets/README.md`、
+  `.claude/skills/delegate-implementer/SKILL.md`(委譲レビューの是正)、`docs/delegation-reviews/202611.md`
+
+### 画面名(仕様の表から既存名に合わせたもの)
+月次勤怠一覧→「月次勤怠」、申請を作成→「新規申請」、経費精算一覧→「経費精算」、明細プリセット一覧/作成/編集→「入力プリセット」/
+「プリセットの新規作成」/「プリセットの編集」、備品一覧→「備品管理」、備品を作成→「備品を登録」、一括5画面は各見出し、
+グループ・申請種別・経費区分の作成/編集→「〜を新規作成」「〜の新規作成」「〜の編集」、有給取得予定→「付与予定」、
+管理画面の一覧は管理サイドバーの表示名(例「ユーザー」)。
+
+### 検証結果
+- `npx tsc -p tsconfig.app.json --noEmit`: エラーなし
+- `npm run lint`: エラー0(警告は既存の`only-export-components`のみ)
+- `npm test`: 154ファイル、1358件PASS・2件skip(既存)
+- 実機確認(Playwright、ローカルのbackend+frontend、Sanctumトークンでログイン):
+  - 有給→「履歴を見る」→有給履歴: タブ名「有給履歴 | flow-office」、左上「有給に戻る」、押すと`/paid-leave`。サイドバー「有給」点灯
+  - 利用者一覧`?account_status=active`→利用者詳細: 「ユーザーに戻る」が`/admin/users?account_status=active`、押すと絞り込み付きで戻る。
+    サイドバー「管理メニュー」「ユーザー」点灯
+  - 月次詳細を直接開く: 「月次勤怠に戻る」→`/attendance/months`、タブ名「2026年11月の勤怠 | flow-office」
+  - 日次を直接開く: 「2026年11月の勤怠に戻る」→`/attendance/months/2026-11`、サイドバー「日次勤怠」点灯
+  - 申請一覧(絞り込み)→詳細、備品一覧→詳細→編集→保存の戻りはデータ準備の都合で単体テストで確認(申請詳細・備品詳細・備品編集のテスト)
+- e2e `scenario-03`・`scenario-06`: この環境では実行できず。ログイン画面の「Microsoftでログイン」のクリックで止まる
+  (変更前のコミット`005440c`でも同じ挙動を確認したため、今回の変更による失敗ではない)。CIまたはdocker compose環境での確認が必要。
+
+### 受け入れ条件の確認
+- 有給・特別休暇の履歴の戻る導線: 実機(有給)と単体テスト(両方)で確認
+- 差戻し通知→申請詳細→元の休暇画面: `WorkflowRequestDetailPage.test`(backTo=`/paid-leave`で「有給に戻る」)、`LeaveReturnedNotice`のstate付与
+- 一覧の絞り込み・ページの復元: 実機(利用者一覧)と単体テスト(申請・備品・タスク・月次・経費・申請種別)
+- 第2階層以下の全画面に戻る導線1つ: `pageHierarchy`の親がnullでない全ルートについて、ページファイルの`<BackLink`の有無を機械的に確認(全件あり)
+- キャンセル・削除後・一括画面の「キャンセル」: 各ページのテスト
+- サイドバー点灯・タブ名: `AppLayout`/`AdminLayout`/`pageHierarchy`のテストと実機
+- ガイドラインの反映: 上記ドキュメント
+- lint・型・単体テスト: PASS。e2eは上記のとおり環境要因で未確認
