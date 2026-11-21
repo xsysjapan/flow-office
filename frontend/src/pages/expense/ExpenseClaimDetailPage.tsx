@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useForwardState } from '../../navigation/backState'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -72,6 +74,7 @@ export function ExpenseClaimDetailPage() {
   const { id } = useParams<{ id: string }>()
   const claimId = id ?? ''
   const { user } = useAuth()
+  const forwardState = useForwardState()
   const { data: claim, isLoading, error } = useExpenseClaim(claimId)
   const { data: history, isLoading: isLoadingHistory } = useExpenseClaimHistory(claimId)
 
@@ -98,9 +101,7 @@ export function ExpenseClaimDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/expenses" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-        ← 経費精算一覧へ戻る
-      </Link>
+      <BackLink />
 
       <Card
         title={claim.title ? `${claim.title}(${periodLabel})` : `経費精算(${periodLabel})`}
@@ -195,7 +196,7 @@ export function ExpenseClaimDetailPage() {
           <div className="flex flex-wrap items-center gap-3">
             {isApplicant && isExpenseClaimEditable(claim.status) && (
               <Button asChild variant="secondary">
-                <Link to={`/expenses/${claim.id}/edit`}>明細を編集する</Link>
+                <Link to={`/expenses/${claim.id}/edit`} state={forwardState}>明細を編集する</Link>
               </Button>
             )}
 

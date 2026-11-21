@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { CheckCircle2, Clock, Coffee, LogIn, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { Badge, type BadgeTone } from '../Badge/Badge'
 import { Button } from '../Button/Button'
 import { Card } from '../Card/Card'
@@ -152,6 +153,7 @@ function FlexSettlementSummaryCard({ summary }: { summary: FlexSettlementSummary
  * ダッシュボード(`HomeDashboardPage`)に統合された。ロジック・表示は変更していない。
  */
 export function TodayAttendancePanel() {
+  const forwardState = useForwardState()
   const { data: day, isLoading, error } = useTodayAttendance()
   const clockIn = useClockIn()
   const startBreak = useStartBreak()
@@ -183,7 +185,7 @@ export function TodayAttendancePanel() {
           navigation={
             <div className="flex gap-2">
               <Button asChild variant="secondary">
-                <Link to={`/attendance/days/${day.work_date}`}>日次勤怠</Link>
+                <Link to={`/attendance/days/${day.work_date}`} state={forwardState}>日次勤怠</Link>
               </Button>
             </div>
           }

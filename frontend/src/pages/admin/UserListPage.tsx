@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useForwardState } from "../../navigation/backState";
 import { Badge } from "../../components/Badge/Badge";
 import { Card } from "../../components/Card/Card";
 import { Button } from "../../components/Button/Button";
@@ -51,6 +52,7 @@ const PER_PAGE = 20;
  */
 export function UserListPage() {
   const navigate = useNavigate();
+  const forwardState = useForwardState();
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") ?? "";
   const accountStatusParam = searchParams.get("account_status");
@@ -169,6 +171,7 @@ export function UserListPage() {
         <Link
           className="text-sm font-medium text-primary hover:underline"
           to="/admin/hr-import"
+          state={forwardState}
         >
           外部ID・HR連携
         </Link>
@@ -368,12 +371,15 @@ export function UserListPage() {
             {users.map((user) => (
               <ClickableTableRow
                 key={user.id}
-                onRowClick={() => navigate(`/admin/users/${user.id}`)}
+                onRowClick={() =>
+                  navigate(`/admin/users/${user.id}`, { state: forwardState })
+                }
                 rowLabel={`${user.name}の詳細を開く`}
               >
                 <TableCell>
                   <Link
                     to={`/admin/users/${user.id}`}
+                    state={forwardState}
                     className="font-medium text-foreground hover:text-primary hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >

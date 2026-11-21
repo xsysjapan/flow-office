@@ -25,13 +25,17 @@ const expenseType: RequestType = {
   is_active: true,
 }
 
-function renderPage(initialPath: string, types: RequestType[] = [expenseType]) {
+function renderPage(
+  initialPath: string,
+  types: RequestType[] = [expenseType],
+  state?: unknown,
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue(types)
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[initialPath]}>
+      <MemoryRouter initialEntries={[{ pathname: initialPath, state }]}>
         <Routes>
           <Route path="/admin/request-types/:id" element={<RequestTypeEditPage />} />
           <Route path="/admin/request-types" element={<p>申請種別一覧ページ</p>} />
@@ -52,8 +56,22 @@ describe('RequestTypeEditPage', () => {
   it('shows a back link to the request type list', async () => {
     renderPage('/admin/request-types/new')
 
-    const backLink = await screen.findByRole('link', { name: '← 申請種別一覧へ戻る' })
+    const backLink = await screen.findByRole('link', { name: '申請種別に戻る' })
     expect(backLink).toHaveAttribute('href', '/admin/request-types')
+  })
+
+  it('returns to the recorded origin (with its query) when cancelled', async () => {
+    renderPage('/admin/request-types/1', [expenseType], {
+      backTo: { pathname: '/admin/request-types', search: '?x=1', hash: '' },
+    })
+
+    expect(await screen.findByRole('link', { name: '申請種別に戻る' })).toHaveAttribute(
+      'href',
+      '/admin/request-types?x=1',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+
+    expect(await screen.findByText('申請種別一覧ページ')).toBeInTheDocument()
   })
 
   it('prefills the form and disables the code field in edit mode', async () => {

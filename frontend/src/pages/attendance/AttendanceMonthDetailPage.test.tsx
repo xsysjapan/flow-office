@@ -123,7 +123,7 @@ const dayRecord: AttendanceDay = {
   calculation: null,
 }
 
-function renderPage(initialYearMonth = yearMonth, attendanceRequiresApproval = true) {
+function renderPage(initialYearMonth = yearMonth, attendanceRequiresApproval = true, initialState?: unknown) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
@@ -145,7 +145,7 @@ function renderPage(initialYearMonth = yearMonth, attendanceRequiresApproval = t
           isLoading: false,
         }}
       >
-        <MemoryRouter initialEntries={[`/attendance/months/${initialYearMonth}`]}>
+        <MemoryRouter initialEntries={[{ pathname: `/attendance/months/${initialYearMonth}`, state: initialState }]}>
           <Routes>
             <Route path="/attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
           </Routes>
@@ -571,6 +571,34 @@ describe('AttendanceMonthDetailPage', () => {
     })
   })
 
+  describe('back link', () => {
+    const mockMonth = () =>
+      vi.spyOn(attendanceApi, 'fetchMonth').mockImplementation((ym) =>
+        Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
+      )
+
+    it('points to the months list when opened directly', async () => {
+      mockMonth()
+      renderPage()
+      await screen.findByText('月次勤怠')
+
+      expect(screen.getByRole('link', { name: '月次勤怠に戻る' })).toHaveAttribute('href', '/attendance/months')
+    })
+
+    it('returns to the recorded list with its query and keeps it after moving to the previous month', async () => {
+      mockMonth()
+      renderPage(yearMonth, true, { backTo: { pathname: '/attendance/months', search: '?year=2026&page=2', hash: '' } })
+      await screen.findByText('月次勤怠')
+
+      expect(screen.getByRole('link', { name: '月次勤怠に戻る' })).toHaveAttribute('href', '/attendance/months?year=2026&page=2')
+
+      await userEvent.click(screen.getByRole('button', { name: '前月' }))
+
+      await waitFor(() => expect(screen.getByText('2026-06')).toBeInTheDocument())
+      expect(screen.getByRole('link', { name: '月次勤怠に戻る' })).toHaveAttribute('href', '/attendance/months?year=2026&page=2')
+    })
+  })
+
   describe('month navigation', () => {
     it('allows navigation in the employment period regardless of work-style assignments', async () => {
       vi.spyOn(attendanceApi, 'fetchMonth').mockImplementation((ym) =>
@@ -581,7 +609,7 @@ describe('AttendanceMonthDetailPage', () => {
 
       expect(screen.getByRole('button', { name: '前月' })).not.toBeDisabled()
       expect(screen.getByRole('button', { name: '次月' })).toBeDisabled()
-      expect(screen.getByRole('link', { name: '一覧' })).toHaveAttribute('href', '/attendance/months')
+      expect(screen.queryByRole('link', { name: '一覧' })).not.toBeInTheDocument()
     })
 
     it('disables 次月 for the current month but allows navigating to earlier employment months', async () => {

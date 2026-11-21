@@ -21,6 +21,8 @@ const unreadNotification: Notification = {
   confirmed_at: null,
 }
 
+const relativeNotification: Notification = { ...unreadNotification, id: '2', detail_url: '/requests/1' }
+
 function LocationProbe() {
   const location = useLocation()
   return <div data-testid="location-search">{location.search}</div>
@@ -55,6 +57,19 @@ describe('NotificationsPage', () => {
     expect(await screen.findByText('承認依頼')).toBeInTheDocument()
     expect(screen.getAllByText('未読').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: '確認済みにする' })).toBeInTheDocument()
+  })
+
+  it('renders an in-app detail_url as a router link and an external one as a plain anchor', async () => {
+    vi.spyOn(notificationsApi, 'fetchMyNotifications').mockResolvedValue(
+      paginated([relativeNotification, { ...unreadNotification, id: '3' }]),
+    )
+
+    renderPage()
+
+    await screen.findAllByRole('link', { name: '詳細を確認する' })
+    const links = screen.getAllByRole('link', { name: '詳細を確認する' })
+    expect(links[0]).toHaveAttribute('href', '/requests/1')
+    expect(links[1]).toHaveAttribute('href', 'https://example.com/requests/1')
   })
 
   it('confirms a notification when the button is clicked', async () => {

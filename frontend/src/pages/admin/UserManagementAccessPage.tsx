@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useForwardState } from "../../navigation/backState";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
@@ -44,6 +45,7 @@ export function UserManagementAccessPage({
   section?: "groups" | "membershipChanges" | "hr" | "identities";
 }) {
   const navigate = useNavigate();
+  const forwardState = useForwardState();
   const groups = userManagement.useManagedGroups(),
     types = userManagement.useGroupTypes(),
     identities = userManagement.useExternalIdentities(section === "identities"),
@@ -250,6 +252,7 @@ export function UserManagementAccessPage({
               <Link
                 className="text-sm font-medium text-primary hover:underline"
                 to="/admin/groups/new"
+                state={forwardState}
               >
                 新規グループ
               </Link>
@@ -303,7 +306,9 @@ export function UserManagementAccessPage({
                 {visibleGroups?.map((g) => (
                   <ClickableTableRow
                     key={g.id}
-                    onRowClick={() => navigate(`/admin/groups/${g.id}`)}
+                    onRowClick={() =>
+                      navigate(`/admin/groups/${g.id}`, { state: forwardState })
+                    }
                     rowLabel={`${g.name}の詳細を開く`}
                   >
                     <TableCell>{g.type.name}</TableCell>
@@ -311,6 +316,7 @@ export function UserManagementAccessPage({
                       <Link
                         className="font-medium text-foreground hover:text-primary hover:underline"
                         to={`/admin/groups/${g.id}`}
+                        state={forwardState}
                         onClick={(e) => e.stopPropagation()}
                       >
                         {g.name}
@@ -911,7 +917,11 @@ export function UserManagementAccessPage({
               </div>
               <p className="mt-2">
                 上記以外の項目(氏名など)を外部HRから取り込みたい場合は、先に
-                <Link to="/admin/identity-settings" className="underline">
+                <Link
+                  to="/admin/identity-settings"
+                  state={forwardState}
+                  className="underline"
+                >
                   外部ID・項目管理責任
                 </Link>
                 の画面で対象項目を「外部HR管理」に設定してください。設定していない項目はCSVに列があっても反映されません。
@@ -978,7 +988,11 @@ export function UserManagementAccessPage({
               <p className="mt-3 text-sm text-foreground">
                 適用しました(新規{csvApplySummary.new}件・変更
                 {csvApplySummary.changed}件)。反映結果は
-                <Link to="/admin/users" className="underline">
+                <Link
+                  to="/admin/users"
+                  state={forwardState}
+                  className="underline"
+                >
                   ユーザー一覧
                 </Link>
                 から確認できます。

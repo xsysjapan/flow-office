@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -36,6 +37,7 @@ import {
   useWorkCalendars,
 } from '../../hooks/useWorkCalendars'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { useForwardState } from '../../navigation/backState'
 
 const SYNC_STATUS_LABEL: Record<string, string> = {
   pending: '未同期',
@@ -128,6 +130,7 @@ function formatSyncSummary(summary: HolidayCalendarSyncSummary): string {
  * (ui-interaction-patterns SKILL.md §2.7の例外)。
  */
 export function WorkCalendarDetailPage() {
+  const forwardState = useForwardState()
   const { id: companyCalendarId } = useParams<{ id: string }>()
   const { data: calendars, isLoading, error } = useWorkCalendars()
   const updateCalendar = useUpdateWorkCalendar()
@@ -346,11 +349,7 @@ export function WorkCalendarDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link to="/admin/work-calendars" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-          ← 会社カレンダー一覧に戻る
-        </Link>
-      </div>
+      <BackLink className="mb-0" />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-foreground">{calendar.name}</h1>
@@ -546,6 +545,7 @@ export function WorkCalendarDetailPage() {
                     <div className="flex flex-1 flex-col gap-1">
                       <Link
                         to={`/admin/work-calendars/${calendar.id}/years/${year.fiscal_year}/days`}
+                        state={forwardState}
                         className="text-sm font-medium text-foreground hover:text-primary hover:underline"
                       >
                         {year.fiscal_year}年度

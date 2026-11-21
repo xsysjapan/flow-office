@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -18,6 +19,7 @@ import type {
   WorkCalendarYearStatus,
 } from '../../api/types'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { useBackTarget, useForwardState, useKeepBackState } from '../../navigation/backState'
 import { cn } from '../../lib/utils'
 import { addDays, addMonths, datesInMonth } from '../../utils/weekDates'
 import {
@@ -303,6 +305,9 @@ function DayCell({ date, state, inRange, allowOverride, weekdayClassification, o
 export function WorkCalendarDaysPage() {
   const { calendarId = '', fiscalYear = '' } = useParams<{ calendarId: string; fiscalYear: string }>()
   const navigate = useNavigate()
+  const forwardState = useForwardState()
+  const backTarget = useBackTarget()
+  const keepBackState = useKeepBackState()
   const putDays = usePutWorkCalendarDays()
 
   const { year, calendar, isLoading: isLoadingYear, error: yearError } = useCompanyCalendarYearByFiscalYear(calendarId, fiscalYear)
@@ -422,7 +427,14 @@ export function WorkCalendarDaysPage() {
   const handleDeleteYear = () => {
     if (!calendar || !year) return Promise.resolve()
     return deleteYear.mutateAsync(year.id, {
-      onSuccess: () => navigate(`/admin/work-calendars/${calendar.id}`),
+      onSuccess: () => {
+        const detailPath = `/admin/work-calendars/${calendar.id}`
+        if (backTarget && backTarget.to.split(/[?#]/)[0] === detailPath) {
+          navigate(backTarget.to, { state: backTarget.state })
+        } else {
+          navigate(detailPath, { state: keepBackState })
+        }
+      },
     })
   }
 
@@ -439,16 +451,7 @@ export function WorkCalendarDaysPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {calendar && (
-        <div>
-          <Link
-            to={`/admin/work-calendars/${calendar.id}`}
-            className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-          >
-            ← {calendar.name}に戻る
-          </Link>
-        </div>
-      )}
+      <BackLink label={calendar?.name} className="mb-0" />
 
       {isLoadingYear ? (
         <LoadingState />
@@ -539,6 +542,7 @@ export function WorkCalendarDaysPage() {
               休日iCalendarソースが未設定のため、同期は行えません。
               <Link
                 to={`/admin/work-calendars/${calendar.id}#${HOLIDAY_SOURCE_MANAGEMENT_ANCHOR}`}
+                state={forwardState}
                 className="ml-1 underline hover:text-foreground"
               >
                 休日iCalendarソース管理

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import type { SearchAssetsParams } from '../../api/asset'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
@@ -93,6 +94,7 @@ const FILTER_KEYS = [
  */
 export function AssetListPage() {
   const navigate = useNavigate()
+  const forwardState = useForwardState()
   const { user } = useAuth()
   const canManage = user?.effective_permissions?.includes('asset.manage') ?? false
   const [searchParams, setSearchParams] = useSearchParams()
@@ -169,7 +171,7 @@ export function AssetListPage() {
       title="備品管理"
       actions={
         canManage && (
-          <Button size="sm" onClick={() => navigate('/assets/new')}>
+          <Button size="sm" onClick={() => navigate('/assets/new', { state: forwardState })}>
             新規登録
           </Button>
         )
@@ -177,25 +179,25 @@ export function AssetListPage() {
     >
       <div className="mb-4 flex flex-col gap-4">
         <div className="flex flex-wrap gap-2">
-          <Link to="/assets/bulk/self-loan" className="text-sm text-primary hover:underline">
+          <Link to="/assets/bulk/self-loan" state={forwardState} className="text-sm text-primary hover:underline">
             セルフ一括貸出
           </Link>
           <span className="text-sm text-muted-foreground">/</span>
-          <Link to="/assets/bulk/self-return" className="text-sm text-primary hover:underline">
+          <Link to="/assets/bulk/self-return" state={forwardState} className="text-sm text-primary hover:underline">
             セルフ一括返却
           </Link>
           {canManage && (
             <>
               <span className="text-sm text-muted-foreground">/</span>
-              <Link to="/assets/bulk/lend" className="text-sm text-primary hover:underline">
+              <Link to="/assets/bulk/lend" state={forwardState} className="text-sm text-primary hover:underline">
                 一括貸与
               </Link>
               <span className="text-sm text-muted-foreground">/</span>
-              <Link to="/assets/bulk/return" className="text-sm text-primary hover:underline">
+              <Link to="/assets/bulk/return" state={forwardState} className="text-sm text-primary hover:underline">
                 一括返却
               </Link>
               <span className="text-sm text-muted-foreground">/</span>
-              <Link to="/assets/bulk/relocate" className="text-sm text-primary hover:underline">
+              <Link to="/assets/bulk/relocate" state={forwardState} className="text-sm text-primary hover:underline">
                 一括移設
               </Link>
             </>
@@ -306,13 +308,14 @@ export function AssetListPage() {
             {assets.map((asset) => (
               <ClickableTableRow
                 key={asset.id}
-                onRowClick={() => navigate(`/assets/${asset.id}`)}
+                onRowClick={() => navigate(`/assets/${asset.id}`, { state: forwardState })}
                 rowLabel={`${asset.name}の詳細を開く`}
               >
                 <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
                 <TableCell>
                   <Link
                     to={`/assets/${asset.id}`}
+                    state={forwardState}
                     className="text-foreground hover:text-primary hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >

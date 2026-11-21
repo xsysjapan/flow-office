@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { BackLink } from "../../components/BackLink/BackLink";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
 import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/ConfirmActionDialog";
@@ -28,6 +29,7 @@ import {
   useScheduleMembershipChange,
   useUpdateGroup,
 } from "../../hooks/useUserManagement";
+import { useForwardState, useKeepBackState } from "../../navigation/backState";
 import { useUsers } from "../../hooks/useUsers";
 import type { ManagedGroup } from "../../api/userManagement";
 import {
@@ -41,6 +43,7 @@ export function GroupDetailPage() {
   const { id = "new" } = useParams<{ id: string }>();
   const isNew = id === "new";
   const navigate = useNavigate();
+  const keepBackState = useKeepBackState();
   const groups = useManagedGroups();
   const types = useGroupTypes();
   const roles = access.useAccessRoles();
@@ -105,6 +108,7 @@ export function GroupDetailPage() {
 
   return (
     <div className="space-y-4">
+      <BackLink className="mb-0" />
       <Card title={isNew ? "グループを新規作成" : `${group!.name}の詳細`}>
         {mutation.error && <ErrorMessage error={mutation.error} />}
         <div className="grid gap-3 md:grid-cols-2">
@@ -221,6 +225,7 @@ export function GroupDetailPage() {
                       }
                       navigate(`/admin/groups/${newGroupId}`, {
                         replace: true,
+                        state: keepBackState,
                       });
                     },
                   },
@@ -273,6 +278,7 @@ function GroupMembersCard({
   group: ManagedGroup;
   groupOptions: ManagedGroup[];
 }) {
+  const forwardState = useForwardState();
   const users = useUsers("", 100);
   const changes = useMembershipChangeSets(true, {
     group_id: group.id,
@@ -373,6 +379,7 @@ function GroupMembersCard({
                 <Link
                   className="font-medium text-foreground hover:text-primary hover:underline"
                   to={`/admin/users/${membership.user_id}`}
+                  state={forwardState}
                 >
                   {membership.user.name}
                 </Link>

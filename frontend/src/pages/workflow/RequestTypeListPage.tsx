@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -14,6 +15,7 @@ import { useRequestTypes } from '../../hooks/useRequestTypes'
  */
 export function RequestTypeListPage() {
   const navigate = useNavigate()
+  const forwardState = useForwardState()
   const { data: requestTypes, isLoading, error } = useRequestTypes(true)
 
   if (isLoading) return <LoadingState />
@@ -26,7 +28,9 @@ export function RequestTypeListPage() {
       title="申請種別一覧"
       actions={
         <Button asChild>
-          <Link to="/admin/request-types/new">新規作成</Link>
+          <Link to="/admin/request-types/new" state={forwardState}>
+            新規作成
+          </Link>
         </Button>
       }
     >
@@ -36,7 +40,9 @@ export function RequestTypeListPage() {
           description="申請種別を作成すると、社員が申請フォームからその種別で申請できるようになります。"
           action={
             <Button asChild variant="secondary" size="sm">
-              <Link to="/admin/request-types/new">申請種別を作成</Link>
+              <Link to="/admin/request-types/new" state={forwardState}>
+                申請種別を作成
+              </Link>
             </Button>
           }
         />
@@ -54,12 +60,13 @@ export function RequestTypeListPage() {
             {types.map((type) => (
               <ClickableTableRow
                 key={type.id}
-                onRowClick={() => navigate(`/admin/request-types/${type.id}`)}
+                onRowClick={() => navigate(`/admin/request-types/${type.id}`, { state: forwardState })}
                 rowLabel={`${type.name}の詳細を開く`}
               >
                 <TableCell>
                   <Link
                     to={`/admin/request-types/${type.id}`}
+                    state={forwardState}
                     className="font-medium text-foreground hover:text-primary hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >

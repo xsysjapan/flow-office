@@ -204,6 +204,12 @@ describe('AttendanceDayPage', () => {
     )
   })
 
+  it('shows a back link to the month of the day when opened directly', async () => {
+    renderPage([recordedDay])
+
+    expect(await screen.findByRole('link', { name: '2026年7月の勤怠に戻る' })).toHaveAttribute('href', '/attendance/months/2026-07')
+  })
+
   it('deletes the day after confirming with a reason (UC-A015)', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     vi.spyOn(attendanceApi, 'deleteAttendanceDay').mockResolvedValue({ deleted: true })

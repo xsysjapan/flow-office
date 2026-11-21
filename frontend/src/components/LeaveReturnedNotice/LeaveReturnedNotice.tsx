@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { Button } from '../Button/Button'
 
 /**
@@ -10,12 +11,13 @@ import { Button } from '../Button/Button'
  * `workflowRequestId`がnullのときは導線を出さない(案内の文だけ出す)。
  */
 export function LeaveReturnedNotice({ workflowRequestId }: { workflowRequestId: string | null }) {
+  const forwardState = useForwardState()
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
       <span>差し戻されています。申請詳細の「提出する」で再提出できます。</span>
       {workflowRequestId !== null && (
         <Button asChild variant="secondary">
-          <Link to={`/requests/${workflowRequestId}`}>申請詳細を開く</Link>
+          <Link to={`/requests/${workflowRequestId}`} state={forwardState}>申請詳細を開く</Link>
         </Button>
       )}
     </div>

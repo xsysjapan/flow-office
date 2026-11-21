@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useForwardState, useKeepBackState } from '../../navigation/backState'
 import { useAuth } from '../../auth/useAuth'
 import { useAppSettings } from '../../contexts/useAppSettings'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
@@ -52,6 +54,7 @@ function useNavigableYearMonths(yearMonth: string) {
 
 function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: boolean }) {
   const navigate = useNavigate()
+  const keepState = useKeepBackState()
   const { prevMonth, nextMonth } = useNavigableYearMonths(yearMonth)
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
 
@@ -63,7 +66,7 @@ function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: bool
         title={prevMonth ? '前月' : '入社月より前の月には移動できません'}
         aria-label="前月"
         disabled={!prevMonth}
-        onClick={() => prevMonth && navigate(`/attendance/months/${prevMonth}`)}
+        onClick={() => prevMonth && navigate(`/attendance/months/${prevMonth}`, { state: keepState })}
       >
         <ChevronLeft aria-hidden="true" />
       </Button>
@@ -73,22 +76,16 @@ function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: bool
         </Button>
       ) : (
         <Button asChild variant="secondary">
-          <Link to={`/attendance/months/${currentYearMonth}`}>今月</Link>
+          <Link to={`/attendance/months/${currentYearMonth}`} state={keepState}>今月</Link>
         </Button>
       )}
-      <Button asChild variant="secondary" title="月次一覧へ戻る">
-        <Link to="/attendance/months">
-          <CalendarRange aria-hidden="true" />
-          一覧
-        </Link>
-      </Button>
       <Button
         variant="secondary"
         size="icon"
         title={nextMonth ? '次月' : '退社月または今月より先の月には移動できません'}
         aria-label="次月"
         disabled={!nextMonth}
-        onClick={() => nextMonth && navigate(`/attendance/months/${nextMonth}`)}
+        onClick={() => nextMonth && navigate(`/attendance/months/${nextMonth}`, { state: keepState })}
       >
         <ChevronRight aria-hidden="true" />
       </Button>
@@ -163,6 +160,7 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
 export function AttendanceMonthDetailPage() {
   const { user } = useAuth()
   const { yearMonth } = useParams<{ yearMonth: string }>()
+  const forwardState = useForwardState()
   const [bulkEntryMessage, setBulkEntryMessage] = useState<string | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
@@ -217,6 +215,7 @@ export function AttendanceMonthDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <BackLink />
       <Card
         title="月次勤怠"
         actions={monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
@@ -257,6 +256,7 @@ export function AttendanceMonthDetailPage() {
             <p>この月は承認済みのため編集できません。日次実績の修正が必要な場合は、勤怠確定取消依頼を申請してください（承認されると未提出に戻ります）。</p>
             <Button asChild size="sm" variant="secondary" className="mt-2">
               <Link
+                state={forwardState}
                 to={`/requests/new?${new URLSearchParams({
                   type: 'attendance_confirmation_revert',
                   target_year_month: yearMonth,
@@ -273,7 +273,7 @@ export function AttendanceMonthDetailPage() {
           <div key={week.week_start_date} className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
             <p>週40時間超の法定外労働時間が{week.unallocated_weekly_statutory_excess_overtime_minutes}分未振分です（{week.week_start_date}〜{week.week_end_date}）。</p>
             <Button asChild size="sm" variant="secondary" className="mt-2">
-              <Link to={`/attendance/week?start=${week.week_start_date}`}>週次勤怠で振り分ける</Link>
+              <Link to={`/attendance/week?start=${week.week_start_date}`} state={forwardState}>週次勤怠で振り分ける</Link>
             </Button>
           </div>
         ))}

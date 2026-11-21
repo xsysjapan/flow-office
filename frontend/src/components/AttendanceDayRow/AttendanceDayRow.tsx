@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import type { KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import type { AttendanceDay, EmployeeShiftAssignment } from '../../api/types'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
 import { attendanceRowDisplayLabel, attendanceScheduleHolidayLabel } from '../../utils/statusLabels'
@@ -49,6 +50,7 @@ export function AttendanceDayRow({
   selected = false,
   onToggleSelected,
 }: AttendanceDayRowProps) {
+  const forwardState = useForwardState()
   const { label, tone } = attendanceRowDisplayLabel(day, schedule)
   const holiday = attendanceScheduleHolidayLabel(schedule)
   const showHolidayAlongsideStatus = holiday !== null && day !== undefined
@@ -123,6 +125,7 @@ export function AttendanceDayRow({
     <li className="flex items-center gap-1">
       <Link
         to={`/attendance/days/${date}`}
+        state={forwardState}
         className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 rounded-md px-2 py-3 transition-colors hover:bg-accent sm:flex sm:items-center sm:gap-2.5"
       >
         {content}

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
+import { BackLink } from '../../components/BackLink/BackLink'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -14,6 +15,7 @@ import { PermissionDenied } from '../../components/PermissionDenied/PermissionDe
 import { Input } from '../../components/ui/input'
 import { Separator } from '../../components/ui/separator'
 import { WorkflowRequestSubjectDetail } from '../../components/WorkflowRequestSubjectDetail/WorkflowRequestSubjectDetail'
+import { useForwardState } from '../../navigation/backState'
 import { useAsset } from '../../hooks/useAsset'
 import {
   useApproveWorkflowRequest,
@@ -40,6 +42,7 @@ function SectionHeading({ children }: { children: string }) {
  * form_data.asset_idから資産名・管理番号を解決して表示する(UC-C相当)。
  */
 function AssetLoanRequestSubjectView({ assetId }: { assetId: string }) {
+  const forwardState = useForwardState()
   const { data: asset, isLoading } = useAsset(assetId)
 
   if (isLoading) return <p className="text-sm text-muted-foreground">対象備品を確認しています…</p>
@@ -48,7 +51,7 @@ function AssetLoanRequestSubjectView({ assetId }: { assetId: string }) {
   return (
     <p className="text-sm text-foreground">
       対象備品:{' '}
-      <Link to={`/assets/${asset.id}`} className="text-primary hover:underline">
+      <Link to={`/assets/${asset.id}`} state={forwardState} className="text-primary hover:underline">
         {asset.name}({asset.asset_no})
       </Link>
     </p>
@@ -121,9 +124,7 @@ export function WorkflowRequestDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/requests" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-        ← 一覧へ戻る
-      </Link>
+      <BackLink />
 
       <Card title={request.title} actions={<Badge tone={tone}>{label}</Badge>}>
         {actionError && <ErrorMessage error={actionError} />}

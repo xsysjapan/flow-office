@@ -1,3 +1,4 @@
+import { BackLink } from '../../components/BackLink/BackLink'
 import { Card } from '../../components/Card/Card'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { LeaveHistoryList } from '../../components/LeaveHistoryList/LeaveHistoryList'
@@ -11,12 +12,15 @@ export function MySpecialLeaveHistoryPage() {
   const isEmpty = !isLoading && !error && (data?.length ?? 0) === 0
 
   return (
-    <Card title="特別休暇履歴">
-      {isEmpty ? (
-        <EmptyState title="特別休暇履歴はまだありません。" description="特別休暇を申請すると、ここに履歴が表示されます。" />
-      ) : (
-        <LeaveHistoryList domain="special_leave" events={data} isLoading={isLoading} error={error} />
-      )}
-    </Card>
+    <>
+      <BackLink />
+      <Card title="特別休暇履歴">
+        {isEmpty ? (
+          <EmptyState title="特別休暇履歴はまだありません。" description="特別休暇を申請すると、ここに履歴が表示されます。" />
+        ) : (
+          <LeaveHistoryList domain="special_leave" events={data} isLoading={isLoading} error={error} />
+        )}
+      </Card>
+    </>
   )
 }

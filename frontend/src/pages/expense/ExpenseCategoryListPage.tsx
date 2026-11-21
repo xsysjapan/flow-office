@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -21,6 +22,7 @@ const evidenceTypeLabels: Record<ExpenseEvidenceType, string> = {
  */
 export function ExpenseCategoryListPage() {
   const navigate = useNavigate()
+  const forwardState = useForwardState()
   const { data: categories, isLoading, error } = useExpenseCategories(true)
 
   if (isLoading) return <LoadingState />
@@ -33,7 +35,9 @@ export function ExpenseCategoryListPage() {
       title="経費区分一覧"
       actions={
         <Button asChild>
-          <Link to="/admin/expense-categories/new">新規作成</Link>
+          <Link to="/admin/expense-categories/new" state={forwardState}>
+            新規作成
+          </Link>
         </Button>
       }
     >
@@ -43,7 +47,9 @@ export function ExpenseCategoryListPage() {
           description="経費区分を作成すると、社員が経費精算の明細を入力できるようになります。"
           action={
             <Button asChild variant="secondary" size="sm">
-              <Link to="/admin/expense-categories/new">経費区分を作成</Link>
+              <Link to="/admin/expense-categories/new" state={forwardState}>
+                経費区分を作成
+              </Link>
             </Button>
           }
         />
@@ -63,12 +69,13 @@ export function ExpenseCategoryListPage() {
             {items.map((category) => (
               <ClickableTableRow
                 key={category.id}
-                onRowClick={() => navigate(`/admin/expense-categories/${category.id}`)}
+                onRowClick={() => navigate(`/admin/expense-categories/${category.id}`, { state: forwardState })}
                 rowLabel={`${category.name}の詳細を開く`}
               >
                 <TableCell>
                   <Link
                     to={`/admin/expense-categories/${category.id}`}
+                    state={forwardState}
                     className="font-medium text-foreground hover:text-primary hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -22,6 +23,7 @@ const PER_PAGE = 20
  * 作成時から選べるようにする(段階的開示のため曜日ごとの休日設定は既定で折りたたまれている)。
  */
 export function WorkCalendarListPage() {
+  const forwardState = useForwardState()
   const [searchParams, setSearchParams] = useSearchParams()
   const pageParam = searchParams.get('page')
   const page = isValidPageParam(pageParam) ? Number(pageParam) : 1
@@ -60,7 +62,9 @@ export function WorkCalendarListPage() {
         title="会社カレンダー一覧"
         actions={
           <Button asChild>
-            <Link to="/admin/work-calendars/new">新規作成</Link>
+            <Link to="/admin/work-calendars/new" state={forwardState}>
+              新規作成
+            </Link>
           </Button>
         }
       >
@@ -74,7 +78,9 @@ export function WorkCalendarListPage() {
             description="会社カレンダーを作成すると、社員の勤務予定や休日をカレンダー単位で管理できます。"
             action={
               <Button asChild>
-                <Link to="/admin/work-calendars/new">会社カレンダーを作成</Link>
+                <Link to="/admin/work-calendars/new" state={forwardState}>
+                  会社カレンダーを作成
+                </Link>
               </Button>
             }
           />
@@ -85,6 +91,7 @@ export function WorkCalendarListPage() {
                 <li key={calendar.id} className="flex flex-wrap items-center gap-3 py-1">
                   <Link
                     to={`/admin/work-calendars/${calendar.id}`}
+                    state={forwardState}
                     className="flex flex-1 flex-wrap items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent"
                   >
                     <div className="flex flex-1 flex-col">

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
 import type { StoredEvent } from '../../api/types'
@@ -11,12 +12,20 @@ function renderPage(events: StoredEvent[]) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MyPaidLeaveHistoryPage />
+      <MemoryRouter initialEntries={['/paid-leave/history']}>
+        <MyPaidLeaveHistoryPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
 describe('MyPaidLeaveHistoryPage', () => {
+  it('shows a back link to the paid leave screen', async () => {
+    renderPage([])
+
+    expect(await screen.findByRole('link', { name: '有給に戻る' })).toHaveAttribute('href', '/paid-leave')
+  })
+
   it('shows an empty state when there is no history', async () => {
     renderPage([])
 

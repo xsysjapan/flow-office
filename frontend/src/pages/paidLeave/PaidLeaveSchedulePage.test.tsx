@@ -174,7 +174,7 @@ describe('PaidLeaveSchedulePage', () => {
 
   it('links back to the paid leave page', async () => {
     renderPage()
-    expect(await screen.findByRole('link', { name: '← 有給休暇' })).toHaveAttribute('href', '/admin/paid-leave')
+    expect(await screen.findByRole('link', { name: '有給休暇に戻る' })).toHaveAttribute('href', '/admin/paid-leave')
   })
 
   it('lists schedule entries with category/status/attendance rate columns', async () => {

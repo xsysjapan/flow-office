@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -9,9 +10,12 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Textarea } from '../../components/ui/textarea'
+import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useCreateRequestType, useRequestTypes, useUpdateRequestType } from '../../hooks/useRequestTypes'
 import type { RequestFormFieldSchema } from '../../api/types'
+
+const LIST_PATH = '/admin/request-types'
 
 /**
  * UC-M002 / UC-W001: 管理者が申請種別を作成・編集する。
@@ -19,6 +23,8 @@ import type { RequestFormFieldSchema } from '../../api/types'
 export function RequestTypeEditPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const backTarget = useBackTarget()
+  const keepBackState = useKeepBackState()
   const isCreate = !id || id === 'new'
 
   const { data: requestTypes, isLoading, error: listError } = useRequestTypes(true)
@@ -112,19 +118,24 @@ export function RequestTypeEditPage() {
       await updateType.mutateAsync({ id: existing.id, input })
     }
 
-    navigate('/admin/request-types')
+    if (backTarget && backTarget.to.split(/[?#]/)[0] === LIST_PATH) {
+      navigate(backTarget.to, { state: backTarget.state })
+    } else {
+      navigate(LIST_PATH, { state: keepBackState })
+    }
+  }
+
+  const handleCancel = () => {
+    if (backTarget) {
+      navigate(backTarget.to, { state: backTarget.state, replace: true })
+    } else {
+      navigate(LIST_PATH)
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link
-          to="/admin/request-types"
-          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-        >
-          ← 申請種別一覧へ戻る
-        </Link>
-      </div>
+      <BackLink className="mb-0" />
 
       <Card title={isCreate ? '申請種別の新規作成' : '申請種別の編集'}>
         {error && <ErrorMessage error={error} />}
@@ -286,7 +297,7 @@ export function RequestTypeEditPage() {
         </Button>
 
         <div className="mt-5 flex items-center gap-3">
-          <Button variant="secondary" disabled={isBusy} onClick={() => navigate('/admin/request-types')}>
+          <Button variant="secondary" disabled={isBusy} onClick={handleCancel}>
             キャンセル
           </Button>
           <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>

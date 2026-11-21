@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
+import { useForwardState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -16,6 +17,7 @@ import { expenseClaimStatusLabel, isExpenseClaimDeletable, isExpenseClaimEditabl
  */
 export function ExpenseClaimListPage() {
   const navigate = useNavigate()
+  const forwardState = useForwardState()
   const { data, isLoading, error } = useMyExpenseClaims()
   const deleteClaim = useDeleteExpenseClaim()
 
@@ -29,7 +31,7 @@ export function ExpenseClaimListPage() {
       title="自分の経費精算"
       actions={
         <Button asChild>
-          <Link to="/expenses/new">新規作成</Link>
+          <Link to="/expenses/new" state={forwardState}>新規作成</Link>
         </Button>
       }
     >
@@ -39,7 +41,7 @@ export function ExpenseClaimListPage() {
           description="経費を使ったら新規作成から精算を申請できます。"
           action={
             <Button asChild variant="secondary" size="sm">
-              <Link to="/expenses/new">経費精算を作成</Link>
+              <Link to="/expenses/new" state={forwardState}>経費精算を作成</Link>
             </Button>
           }
         />
@@ -64,13 +66,14 @@ export function ExpenseClaimListPage() {
               return (
                 <ClickableTableRow
                   key={claim.id}
-                  onRowClick={() => navigate(`/expenses/${claim.id}`)}
+                  onRowClick={() => navigate(`/expenses/${claim.id}`, { state: forwardState })}
                   rowLabel={`${claim.title ?? '経費精算'}の詳細を開く`}
                 >
                   <TableCell className="text-foreground">{claim.title ?? '-'}</TableCell>
                   <TableCell>
                     <Link
                       to={`/expenses/${claim.id}`}
+                      state={forwardState}
                       className="font-medium text-foreground hover:text-primary hover:underline"
                       onClick={(e) => e.stopPropagation()}
                     >
@@ -87,7 +90,7 @@ export function ExpenseClaimListPage() {
                     <div className="flex items-center gap-2">
                       {isEditable && (
                         <Button asChild variant="secondary" size="sm">
-                          <Link to={`/expenses/${claim.id}/edit`}>編集を続ける</Link>
+                          <Link to={`/expenses/${claim.id}/edit`} state={forwardState}>編集を続ける</Link>
                         </Button>
                       )}
                       {isDeletable && (

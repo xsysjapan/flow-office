@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useBackTarget, useForwardState } from '../../navigation/backState'
 import { ApiError } from '../../api/client'
 import type { Asset } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
@@ -409,6 +411,8 @@ export function AssetDetailPage() {
   const { id } = useParams<{ id: string }>()
   const assetId = id ?? ''
   const navigate = useNavigate()
+  const forwardState = useForwardState()
+  const backTarget = useBackTarget()
   const { user } = useAuth()
   const { data: asset, isLoading, error } = useAsset(assetId)
   const { data: history, isLoading: isLoadingHistory } = useAssetHistory(assetId)
@@ -455,7 +459,7 @@ export function AssetDetailPage() {
     setDeleteError(null)
     try {
       await deleteAsset.mutateAsync(assetId)
-      navigate('/assets')
+      navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })
     } catch (e) {
       setDeleteError(e as Error)
       throw e
@@ -472,12 +476,7 @@ export function AssetDetailPage() {
         }
       `}</style>
 
-      <Link
-        to="/assets"
-        className="no-print text-sm text-muted-foreground hover:text-foreground hover:underline"
-      >
-        ← 一覧へ戻る
-      </Link>
+      <BackLink className="no-print" />
 
       <div className="no-print">
       <Card
@@ -487,7 +486,7 @@ export function AssetDetailPage() {
             {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
             {canManage && (
               <Button variant="secondary" size="sm" asChild>
-                <Link to={`/assets/${asset.id}/edit`}>編集</Link>
+                <Link to={`/assets/${asset.id}/edit`} state={forwardState}>編集</Link>
               </Button>
             )}
           </div>

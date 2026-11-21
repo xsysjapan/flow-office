@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { getSafeRedirectTarget } from '../../auth/redirectTarget'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { useForwardState } from '../../navigation/backState'
 import { useConfirmNotification, useMyNotifications } from '../../hooks/useNotifications'
 
 type StatusFilter = 'all' | 'unread' | 'read'
@@ -22,6 +24,7 @@ function isStatusFilter(value: string | null): value is StatusFilter {
 
 /** UC-N001: 自分宛て通知の一覧・既読管理。 */
 export function NotificationsPage() {
+  const forwardState = useForwardState()
   const [searchParams, setSearchParams] = useSearchParams()
   const statusParam = searchParams.get('status')
   const status: StatusFilter = isStatusFilter(statusParam) ? statusParam : 'all'
@@ -102,14 +105,23 @@ export function NotificationsPage() {
                   <span className="font-medium text-foreground">{notification.title}</span>
                 </div>
                 <p className="text-sm text-muted-foreground">{notification.summary}</p>
-                {notification.detail_url && (
-                  <a
-                    href={notification.detail_url}
-                    className="mt-1 inline-block text-sm text-primary hover:underline"
-                  >
-                    詳細を確認する
-                  </a>
-                )}
+                {notification.detail_url &&
+                  (getSafeRedirectTarget(notification.detail_url) ? (
+                    <Link
+                      to={notification.detail_url}
+                      state={forwardState}
+                      className="mt-1 inline-block text-sm text-primary hover:underline"
+                    >
+                      詳細を確認する
+                    </Link>
+                  ) : (
+                    <a
+                      href={notification.detail_url}
+                      className="mt-1 inline-block text-sm text-primary hover:underline"
+                    >
+                      詳細を確認する
+                    </a>
+                  ))}
               </div>
               {isUnread && (
                 <Button
