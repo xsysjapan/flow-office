@@ -21,6 +21,7 @@ import {
   useMyBackOfficeTasks,
   useUnassignedBackOfficeTasks,
 } from '../../hooks/useBackOfficeTasks'
+import { isValidPageParam } from '../../utils/searchParamValidators'
 import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
 
 interface BackOfficeTaskTableProps {
@@ -116,10 +117,12 @@ export function BackOfficeTaskListPage() {
    *  未割り当て/自分のタスクの2つの一覧は検索語を共有しつつ、ページングは独立させる。 */
   const [searchParams, setSearchParams] = useSearchParams()
   const search = searchParams.get('q') ?? ''
-  const unassignedPageParam = Number(searchParams.get('unassignedPage'))
-  const unassignedPage = Number.isInteger(unassignedPageParam) && unassignedPageParam > 0 ? unassignedPageParam : 1
-  const minePageParam = Number(searchParams.get('minePage'))
-  const minePage = Number.isInteger(minePageParam) && minePageParam > 0 ? minePageParam : 1
+  const unassignedPageParam = searchParams.get('unassignedPage')
+  const isInvalidUnassignedPage = unassignedPageParam !== null && !isValidPageParam(unassignedPageParam)
+  const unassignedPage = unassignedPageParam !== null && !isInvalidUnassignedPage ? Number(unassignedPageParam) : 1
+  const minePageParam = searchParams.get('minePage')
+  const isInvalidMinePage = minePageParam !== null && !isValidPageParam(minePageParam)
+  const minePage = minePageParam !== null && !isInvalidMinePage ? Number(minePageParam) : 1
   const isFiltered = Boolean(search)
 
   const [searchInput, setSearchInput] = useState(search)
@@ -135,6 +138,20 @@ export function BackOfficeTaskListPage() {
   const [bulkAssignee, setBulkAssignee] = useState<string | undefined>(undefined)
   const [isBulkAssigning, setIsBulkAssigning] = useState(false)
   const [bulkError, setBulkError] = useState<Error | null>(null)
+
+  // 不正なページは1ページ目として扱い、URLからもキーを消す
+  useEffect(() => {
+    if (!isInvalidUnassignedPage && !isInvalidMinePage) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (isInvalidUnassignedPage) next.delete('unassignedPage')
+        if (isInvalidMinePage) next.delete('minePage')
+        return next
+      },
+      { replace: true },
+    )
+  }, [isInvalidUnassignedPage, isInvalidMinePage, setSearchParams])
 
   if (unassigned.isLoading || mine.isLoading) return <LoadingState />
 

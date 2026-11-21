@@ -24,14 +24,16 @@ export function fetchUsers(
  * 承認者選択(UserPicker)等、一般社員も使う軽量な検索。機微な項目は返らない。
  * `permission`を指定すると、globalスコープで当該Permissionを保有するユーザーのみに
  * 絞り込む(例: 備品貸出申請の承認者を`asset.manage`保有者に絞る)。
+ * `ids`を指定すると、そのIDの社員だけを返す(IDから氏名を引く用途。`per_page`省略時は件数ぶん返る)。
  */
 export function searchUsers(
   query?: string,
   perPage?: number,
   permission?: string,
+  ids?: string[],
 ): Promise<Paginated<UserSearchResult>> {
   return apiFetch("/users/search", {
-    query: { q: query, per_page: perPage, permission },
+    query: { q: query, per_page: perPage, permission, ids },
   });
 }
 

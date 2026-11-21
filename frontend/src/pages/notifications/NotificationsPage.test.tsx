@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as notificationsApi from '../../api/notifications'
 import type { Notification, Paginated } from '../../api/types'
@@ -21,12 +21,18 @@ const unreadNotification: Notification = {
   confirmed_at: null,
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
 function renderPage(initialEntries: string[] = ['/notifications']) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={initialEntries}>
         <NotificationsPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -62,5 +68,24 @@ describe('NotificationsPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '確認済みにする' }))
 
     await waitFor(() => expect(confirmSpy).toHaveBeenCalledWith('1'))
+  })
+
+  it('drops an invalid status from the URL and shows all notifications', async () => {
+    const spy = vi.spyOn(notificationsApi, 'fetchMyNotifications').mockResolvedValue(paginated([unreadNotification]))
+
+    renderPage(['/notifications?status=bogus'])
+
+    expect(await screen.findByText('承認依頼')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('location-search')).toBeEmptyDOMElement())
+    expect(spy).toHaveBeenLastCalledWith(undefined)
+  })
+
+  it('keeps a valid status in the URL', async () => {
+    vi.spyOn(notificationsApi, 'fetchMyNotifications').mockResolvedValue(paginated([unreadNotification]))
+
+    renderPage(['/notifications?status=unread'])
+
+    expect(await screen.findByText('承認依頼')).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?status=unread')
   })
 })

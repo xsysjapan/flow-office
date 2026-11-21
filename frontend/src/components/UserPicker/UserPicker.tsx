@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
-import { useUserSearch } from '../../hooks/useUsers'
+import { useUserSearch, useUsersByIds } from '../../hooks/useUsers'
 import { cn } from '../../lib/utils'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
@@ -30,9 +30,20 @@ export function UserPicker({
 }: UserPickerProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [selectedLabel, setSelectedLabel] = useState<string>()
+  const [selectedLabel, setSelectedLabel] = useState<{ id: string; label: string }>()
   const { data } = useUserSearch(query, 100, permission)
   const suggestions = data?.data ?? []
+
+  // 一覧から選んだ手元のラベルがvalueと一致しないとき(URL復元・リロード・親から値が変わった)だけIDから取得する。
+  const localLabel = value && selectedLabel?.id === value ? selectedLabel.label : undefined
+  const lookup = useUsersByIds(value && !localLabel ? [value] : [])
+  const looked = value && !localLabel ? lookup.data?.data.find((user) => user.id === value) : undefined
+  let displayLabel: string
+  if (!value) displayLabel = placeholder
+  else if (localLabel) displayLabel = localLabel
+  else if (looked) displayLabel = `${looked.name}(${looked.email})`
+  else if (lookup.isPending) displayLabel = '読み込み中…'
+  else displayLabel = '不明な社員'
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -47,7 +58,7 @@ export function UserPicker({
             !value && 'text-muted-foreground',
           )}
         >
-          <span className="truncate">{value ? selectedLabel : placeholder}</span>
+          <span className="truncate">{displayLabel}</span>
           <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
@@ -66,7 +77,7 @@ export function UserPicker({
                   value={String(user.id)}
                   onSelect={() => {
                     onChange(user.id)
-                    setSelectedLabel(`${user.name}(${user.email})`)
+                    setSelectedLabel({ id: user.id, label: `${user.name}(${user.email})` })
                     setQuery('')
                     setOpen(false)
                   }}

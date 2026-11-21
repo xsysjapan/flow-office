@@ -10,7 +10,7 @@ import { pickDate } from '../../test-support/pickerInteractions'
 import { CompensatoryLeaveAdminPage } from './CompensatoryLeaveAdminPage'
 
 const targetUser: User = {
-  id: 'user-3',
+  id: '11111111-1111-4111-8111-111111111111',
   name: '対象社員',
   email: 'taisho@example.com',
   department: null,
@@ -42,7 +42,7 @@ describe('CompensatoryLeaveAdminPage', () => {
     vi.spyOn(compensatoryLeaveApi, 'fetchCompensatoryLeaveGrantsForUser').mockResolvedValue([])
     vi.spyOn(compensatoryLeaveApi, 'grantCompensatoryLeave').mockResolvedValue({
       id: 'grant-1',
-      user_id: 'user-3',
+      user_id: '11111111-1111-4111-8111-111111111111',
       source: 'manual',
       attendance_day_id: 'day-1',
       work_date: '2026-08-01',
@@ -68,7 +68,7 @@ describe('CompensatoryLeaveAdminPage', () => {
 
     await waitFor(() =>
       expect(compensatoryLeaveApi.grantCompensatoryLeave).toHaveBeenCalledWith({
-        user_id: 'user-3',
+        user_id: '11111111-1111-4111-8111-111111111111',
         work_date: '2026-08-01',
         expires_on: undefined,
         grant_reason: undefined,
@@ -80,7 +80,7 @@ describe('CompensatoryLeaveAdminPage', () => {
   it('shows the selected users usage records from the ?userId= URL query param', async () => {
     const usage: CompensatoryLeaveUsage = {
       id: 'usage-1',
-      user_id: 'user-3',
+      user_id: '11111111-1111-4111-8111-111111111111',
       used_on: '2026-08-16',
       used_days: 1,
       used_minutes: null,
@@ -92,18 +92,18 @@ describe('CompensatoryLeaveAdminPage', () => {
     }
     vi.spyOn(compensatoryLeaveApi, 'fetchCompensatoryLeaveUsagesForUser').mockResolvedValue([usage])
 
-    renderPage('/admin/compensatory-leave?userId=user-3')
+    renderPage('/admin/compensatory-leave?userId=11111111-1111-4111-8111-111111111111')
 
     expect(await screen.findByText('2026-08-16')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
-    expect(compensatoryLeaveApi.fetchCompensatoryLeaveUsagesForUser).toHaveBeenCalledWith('user-3')
+    expect(compensatoryLeaveApi.fetchCompensatoryLeaveUsagesForUser).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111')
   })
 
   describe('grant list buttons of the target user', () => {
     function grantOf(overrides: Partial<CompensatoryLeaveGrant>): CompensatoryLeaveGrant {
       return {
         id: 'grant-1',
-        user_id: 'user-3',
+        user_id: '11111111-1111-4111-8111-111111111111',
         source: 'attendance',
         attendance_day_id: 'day-1',
         work_date: '2026-08-01',

@@ -45,6 +45,23 @@ function withSeeded() {
   }
 }
 
+function withSeededValue(id: string) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
+  queryClient.setQueryData(['users', 'search', '', 100, ''], paginatedUsers)
+  queryClient.setQueryData(['users', 'by-ids', [id]], {
+    ...paginatedUsers,
+    data: users.filter((user) => user.id === id),
+  })
+
+  return function Decorator() {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <UserPicker id="approver" value={id} onChange={fn()} />
+      </QueryClientProvider>
+    )
+  }
+}
+
 const meta = {
   title: 'Components/UserPicker',
   component: UserPicker,
@@ -66,5 +83,14 @@ export const Open: Story = {
     await userEvent.click(canvas.getByRole('combobox'))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '花')
     await expect(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' })).toBeInTheDocument()
+  },
+}
+
+export const WithValue: Story = {
+  args: { id: 'approver', value: 'approver-1', onChange: fn() },
+  render: withSeededValue('approver-1'),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('combobox')).toHaveTextContent('承認者花子(hanako@example.com)')
   },
 }

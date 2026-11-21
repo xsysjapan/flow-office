@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
@@ -25,6 +25,7 @@ import {
   useMyCompensatoryLeaveGrants,
   useMyCompensatoryLeaveRequests,
 } from '../../hooks/useCompensatoryLeave'
+import { isValidPageParam } from '../../utils/searchParamValidators'
 import { paidLeaveRequestStatusLabel, paidLeaveTypeLabel } from '../../utils/statusLabels'
 import { addDays } from '../../utils/weekDates'
 
@@ -263,10 +264,22 @@ function CompensatoryLeaveRequestForm() {
 
 function MyCompensatoryLeaveRequestList() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const pageParam = Number(searchParams.get('requestPage'))
-  const requestPage = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const requestPageParam = searchParams.get('requestPage')
+  const requestPage = isValidPageParam(requestPageParam) ? Number(requestPageParam) : 1
   const { data, isLoading, error } = useMyCompensatoryLeaveRequests({ page: requestPage })
   const cancelRequest = useCancelCompensatoryLeaveRequest()
+
+  useEffect(() => {
+    if (requestPageParam === null || isValidPageParam(requestPageParam)) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('requestPage')
+        return next
+      },
+      { replace: true },
+    )
+  }, [requestPageParam, setSearchParams])
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="代休申請の取得に失敗しました。" />
@@ -278,11 +291,15 @@ function MyCompensatoryLeaveRequestList() {
   }
 
   function handlePageChange(nextPage: number) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      next.set('requestPage', String(nextPage))
-      return next
-    })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (nextPage <= 1) next.delete('requestPage')
+        else next.set('requestPage', String(nextPage))
+        return next
+      },
+      { replace: true },
+    )
   }
 
   return (

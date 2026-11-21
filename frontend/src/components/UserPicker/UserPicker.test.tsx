@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import * as usersApi from '../../api/users'
-import type { Paginated, User } from '../../api/types'
+import type { Paginated, User, UserSearchResult } from '../../api/types'
 import { UserPicker } from './UserPicker'
 
 function ControlledUserPicker({ onChange }: { onChange: (userId: string | undefined) => void }) {
@@ -131,5 +131,76 @@ describe('UserPicker', () => {
     await waitFor(() => expect(onChange).toHaveBeenCalledWith('approver-1'))
     expect(screen.queryByRole('option', { name: '承認者花子(hanako@example.com)' })).not.toBeInTheDocument()
     expect(screen.getByRole('combobox')).toHaveTextContent('承認者花子(hanako@example.com)')
+  })
+
+  describe('value passed from the parent', () => {
+    const lookupUsers: UserSearchResult[] = [
+      { id: 'user-a', name: '山田太郎', email: 'yamada@example.com', department: null, job_title: null },
+      { id: 'user-b', name: '鈴木次郎', email: 'suzuki@example.com', department: null, job_title: null },
+    ]
+
+    function mockLookup() {
+      return vi.spyOn(usersApi, 'searchUsers').mockImplementation(async (_q, _perPage, _permission, ids) => {
+        const data = ids ? lookupUsers.filter((user) => ids.includes(user.id)) : lookupUsers
+        return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
+      })
+    }
+
+    function renderWithValue(value: string | undefined) {
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      const ui = (v: string | undefined) => (
+        <QueryClientProvider client={queryClient}>
+          <UserPicker id="approver" value={v} onChange={vi.fn()} />
+        </QueryClientProvider>
+      )
+      const result = render(ui(value))
+      return { ...result, rerenderWith: (v: string | undefined) => result.rerender(ui(v)) }
+    }
+
+    it('shows the fetched name and email when only the id is given', async () => {
+      mockLookup()
+      renderWithValue('user-a')
+
+      await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('山田太郎(yamada@example.com)'))
+      expect(usersApi.searchUsers).toHaveBeenCalledWith(undefined, undefined, undefined, ['user-a'])
+    })
+
+    it('shows a loading label while the name is being fetched', async () => {
+      vi.spyOn(usersApi, 'searchUsers').mockImplementation(() => new Promise(() => {}))
+      renderWithValue('user-a')
+
+      expect(screen.getByRole('combobox')).toHaveTextContent('読み込み中…')
+    })
+
+    it('shows an unknown label when no user matches the id', async () => {
+      mockLookup()
+      renderWithValue('missing')
+
+      await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('不明な社員'))
+    })
+
+    it('shows the unknown label when the lookup fails', async () => {
+      vi.spyOn(usersApi, 'searchUsers').mockRejectedValue(new Error('boom'))
+      renderWithValue('user-a')
+
+      await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('不明な社員'))
+    })
+
+    it('shows the placeholder when no value is given', () => {
+      mockLookup()
+      renderWithValue(undefined)
+
+      expect(screen.getByRole('combobox')).toHaveTextContent('氏名またはメールアドレスで検索')
+    })
+
+    it('shows the new user name when the value changes from the parent', async () => {
+      mockLookup()
+      const { rerenderWith } = renderWithValue('user-a')
+      await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('山田太郎(yamada@example.com)'))
+
+      rerenderWith('user-b')
+
+      await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('鈴木次郎(suzuki@example.com)'))
+    })
   })
 })

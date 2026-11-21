@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -33,6 +33,7 @@ import {
   useUpdateSpecialLeaveType,
 } from '../../hooks/useSpecialLeave'
 import { useUpdateSpecialLeaveAutoGrantEnabled } from '../../hooks/useUsers'
+import { isValidUuidParam } from '../../utils/searchParamValidators'
 
 interface StepInput {
   continuous_service_months: number
@@ -622,18 +623,36 @@ function ManualGrantCard() {
 
 function SpecialLeaveUsageCard() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const userId = searchParams.get('userId') ?? undefined
+  const userIdParam = searchParams.get('userId')
+  const userId = isValidUuidParam(userIdParam) ? (userIdParam ?? undefined) : undefined
   const { data, isLoading, error } = useSpecialLeaveUsagesForUser(userId ?? '')
   const adminCancel = useAdminCancelSpecialLeaveRequest(userId ?? '')
 
+  useEffect(() => {
+    if (userIdParam === null || isValidUuidParam(userIdParam)) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('userId')
+        return next
+      },
+      { replace: true },
+    )
+  }, [userIdParam, setSearchParams])
+
   const handleUserChange = (value: string | undefined) => {
-    const next = new URLSearchParams(searchParams)
-    if (value) {
-      next.set('userId', value)
-    } else {
-      next.delete('userId')
-    }
-    setSearchParams(next, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (value) {
+          next.set('userId', value)
+        } else {
+          next.delete('userId')
+        }
+        return next
+      },
+      { replace: true },
+    )
   }
 
   const isEmpty = userId !== undefined && !isLoading && !error && (data?.length ?? 0) === 0

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CalendarClock, ClipboardList, Receipt, Sunrise } from 'lucide-react'
 import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
@@ -28,6 +28,7 @@ import {
   isWorkflowRequestCancellable,
   workflowRequestStatusLabel,
 } from '../../utils/statusLabels'
+import { isValidPageParam } from '../../utils/searchParamValidators'
 
 /** 「新規申請」で選べる申請種別と、各ドメインの既存作成(または作成導線を持つ)ページへの
  *  遷移先。作成ページ自体はドメインごとに既存のものをそのまま使う。 */
@@ -191,11 +192,23 @@ export function WorkflowRequestListPage() {
       : subjectTypeParam === 'none'
         ? null
         : (subjectTypeParam as NonNullable<FetchMyWorkflowRequestsOptions['subjectType']>)
-  const pageParam = Number(searchParams.get('page'))
-  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const pageParam = searchParams.get('page')
+  const page = isValidPageParam(pageParam) ? Number(pageParam) : 1
 
   const { data, isLoading, error } = useMyWorkflowRequests({ status, subjectType, page })
   const cancelRequest = useCancelWorkflowRequest()
+
+  useEffect(() => {
+    if (pageParam === null || isValidPageParam(pageParam)) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }, [pageParam, setSearchParams])
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkReason, setBulkReason] = useState('')

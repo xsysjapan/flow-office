@@ -54,6 +54,7 @@ import {
   pickDefaultFiscalYearStart,
   statutoryGrantSteps,
 } from '../../lib/paidLeaveGrantRule'
+import { isValidUuidParam } from '../../utils/searchParamValidators'
 
 const STATUTORY_POLICY_WARNING =
   'この表の変更は法令に基づく設定です。保存前に社労士等の専門家に確認してください。'
@@ -806,18 +807,36 @@ function ManualGrantCard() {
 
 function PaidLeaveUsageCard() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const userId = searchParams.get('userId') ?? undefined
+  const userIdParam = searchParams.get('userId')
+  const userId = isValidUuidParam(userIdParam) ? (userIdParam ?? undefined) : undefined
   const { data, isLoading, error } = usePaidLeaveUsagesForUser(userId ?? '')
   const adminCancel = useAdminCancelPaidLeaveRequest(userId ?? '')
 
+  useEffect(() => {
+    if (userIdParam === null || isValidUuidParam(userIdParam)) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('userId')
+        return next
+      },
+      { replace: true },
+    )
+  }, [userIdParam, setSearchParams])
+
   const handleUserChange = (value: string | undefined) => {
-    const next = new URLSearchParams(searchParams)
-    if (value) {
-      next.set('userId', value)
-    } else {
-      next.delete('userId')
-    }
-    setSearchParams(next, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (value) {
+          next.set('userId', value)
+        } else {
+          next.delete('userId')
+        }
+        return next
+      },
+      { replace: true },
+    )
   }
 
   const isEmpty = userId !== undefined && !isLoading && !error && (data?.length ?? 0) === 0

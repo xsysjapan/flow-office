@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -15,8 +15,10 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { useDeleteDevice, useDevices, useRegisterDevice, useRevokeDevice } from '../../hooks/useDevices'
+import { ApiError } from '../../api/client'
+import { useDeleteDevice, useDevice, useDevices, useRegisterDevice, useRevokeDevice } from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
+import { isValidPageParam } from '../../utils/searchParamValidators'
 import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
 
 const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
@@ -79,8 +81,11 @@ function isHeartbeatStale(device: Device): boolean {
  */
 export function DeviceListPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const pageParam = Number(searchParams.get('page'))
-  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const pageParam = searchParams.get('page')
+  const isInvalidPage = pageParam !== null && !isValidPageParam(pageParam)
+  const page = pageParam !== null && !isInvalidPage ? Number(pageParam) : 1
+  /** 詳細パネルの対象端末はURLの`deviceId`に載せる(SKILL.md §2.10) */
+  const selectedDeviceId = searchParams.get('deviceId')
   const showDeleted = searchParams.get('show_deleted') === '1'
   const { data: devices, isLoading, error } = useDevices({
     ownerType: 'organization_shared',
@@ -96,7 +101,39 @@ export function DeviceListPage() {
   const [roleTypes, setRoleTypes] = useState<DeviceRoleType[]>(['attendance_reader'])
   const [locationName, setLocationName] = useState('')
   const [defaultWorkLocationType, setDefaultWorkLocationType] = useState<WorkLocationType | ''>('')
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
+
+  // 対象端末が現在のページの一覧に無くても開けるよう、一覧に無いときだけ個別に取得する
+  const selectedInList = devices?.data.find((device) => device.id === selectedDeviceId)
+  const { data: fetchedDevice, error: deviceError } = useDevice(
+    selectedDeviceId !== null && !selectedInList ? selectedDeviceId : undefined,
+  )
+  const isDeviceNotFound = deviceError instanceof ApiError && deviceError.status === 404
+
+  function setSelectedDeviceId(id: string | null) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (id === null) next.delete('deviceId')
+        else next.set('deviceId', id)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  // 不正なページは1ページ目として扱い、存在しない端末のIDと共にURLからキーを消す
+  useEffect(() => {
+    if (!isInvalidPage && !isDeviceNotFound) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (isInvalidPage) next.delete('page')
+        if (isDeviceNotFound) next.delete('deviceId')
+        return next
+      },
+      { replace: true },
+    )
+  }, [isInvalidPage, isDeviceNotFound, setSearchParams])
 
   const toggleShowDeleted = () => {
     setSearchParams(
@@ -157,7 +194,7 @@ export function DeviceListPage() {
   if (error) return <ErrorMessage error={error} fallback="端末一覧の取得に失敗しました。" />
 
   const list = devices?.data ?? []
-  const selectedDevice = list.find((device) => device.id === selectedDeviceId) ?? null
+  const selectedDevice = selectedInList ?? (selectedDeviceId !== null && fetchedDevice?.id === selectedDeviceId ? fetchedDevice : null)
 
   return (
     <Card

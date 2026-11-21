@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -24,6 +25,19 @@ export function NotificationsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const statusParam = searchParams.get('status')
   const status: StatusFilter = isStatusFilter(statusParam) ? statusParam : 'all'
+  const isInvalidStatus = statusParam !== null && !isStatusFilter(statusParam)
+  // 不正な値は既定表示(すべて)として扱い、URLからもキーを消す
+  useEffect(() => {
+    if (!isInvalidStatus) return
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev)
+        params.delete('status')
+        return params
+      },
+      { replace: true },
+    )
+  }, [isInvalidStatus, setSearchParams])
   function setStatus(next: StatusFilter) {
     setSearchParams(
       (prev) => {

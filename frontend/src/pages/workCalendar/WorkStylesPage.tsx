@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -23,6 +24,7 @@ import { useGenerateShiftAssignments } from '../../hooks/useEmployeeShiftAssignm
 import { useUser } from '../../hooks/useUsers'
 import { useCreateDefaultWorkStyle, useSetDefaultWorkStyle, useWorkStyles } from '../../hooks/useWorkStyles'
 import type { WorkStyle } from '../../api/types'
+import { isValidPageParam } from '../../utils/searchParamValidators'
 
 /** "YYYY-MM" から、その月の1日と末日(YYYY-MM-DD)を返す。 */
 function monthBoundaries(yearMonth: string): { from: string; to: string } {
@@ -156,7 +158,33 @@ function WorkStyleListCard() {
   const { data: workStyles, isLoading, error } = useWorkStyles()
   const setDefaultWorkStyle = useSetDefaultWorkStyle()
 
-  const [page, setPage] = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const pageParam = searchParams.get('page')
+  const page = isValidPageParam(pageParam) ? Number(pageParam) : 1
+
+  useEffect(() => {
+    if (pageParam === null || isValidPageParam(pageParam)) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }, [pageParam, setSearchParams])
+
+  function setPage(nextPage: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (nextPage <= 1) next.delete('page')
+        else next.set('page', String(nextPage))
+        return next
+      },
+      { replace: true },
+    )
+  }
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingWorkStyle, setEditingWorkStyle] = useState<WorkStyle | null>(null)
 

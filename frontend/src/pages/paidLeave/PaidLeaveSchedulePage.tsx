@@ -32,6 +32,7 @@ import {
 } from '../../hooks/usePaidLeave'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { paidLeaveScheduleCategoryLabel, paidLeaveScheduleStatusLabel } from '../../utils/statusLabels'
+import { isValidDateParam } from '../../utils/searchParamValidators'
 import { formatDate } from '../../utils/weekDates'
 
 const DEFAULT_FILTER: PaidLeaveScheduleFilter = 'all'
@@ -121,10 +122,17 @@ function pairPartnerOf(entry: PaidLeaveScheduleEntry, rows: PaidLeaveScheduleEnt
  */
 export function PaidLeaveSchedulePage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const filter = parseFilter(searchParams.get('filter'))
+  const filterParam = searchParams.get('filter')
+  const filter = parseFilter(filterParam)
   const userName = searchParams.get('user_name') ?? ''
-  const scheduledOnFrom = searchParams.get('scheduled_on_from') ?? ''
-  const scheduledOnTo = searchParams.get('scheduled_on_to') ?? ''
+  const scheduledOnFromParam = searchParams.get('scheduled_on_from')
+  const scheduledOnToParam = searchParams.get('scheduled_on_to')
+  // 不正な値は既定表示(未指定)として扱い、URLからもキーを消す
+  const isInvalidFilter = filterParam !== null && !FILTER_OPTIONS.some((option) => option.value === filterParam)
+  const isInvalidFrom = scheduledOnFromParam !== null && !isValidDateParam(scheduledOnFromParam)
+  const isInvalidTo = scheduledOnToParam !== null && !isValidDateParam(scheduledOnToParam)
+  const scheduledOnFrom = scheduledOnFromParam !== null && !isInvalidFrom ? scheduledOnFromParam : ''
+  const scheduledOnTo = scheduledOnToParam !== null && !isInvalidTo ? scheduledOnToParam : ''
   const selectedEntryId = searchParams.get('scheduleEntryId')
   const isFiltered = filter !== DEFAULT_FILTER || userName !== '' || scheduledOnFrom !== '' || scheduledOnTo !== ''
 
@@ -157,6 +165,20 @@ export function PaidLeaveSchedulePage() {
   }, [userName])
 
   useUnsavedChangesGuard(isDetailDirty)
+
+  useEffect(() => {
+    if (!isInvalidFilter && !isInvalidFrom && !isInvalidTo) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (isInvalidFilter) next.delete('filter')
+        if (isInvalidFrom) next.delete('scheduled_on_from')
+        if (isInvalidTo) next.delete('scheduled_on_to')
+        return next
+      },
+      { replace: true },
+    )
+  }, [isInvalidFilter, isInvalidFrom, isInvalidTo, setSearchParams])
 
   /** 指定したキーだけをURLクエリパラメータへ反映する(他のキーはそのまま維持)。値`null`は削除。 */
   function updateParams(patch: Record<string, string | null>) {

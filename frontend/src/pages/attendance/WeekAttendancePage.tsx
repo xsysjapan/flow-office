@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
@@ -16,6 +16,7 @@ import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
+import { isValidDateParam } from '../../utils/searchParamValidators'
 import { attendanceDayOffBadges, type StatusMeta } from '../../utils/statusLabels'
 import { addDays, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
 
@@ -31,15 +32,50 @@ import { addDays, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
  */
 export function WeekAttendancePage() {
   const { user } = useAuth()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const startParam = searchParams.get('start')
-  const [weekStart, setWeekStart] = useState(() =>
-    formatDate(mondayOf(startParam ? new Date(`${startParam}T00:00:00`) : new Date())),
-  )
+  // 表示中の週はURLのstartを正として毎回読む。月曜以外の正しい日付はその週に寄せて表示し(URLは書き換えない)、
+  // 不正値は今週として扱ってURLからキーを消す。
+  const isInvalidStart = startParam !== null && !isValidDateParam(startParam)
+  const weekStart = formatDate(mondayOf(startParam !== null && !isInvalidStart ? new Date(`${startParam}T00:00:00`) : new Date()))
+
+  useEffect(() => {
+    if (!isInvalidStart) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('start')
+        return next
+      },
+      { replace: true },
+    )
+  }, [isInvalidStart, setSearchParams])
+
+  function moveToWeek(nextWeekStart: string) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('start', nextWeekStart)
+        return next
+      },
+      { replace: true },
+    )
+  }
   const [bulkEntryMessage, setBulkEntryMessage] = useState<string | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const [allocationDraft, setAllocationDraft] = useState<Record<string, { prescribed: number; nonPrescribed: number }>>({})
+
+  // 表示中の週が変わったら、選択モード・選択中の日・一括入力の下書き・メッセージをリセットする
+  // (週の移動・他画面からのリンク・Backのいずれでも同じ)。
+  const [resetWeekStart, setResetWeekStart] = useState(weekStart)
+  if (resetWeekStart !== weekStart) {
+    setResetWeekStart(weekStart)
+    setBulkEntryMessage(null)
+    setSelectionMode(false)
+    setSelectedDates(new Set())
+    setAllocationDraft({})
+  }
   const { data, isLoading, error } = useWeek(weekStart)
   const { data: weeklyOvertime } = useWeekOvertime(weekStart)
   const allocateWeeklyOvertime = useAllocateWeekOvertime(weekStart)
@@ -134,10 +170,10 @@ export function WeekAttendancePage() {
         title="週次勤怠"
         navigation={
           <div className="flex gap-2">
-            <Button variant="secondary" size="icon" title="前週" aria-label="前週" onClick={() => setWeekStart((prev) => addDays(prev, -7))}>
+            <Button variant="secondary" size="icon" title="前週" aria-label="前週" onClick={() => moveToWeek(addDays(weekStart, -7))}>
               <ChevronLeft aria-hidden="true" />
             </Button>
-            <Button variant="secondary" disabled={weekStart === currentWeekStart} onClick={() => setWeekStart(currentWeekStart)}>
+            <Button variant="secondary" disabled={weekStart === currentWeekStart} onClick={() => moveToWeek(currentWeekStart)}>
               今週
             </Button>
             <Button asChild variant="secondary" title="月次で見る">
@@ -146,7 +182,7 @@ export function WeekAttendancePage() {
                 月次
               </Link>
             </Button>
-            <Button variant="secondary" size="icon" title="次週" aria-label="次週" onClick={() => setWeekStart((prev) => addDays(prev, 7))}>
+            <Button variant="secondary" size="icon" title="次週" aria-label="次週" onClick={() => moveToWeek(addDays(weekStart, 7))}>
               <ChevronRight aria-hidden="true" />
             </Button>
           </div>

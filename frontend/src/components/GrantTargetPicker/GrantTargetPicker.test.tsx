@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import * as groupsApi from '../../api/groups'
 import * as usersApi from '../../api/users'
 import type { GroupMember, GroupOption, Paginated, User } from '../../api/types'
-import { GrantTargetPicker } from './GrantTargetPicker'
+import { GrantTargetPicker, type GrantTargetPickerProps } from './GrantTargetPicker'
 
 const targetUser: User = {
   id: 'user-1',
@@ -82,5 +82,46 @@ describe('GrantTargetPicker', () => {
 
     await waitFor(() => expect(onResolvedChange).toHaveBeenLastCalledWith([], 'group', {}))
     expect(await screen.findByText(/所属メンバーがいません/)).toBeInTheDocument()
+  })
+
+  function renderNamed(props: Partial<GrantTargetPickerProps> = {}) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(usersApi, 'searchUsers').mockImplementation((_q, _p, _perm, ids) =>
+      Promise.resolve(ids ? { ...paginatedUsers, data: [targetUser].filter((u) => ids.includes(u.id)) } : paginatedUsers),
+    )
+    vi.spyOn(groupsApi, 'fetchGroups').mockResolvedValue(groups)
+    vi.spyOn(groupsApi, 'fetchGroupMembers').mockResolvedValue(members)
+    const onResolvedChange = vi.fn()
+    const tree = (p: Partial<GrantTargetPickerProps>) => (
+      <QueryClientProvider client={queryClient}>
+        <GrantTargetPicker idPrefix="grant" onResolvedChange={onResolvedChange} {...p} />
+      </QueryClientProvider>
+    )
+    const view = render(tree(props))
+    return { onResolvedChange, rerender: (p: Partial<GrantTargetPickerProps>) => view.rerender(tree(p)) }
+  }
+
+  it('keeps names after switching individual -> group -> individual', async () => {
+    renderNamed()
+
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByRole('option', { name: '対象太郎(taro@example.com)' }))
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(screen.getByRole('button', { name: 'グループを指定' }))
+    await userEvent.click(screen.getByRole('button', { name: '個人を指定' }))
+
+    expect(await screen.findByRole('button', { name: '対象太郎(taro@example.com)を選択解除' })).toBeInTheDocument()
+  })
+
+  it('shows names for reset individual ids and passes them to onResolvedChange', async () => {
+    const { onResolvedChange, rerender } = renderNamed({ resetSignal: 0 })
+    rerender({ resetSignal: 1, resetIndividualIds: ['user-1'] })
+
+    expect(await screen.findByRole('button', { name: '対象太郎(taro@example.com)を選択解除' })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(onResolvedChange).toHaveBeenLastCalledWith(['user-1'], 'individual', {
+        'user-1': '対象太郎(taro@example.com)',
+      }),
+    )
   })
 })

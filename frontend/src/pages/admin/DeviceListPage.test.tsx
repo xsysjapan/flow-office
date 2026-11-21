@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as devicesApi from '../../api/devices'
+import { ApiError } from '../../api/client'
 import type { Device } from '../../api/types'
 import { DeviceListPage } from './DeviceListPage'
 
@@ -58,7 +59,12 @@ const devices: Device[] = [
   },
 ]
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage(initialEntry = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue({
     data: devices,
@@ -68,8 +74,9 @@ function renderPage() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <DeviceListPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -211,5 +218,45 @@ describe('DeviceListPage', () => {
 
     expect(fetchSpy).toHaveBeenLastCalledWith({ ownerType: 'organization_shared', page: 1, withTrashed: true })
     fetchSpy.mockRestore()
+  })
+
+  it('writes deviceId to the URL when the panel opens and removes it when closed', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('本社1階受付')
+    expect(screen.getByTestId('location-search')).toBeEmptyDOMElement()
+    await user.click(screen.getByText('本社1階受付'))
+    expect(await screen.findByRole('heading', { name: '本社1階受付' })).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?deviceId=device-1')
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.getByTestId('location-search')).toBeEmptyDOMElement())
+    expect(screen.queryByRole('heading', { name: '本社1階受付' })).not.toBeInTheDocument()
+  })
+
+  it('opens the panel from ?deviceId even when the device is not on the current page', async () => {
+    const fetchSpy = vi.spyOn(devicesApi, 'fetchDevice').mockResolvedValue({ ...devices[0], id: 'device-9', name: '別ページの端末' })
+    renderPage('/?deviceId=device-9')
+
+    expect(await screen.findByRole('heading', { name: '別ページの端末' })).toBeInTheDocument()
+    expect(fetchSpy).toHaveBeenCalledWith('device-9')
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?deviceId=device-9')
+  })
+
+  it('removes deviceId from the URL when the device is not found (404)', async () => {
+    vi.spyOn(devicesApi, 'fetchDevice').mockRejectedValue(new ApiError(404, 'not found'))
+    renderPage('/?deviceId=missing')
+
+    await screen.findByText('本社1階受付')
+    await waitFor(() => expect(screen.getByTestId('location-search')).toBeEmptyDOMElement())
+  })
+
+  it('drops an invalid page from the URL and shows the first page', async () => {
+    renderPage('/?page=abc&show_deleted=1')
+
+    await screen.findByText('本社1階受付')
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?show_deleted=1$/))
+    expect(devicesApi.fetchDevices).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
   })
 })

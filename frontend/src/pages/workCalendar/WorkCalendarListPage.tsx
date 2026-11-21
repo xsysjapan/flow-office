@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -9,6 +9,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { useDeleteWorkCalendar, useWorkCalendarsPage } from '../../hooks/useWorkCalendars'
+import { isValidPageParam } from '../../utils/searchParamValidators'
 
 const PER_PAGE = 20
 
@@ -21,7 +22,33 @@ const PER_PAGE = 20
  * 作成時から選べるようにする(段階的開示のため曜日ごとの休日設定は既定で折りたたまれている)。
  */
 export function WorkCalendarListPage() {
-  const [page, setPage] = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const pageParam = searchParams.get('page')
+  const page = isValidPageParam(pageParam) ? Number(pageParam) : 1
+  useEffect(() => {
+    if (pageParam === null || isValidPageParam(pageParam)) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }, [pageParam, setSearchParams])
+
+  function setPage(nextPage: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (nextPage <= 1) next.delete('page')
+        else next.set('page', String(nextPage))
+        return next
+      },
+      { replace: true },
+    )
+  }
+
   const { data, isLoading, error } = useWorkCalendarsPage(page, PER_PAGE)
   const deleteCalendar = useDeleteWorkCalendar()
 

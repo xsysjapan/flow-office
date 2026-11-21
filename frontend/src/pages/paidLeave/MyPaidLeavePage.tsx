@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
@@ -25,6 +25,7 @@ import {
   useMyPaidLeaveGrants,
   useMyPaidLeaveRequests,
 } from '../../hooks/usePaidLeave'
+import { isValidPageParam } from '../../utils/searchParamValidators'
 import { paidLeaveRequestStatusLabel, paidLeaveTypeLabel } from '../../utils/statusLabels'
 import { addDays } from '../../utils/weekDates'
 
@@ -259,10 +260,22 @@ function PaidLeaveRequestForm() {
 
 function MyPaidLeaveRequestList() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const pageParam = Number(searchParams.get('requestPage'))
-  const requestPage = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const requestPageParam = searchParams.get('requestPage')
+  const requestPage = isValidPageParam(requestPageParam) ? Number(requestPageParam) : 1
   const { data, isLoading, error } = useMyPaidLeaveRequests({ page: requestPage })
   const cancelRequest = useCancelPaidLeaveRequest()
+
+  useEffect(() => {
+    if (requestPageParam === null || isValidPageParam(requestPageParam)) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('requestPage')
+        return next
+      },
+      { replace: true },
+    )
+  }, [requestPageParam, setSearchParams])
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="有給申請の取得に失敗しました。" />
@@ -274,11 +287,15 @@ function MyPaidLeaveRequestList() {
   }
 
   function handlePageChange(nextPage: number) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      next.set('requestPage', String(nextPage))
-      return next
-    })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (nextPage <= 1) next.delete('requestPage')
+        else next.set('requestPage', String(nextPage))
+        return next
+      },
+      { replace: true },
+    )
   }
 
   return (

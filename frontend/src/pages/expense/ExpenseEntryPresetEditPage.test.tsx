@@ -35,6 +35,14 @@ const categories: ExpenseCategory[] = [
   },
 ]
 
+const inactiveCategory: ExpenseCategory = {
+  ...categories[1],
+  id: 3,
+  code: 'old_taxi',
+  name: '旧タクシー',
+  is_active: false,
+}
+
 const preset: ExpenseEntryPreset = {
   id: 1,
   visibility: 'personal',
@@ -61,7 +69,9 @@ const preset: ExpenseEntryPreset = {
 function renderPage(initialPath: string, existing: ExpenseEntryPreset = preset) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPreset').mockResolvedValue(existing)
-  vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue(categories)
+  vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockImplementation((includeInactive) =>
+    Promise.resolve(includeInactive ? [...categories, inactiveCategory] : categories),
+  )
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -189,5 +199,25 @@ describe('ExpenseEntryPresetEditPage', () => {
     const deleteButtons = screen.getAllByRole('button', { name: '削除' })
     await userEvent.click(deleteButtons[1])
     expect(screen.queryByLabelText('2番目の明細の経費区分')).not.toBeInTheDocument()
+  })
+
+  it('keeps an inactive category as the only inactive option when it is the current value', async () => {
+    renderPage('/expenses/presets/1', {
+      ...preset,
+      definition: [{ category_id: 3, description: null, amount: null }],
+    })
+
+    expect(await screen.findByLabelText('名称')).toHaveValue('自宅⇔会社')
+    const select = screen.getByLabelText('1番目の明細の経費区分')
+    await waitFor(() => expect(select).toHaveValue('3'))
+    expect(screen.getByRole('option', { name: '旧タクシー(無効)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '交通費' })).toBeInTheDocument()
+  })
+
+  it('does not offer inactive categories for a new preset', async () => {
+    renderPage('/expenses/presets/new')
+
+    await screen.findByLabelText('名称')
+    expect(screen.queryByRole('option', { name: /旧タクシー/ })).not.toBeInTheDocument()
   })
 })

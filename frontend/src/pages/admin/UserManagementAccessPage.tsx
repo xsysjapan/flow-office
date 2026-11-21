@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
@@ -36,6 +36,7 @@ import {
   membershipChangeDescription,
   membershipChangeStatusLabel,
 } from "../../utils/membershipChangeLabels";
+import { isValidPositiveIntIdParam } from "../../utils/searchParamValidators";
 
 export function UserManagementAccessPage({
   section = "groups",
@@ -90,7 +91,34 @@ export function UserManagementAccessPage({
     new: number;
     changed: number;
   } | null>(null);
-  const [groupTypeFilter, setGroupTypeFilter] = useState("");
+  // グループ種別の絞り込みは一覧の絞り込みなのでURLの`group_type_id`に載せる(SKILL.md §2.10)。
+  // 不正な値は絞り込みなしとして扱い、URLからもキーを消す。
+  const [searchParams, setSearchParams] = useSearchParams();
+  const groupTypeParam = searchParams.get("group_type_id");
+  const isInvalidGroupType =
+    groupTypeParam !== null && !isValidPositiveIntIdParam(groupTypeParam);
+  const groupTypeFilter = isInvalidGroupType ? "" : (groupTypeParam ?? "");
+  const setGroupTypeFilter = (value: string) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set("group_type_id", value);
+        else next.delete("group_type_id");
+        return next;
+      },
+      { replace: true },
+    );
+  useEffect(() => {
+    if (!isInvalidGroupType) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("group_type_id");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [isInvalidGroupType, setSearchParams]);
   const queries =
     section === "identities"
       ? [identities, authorities, users]

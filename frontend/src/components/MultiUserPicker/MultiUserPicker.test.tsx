@@ -7,12 +7,21 @@ import * as usersApi from '../../api/users'
 import type { Paginated, User } from '../../api/types'
 import { MultiUserPicker } from './MultiUserPicker'
 
-function ControlledMultiUserPicker({ onChange }: { onChange: (userIds: string[]) => void }) {
-  const [value, setValue] = useState<string[]>([])
+function ControlledMultiUserPicker({
+  onChange,
+  initial = [],
+  onLabelsChange,
+}: {
+  onChange: (userIds: string[]) => void
+  initial?: string[]
+  onLabelsChange?: (labels: Record<string, string>) => void
+}) {
+  const [value, setValue] = useState<string[]>(initial)
 
   return (
     <MultiUserPicker
       id="targets"
+      onLabelsChange={onLabelsChange}
       value={value}
       onChange={(userIds) => {
         setValue(userIds)
@@ -87,5 +96,57 @@ describe('MultiUserPicker', () => {
 
     await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([]))
     expect(screen.queryByRole('button', { name: '対象太郎(taro@example.com)を選択解除' })).not.toBeInTheDocument()
+  })
+
+  function renderWithInitial(
+    initial: string[],
+    impl: (...args: Parameters<typeof usersApi.searchUsers>) => Promise<Paginated<User>>,
+    onLabelsChange?: (labels: Record<string, string>) => void,
+  ) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const spy = vi.spyOn(usersApi, 'searchUsers')
+    spy.mockReset()
+    spy.mockImplementation(impl)
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ControlledMultiUserPicker onChange={vi.fn()} initial={initial} onLabelsChange={onLabelsChange} />
+      </QueryClientProvider>,
+    )
+    return spy
+  }
+
+  const byIds = (ids?: string[]) =>
+    Promise.resolve({
+      ...paginatedUsers,
+      data: users.filter((u) => ids?.includes(u.id)),
+    })
+
+  it('shows names for initial ids and reports them via onLabelsChange', async () => {
+    const onLabelsChange = vi.fn()
+    renderWithInitial(['user-1'], (_q, _p, _perm, ids) => byIds(ids), onLabelsChange)
+
+    expect(await screen.findByRole('button', { name: '対象太郎(taro@example.com)を選択解除' })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(onLabelsChange).toHaveBeenLastCalledWith({ 'user-1': '対象太郎(taro@example.com)' }),
+    )
+  })
+
+  it('shows a loading label while fetching', async () => {
+    renderWithInitial(['user-1'], () => new Promise(() => {}))
+    expect(await screen.findByRole('button', { name: '読み込み中…を選択解除' })).toBeInTheDocument()
+  })
+
+  it('shows unknown label when the id is not found', async () => {
+    renderWithInitial(['missing'], (_q, _p, _perm, ids) => byIds(ids))
+    expect(await screen.findByRole('button', { name: '不明な社員を選択解除' })).toBeInTheDocument()
+  })
+
+  it('fetches more than 100 ids in chunks of 100', async () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`)
+    const spy = renderWithInitial(ids, (_q, _p, _perm, got) => byIds(got))
+    await waitFor(() => {
+      const idCalls = spy.mock.calls.map((c) => c[3]).filter((x): x is string[] => Array.isArray(x))
+      expect(idCalls.map((c) => c.length).sort()).toEqual([1, 100])
+    })
   })
 })

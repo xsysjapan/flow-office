@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
@@ -60,7 +60,12 @@ const mondayRecord: AttendanceDay = {
   },
 }
 
-function renderPage(days: AttendanceDay[] = [mondayRecord]) {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage(days: AttendanceDay[] = [mondayRecord], entry = '/attendance/week') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
   vi.spyOn(attendanceApi, 'fetchWeekOvertime').mockResolvedValue({
@@ -72,8 +77,9 @@ function renderPage(days: AttendanceDay[] = [mondayRecord]) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}>
         <WeekAttendancePage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -184,5 +190,42 @@ describe('WeekAttendancePage', () => {
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent('network down')
+  })
+
+  it('shows the week containing a non-Monday ?start= date without rewriting the URL', async () => {
+    const wednesday = addDays(weekStart, 9)
+    renderPage([], `/attendance/week?start=${wednesday}`)
+
+    await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(addDays(weekStart, 7)))
+    expect(screen.getByTestId('location-search')).toHaveTextContent(`?start=${wednesday}`)
+  })
+
+  it('writes the Monday of the destination week to ?start= when moving weeks', async () => {
+    renderPage([])
+    await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(weekStart))
+    expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/)
+
+    await userEvent.click(screen.getByRole('button', { name: '次週' }))
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(`?start=${addDays(weekStart, 7)}`))
+    expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(addDays(weekStart, 7))
+  })
+
+  it('treats an invalid ?start= as the current week and removes the key', async () => {
+    renderPage([], '/attendance/week?start=2026-02-30')
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/))
+    expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(weekStart)
+    expect(attendanceApi.fetchWeek).not.toHaveBeenCalledWith('Invalid')
+  })
+
+  it('resets the selection mode when the displayed week changes', async () => {
+    renderPage([mondayRecord])
+    await userEvent.click(await screen.findByRole('button', { name: '選択' }))
+    expect(screen.queryByRole('button', { name: '選択' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '次週' }))
+
+    expect(await screen.findByRole('button', { name: '選択' })).toBeInTheDocument()
   })
 })

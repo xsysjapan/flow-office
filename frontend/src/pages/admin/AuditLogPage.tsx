@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -10,6 +11,7 @@ import { Pagination } from '../../components/Pagination/Pagination'
 import { Input } from '../../components/ui/input'
 import { downloadAuditLogCsv, type AuditLogFilters } from '../../api/auditLog'
 import { useAuditLog } from '../../hooks/useAuditLog'
+import { isValidDateParam, isValidPageParam } from '../../utils/searchParamValidators'
 
 const FILTER_KEYS = ['aggregate_type', 'aggregate_id', 'event_type', 'user_id', 'from', 'to'] as const
 
@@ -29,11 +31,32 @@ export function AuditLogPage() {
   const aggregateId = searchParams.get('aggregate_id') ?? ''
   const eventType = searchParams.get('event_type') ?? ''
   const userId = searchParams.get('user_id') ?? ''
-  const from = searchParams.get('from') ?? ''
-  const to = searchParams.get('to') ?? ''
-  const page = Number(searchParams.get('page') ?? '1') || 1
+  const fromParam = searchParams.get('from')
+  const toParam = searchParams.get('to')
+  const pageParam = searchParams.get('page')
+  const isInvalidFrom = fromParam !== null && !isValidDateParam(fromParam)
+  const isInvalidTo = toParam !== null && !isValidDateParam(toParam)
+  const isInvalidPage = pageParam !== null && !isValidPageParam(pageParam)
+  // 不正な値は既定表示として扱い、URLからもキーを消す
+  const from = isInvalidFrom ? '' : (fromParam ?? '')
+  const to = isInvalidTo ? '' : (toParam ?? '')
+  const page = isInvalidPage ? 1 : Number(pageParam ?? '1')
 
-  const isFiltered = FILTER_KEYS.some((key) => Boolean(searchParams.get(key)))
+  useEffect(() => {
+    if (!isInvalidFrom && !isInvalidTo && !isInvalidPage) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (isInvalidFrom) next.delete('from')
+        if (isInvalidTo) next.delete('to')
+        if (isInvalidPage) next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }, [isInvalidFrom, isInvalidTo, isInvalidPage, setSearchParams])
+
+  const isFiltered = Boolean(aggregateType || aggregateId || eventType || userId || from || to)
 
   function updateParam(key: (typeof FILTER_KEYS)[number], value: string) {
     setSearchParams(

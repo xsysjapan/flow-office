@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as expenseEntryPresetsApi from '../../api/expenseEntryPresets'
@@ -76,9 +76,32 @@ const lodgingCategory: ExpenseCategory = {
   is_active: true,
 }
 
+const inactiveCategory: ExpenseCategory = {
+  ...lodgingCategory,
+  id: 3,
+  code: 'old_taxi',
+  name: '旧タクシー',
+  is_active: false,
+}
+
+const inactivePreset: ExpenseEntryPreset = {
+  ...personalPreset,
+  id: 3,
+  name: '旧タクシー用',
+  definition: [{ category_id: 3, description: null, amount: null }],
+}
+
+function LocationProbe() {
+  return <p data-testid="location">{useLocation().search}</p>
+}
+
 function renderPage(presets: ExpenseEntryPreset[], initialPath = '/expenses/presets') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue([transportCategory, lodgingCategory])
+  vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockImplementation((includeInactive) =>
+    Promise.resolve(
+      includeInactive ? [transportCategory, lodgingCategory, inactiveCategory] : [transportCategory, lodgingCategory],
+    ),
+  )
   // 名称検索・経費区分での絞り込みはAPI側で行うため、モックでも同じ絞り込みを再現する。
   const fetchPresets = vi
     .spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPresets')
@@ -103,6 +126,7 @@ function renderPage(presets: ExpenseEntryPreset[], initialPath = '/expenses/pres
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={[initialPath]}>
           <ExpenseEntryPresetListPage />
+          <LocationProbe />
         </MemoryRouter>
       </QueryClientProvider>,
     ),
@@ -183,5 +207,28 @@ describe('ExpenseEntryPresetListPage', () => {
 
     await waitFor(() => expect(screen.queryByRole('link', { name: '自宅⇔会社' })).not.toBeInTheDocument())
     expect(screen.getByText('深夜タクシー')).toBeInTheDocument()
+  })
+
+  it('shows the name of an inactive category and lists it in the filter with (無効)', async () => {
+    renderPage([inactivePreset])
+
+    expect(await screen.findByText('旧タクシー')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '旧タクシー(無効)' })).toBeInTheDocument()
+  })
+
+  it('removes invalid category_id and page from the URL and shows the default', async () => {
+    renderPage([personalPreset], '/expenses/presets?category_id=abc&page=0')
+
+    expect(await screen.findByRole('link', { name: '自宅⇔会社' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^$/))
+    expect(screen.getByLabelText('経費区分で絞り込む')).toHaveValue('')
+  })
+
+  it('keeps a valid category_id in the URL', async () => {
+    renderPage([personalPreset], '/expenses/presets?category_id=1')
+
+    expect(await screen.findByRole('link', { name: '自宅⇔会社' })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('?category_id=1')
+    expect(screen.getByLabelText('経費区分で絞り込む')).toHaveValue('1')
   })
 })

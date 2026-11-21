@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
@@ -129,6 +129,11 @@ const expenseDetail: WorkflowRequest = {
   },
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
 function renderPage(initialEntries?: string[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attachmentsApi, 'fetchAttachments').mockResolvedValue([])
@@ -136,6 +141,7 @@ function renderPage(initialEntries?: string[]) {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={initialEntries}>
         <ApprovalsPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -443,5 +449,35 @@ describe('ApprovalsPage', () => {
     await user.click(screen.getByRole('button', { name: '今月' }))
 
     await waitFor(() => expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument())
+  })
+  it('ignores an invalid yearMonth query param and removes it from the URL', async () => {
+    const withData: Paginated<WorkflowRequest> = {
+      data: [genericRequest],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage(['/approvals?yearMonth=bad'])
+    await screen.findByText('名刺作成申請')
+
+    await waitFor(() => expect(screen.getByTestId('location-search').textContent).not.toContain('yearMonth'))
+    expect(fetchToApprove).toHaveBeenCalled()
+    for (const call of fetchToApprove.mock.calls) {
+      expect(call[0]?.yearMonth).toBeUndefined()
+    }
+  })
+
+
+  it('removes an invalid page from the URL', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue({
+      data: [],
+      meta: { current_page: 1, last_page: 1, total: 0 },
+      links: { next: null, prev: null },
+    } as Paginated<WorkflowRequest>)
+
+    renderPage(['/approvals?page=0&status=approved'])
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?status=approved$/))
   })
 })

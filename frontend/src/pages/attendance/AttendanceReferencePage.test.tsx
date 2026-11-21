@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as exportsApi from '../../api/exports'
@@ -18,7 +18,7 @@ import { datesInMonth, formatDate, mondayOf } from '../../utils/weekDates'
 import { AttendanceReferencePage } from './AttendanceReferencePage'
 
 const targetUser: User = {
-  id: 'user-3',
+  id: '11111111-1111-4111-8111-111111111111',
   name: '対象社員',
   email: 'taisho@example.com',
   department: null,
@@ -70,13 +70,19 @@ const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
   late_night_prescribed_holiday_work_minutes: 0,
 }
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage(initialEntries?: string[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <AttendanceReferencePage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -500,4 +506,52 @@ describe('AttendanceReferencePage', () => {
       )
     })
   })
+  describe('restoring the selection from the URL', () => {
+    function mockApis() {
+      vi.spyOn(usersApi, 'searchUsers').mockImplementation(async (_q, _perPage, _permission, ids) => {
+        const data = ids ? [targetUser].filter((user) => ids.includes(user.id)) : [targetUser]
+        return { ...paginatedUsers, data }
+      })
+      return vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+        days: [],
+        month: null,
+        flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      })
+    }
+
+    it('shows the employee name and the year-month from userId and yearMonth', async () => {
+      const fetchMonth = mockApis()
+
+      renderPage([`/admin/attendance?userId=${targetUser.id}&yearMonth=2026-10`])
+
+      await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('対象社員(taisho@example.com)'))
+      await waitFor(() => expect(fetchMonth).toHaveBeenCalledWith('2026-10', targetUser.id))
+    })
+
+    it('treats the legacy user query param as userId and rewrites the URL', async () => {
+      mockApis()
+
+      renderPage([`/admin/attendance?user=${targetUser.id}`])
+
+      await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('対象社員(taisho@example.com)'))
+      await waitFor(() => {
+        const search = screen.getByTestId('location-search').textContent ?? ''
+        expect(search).toContain(`userId=${targetUser.id}`)
+        expect(search).not.toContain('user=')
+      })
+    })
+
+    it('shows the current month for an invalid yearMonth and removes it from the URL', async () => {
+      const fetchMonth = mockApis()
+
+      renderPage([`/admin/attendance?userId=${targetUser.id}&yearMonth=2026-13`])
+
+      const currentYearMonth = formatDate(new Date()).slice(0, 7)
+      await waitFor(() => expect(fetchMonth).toHaveBeenCalledWith(currentYearMonth, targetUser.id))
+      await waitFor(() => expect(screen.getByTestId('location-search').textContent).not.toContain('yearMonth'))
+      expect(screen.getByTestId('location-search').textContent).toContain(`userId=${targetUser.id}`)
+    })
+  })
+
 })

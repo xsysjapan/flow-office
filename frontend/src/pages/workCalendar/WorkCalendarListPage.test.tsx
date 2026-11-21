@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as workCalendarsApi from '../../api/workCalendars'
 import { ApiError } from '../../api/client'
@@ -29,11 +29,17 @@ function page(calendars: WorkCalendar[], overrides: Partial<Paginated<WorkCalend
   }
 }
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage(entry = '/admin/work-calendars') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/admin/work-calendars']}>
+      <MemoryRouter initialEntries={[entry]}>
+        <LocationProbe />
         <Routes>
           <Route path="/admin/work-calendars" element={<WorkCalendarListPage />} />
           <Route path="/admin/work-calendars/new" element={<p>カレンダー作成ページ</p>} />
@@ -75,6 +81,29 @@ describe('WorkCalendarListPage', () => {
     await waitFor(() =>
       expect(workCalendarsApi.fetchWorkCalendarsPage).toHaveBeenCalledWith({ page: 2, per_page: 20 }),
     )
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?page=2')
+  })
+
+  it('fetches the page given in the URL', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(
+      page([calendar], { current_page: 2, last_page: 3, total: 45 }),
+    )
+
+    renderPage('/admin/work-calendars?page=2')
+
+    await screen.findByText('2026年度カレンダー')
+    expect(workCalendarsApi.fetchWorkCalendarsPage).toHaveBeenCalledWith({ page: 2, per_page: 20 })
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?page=2')
+  })
+
+  it('removes an invalid page from the URL and shows the first page', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([calendar]))
+
+    renderPage('/admin/work-calendars?page=abc')
+
+    await screen.findByText('2026年度カレンダー')
+    expect(workCalendarsApi.fetchWorkCalendarsPage).toHaveBeenCalledWith({ page: 1, per_page: 20 })
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/))
   })
 
   it('navigates to the create page when "新規作成" is clicked', async () => {

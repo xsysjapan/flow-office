@@ -57,6 +57,15 @@ export function useUserSearch(
   });
 }
 
+/** IDから社員の氏名等を引く(UserPickerが、IDだけ渡されたときの表示用)。`permission`は渡さない。 */
+export function useUsersByIds(ids: string[]) {
+  return useQuery({
+    queryKey: ["users", "by-ids", ids],
+    queryFn: () => searchUsers(undefined, undefined, undefined, ids),
+    enabled: ids.length > 0,
+  });
+}
+
 export function useUser(id: string) {
   return useQuery({
     queryKey: ["users", "detail", id],
