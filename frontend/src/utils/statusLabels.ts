@@ -350,6 +350,10 @@ const leaveEventSuffixMeta: Record<string, StatusMeta> = {
   grant_revoked: { label: '取消', tone: 'danger' },
   /** 有給・特別休暇の付与日数の変更(grant_amount_changed)。 */
   grant_amount_changed: { label: '付与日数の変更', tone: 'info' },
+  /** 有給の付与日の変更(grant_date_changed)。 */
+  grant_date_changed: { label: '付与日の変更', tone: 'info' },
+  /** 有給の有効期限の変更(grant_expiry_changed)。 */
+  grant_expiry_changed: { label: '有効期限の変更', tone: 'info' },
   /** 代休固有: 休日出勤実績からの自動計上(下書き)。 */
   grant_synced: { label: '自動計上', tone: 'success' },
   /** 代休固有: 月次確定前の下書き付与の取消。 */
@@ -394,7 +398,7 @@ export function specialLeaveEventTypeLabel(eventType: string): StatusMeta {
  * イベントの種類ごとにpayloadの形が異なるため(docs/17-events.md参照)、末尾の種別
  * (leaveEventTypeLabelと同じ考え方)で分岐して必要なフィールドだけを取り出す。
  * 有給には無い(法定の時効が無い)特別休暇の無期限付与に対応するため、`expires_on`が
- * 無い場合は「有効期限なし」と表示する。
+ * 無い場合は「有効期限なし」と表示する。未知の種別はイベントコードを見せず空文字を返す。
  */
 function leaveEventDetail(event: StoredEvent, domainLabel: string): string {
   const payload = event.payload
@@ -410,6 +414,40 @@ function leaveEventDetail(event: StoredEvent, domainLabel: string): string {
       const reason = payload.reason ? `(${payload.reason})` : ''
       return `付与日数を${payload.new_granted_days}日に変更${reason}`
     }
+    case 'grant_revoked': {
+      const reason = payload.reason ? `(${payload.reason})` : ''
+      return `付与を取り消しました${reason}`
+    }
+    case 'grant_date_changed': {
+      const reason = payload.reason ? `(${payload.reason})` : ''
+      return `付与日を${payload.new_granted_on}に変更${reason}`
+    }
+    case 'grant_expiry_changed': {
+      const reason = payload.reason ? `(${payload.reason})` : ''
+      return `有効期限を${payload.new_expires_on}に変更${reason}`
+    }
+    case 'usage_designated': {
+      // 時間単位の消化は有給(hours)と特別休暇(used_minutes)でキーが異なる。どちらも無ければ日数で表示する。
+      let amount: string
+      if (payload.hours !== null && payload.hours !== undefined) {
+        amount = `${payload.hours}時間`
+      } else if (payload.used_minutes !== null && payload.used_minutes !== undefined) {
+        const usedMinutes = Number(payload.used_minutes)
+        const hours = Math.floor(usedMinutes / 60)
+        const minutes = usedMinutes % 60
+        amount = `${hours > 0 ? `${hours}時間` : ''}${minutes > 0 ? `${minutes}分` : ''}`
+      } else {
+        amount = `${payload.used_days}日`
+      }
+      return `対象日 ${payload.used_on} に${amount}の消化を指定`
+    }
+    case 'usage_allocated':
+      return `付与へ${payload.allocated_days}日を充当`
+    case 'usage_allocation_released':
+      return `付与への充当${payload.released_days}日を解除`
+    case 'shared':
+    case 'request_shared':
+      return '申請がワークフローに連携されました'
     case 'requested':
       return `対象日 ${payload.target_date} の${paidLeaveTypeLabel(payload.leave_type as PaidLeaveType)}を申請(${payload.requested_days}日)`
     case 'approved':
@@ -431,7 +469,7 @@ function leaveEventDetail(event: StoredEvent, domainLabel: string): string {
     case 'grant_warning_raised':
       return String(payload.message)
     default:
-      return event.event_type
+      return ''
   }
 }
 

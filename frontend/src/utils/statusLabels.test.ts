@@ -206,6 +206,43 @@ describe('statusLabels', () => {
     ).toBe('付与日数を3.5日に変更')
   })
 
+  it('formats grant revoke, date/expiry change, usage and workflow share events without event codes', () => {
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_revoked', { reason: '誤登録' }))).toBe('付与を取り消しました(誤登録)')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_revoked', { reason: null }))).toBe('付与を取り消しました')
+    expect(specialLeaveEventDetail(buildEvent('special_leave_account.grant_revoked', { reason: null }))).toBe('付与を取り消しました')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_date_changed', { new_granted_on: '2026-04-01', reason: null }))).toBe(
+      '付与日を2026-04-01に変更',
+    )
+    expect(
+      paidLeaveEventDetail(buildEvent('paid_leave_account.grant_expiry_changed', { new_expires_on: '2028-04-30', reason: '訂正' })),
+    ).toBe('有効期限を2028-04-30に変更(訂正)')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.usage_designated', { used_on: '2026-08-31', used_days: 1, hours: null }))).toBe(
+      '対象日 2026-08-31 に1日の消化を指定',
+    )
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.usage_designated', { used_on: '2026-08-31', used_days: 0.25, hours: 2 }))).toBe(
+      '対象日 2026-08-31 に2時間の消化を指定',
+    )
+    expect(
+      specialLeaveEventDetail(buildEvent('special_leave_account.usage_designated', { used_on: '2026-09-01', used_days: 0.1875, used_minutes: 90 })),
+    ).toBe('対象日 2026-09-01 に1時間30分の消化を指定')
+    expect(specialLeaveEventDetail(buildEvent('special_leave_account.usage_designated', { used_on: '2026-09-01', used_days: 0.5, used_minutes: 60 }))).toBe(
+      '対象日 2026-09-01 に1時間の消化を指定',
+    )
+    expect(specialLeaveEventDetail(buildEvent('special_leave_account.usage_designated', { used_on: '2026-09-01', used_days: 0.0625, used_minutes: 30 }))).toBe(
+      '対象日 2026-09-01 に30分の消化を指定',
+    )
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.usage_allocated', { allocated_days: 1 }))).toBe('付与へ1日を充当')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.usage_allocation_released', { released_days: 0.5 }))).toBe('付与への充当0.5日を解除')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_request.shared', {}))).toBe('申請がワークフローに連携されました')
+    expect(specialLeaveEventDetail(buildEvent('special_leave.request_shared', {}))).toBe('申請がワークフローに連携されました')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.something_new', {}))).toBe('')
+  })
+
+  it('labels grant_date_changed and grant_expiry_changed events', () => {
+    expect(paidLeaveEventTypeLabel('paid_leave_account.grant_date_changed')).toEqual({ label: '付与日の変更', tone: 'info' })
+    expect(paidLeaveEventTypeLabel('paid_leave_account.grant_expiry_changed')).toEqual({ label: '有効期限の変更', tone: 'info' })
+  })
+
   it('formats each paid leave history event type using its own payload shape', () => {
     expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_created', { granted_days: 10, expires_on: '2027-06-30' }))).toBe(
       '10日を付与(有効期限 2027-06-30)',

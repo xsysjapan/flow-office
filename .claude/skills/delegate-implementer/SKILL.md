@@ -107,6 +107,8 @@ implementerは指示に書かれていないことを推測で埋めるか、気
       ファイルのDBに行が残り、後続の`RefreshDatabase`のテスト約140件を壊したのを見逃した)。`DatabaseMigrations`を使うテストには、
       後続のテストへ状態を残さないこと(`RefreshDatabaseState::$migrated`を戻す等)を書く。
 - [ ] migrationを足したときは、down()を、データ移行(後続のmigration)の後の状態で確かめるテストがあるか(CIの`migrate-mysql`は、`migrate`の後に`migrate:rollback`を行う)。
+- [ ] frontendのvitestは`npx vitest run --project unit <対象>`、lintは`npx oxlint <対象>`を指定したか(eslintの設定は無く、
+      `--project`なしではstorybookプロジェクトがブラウザ実行で失敗する)。
 - [ ] frontendの型チェックは`npx tsc -p tsconfig.app.json --noEmit`を指定したか(ルートの`tsconfig.json`は
       参照だけなので、`npx tsc --noEmit`では何も検査されない)。
 - [ ] コマンドの出力や画面の文言を変える作業では、その文言を期待しているテストとe2eを`grep`で探して直すことを書いたか

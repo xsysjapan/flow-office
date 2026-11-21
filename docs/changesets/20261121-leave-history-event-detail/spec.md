@@ -1,6 +1,6 @@
 # 有給・特別休暇履歴でイベントコードがそのまま表示される不具合の修正
 
-- ステータス: 実装中
+- ステータス: 完了
 - 種別: 不具合修正(frontend)
 
 ## 変更要望(原文)
@@ -82,4 +82,8 @@
 
 ## 実装結果
 
-(実装後に追記)
+- 変更: `frontend/src/utils/statusLabels.ts`(ラベル2件追加・詳細文の分岐8件追加・未知の種別は空文字)、
+  `frontend/src/utils/statusLabels.test.ts`(2テスト追加)。
+- 検証: `npx vitest run --project unit src/utils/statusLabels.test.ts src/components/LeaveHistoryList src/pages` 68ファイル/688件成功、
+  `npx tsc -p tsconfig.app.json --noEmit` 成功。
+- 残課題(対象外として据え置き): 未知の種別のラベル(バッジ)はイベントコードのまま。消化量0(hours=0・used_minutes=0)は実運用で発生しない前提。
