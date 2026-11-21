@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueries } from '@tanstack/react-query'
 import { Check, ChevronsUpDown, X } from 'lucide-react'
+import { searchUsers } from '../../api/users'
 import { useUserSearch } from '../../hooks/useUsers'
 import { cn } from '../../lib/utils'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+
+/** backendの`/users/search`の`ids`上限。 */
+const IDS_CHUNK_SIZE = 100
 
 export interface MultiUserPickerProps {
   id: string
@@ -32,12 +37,49 @@ export function MultiUserPicker({
   const { data } = useUserSearch(query, 100)
   const suggestions = data?.data ?? []
 
+  // 一覧から選んだ手元のラベルに無いID(初期値・作り直し・親から値が変わった)だけIDから取得する。
+  const unresolvedIds = Array.from(new Set(value.filter((userId) => !labels[userId])))
+  const chunks: string[][] = []
+  for (let i = 0; i < unresolvedIds.length; i += IDS_CHUNK_SIZE) {
+    chunks.push(unresolvedIds.slice(i, i + IDS_CHUNK_SIZE))
+  }
+  const lookups = useQueries({
+    queries: chunks.map((chunk) => ({
+      queryKey: ['users', 'by-ids', chunk],
+      queryFn: () => searchUsers(undefined, undefined, undefined, chunk),
+    })),
+  })
+  const lookupKey = lookups.map((q) => (q.data ? q.data.data.map((u) => u.id).join(',') : q.status)).join('|')
+  const fetchedLabels = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const q of lookups) {
+      for (const user of q.data?.data ?? []) map[user.id] = `${user.name}(${user.email})`
+    }
+    return map
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lookupKey])
+  const allLabels = useMemo(() => ({ ...fetchedLabels, ...labels }), [fetchedLabels, labels])
+
+  const displayName = (userId: string): string => {
+    const known = allLabels[userId]
+    if (known) return known
+    const index = chunks.findIndex((chunk) => chunk.includes(userId))
+    if (index >= 0 && lookups[index]?.isPending) return '読み込み中…'
+    return '不明な社員'
+  }
+
+  // 取得した名前も含めて親へ渡す(更新関数の外で呼ぶ。内容が変わったときだけ)。
+  const notifiedKey = useRef('{}')
+  useEffect(() => {
+    const key = JSON.stringify(allLabels)
+    if (key === notifiedKey.current) return
+    notifiedKey.current = key
+    onLabelsChange?.(allLabels)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allLabels])
+
   const toggle = (userId: string, label: string) => {
-    setLabels((prev) => {
-      const next = { ...prev, [userId]: label }
-      onLabelsChange?.(next)
-      return next
-    })
+    setLabels((prev) => ({ ...prev, [userId]: label }))
     if (value.includes(userId)) {
       onChange(value.filter((id) => id !== userId))
     } else {
@@ -99,10 +141,10 @@ export function MultiUserPicker({
           {value.map((userId) => (
             <li key={userId}>
               <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
-                <span className="max-w-[16rem] truncate">{labels[userId] ?? userId}</span>
+                <span className="max-w-[16rem] truncate">{displayName(userId)}</span>
                 <button
                   type="button"
-                  aria-label={`${labels[userId] ?? userId}を選択解除`}
+                  aria-label={`${displayName(userId)}を選択解除`}
                   onClick={() => remove(userId)}
                   className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >

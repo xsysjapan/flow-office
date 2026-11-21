@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { Badge } from "../../components/Badge/Badge";
@@ -24,6 +25,7 @@ import type {
   ExpenseEntryPreset,
   ExpenseEntryPresetVisibility,
 } from "../../api/types";
+import { isValidPageParam, isValidPositiveIntIdParam } from "../../utils/searchParamValidators";
 import { useExpenseCategories } from "../../hooks/useExpenseCategories";
 import {
   useDeleteExpenseEntryPreset,
@@ -52,12 +54,16 @@ export function ExpenseEntryPresetListPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const categoryIdParam = searchParams.get("category_id");
+  const rawCategoryId = searchParams.get("category_id");
+  const rawPage = searchParams.get("page");
+  // 不正な値は既定(すべて / 1ページ目)で表示し、下のuseEffectでURLからキーを消す。
+  const categoryIdParam =
+    rawCategoryId !== null && isValidPositiveIntIdParam(rawCategoryId) ? rawCategoryId : null;
   const q = searchParams.get("q") ?? "";
-  const pageParam = Number(searchParams.get("page"));
-  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
+  const page = rawPage !== null && isValidPageParam(rawPage) ? Number(rawPage) : 1;
 
-  const { data: categories } = useExpenseCategories();
+  // 無効化した区分を使うプリセットの区分名も出すため、無効込みで取得する。
+  const { data: categories } = useExpenseCategories(true);
   const {
     data: presets,
     isLoading,
@@ -90,6 +96,22 @@ export function ExpenseEntryPresetListPage() {
       { replace: true },
     );
   };
+
+  useEffect(() => {
+    const invalidKeys = [
+      ...(rawCategoryId !== null && categoryIdParam === null ? ["category_id"] : []),
+      ...(rawPage !== null && !isValidPageParam(rawPage) ? ["page"] : []),
+    ];
+    if (invalidKeys.length === 0) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const key of invalidKeys) next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [rawCategoryId, rawPage, categoryIdParam, setSearchParams]);
 
   const changeSearch = (value: string) => updateParams({ q: value || null, page: null });
   const changeCategoryFilter = (value: string) => updateParams({ category_id: value || null, page: null });
@@ -124,11 +146,20 @@ export function ExpenseEntryPresetListPage() {
             onChange={(e) => changeCategoryFilter(e.target.value)}
           >
             <option value="">すべての経費区分</option>
-            {categories?.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
+            {categories
+              ?.filter((category) => category.is_active)
+              .map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            {categories
+              ?.filter((category) => !category.is_active)
+              .map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}(無効)
+                </option>
+              ))}
           </NativeSelect>
         </FormField>
       </div>

@@ -66,7 +66,7 @@ export function ExpenseEntryPresetEditPage() {
   const isCreate = !id || id === 'new'
 
   const { data: existing, isLoading, error: loadError } = useExpenseEntryPreset(isCreate ? undefined : Number(id))
-  const { data: categories, isLoading: isCategoriesLoading, error: categoriesError } = useExpenseCategories()
+  const { data: categories, isLoading: isCategoriesLoading, error: categoriesError } = useExpenseCategories(true)
 
   const createPreset = useCreateExpenseEntryPreset()
   const updatePreset = useUpdateExpenseEntryPreset()
@@ -281,11 +281,13 @@ function PresetDefinitionRowFields({
             onChange={(e) => onChange({ category_id: Number(e.target.value) })}
           >
             <option value="">経費区分を選択</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            {categories
+              .filter((c) => c.is_active || c.id === row.category_id)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.is_active ? c.name : `${c.name}(無効)`}
+                </option>
+              ))}
           </NativeSelect>
         </FormField>
 
