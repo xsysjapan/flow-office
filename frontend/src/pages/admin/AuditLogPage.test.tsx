@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as auditLogApi from '../../api/auditLog'
 import type { Paginated, StoredEvent } from '../../api/types'
@@ -24,14 +24,20 @@ const paginated: Paginated<StoredEvent> = {
   links: { next: null, prev: null },
 }
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage(initialEntry = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(auditLogApi, 'fetchAuditLog').mockResolvedValue(paginated)
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <AuditLogPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -66,5 +72,25 @@ describe('AuditLogPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'CSVダウンロード' }))
 
     await waitFor(() => expect(auditLogApi.downloadAuditLogCsv).toHaveBeenCalled())
+  })
+
+  it('drops invalid from/to/page from the URL and shows the default', async () => {
+    renderPage('/?from=abc&to=2026-02-30&page=-1&aggregate_type=workflow_request')
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('?aggregate_type=workflow_request'))
+    expect(screen.getByTestId('location-search').textContent).not.toMatch(/from|to=|page/)
+    await waitFor(() =>
+      expect(auditLogApi.fetchAuditLog).toHaveBeenLastCalledWith(
+        expect.objectContaining({ aggregate_type: 'workflow_request', from: undefined, to: undefined, page: 1 }),
+      ),
+    )
+  })
+
+  it('keeps a valid from date in the URL', async () => {
+    renderPage('/?from=2026-07-01')
+
+    await screen.findByText('workflow_request.drafted')
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?from=2026-07-01')
+    expect(auditLogApi.fetchAuditLog).toHaveBeenLastCalledWith(expect.objectContaining({ from: '2026-07-01' }))
   })
 })

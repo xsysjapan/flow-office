@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type { SearchAssetsParams } from '../../api/asset'
 import { ApiError } from '../../api/client'
@@ -16,6 +17,7 @@ import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useAssetSearch } from '../../hooks/useAsset'
+import { isOneOf, isValidPageParam } from '../../utils/searchParamValidators'
 import {
   assetManagementTypeLabel,
   assetStatusSummary,
@@ -55,6 +57,22 @@ const INSTALLATION_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'disposed', label: '廃棄済み' },
 ]
 
+/** 選択肢の値で判定する列挙キー(空=すべては既定。URLに空文字が入っていても不正としない) */
+const ENUM_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
+  management_type: MANAGEMENT_TYPE_OPTIONS,
+  lending_status: LENDING_STATUS_OPTIONS,
+  installation_status: INSTALLATION_STATUS_OPTIONS,
+}
+
+function isInvalidEnumParam(key: string, value: string | null): boolean {
+  const options = ENUM_OPTIONS[key]
+  if (!options || value === null) return false
+  return !isOneOf(
+    value,
+    options.map((option) => option.value),
+  )
+}
+
 const FILTER_KEYS = [
   'q',
   'asset_no',
@@ -79,18 +97,36 @@ export function AssetListPage() {
   const canManage = user?.effective_permissions?.includes('asset.manage') ?? false
   const [searchParams, setSearchParams] = useSearchParams()
 
+  const invalidKeys: string[] = FILTER_KEYS.filter((key) => isInvalidEnumParam(key, searchParams.get(key)))
+  const pageRaw = searchParams.get('page')
+  if (pageRaw !== null && !isValidPageParam(pageRaw)) invalidKeys.push('page')
+  const invalidKeysJoined = invalidKeys.join(',')
+
   const params: SearchAssetsParams = {}
   for (const key of FILTER_KEYS) {
     const value = searchParams.get(key)
-    if (value) (params as Record<string, string>)[key] = value
+    // 不正な値は既定(絞り込みなし)として扱う
+    if (value && !invalidKeys.includes(key)) (params as Record<string, string>)[key] = value
   }
-  const pageParam = Number(searchParams.get('page'))
-  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const page = pageRaw !== null && !invalidKeys.includes('page') ? Number(pageRaw) : 1
   params.page = page
+
+  useEffect(() => {
+    if (!invalidKeysJoined) return
+    const keys = invalidKeysJoined.split(',')
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const key of keys) next.delete(key)
+        return next
+      },
+      { replace: true },
+    )
+  }, [invalidKeysJoined, setSearchParams])
 
   const { data, isLoading, error } = useAssetSearch(params)
 
-  const isFiltered = FILTER_KEYS.some((key) => searchParams.get(key))
+  const isFiltered = FILTER_KEYS.some((key) => searchParams.get(key) && !invalidKeys.includes(key))
 
   function updateParams(patch: Record<string, string | null>) {
     setSearchParams(
@@ -119,7 +155,7 @@ export function AssetListPage() {
   }
 
   function clearFilters() {
-    setSearchParams(new URLSearchParams(), { replace: true })
+    setSearchParams({}, { replace: true })
   }
 
   if (isLoading) return <LoadingState />

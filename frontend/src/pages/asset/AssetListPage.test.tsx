@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../api/asset'
 import type { Asset, Paginated } from '../../api/types'
@@ -22,12 +22,18 @@ vi.mock('../../auth/useAuth', () => ({
   useAuth: () => ({ user: currentUser }),
 }))
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage(initialEntry = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <AssetListPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -169,5 +175,15 @@ describe('AssetListPage', () => {
 
     expect(await screen.findByLabelText('管理番号')).toHaveValue('EQ-001')
     expect(spy).toHaveBeenCalled()
+  })
+
+  it('drops invalid enum values and page from the URL and shows the default', async () => {
+    const spy = vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([]))
+
+    renderPage('/?management_type=bogus&lending_status=loaned&installation_status=nope&page=1.5')
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?lending_status=loaned$/))
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith({ lending_status: 'loaned', page: 1 }))
+    expect(screen.getByLabelText('管理区分')).toHaveValue('')
   })
 })

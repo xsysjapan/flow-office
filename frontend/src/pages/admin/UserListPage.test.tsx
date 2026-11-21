@@ -1,14 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as usersApi from '../../api/users'
 import * as userManagementApi from '../../api/userManagement'
 import type { Paginated, User } from '../../api/types'
 import { UserListPage } from './UserListPage'
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage(initialEntry = '/') {
   vi.spyOn(userManagementApi, 'fetchManagedGroups').mockResolvedValue([
     {
       id: 'group-1',
@@ -45,8 +50,9 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <UserListPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -137,5 +143,27 @@ describe('UserListPage', () => {
     await screen.findByDisplayValue('山田')
 
     await waitFor(() => expect(usersApi.fetchUsers).toHaveBeenCalledWith('山田', 20, {}, 1))
+  })
+
+  it('drops invalid group_type_id/group_id/account_status/page from the URL and shows the default', async () => {
+    const empty: Paginated<User> = { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(empty)
+
+    renderPage('/?group_type_id=abc&group_id=12&account_status=bogus&page=0&q=yama')
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?q=yama$/))
+    await waitFor(() => expect(usersApi.fetchUsers).toHaveBeenLastCalledWith('yama', 20, {}, 1))
+  })
+
+  it('keeps a valid upper-case UUID group_id in the URL', async () => {
+    const empty: Paginated<User> = { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(empty)
+    const groupId = '0A1B2C3D-0000-4000-8000-ABCDEF123456'
+
+    renderPage(`/?group_id=${groupId}&account_status=active&group_type_id=2&page=2`)
+
+    await screen.findByText('条件に一致するユーザーはいません。')
+    expect(screen.getByTestId('location-search').textContent).toBe(`?group_id=${groupId}&account_status=active&group_type_id=2&page=2`)
+    expect(usersApi.fetchUsers).toHaveBeenLastCalledWith('', 20, expect.objectContaining({ group_id: groupId, account_status: 'active', group_type_id: 2 }), 2)
   })
 })

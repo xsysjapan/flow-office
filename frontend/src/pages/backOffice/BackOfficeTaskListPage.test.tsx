@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
 import { ApiError } from '../../api/client'
@@ -17,12 +17,18 @@ function paginate<T>(data: T[], meta?: Partial<Paginated<T>['meta']>): Paginated
   }
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
 function renderPage(initialEntries: string[] = ['/backoffice-tasks']) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={initialEntries}>
         <BackOfficeTaskListPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -261,5 +267,16 @@ describe('BackOfficeTaskListPage', () => {
     renderPage()
 
     expect(await screen.findByText(/権限がありません/)).toBeInTheDocument()
+  })
+
+  it('drops invalid unassignedPage/minePage from the URL and shows the first page', async () => {
+    vi.spyOn(backOfficeTasksApi, 'fetchUnassignedTasks').mockResolvedValue(paginate([]))
+    vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(paginate([]))
+
+    renderPage(['/backoffice-tasks?unassignedPage=0&minePage=abc&q=a'])
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?q=a$/))
+    expect(backOfficeTasksApi.fetchUnassignedTasks).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
+    expect(backOfficeTasksApi.fetchMyTasks).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
   })
 })

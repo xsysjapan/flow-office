@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Badge } from "../../components/Badge/Badge";
 import { Card } from "../../components/Card/Card";
@@ -26,6 +26,12 @@ import {
   accountStatusLabel,
   employmentStatusLabel,
 } from "../../utils/userLabels";
+import {
+  isOneOf,
+  isValidPageParam,
+  isValidPositiveIntIdParam,
+  isValidUuidParam,
+} from "../../utils/searchParamValidators";
 
 const FILTER_PARAM_KEYS = [
   "q",
@@ -47,13 +53,41 @@ export function UserListPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") ?? "";
-  const accountStatus = searchParams.get("account_status") ?? "";
+  const accountStatusParam = searchParams.get("account_status");
   const externalUnlinked = searchParams.get("external_unlinked") === "1";
   const externalHr = searchParams.get("external_hr") === "1";
-  const groupId = searchParams.get("group_id") ?? "";
-  const groupTypeId = searchParams.get("group_type_id") ?? "";
-  const pageParam = Number(searchParams.get("page"));
-  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
+  const groupIdParam = searchParams.get("group_id");
+  const groupTypeIdParam = searchParams.get("group_type_id");
+  const pageRaw = searchParams.get("page");
+  // 不正な値は既定表示として扱い、URLからもキーを消す(正当な値は消さない)
+  const invalidKeys: string[] = [];
+  if (
+    accountStatusParam !== null &&
+    !isOneOf(accountStatusParam, ACCOUNT_STATUS_OPTIONS.map((option) => option.value))
+  )
+    invalidKeys.push("account_status");
+  if (groupIdParam !== null && !isValidUuidParam(groupIdParam)) invalidKeys.push("group_id");
+  if (groupTypeIdParam !== null && !isValidPositiveIntIdParam(groupTypeIdParam))
+    invalidKeys.push("group_type_id");
+  if (pageRaw !== null && !isValidPageParam(pageRaw)) invalidKeys.push("page");
+  const invalidKeysJoined = invalidKeys.join(",");
+  const accountStatus = invalidKeys.includes("account_status") ? "" : (accountStatusParam ?? "");
+  const groupId = invalidKeys.includes("group_id") ? "" : (groupIdParam ?? "");
+  const groupTypeId = invalidKeys.includes("group_type_id") ? "" : (groupTypeIdParam ?? "");
+  const page = invalidKeys.includes("page") || pageRaw === null ? 1 : Number(pageRaw);
+
+  useEffect(() => {
+    if (!invalidKeysJoined) return;
+    const keys = invalidKeysJoined.split(",");
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const key of keys) next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [invalidKeysJoined, setSearchParams]);
 
   const [showCreate, setShowCreate] = useState(false);
   const [newUser, setNewUser] = useState({
@@ -79,7 +113,9 @@ export function UserListPage() {
     page,
   );
 
-  const isFiltered = FILTER_PARAM_KEYS.some((key) => Boolean(searchParams.get(key)));
+  const isFiltered = Boolean(
+    query || accountStatus || externalUnlinked || externalHr || groupId || groupTypeId,
+  );
 
   function updateParam(key: (typeof FILTER_PARAM_KEYS)[number], value: string) {
     setSearchParams(

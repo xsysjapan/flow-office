@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
@@ -26,13 +27,38 @@ export function AdminCommandsPage() {
   const commands = useAdminCommands()
   const runs = useAdminCommandRuns()
   const execute = useRunAdminCommand()
-  const [commandName, setCommandName] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
   const [parameters, setParameters] = useState<Record<string, unknown>>({})
 
-  const command = useMemo(() => commands.data?.data.find((item) => item.name === commandName), [commands.data, commandName])
+  /** 選んだコマンドはURLの`command`に載せる(SKILL.md §2.10)。キーなしは先頭のコマンドを表示上の既定とし、
+   *  URLには書かない。一覧に無い名前は先頭のコマンドとして表示し、一覧の取得後にキーを消す。 */
+  const commandList = commands.data?.data
+  const commandParam = searchParams.get('command')
+  const isUnknownCommand = commandList !== undefined && commandParam !== null && !commandList.some((item) => item.name === commandParam)
+  const commandName = commandParam !== null && !isUnknownCommand ? commandParam : (commandList?.[0]?.name ?? '')
+  function setCommandName(name: string) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('command', name)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  const command = useMemo(() => commandList?.find((item) => item.name === commandName), [commandList, commandName])
   useEffect(() => {
-    if (!commandName && commands.data?.data[0]) setCommandName(commands.data.data[0].name)
-  }, [commands.data, commandName])
+    if (!isUnknownCommand) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('command')
+        return next
+      },
+      { replace: true },
+    )
+  }, [isUnknownCommand, setSearchParams])
   useEffect(() => setParameters({}), [commandName])
 
   function parameterControl(parameter: AdminCommandParameter) {
