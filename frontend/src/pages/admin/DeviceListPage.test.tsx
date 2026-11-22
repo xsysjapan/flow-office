@@ -1,12 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as devicesApi from '../../api/devices'
 import { ApiError } from '../../api/client'
 import type { Device } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { DeviceListPage } from './DeviceListPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const devices: Device[] = [
   {
@@ -83,6 +86,10 @@ function renderPage(initialEntry = '/') {
 }
 
 describe('DeviceListPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('lists shared devices with their status', async () => {
     renderPage()
 
@@ -92,14 +99,22 @@ describe('DeviceListPage', () => {
     expect(screen.getByText('ペアリング待ち')).toBeInTheDocument()
   })
 
-  it('only offers navigate-to-detail, revoke, and delete as row actions', async () => {
+  it('puts detail, revoke, and delete behind the row 「⋯」 menu', async () => {
+    const user = userEvent.setup()
     renderPage()
 
     await screen.findByText('本社1階受付')
 
-    expect(screen.getAllByRole('button', { name: '詳細' })).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: '詳細' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '失効させる' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /の操作$/ })).toHaveLength(2)
     expect(screen.queryByRole('button', { name: 'ペアリング用QRを発行' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '停止する' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '本社1階受付の操作' }))
+    expect(await screen.findByRole('menuitem', { name: '詳細' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: '失効させる' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '削除する' })).not.toBeInTheDocument()
   })
 
   it('opens the device detail modal when a row is clicked', async () => {
@@ -112,12 +127,13 @@ describe('DeviceListPage', () => {
     expect(await screen.findByRole('heading', { name: '本社1階受付' })).toBeInTheDocument()
   })
 
-  it('opens the device detail modal from the 詳細 button', async () => {
+  it('opens the device detail modal from the 詳細 menu item', async () => {
     const user = userEvent.setup()
     renderPage()
 
     await screen.findByText('大阪支店リーダー')
-    await user.click(screen.getAllByRole('button', { name: '詳細' })[1])
+    await user.click(screen.getByRole('button', { name: '大阪支店リーダーの操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '詳細' }))
 
     expect(await screen.findByRole('heading', { name: '大阪支店リーダー' })).toBeInTheDocument()
   })
@@ -135,19 +151,34 @@ describe('DeviceListPage', () => {
     expect(registerSpy).toHaveBeenCalledWith(
       expect.objectContaining({ name: '名古屋支店入口', role_types: ['attendance_reader'] }),
     )
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('名古屋支店入口を登録しました')
+    })
   })
 
-  it('opens a confirmation dialog before revoking a device', async () => {
+  it('confirms before revoking from the row menu and shows a toast after revoking', async () => {
     const user = userEvent.setup()
+    const revokeSpy = vi.spyOn(devicesApi, 'revokeDevice').mockResolvedValue(devices[0])
     renderPage()
 
     await screen.findByText('本社1階受付')
-    await user.click(screen.getAllByRole('button', { name: '失効させる' })[0])
+    await user.click(screen.getByRole('button', { name: '本社1階受付の操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '失効させる' }))
 
-    expect(await screen.findByText('端末を失効させますか?')).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('端末を失効させますか?')).toBeInTheDocument()
+    expect(revokeSpy).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: '失効させる' }))
+
+    expect(revokeSpy.mock.calls[0]?.[0]).toBe('device-1')
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('本社1階受付を失効しました')
+    })
   })
 
-  it('shows a delete button only for disabled or revoked devices', async () => {
+  it('shows the delete menu item only for disabled or revoked devices and confirms before deleting', async () => {
+    const user = userEvent.setup()
     const fetchSpy = vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue({
       data: [
         { ...devices[0], status: 'disabled', disabled_at: '2026-07-01T00:00:00+09:00' },
@@ -156,6 +187,7 @@ describe('DeviceListPage', () => {
       meta: { current_page: 1, last_page: 1, total: 2 },
       links: { next: null, prev: null },
     })
+    const deleteSpy = vi.spyOn(devicesApi, 'deleteDevice').mockResolvedValue(undefined)
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <MemoryRouter>
@@ -165,7 +197,21 @@ describe('DeviceListPage', () => {
     )
 
     await screen.findByText('本社1階受付')
-    expect(screen.getAllByRole('button', { name: '削除する' })).toHaveLength(1)
+    await user.click(screen.getByRole('button', { name: '大阪支店リーダーの操作' }))
+    expect(await screen.findByRole('menuitem', { name: '詳細' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '削除する' })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    await user.click(screen.getByRole('button', { name: '本社1階受付の操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '削除する' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('端末を削除しますか?')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: '削除する' }))
+
+    expect(deleteSpy).toHaveBeenCalledWith('device-1')
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('本社1階受付を削除しました')
+    })
     fetchSpy.mockRestore()
   })
 

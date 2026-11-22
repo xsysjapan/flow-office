@@ -12,12 +12,14 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { DeviceDetailModal } from '../../components/DeviceDetailModal/DeviceDetailModal'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { Checkbox } from '../../components/ui/checkbox'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { ApiError } from '../../api/client'
 import { useDeleteDevice, useDevice, useDevices, useRegisterDevice, useRevokeDevice } from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { isValidPageParam } from '../../utils/searchParamValidators'
 import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
 
@@ -93,7 +95,6 @@ export function DeviceListPage() {
     withTrashed: showDeleted,
   })
   const registerDevice = useRegisterDevice()
-  const deleteDevice = useDeleteDevice()
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [name, setName] = useState('')
@@ -101,6 +102,9 @@ export function DeviceListPage() {
   const [roleTypes, setRoleTypes] = useState<DeviceRoleType[]>(['attendance_reader'])
   const [locationName, setLocationName] = useState('')
   const [defaultWorkLocationType, setDefaultWorkLocationType] = useState<WorkLocationType | ''>('')
+  // 行内の「⋯」メニューから開く失効・削除の確認ダイアログの対象
+  const [revokeTarget, setRevokeTarget] = useState<Device | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Device | null>(null)
 
   // 対象端末が現在のページの一覧に無くても開けるよう、一覧に無いときだけ個別に取得する
   const selectedInList = devices?.data.find((device) => device.id === selectedDeviceId)
@@ -173,6 +177,7 @@ export function DeviceListPage() {
   }
 
   const handleRegister = () => {
+    const registeredName = name
     registerDevice.mutate(
       {
         name,
@@ -183,6 +188,7 @@ export function DeviceListPage() {
       },
       {
         onSuccess: () => {
+          notify.success(`${registeredName}を登録しました`)
           resetForm()
           setIsFormOpen(false)
         },
@@ -210,8 +216,6 @@ export function DeviceListPage() {
         </div>
       }
     >
-      {registerDevice.error && <ErrorMessage error={registerDevice.error} />}
-      {deleteDevice.error && <ErrorMessage error={deleteDevice.error} />}
 
       {isFormOpen && (
         <div className="mb-6 rounded-md border border-border p-4">
@@ -283,6 +287,7 @@ export function DeviceListPage() {
               {!name ? '名称を入力してください。' : '役割を1つ以上選択してください。'}
             </p>
           )}
+          {registerDevice.error && <ErrorMessage error={registerDevice.error} />}
         </div>
       )}
 
@@ -340,13 +345,12 @@ export function DeviceListPage() {
                         <span className="text-xs text-muted-foreground">-</span>
                       ) : (
                         <div className="flex flex-wrap items-start gap-2" onClick={(e) => e.stopPropagation()}>
-                          <Button size="sm" variant="secondary" onClick={() => setSelectedDeviceId(device.id)}>
-                            詳細
-                          </Button>
-                          {device.status !== 'revoked' && <RevokeDeviceDialog device={device} />}
-                          {(device.status === 'disabled' || device.status === 'revoked') && (
-                            <DeleteDeviceDialog device={device} />
-                          )}
+                          <DeviceRowMenu
+                            device={device}
+                            onDetail={() => setSelectedDeviceId(device.id)}
+                            onRevoke={() => setRevokeTarget(device)}
+                            onDelete={() => setDeleteTarget(device)}
+                          />
                         </div>
                       )}
                     </TableCell>
@@ -366,6 +370,9 @@ export function DeviceListPage() {
         </>
       )}
 
+      <RevokeDeviceDialog device={revokeTarget} onClose={() => setRevokeTarget(null)} />
+      <DeleteDeviceDialog device={deleteTarget} onClose={() => setDeleteTarget(null)} />
+
       {selectedDevice && (
         <DeviceDetailModal
           device={selectedDevice}
@@ -379,25 +386,89 @@ export function DeviceListPage() {
   )
 }
 
-function RevokeDeviceDialog({ device }: { device: Device }) {
+/**
+ * 行末の「⋯」メニュー。詳細・失効・削除をまとめる。失効・削除は項目を選ぶとメニューを閉じてから
+ * 確認ダイアログを開く(ダイアログをメニュー内に残さない)。
+ */
+function DeviceRowMenu({
+  device,
+  onDetail,
+  onRevoke,
+  onDelete,
+}: {
+  device: Device
+  onDetail: () => void
+  onRevoke: () => void
+  onDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const runAfterClose = (action: () => void) => (event: Event) => {
+    event.preventDefault()
+    setOpen(false)
+    action()
+  }
+  const canRevoke = device.status !== 'revoked'
+  const canDelete = device.status === 'disabled' || device.status === 'revoked'
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="secondary" aria-label={`${device.name}の操作`}>
+          ⋯
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={runAfterClose(onDetail)}>詳細</DropdownMenuItem>
+        {canRevoke && (
+          <DropdownMenuItem variant="destructive" onSelect={runAfterClose(onRevoke)}>
+            失効させる
+          </DropdownMenuItem>
+        )}
+        {canDelete && (
+          <DropdownMenuItem variant="destructive" onSelect={runAfterClose(onDelete)}>
+            削除する
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function RevokeDeviceDialog({ device, onClose }: { device: Device | null; onClose: () => void }) {
   const [reason, setReason] = useState('')
   const revokeDevice = useRevokeDevice()
 
+  const close = () => {
+    setReason('')
+    revokeDevice.reset()
+    onClose()
+  }
+
   return (
     <ConfirmActionDialog
-      triggerLabel="失効させる"
+      open={device !== null}
+      onOpenChange={(open) => {
+        if (!open) close()
+      }}
       title="端末を失効させますか?"
-      description={`「${device.name}」を失効させます。この端末のトークンは使用できなくなり、元に戻せません。`}
+      description={
+        device ? `「${device.name}」を失効させます。この端末のトークンは使用できなくなり、元に戻せません。` : ''
+      }
       confirmLabel="失効させる"
       isPending={revokeDevice.isPending}
       error={revokeDevice.error}
-      onOpenChange={(open) => {
-        if (open) {
-          setReason('')
-          revokeDevice.reset()
-        }
+      onConfirm={() => {
+        if (!device) return
+        revokeDevice.mutate(
+          { deviceId: device.id, reason: reason || undefined },
+          {
+            onSuccess: () => {
+              notify.success(`${device.name}を失効しました`)
+              close()
+            },
+          },
+        )
       }}
-      onConfirm={() => revokeDevice.mutate({ deviceId: device.id, reason: reason || undefined })}
     >
       <Input
         aria-label="失効理由"
@@ -409,21 +480,38 @@ function RevokeDeviceDialog({ device }: { device: Device }) {
   )
 }
 
-function DeleteDeviceDialog({ device }: { device: Device }) {
+function DeleteDeviceDialog({ device, onClose }: { device: Device | null; onClose: () => void }) {
   const deleteDevice = useDeleteDevice()
+
+  const close = () => {
+    deleteDevice.reset()
+    onClose()
+  }
 
   return (
     <ConfirmActionDialog
-      triggerLabel="削除する"
+      open={device !== null}
+      onOpenChange={(open) => {
+        if (!open) close()
+      }}
       title="端末を削除しますか?"
-      description={`「${device.name}」を一覧から削除します。監査記録として操作履歴は残りますが、この端末は一覧から見えなくなります(「削除済みを表示」で再表示できます)。`}
+      description={
+        device
+          ? `「${device.name}」を一覧から削除します。監査記録として操作履歴は残りますが、この端末は一覧から見えなくなります(「削除済みを表示」で再表示できます)。`
+          : ''
+      }
       confirmLabel="削除する"
       isPending={deleteDevice.isPending}
       error={deleteDevice.error}
-      onOpenChange={(open) => {
-        if (open) deleteDevice.reset()
+      onConfirm={() => {
+        if (!device) return
+        deleteDevice.mutate(device.id, {
+          onSuccess: () => {
+            notify.success(`${device.name}を削除しました`)
+            close()
+          },
+        })
       }}
-      onConfirm={() => deleteDevice.mutate(device.id)}
     />
   )
 }

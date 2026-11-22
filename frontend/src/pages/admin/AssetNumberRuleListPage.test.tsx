@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetNumberRulesApi from '../../api/assetNumberRules'
 import type { AssetNumberRule } from '../../api/assetNumberRules'
+import { notify } from '../../lib/notify'
 import { AssetNumberRuleListPage } from './AssetNumberRuleListPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const categoryRule: AssetNumberRule = {
   category: 'ノートPC',
@@ -36,6 +39,10 @@ function renderPage(rules: AssetNumberRule[]) {
 }
 
 describe('AssetNumberRuleListPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('shows an unset state and a create button when there is no default rule', async () => {
     renderPage([categoryRule])
 
@@ -84,6 +91,7 @@ describe('AssetNumberRuleListPage', () => {
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith('ノートPC', { prefix: 'PC', digitCount: 5, enabled: true }),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ノートPCの採番ルールを保存しました'))
   })
 
   it('adds a new category rule', async () => {
@@ -98,6 +106,7 @@ describe('AssetNumberRuleListPage', () => {
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith('モニター', { prefix: 'MON', digitCount: 5, enabled: true }),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('モニターの採番ルールを追加しました'))
   })
 
   it('creates a default rule', async () => {
@@ -111,5 +120,6 @@ describe('AssetNumberRuleListPage', () => {
     await waitFor(() =>
       expect(updateDefaultSpy).toHaveBeenCalledWith({ prefix: 'AST', digitCount: 5, enabled: true }),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('デフォルトの採番ルールを保存しました'))
   })
 })

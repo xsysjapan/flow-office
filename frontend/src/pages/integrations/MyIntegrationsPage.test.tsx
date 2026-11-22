@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as integrationsApi from '../../api/integrations'
 import type { ApplicationIntegration } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { MyIntegrationsPage } from './MyIntegrationsPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const integrations: ApplicationIntegration[] = [
   {
@@ -45,6 +48,10 @@ function renderPage() {
 }
 
 describe('MyIntegrationsPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('lists integrations with type and status', async () => {
     renderPage()
 
@@ -54,13 +61,14 @@ describe('MyIntegrationsPage', () => {
     expect(screen.getByText('停止済み')).toBeInTheDocument()
   })
 
-  it('only shows reissue/stop actions for active integrations', async () => {
+  it('only offers the reissue/stop menu for active integrations', async () => {
     renderPage()
 
     await screen.findByText('Claude Desktop')
 
-    expect(screen.getAllByRole('button', { name: 'トークン再発行' })).toHaveLength(1)
-    expect(screen.getAllByRole('button', { name: '停止する' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /の操作$/ })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'トークン再発行' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '停止する' })).not.toBeInTheDocument()
   })
 
   it('registers a new integration and displays the issued token once', async () => {
@@ -78,15 +86,55 @@ describe('MyIntegrationsPage', () => {
     await user.click(screen.getByRole('button', { name: '登録する' }))
 
     expect(await screen.findByText('plain-text-token-xyz')).toBeInTheDocument()
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Claude Codeを登録しました')
+    })
   })
 
-  it('opens a confirmation dialog before stopping an integration', async () => {
+  it('confirms before reissuing the token and shows a toast without replacing the issued token display', async () => {
     const user = userEvent.setup()
+    const reissueSpy = vi.spyOn(integrationsApi, 'reissueIntegrationToken').mockResolvedValue({
+      integration: integrations[0],
+      token: 'reissued-token-abc',
+    })
     renderPage()
 
     await screen.findByText('Claude Desktop')
-    await user.click(screen.getByRole('button', { name: '停止する' }))
+    await user.click(screen.getByRole('button', { name: 'Claude Desktopの操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'トークン再発行' }))
 
-    expect(await screen.findByText('連携を停止しますか?')).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('トークンを再発行しますか?')).toBeInTheDocument()
+    expect(within(dialog).getByText('再発行すると今のトークンは使えなくなります。')).toBeInTheDocument()
+    expect(reissueSpy).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: '再発行する' }))
+
+    expect(reissueSpy).toHaveBeenCalledWith('integration-1')
+    expect(await screen.findByText('reissued-token-abc')).toBeInTheDocument()
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('トークンを再発行しました')
+    })
+  })
+
+  it('opens a confirmation dialog from the menu before stopping an integration and shows a toast', async () => {
+    const user = userEvent.setup()
+    const revokeSpy = vi.spyOn(integrationsApi, 'revokeIntegration').mockResolvedValue(integrations[0])
+    renderPage()
+
+    await screen.findByText('Claude Desktop')
+    await user.click(screen.getByRole('button', { name: 'Claude Desktopの操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '停止する' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('連携を停止しますか?')).toBeInTheDocument()
+    expect(revokeSpy).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: '停止する' }))
+
+    expect(revokeSpy).toHaveBeenCalledWith('integration-1')
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Claude Desktopを停止しました')
+    })
   })
 })

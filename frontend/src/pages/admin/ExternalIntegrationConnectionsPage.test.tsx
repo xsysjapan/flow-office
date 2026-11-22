@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as connectionsApi from '../../api/externalIntegrationConnections'
 import type { ExternalIntegrationConnection } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { ExternalIntegrationConnectionsPage } from './ExternalIntegrationConnectionsPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const connections: ExternalIntegrationConnection[] = [
   {
@@ -62,6 +65,11 @@ function renderPage(data: ExternalIntegrationConnection[] = connections) {
 }
 
 describe('ExternalIntegrationConnectionsPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+    vi.restoreAllMocks()
+  })
+
   it('lists connections with provider, status and masked credentials', async () => {
     renderPage()
 
@@ -117,9 +125,32 @@ describe('ExternalIntegrationConnectionsPage', () => {
         client_secret: 'secret-1',
       }),
     )
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('新しい接続を作成しました')
+    })
   })
 
-  it('toggles enabled state via the PATCH endpoint', async () => {
+  it('opens the edit dialog from the row menu and shows a toast after saving', async () => {
+    const user = userEvent.setup()
+    const updateSpy = vi
+      .spyOn(connectionsApi, 'updateExternalIntegrationConnection')
+      .mockResolvedValue(connections[0])
+    renderPage()
+
+    await screen.findByText('freee本社経理')
+    await user.click(screen.getByRole('button', { name: 'freee本社経理の操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '編集' }))
+
+    expect(await screen.findByText('外部連携を編集')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(updateSpy).toHaveBeenCalledWith('conn-1', expect.objectContaining({ name: 'freee本社経理' }))
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('freee本社経理を保存しました')
+    })
+  })
+
+  it('toggles enabled state via the PATCH endpoint from the row menu and shows a toast', async () => {
     const user = userEvent.setup()
     const updateSpy = vi
       .spyOn(connectionsApi, 'updateExternalIntegrationConnection')
@@ -127,19 +158,47 @@ describe('ExternalIntegrationConnectionsPage', () => {
     renderPage()
 
     await screen.findByText('マネーフォワード大阪支店')
-    await user.click(screen.getByRole('button', { name: '有効にする' }))
+    await user.click(screen.getByRole('button', { name: 'マネーフォワード大阪支店の操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '有効にする' }))
 
     expect(updateSpy).toHaveBeenCalledWith('conn-2', { enabled: true })
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('マネーフォワード大阪支店を有効にしました')
+    })
   })
 
-  it('opens a confirmation dialog before deleting a connection', async () => {
+  it('shows the toggle error next to the row when switching fails', async () => {
     const user = userEvent.setup()
+    vi.spyOn(connectionsApi, 'updateExternalIntegrationConnection').mockRejectedValue(new Error('network'))
+    renderPage()
+
+    await screen.findByText('マネーフォワード大阪支店')
+    await user.click(screen.getByRole('button', { name: 'マネーフォワード大阪支店の操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '有効にする' }))
+
+    expect(await screen.findByText(/エラー|失敗|network/)).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+  })
+
+  it('confirms before deleting from the row menu and shows a toast after deleting', async () => {
+    const user = userEvent.setup()
+    const deleteSpy = vi.spyOn(connectionsApi, 'deleteExternalIntegrationConnection').mockResolvedValue(undefined)
     renderPage()
 
     await screen.findByText('freee本社経理')
-    await user.click(screen.getAllByRole('button', { name: '削除する' })[0])
+    await user.click(screen.getByRole('button', { name: 'freee本社経理の操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '削除する' }))
 
-    expect(await screen.findByText('外部連携を削除しますか?')).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('外部連携を削除しますか?')).toBeInTheDocument()
+    expect(deleteSpy).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: '削除する' }))
+
+    expect(deleteSpy).toHaveBeenCalledWith('conn-1')
+    await vi.waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('freee本社経理を削除しました')
+    })
   })
 
   it('describes when each provider sends data', async () => {
