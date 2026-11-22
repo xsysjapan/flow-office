@@ -1,6 +1,6 @@
 # 履歴画面のイベント表示名の漏れを機械的に検出する
 
-- ステータス: 実装中
+- ステータス: 完了
 - 種別: プロセス改善(backend・frontend・CI・スキル)
 
 ## 変更要望(原文)
@@ -118,4 +118,4 @@
 - CI: `frontend.yml`に`npm test`。スキル`add-domain-event`・`backend/CLAUDE.md`・`frontend/CLAUDE.md`に手順を追記。
 - 検証: 表示名の表から1キー/詳細文から1caseを消すと`tsc`が失敗することを確認(4パターン)。`--check`成功、
   frontend `npm test` 154ファイル/1366件成功、`tsc`・`lint`・`build`成功。backend全件は2290件中1件失敗
-  (`ReadModelFingerprintCommandTest`。変更前のHEADでの再現を確認中)。
+  (`ReadModelFingerprintCommandTest`。実装前のコミットのワークツリーでも同じ1件が失敗し、既存の不具合と確認(本変更とは無関係))。
