@@ -22,6 +22,17 @@ describe('FormField', () => {
     expect(screen.getByLabelText('承認者')).toBeInTheDocument()
   })
 
+  it('applies className to the outer wrapper (overrides the default margin)', () => {
+    const { container } = render(
+      <FormField label="タイトル" htmlFor="title" className="mb-0">
+        <input id="title" />
+      </FormField>,
+    )
+    const wrapper = container.firstElementChild
+    expect(wrapper).toHaveClass('mb-0')
+    expect(wrapper).not.toHaveClass('mb-4')
+  })
+
   it('shows an error message', () => {
     render(
       <FormField label="タイトル" htmlFor="title" error="タイトルは必須です。">

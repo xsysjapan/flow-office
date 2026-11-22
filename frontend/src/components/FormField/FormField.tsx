@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Label } from '../ui/label'
+import { cn } from '../../lib/utils'
 
 export interface FormFieldProps {
   label: string
@@ -7,11 +8,12 @@ export interface FormFieldProps {
   required?: boolean
   error?: string
   children: ReactNode
+  className?: string
 }
 
-export function FormField({ label, htmlFor, required, error, children }: FormFieldProps) {
+export function FormField({ label, htmlFor, required, error, children, className }: FormFieldProps) {
   return (
-    <div className="mb-4 flex flex-col gap-1.5 text-left">
+    <div className={cn('mb-4 flex flex-col gap-1.5 text-left', className)}>
       <div className="flex items-baseline gap-1">
         <Label htmlFor={htmlFor}>{label}</Label>
         {required && (
