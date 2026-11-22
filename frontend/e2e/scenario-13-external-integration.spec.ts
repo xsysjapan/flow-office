@@ -151,7 +151,13 @@ test('外部連携設定の登録〜freee勤怠送信〜マネーフォワード
     approverUserId: adminUserId,
   })
 
-  const expensePublishResult = await publishExpensesExternal(page, { yearMonth, provider: 'moneyforward' })
+  // 共有DBでは他specの経費(マッピング未登録の社員を含む)が同月に存在するため、このテストの
+  // 社員(管理者)に絞って送信する。
+  const expensePublishResult = await publishExpensesExternal(page, {
+    yearMonth,
+    provider: 'moneyforward',
+    employeeIds: [adminUserId],
+  })
   expect(expensePublishResult.failures).toEqual([])
   expect(expensePublishResult.successes).toEqual(
     expect.arrayContaining([expect.objectContaining({ employee_id: adminUserId })]),

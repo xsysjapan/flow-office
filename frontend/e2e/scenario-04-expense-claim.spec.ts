@@ -111,7 +111,7 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await applicantPage.getByRole('button', { name: '明細を保存して続けて入力する' }).click()
 
     await expect(applicantPage.getByText(/保存済みの明細\(1件/)).toBeVisible()
-    await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
+    await expect(applicantPage.getByRole('main').getByText('dummy-receipt.png')).toBeVisible()
 
     await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
     await applicantPage.getByRole('button', { name: '申請する' }).click()
@@ -267,7 +267,7 @@ for (const scenario of singleCategoryScenarios) {
       await applicantPage.getByRole('button', { name: '明細を保存して続けて入力する' }).click()
 
       await expect(applicantPage.getByText(/保存済みの明細\(1件/)).toBeVisible()
-      await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
+      await expect(applicantPage.getByRole('main').getByText('dummy-receipt.png')).toBeVisible()
 
       await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
       await applicantPage.getByRole('button', { name: '申請する' }).click()
@@ -350,7 +350,7 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     await applicantPage.getByRole('button', { name: /明細を保存する\(2件\)/ }).click()
 
     await expect(applicantPage.getByText(/保存済みの明細\(2件/)).toBeVisible()
-    await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
+    await expect(applicantPage.getByRole('main').getByText('dummy-receipt.png')).toBeVisible()
 
     // 3. UC-X013: 別の区分(宿泊費)の明細を同じ申請に追加する。
     await applicantPage.getByRole('button', { name: '別の区分の明細を追加する' }).click()

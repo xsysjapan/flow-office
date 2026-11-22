@@ -121,7 +121,10 @@ export async function findTextAcrossPages(page: Page, text: string, maxPages = 2
     if (await page.getByText(text).isVisible().catch(() => false)) return
     const nextButton = page.getByRole("button", { name: "次のページ" })
     if (!(await nextButton.isEnabled().catch(() => false))) break
-    await nextButton.click()
+    // isEnabledの直後に無効化されうる(一覧の再取得中など)ため、クリック失敗時はループを抜け、
+    // 最後の表示確認(toBeVisible)で判定させる。
+    const clicked = await nextButton.click({ timeout: 5000 }).then(() => true, () => false)
+    if (!clicked) break
   }
   await expect(page.getByText(text)).toBeVisible()
 }

@@ -157,7 +157,8 @@ test.describe('備品管理', () => {
       await adminPage.getByRole('dialog').getByRole('button', { name: '貸与する' }).click()
 
       await expect(adminPage.getByRole('status', { name: '貸出中' })).toBeVisible()
-      await expect(adminPage.getByText(SCENARIO_USERS.monthlyEmployee)).toBeVisible()
+      // 貸与成功トースト(「…を伊藤 舞さんに貸与しました」)と部分一致しないよう完全一致で確認する。
+      await expect(adminPage.getByText(SCENARIO_USERS.monthlyEmployee, { exact: true })).toBeVisible()
 
       await adminPage.getByRole('button', { name: '返却' }).click()
       await adminPage.getByRole('button', { name: '返却する' }).click()
@@ -217,7 +218,8 @@ test.describe('備品管理', () => {
       await expect(adminPage.getByText('E2Eテスト用の申請')).toBeVisible()
       await adminPage.getByRole('dialog').getByRole('button', { name: '貸与する' }).click()
       await expect(adminPage.getByRole('status', { name: '貸出中' })).toBeVisible()
-      await expect(adminPage.getByText(SCENARIO_USERS.punchEmployee)).toBeVisible()
+      // 貸与成功トースト(「…を…さんに貸与しました」)と部分一致しないよう完全一致で確認する。
+      await expect(adminPage.getByText(SCENARIO_USERS.punchEmployee, { exact: true })).toBeVisible()
 
       // 申請の表示ステータスも「貸与済み」に反映される。
       const loanRequests = await apiFetch<Array<{ id: string; status: string }>>(
