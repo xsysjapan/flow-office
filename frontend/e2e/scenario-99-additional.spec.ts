@@ -218,8 +218,12 @@ test("§5-6+7: ロール変更が即座に反映され、監査ログに記録�
 
     // §5-7: この操作が監査ログに記録されていることを確認する。
     await adminPage.goto("/admin/audit-log");
+    // 対象タイプ・対象IDは既定で閉じた「詳細条件」の中にあるため、先に開く。
+    await adminPage.getByRole("button", { name: /^詳細条件/ }).click();
     await adminPage.getByLabel("対象タイプ").fill("role_assignment");
+    await adminPage.getByLabel("対象タイプ").press("Enter");
     await adminPage.getByLabel("イベント種別").fill("role_assignment.created");
+    await adminPage.getByLabel("イベント種別").press("Enter");
     const auditRow = adminPage
       .getByRole("listitem")
       .filter({ hasText: "role_assignment.created" })

@@ -76,7 +76,8 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     await page.getByLabel('社員名').press('Enter')
     await expect(page.getByText('条件に一致する付与予定はありません。')).toBeVisible()
 
-    await page.getByRole('button', { name: '検索条件をクリア' }).click()
+    // フィルターバー末尾と0件の空状態に同名ボタンがあるため、空状態のボタン(後ろに描画される方)を押す。
+    await page.getByRole('button', { name: '検索条件をクリア' }).last().click()
     await expect(page).toHaveURL(/\/admin\/paid-leave\/schedule$/)
   })
 
