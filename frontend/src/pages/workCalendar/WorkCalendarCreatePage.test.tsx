@@ -2,11 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as holidayCalendarSourcesApi from '../../api/holidayCalendarSources'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { HolidayCalendarSource, WorkCalendar } from '../../api/types'
 import { WorkCalendarCreatePage } from './WorkCalendarCreatePage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const calendar: WorkCalendar = {
   id: 'calendar-1',
@@ -59,6 +62,10 @@ function renderPage() {
 }
 
 describe('WorkCalendarCreatePage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('creates a calendar and navigates to the created calendar detail page', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
@@ -88,6 +95,7 @@ describe('WorkCalendarCreatePage', () => {
     )
 
     expect(await screen.findByText('カレンダー詳細ページ')).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith(`「${calendar.name}」を作成しました`)
   })
 
   it('sends the full weekday pattern once the disclosure is opened and edited', async () => {

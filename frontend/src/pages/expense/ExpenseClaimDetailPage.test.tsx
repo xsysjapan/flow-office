@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,12 @@ import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseClaimsApi from '../../api/expenseClaims'
 import type { AttendanceDay, ExpenseClaim, ExpenseClaimHistoryEntry, User } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { ExpenseClaimDetailPage } from './ExpenseClaimDetailPage'
+
+vi.mock('../../lib/notify', () => ({
+  notify: { success: vi.fn() },
+}))
 
 const applicant: User = {
   id: 'applicant-1',
@@ -126,14 +131,34 @@ describe('ExpenseClaimDetailPage', () => {
     expect(await screen.findByText('2026-07-04 客先と記録あり')).toBeInTheDocument()
   })
 
-  it('approves the claim when the approver clicks approve', async () => {
+  it('approves the claim after confirming in the dialog and shows a toast', async () => {
     currentUser = approver
+    vi.mocked(notify.success).mockClear()
     vi.spyOn(expenseClaimsApi, 'approveExpenseClaim').mockResolvedValue({ ...inReviewClaim, status: 'approved' })
 
     renderPage(inReviewClaim)
     await userEvent.click(await screen.findByRole('button', { name: '承認する' }))
 
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('この経費精算を承認しますか?')).toBeInTheDocument()
+    expect(expenseClaimsApi.approveExpenseClaim).not.toHaveBeenCalled()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '承認する' }))
+
     await waitFor(() => expect(expenseClaimsApi.approveExpenseClaim).toHaveBeenCalledWith('claim-1'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('経費精算を承認しました'))
+  })
+
+  it('shows a toast when the claim is returned', async () => {
+    currentUser = approver
+    vi.mocked(notify.success).mockClear()
+    vi.spyOn(expenseClaimsApi, 'returnExpenseClaim').mockResolvedValue({ ...inReviewClaim, status: 'returned' })
+
+    renderPage(inReviewClaim)
+    await userEvent.type(await screen.findByPlaceholderText('差戻しコメント'), '不備があります')
+    await userEvent.click(screen.getByRole('button', { name: '差戻す' }))
+
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('経費精算を差し戻しました'))
   })
 
   it('returns the claim with a comment when the approver clicks return', async () => {

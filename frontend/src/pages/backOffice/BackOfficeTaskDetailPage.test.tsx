@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
 import * as attendanceApi from '../../api/attendance'
 import { ApiError } from '../../api/client'
@@ -17,6 +17,7 @@ import type {
   User,
   WorkflowRequest,
 } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { BackOfficeTaskDetailPage } from './BackOfficeTaskDetailPage'
 
 const assignee: User = {
@@ -67,6 +68,8 @@ function mockFetchMonth(month: AttendanceMonth, canExport = false) {
   })
 }
 
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
+
 // 既定はassignee。権限を変えるテストだけauthState.userを差し替える。
 const authState = vi.hoisted(() => ({ user: undefined as User | undefined }))
 
@@ -103,6 +106,10 @@ function renderPage(task: BackOfficeTask, state?: unknown) {
 }
 
 describe('BackOfficeTaskDetailPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('shows a permission denied state instead of a generic error on 403', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     vi.spyOn(backOfficeTasksApi, 'fetchBackOfficeTask').mockRejectedValue(new ApiError(403, 'Forbidden'))
@@ -140,80 +147,103 @@ describe('BackOfficeTaskDetailPage', () => {
     expect(screen.getByRole('link', { name: 'タスク一覧に戻る' })).toHaveAttribute('href', '/backoffice-tasks')
   })
 
-  it('shows the assignee picker when the task has no assignee', async () => {
+  it('shows the assign button instead of an inline form when the task has no assignee', async () => {
     renderPage(baseTask)
 
-    expect(await screen.findByRole('heading', { name: '担当者を割り当てる' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '割り当てる' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '担当者を割り当てる' })).toBeInTheDocument()
     expect(screen.getByText('未割り当て')).toBeInTheDocument()
+    // ダイアログを開くまでピッカーは出ない
+    expect(screen.queryByRole('combobox', { name: '担当者' })).not.toBeInTheDocument()
   })
 
-  it('shows the change form for an in-progress task that already has an assignee', async () => {
+  it('shows the change button for an in-progress task that already has an assignee', async () => {
     renderPage({ ...baseTask, status: 'processing', assignee })
 
-    expect(await screen.findByRole('heading', { name: '担当者を変更' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '変更する' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '割り当てる' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '担当者を変更' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '担当者を割り当てる' })).not.toBeInTheDocument()
     expect(screen.getByText('担当者花子')).toBeInTheDocument()
   })
 
-  it.each(['completed', 'cancelled'] as const)('hides the assignee form for a %s task', async (status) => {
+  it.each(['completed', 'cancelled'] as const)('hides the assignee button for a %s task', async (status) => {
     renderPage({ ...baseTask, status, assignee, completed_at: status === 'completed' ? '2026-07-10T09:00:00+09:00' : null })
 
     await screen.findByText('タクシー代の経理処理')
-    expect(screen.queryByRole('heading', { name: '担当者を変更' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: '担当者を割り当てる' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '変更する' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '割り当てる' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '担当者を変更' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '担当者を割り当てる' })).not.toBeInTheDocument()
   })
 
-  it('changes the assignee of an in-progress task to the selected user without changing the status', async () => {
+  async function pickInDialog() {
+    await userEvent.click(await screen.findByRole('combobox', { name: '担当者' }))
+    await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
+    await userEvent.click(await screen.findByRole('option', { name: '担当者花子(hanako@example.com)' }))
+  }
+
+  const searchedUsers: Paginated<User> = {
+    data: [assignee],
+    meta: { current_page: 1, last_page: 1, total: 1 },
+    links: { next: null, prev: null },
+  }
+
+  it('changes the assignee of an in-progress task from the dialog, notifies and closes it', async () => {
     const previousAssignee: User = { ...assignee, id: 'user-9', name: '前担当次郎', email: 'jiro@example.com' }
-    const paginatedUsers: Paginated<User> = {
-      data: [assignee],
-      meta: { current_page: 1, last_page: 1, total: 1 },
-      links: { next: null, prev: null },
-    }
-    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(searchedUsers)
     const assignSpy = vi
       .spyOn(backOfficeTasksApi, 'assignBackOfficeTask')
       .mockResolvedValue({ ...baseTask, status: 'processing', assignee })
 
     renderPage({ ...baseTask, status: 'processing', assignee: previousAssignee })
 
-    await userEvent.click(await screen.findByRole('combobox', { name: '担当者' }))
-    await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
-    await userEvent.click(await screen.findByRole('option', { name: '担当者花子(hanako@example.com)' }))
+    await userEvent.click(await screen.findByRole('button', { name: '担当者を変更' }))
+    expect(await screen.findByText('担当者を変更しますか?')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'ステータスは変わりません。未着手のタスクは確認中になります(申請種別の遷移ルールで許可されている場合)。新しい担当者と前の担当者に通知されます。',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '変更する' })).toBeDisabled()
+    expect(screen.getByText('担当者を選択してください')).toBeInTheDocument()
+
+    await pickInDialog()
     await userEvent.click(screen.getByRole('button', { name: '変更する' }))
 
     await waitFor(() => expect(assignSpy).toHaveBeenCalledWith('backoffice-task-1', 'assignee-1'))
     expect(assignSpy).toHaveBeenCalledTimes(1)
-    // 成功後はUserPickerが空に戻る
-    expect(await screen.findByText('担当者を選択してください')).toBeInTheDocument()
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('担当者を担当者花子さんに変更しました'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
-  it('assigns the selected user when 割り当てる is clicked', async () => {
-    const paginatedUsers: Paginated<User> = {
-      data: [assignee],
-      meta: { current_page: 1, last_page: 1, total: 1 },
-      links: { next: null, prev: null },
-    }
-    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
-    vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockResolvedValue({ ...baseTask, assignee })
+  it('assigns the selected user from the dialog and notifies with the assign wording', async () => {
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(searchedUsers)
+    const assignSpy = vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockResolvedValue({ ...baseTask, assignee })
 
     renderPage(baseTask)
 
-    await userEvent.click(await screen.findByRole('combobox', { name: '担当者' }))
-    await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
-    await userEvent.click(await screen.findByRole('option', { name: '担当者花子(hanako@example.com)' }))
+    await userEvent.click(await screen.findByRole('button', { name: '担当者を割り当てる' }))
+    await pickInDialog()
     await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
 
-    await waitFor(() =>
-      expect(backOfficeTasksApi.assignBackOfficeTask).toHaveBeenCalledWith('backoffice-task-1', 'assignee-1'),
-    )
+    await waitFor(() => expect(assignSpy).toHaveBeenCalledWith('backoffice-task-1', 'assignee-1'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('担当者を担当者花子さんに割り当てました'))
   })
 
-  it('changes the status with a comment when 更新する is clicked', async () => {
+  it('keeps the dialog open and shows the error inside it when assigning fails', async () => {
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(searchedUsers)
+    vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockRejectedValue(
+      new ApiError(422, '完了・取消済みのタスクは担当者を変更できません。'),
+    )
+
+    renderPage(baseTask)
+
+    await userEvent.click(await screen.findByRole('button', { name: '担当者を割り当てる' }))
+    await pickInDialog()
+    await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
+
+    expect(await screen.findByText('完了・取消済みのタスクは担当者を変更できません。')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+  })
+
+  it('changes the status with a comment, notifies and clears the comment', async () => {
     vi.spyOn(backOfficeTasksApi, 'changeBackOfficeTaskStatus').mockResolvedValue({
       ...baseTask,
       status: 'processing',
@@ -222,13 +252,53 @@ describe('BackOfficeTaskDetailPage', () => {
     renderPage(baseTask)
 
     await screen.findByText('タクシー代の経理処理')
+    // 現在の状態のままでは更新できない
+    expect(screen.getByRole('button', { name: '更新する' })).toBeDisabled()
+    expect(screen.getByText('変更後のステータスを選択してください')).toBeInTheDocument()
+
     await userEvent.selectOptions(screen.getByLabelText('状態'), '処理中')
     await userEvent.type(screen.getByLabelText('コメント(任意)'), '発注しました')
+    expect(screen.getByRole('button', { name: '更新する' })).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: '更新する' }))
 
     await waitFor(() =>
       expect(backOfficeTasksApi.changeBackOfficeTaskStatus).toHaveBeenCalledWith('backoffice-task-1', 'processing', '発注しました'),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ステータスを処理中に変更しました'))
+    expect(screen.getByLabelText('コメント(任意)')).toHaveValue('')
+  })
+
+  it('limits the status options to the current status plus allowed_next_statuses', async () => {
+    renderPage({ ...baseTask, status: 'in_review', allowed_next_statuses: ['processing', 'needs_fix'] })
+
+    const select = await screen.findByLabelText('状態')
+    const options = Array.from((select as HTMLSelectElement).options).map((option) => option.textContent)
+    expect(options).toEqual(['確認中', '要修正', '処理中'])
+  })
+
+  it('shows a message instead of the status form when no status can be reached', async () => {
+    renderPage({ ...baseTask, status: 'completed', completed_at: '2026-07-10T09:00:00+09:00', allowed_next_statuses: [] })
+
+    expect(await screen.findByText('この状態から変更できるステータスはありません')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '更新する' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('状態')).not.toBeInTheDocument()
+  })
+
+  it('shows the status error right below the update button, not at the top of the card', async () => {
+    vi.spyOn(backOfficeTasksApi, 'changeBackOfficeTaskStatus').mockRejectedValue(
+      new ApiError(422, '「未着手」から「完了」へは変更できません。'),
+    )
+
+    renderPage({ ...baseTask, allowed_next_statuses: ['completed'] })
+
+    await screen.findByText('タクシー代の経理処理')
+    await userEvent.selectOptions(screen.getByLabelText('状態'), '完了')
+    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+
+    const error = await screen.findByText('「未着手」から「完了」へは変更できません。')
+    const statusSection = screen.getByRole('heading', { name: '状態を変更する' }).parentElement
+    expect(statusSection).toContainElement(error)
+    expect(notify.success).not.toHaveBeenCalled()
   })
 
   describe('attendance_month_confirmation task', () => {
@@ -468,6 +538,7 @@ describe('BackOfficeTaskDetailPage', () => {
       await waitFor(() =>
         expect(revertConfirmation).toHaveBeenCalledWith('attendance-month-1', '手続きミスが判明したため', 'workflow-request-1'),
       )
+      await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2026-07の月次勤怠の確定を取り消しました'))
     })
   })
 })

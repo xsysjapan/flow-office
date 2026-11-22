@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import { RevertMonthConfirmationDialog } from './RevertMonthConfirmationDialog'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 function renderDialog() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -16,6 +19,10 @@ function renderDialog() {
 }
 
 describe('RevertMonthConfirmationDialog', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('shows the title and description once the trigger is clicked', async () => {
     renderDialog()
 
@@ -48,5 +55,6 @@ describe('RevertMonthConfirmationDialog', () => {
       expect(revertSpy).toHaveBeenCalledWith('month-1', '日次の休憩入力に誤りがあるため', undefined),
     )
     expect(revertSpy.mock.calls[0]).toHaveLength(3)
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2026-07の月次勤怠を未提出に戻しました'))
   })
 })

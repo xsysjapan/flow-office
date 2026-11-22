@@ -6,6 +6,7 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { notify } from '../../lib/notify'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -124,8 +125,10 @@ export function ExpenseCategoryEditPage() {
 
     if (isCreate) {
       await createCategory.mutateAsync(input)
+      notify.success('経費区分を作成しました')
     } else if (existing) {
       await updateCategory.mutateAsync({ id: existing.id, input })
+      notify.success('経費区分を保存しました')
     }
 
     if (backTarget && backTarget.to.split(/[?#]/)[0] === LIST_PATH) {
@@ -147,8 +150,6 @@ export function ExpenseCategoryEditPage() {
     <>
       <BackLink />
       <Card title={isCreate ? '経費区分の新規作成' : '経費区分の編集'}>
-        {error && <ErrorMessage error={error} />}
-
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="コード" htmlFor="code" required>
             <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
@@ -281,6 +282,7 @@ export function ExpenseCategoryEditPage() {
               {isCreate ? '作成' : '保存'}
             </Button>
           </div>
+          {error && <ErrorMessage error={error} />}
           {(!code || !name) && (
             <p className="text-xs text-muted-foreground">コードと名称を入力してください</p>
           )}

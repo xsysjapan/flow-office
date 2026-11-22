@@ -17,6 +17,9 @@ import type {
 } from '../../api/types'
 import { AppSettingsContext } from '../../contexts/AppSettingsContext'
 import { AttendanceMonthDetailPage } from './AttendanceMonthDetailPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const yearMonth = '2026-07'
 
@@ -156,6 +159,10 @@ function renderPage(initialYearMonth = yearMonth, attendanceRequiresApproval = t
 }
 
 describe('AttendanceMonthDetailPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.useFakeTimers({ shouldAdvanceTime: true })
@@ -351,6 +358,7 @@ describe('AttendanceMonthDetailPage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: '提出する' }))
 
     await waitFor(() => expect(attendanceApi.submitMonth).toHaveBeenCalledWith(yearMonth, 'approver-1'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('7月の勤怠を提出しました'))
   })
 
   it('disables the confirm button in the submit modal until an approver is picked', async () => {

@@ -17,6 +17,7 @@ import { useWorkCalendars } from '../../hooks/useWorkCalendars'
 import { usePaidLeaveGrantPolicies, usePaidLeaveGrantRules, useUpdatePaidLeaveGrantRule } from '../../hooks/usePaidLeave'
 import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { DEFAULT_FISCAL_YEAR_START, pickDefaultFiscalYearStart } from '../../lib/paidLeaveGrantRule'
+import { notify } from '../../lib/notify'
 
 const LIST_PATH = '/admin/paid-leave'
 
@@ -78,6 +79,7 @@ export function PaidLeaveGrantRuleEditPage() {
       },
       {
         onSuccess: () => {
+          notify.success(`${name}を保存しました`)
           if (backTarget && backTarget.to.split(/[?#]/)[0] === LIST_PATH) {
             navigate(backTarget.to, { state: backTarget.state })
           } else {

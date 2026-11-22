@@ -18,7 +18,7 @@ export function fetchAssetNumberRules(): Promise<AssetNumberRule[]> {
 }
 
 export function fetchAssetNumberRuleCategories(): Promise<string[]> {
-  return apiFetch('/asset-number-rules/categories')
+  return apiFetch<{ data: string[] }>('/asset-number-rules/categories').then((res) => res.data)
 }
 
 export interface SaveAssetNumberRuleInput {

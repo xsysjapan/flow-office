@@ -2,11 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as usersApi from '../../api/users'
 import * as userManagementApi from '../../api/userManagement'
 import type { Paginated, User } from '../../api/types'
 import { UserListPage } from './UserListPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 function LocationProbe() {
   const location = useLocation()
@@ -65,6 +68,10 @@ function renderPage(initialEntry = '/') {
 }
 
 describe('UserListPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('shows an empty state when there are no users', async () => {
     const empty: Paginated<User> = { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(empty)
@@ -146,6 +153,22 @@ describe('UserListPage', () => {
     expect(screen.queryByRole('columnheader', { name: 'Feature' })).not.toBeInTheDocument()
     expect(screen.queryByText('employee')).not.toBeInTheDocument()
     expect(screen.queryByText('attendance.entry')).not.toBeInTheDocument()
+  })
+
+  it('creates a user from the create form and notifies', async () => {
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
+    const create = vi
+      .spyOn(usersApi, 'createUser')
+      .mockResolvedValue({ id: 'user-9', name: '新入社員', email: 'new@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'ユーザーを作成' }))
+    await userEvent.type(screen.getByLabelText('氏名'), '新入社員')
+    await userEvent.type(screen.getByLabelText('メールアドレス'), 'new@example.com')
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: '新入社員', email: 'new@example.com' })))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ユーザーを作成しました'))
   })
 
   it('queries users with the current search text', async () => {

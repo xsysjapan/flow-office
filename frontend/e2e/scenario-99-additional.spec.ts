@@ -77,6 +77,10 @@ test("§5-1: 承認差し戻し→再申請", async ({ browser }) => {
       .getByRole("button", { name: title })
       .click({ timeout: 30000 });
     await approverPage.getByRole("button", { name: "承認する" }).click();
+    await approverPage
+      .getByRole("dialog", { name: "この申請を承認しますか?" })
+      .getByRole("button", { name: "承認する" })
+      .click();
     await expect(
       approverPage.getByRole("status", { name: "承認済み" }),
     ).toBeVisible();
@@ -233,7 +237,7 @@ test("§5-6+7: ロール変更が即座に反映され、監査ログに記録�
   await expect(page.getByRole("link", { name: "管理メニュー" })).toBeVisible();
   await page.getByRole("link", { name: "管理メニュー" }).click();
   await expect(
-    page.getByRole("complementary").getByRole("link", { name: "付与ポリシー" }),
+    page.getByRole("complementary").getByRole("link", { name: "有給休暇" }),
   ).toBeVisible();
 });
 
@@ -367,9 +371,12 @@ test("§5-8: 締めた月の勤怠CSV出力", async ({ browser }) => {
     );
 
     await adminPage.goto("/admin/attendance-export");
+    // 年月を選ぶと即座に対象へ追加され、Badge(年月+「…を対象から外す」ボタン)が出る。
     await pickYearMonth(adminPage, "対象月", yearMonth);
-    await adminPage.getByRole("button", { name: "追加" }).click();
     await expect(adminPage.getByText(yearMonth, { exact: true })).toBeVisible();
+    await expect(
+      adminPage.getByRole("button", { name: `${yearMonth}を対象から外す` }),
+    ).toBeVisible();
 
     const [download] = await Promise.all([
       adminPage.waitForEvent("download"),
@@ -424,9 +431,7 @@ test("§5-9: Entra ID初回ログイン(新入社員オンボーディング)", 
 
     await pickDate(adminPage, "入社日(有給の自動付与に使用)", "2026-04-01");
     await adminPage.getByRole("button", { name: "入社日を保存する" }).click();
-    await expect(
-      adminPage.getByRole("status", { name: "保存しました" }),
-    ).toBeVisible();
+    await expect(adminPage.getByText("入社日を保存しました")).toBeVisible();
 
     // ユーザー個人への直接Role付与UIは廃止された(PR#102、UI上はグループへの割当のみ)ため、
     // hr_staffロールの付与はAPIで行う。

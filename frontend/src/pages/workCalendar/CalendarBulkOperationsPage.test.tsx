@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as calendarBulkOperationsApi from '../../api/calendarBulkOperations'
 import * as usersApi from '../../api/users'
 import * as workStylesApi from '../../api/workStyles'
+import { notify } from '../../lib/notify'
 import { pickDate } from '../../test-support/pickerInteractions'
 import type { CalendarBulkOperation, CalendarBulkOperationPreview, Paginated, User, WorkStyle } from '../../api/types'
 import { CalendarBulkOperationsPage } from './CalendarBulkOperationsPage'
@@ -100,7 +101,13 @@ function renderPage(history: CalendarBulkOperation[] = []) {
   )
 }
 
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
+
 describe('CalendarBulkOperationsPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('shows an empty history state', async () => {
     renderPage()
 
@@ -136,8 +143,13 @@ describe('CalendarBulkOperationsPage', () => {
     expect(await screen.findByText('実行可能')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'この内容で確定適用する' }))
+    // 確認ダイアログを経由するまでは適用しない。
+    const dialog = await screen.findByRole('dialog', { name: 'この内容で確定適用しますか?' })
+    expect(calendarBulkOperationsApi.createCalendarBulkOperation).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getByRole('button', { name: '確定適用する' }))
 
     await waitFor(() => expect(calendarBulkOperationsApi.createCalendarBulkOperation).toHaveBeenCalled())
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('一括操作を適用しました'))
   })
 
   it('reverts an applied operation from the history list', async () => {
@@ -152,5 +164,6 @@ describe('CalendarBulkOperationsPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '取り消す' }))
 
     await waitFor(() => expect(calendarBulkOperationsApi.revertCalendarBulkOperation).toHaveBeenCalledWith('bulk-op-1'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('一括操作を取り消しました'))
   })
 })

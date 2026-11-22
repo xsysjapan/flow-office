@@ -82,6 +82,7 @@ import {
   useMySpecialLeaveRequests,
   useSpecialLeaveTypeNames,
 } from '../../hooks/useSpecialLeave'
+import { notify } from '../../lib/notify'
 import { breakShortfallWarning } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown } from '../../utils/attendanceWeeklyTotals'
 import {
@@ -315,12 +316,19 @@ function PunchLogRow({ punch, isEdited, isEditing }: { punch: AttendancePunch; i
     if (!combined) return
     correctPunch.mutate(
       { id: punch.id, input: { punch_type: punchType, punched_at: combined, reason } },
-      { onSuccess: () => setMode('view') },
+      {
+        onSuccess: () => {
+          setMode('view')
+          notify.success('打刻を訂正しました')
+        },
+      },
     )
   }
 
-  const handleDelete = () => {
-    deletePunch.mutate({ id: punch.id, input: reason }, { onSuccess: () => setMode('view') })
+  const handleDelete = async () => {
+    await deletePunch.mutateAsync({ id: punch.id, input: reason })
+    setMode('view')
+    notify.success('打刻を削除しました')
   }
 
   return (
@@ -387,27 +395,34 @@ function PunchLogRow({ punch, isEdited, isEditing }: { punch: AttendancePunch; i
         </div>
       )}
 
-      {mode === 'delete' && (
-        <div className="flex flex-col gap-2 rounded-md border border-border p-2">
-          {deletePunch.error && <ErrorMessage error={deletePunch.error} />}
-          <Input
-            aria-label="削除理由"
-            placeholder="削除理由(必須)"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setMode('view')}>
-              キャンセル
-            </Button>
-            <Button variant="danger" isLoading={deletePunch.isPending} disabled={!reason} onClick={handleDelete}>
-              削除する
-            </Button>
-          </div>
-        </div>
-      )}
+      <ConfirmActionDialog
+        open={mode === 'delete'}
+        onOpenChange={(open) => {
+          if (!open) setMode('view')
+        }}
+        title="打刻を削除しますか?"
+        description={`${punchTypeLabel(punch.punch_type)}(${isoToLocalDatetimeLiteral(punch.punched_at).replace('T', ' ')})の打刻を削除します。この操作は元に戻せません。`}
+        confirmLabel="削除する"
+        confirmDisabled={!reason}
+        isPending={deletePunch.isPending}
+        error={deletePunch.error}
+        onConfirm={handleDelete}
+      >
+        <Input
+          aria-label="削除理由"
+          placeholder="削除理由(必須)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </ConfirmActionDialog>
     </li>
   )
+}
+
+/** 'YYYY-MM-DD' を通知文言の「8月22日」に直す。 */
+function monthDayLabel(date: string): string {
+  const [, month, day] = date.split('-').map(Number)
+  return `${month}月${day}日`
 }
 
 function PunchAddForm({ date }: { date: string }) {
@@ -421,7 +436,12 @@ function PunchAddForm({ date }: { date: string }) {
     if (!combined) return
     createPunch.mutate(
       { work_date: date, punch_type: punchType, punched_at: combined, source: 'web' },
-      { onSuccess: () => setPunchedAt('') },
+      {
+        onSuccess: () => {
+          setPunchedAt('')
+          notify.success(`${punchTypeLabel(punchType)}の打刻を追加しました`)
+        },
+      },
     )
   }
 
@@ -536,6 +556,7 @@ function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: (p
         }
         setValidationError(null)
         await deleteDay.mutateAsync({ id: day.id, input: { reason, punch_log_action: punchLogAction } })
+        notify.success(`${monthDayLabel(day.work_date)}の勤怠を削除しました`)
         onDeleted(punchLogAction)
       }}
     >
@@ -732,6 +753,7 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
         onSuccess: async () => {
           try {
             await leaveController.apply()
+            notify.success(`${monthDayLabel(day.work_date)}の勤怠を保存しました`)
             onDone()
           } catch (error) {
             setLeaveError(error as Error)
@@ -896,6 +918,7 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
       },
       {
         onSuccess: async () => {
+          notify.success(`${monthDayLabel(date)}の実績を作成しました`)
           try {
             await leaveController.apply()
           } catch (error) {
@@ -911,7 +934,6 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
       <p className="text-sm text-muted-foreground">この日の勤怠記録はまだありません。実績を入力して作成できます。</p>
       {createDay.error && <ErrorMessage error={createDay.error} />}
       {leaveError && <ErrorMessage error={leaveError} />}
-      {createDay.isSuccess && <p className="text-sm text-success">実績を作成しました。</p>}
       {defaults && DAY_DEFAULTS_SOURCE_LABEL[defaults.source] && (
         <p className="text-sm text-info">{DAY_DEFAULTS_SOURCE_LABEL[defaults.source]}</p>
       )}
@@ -1053,7 +1075,12 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
           reason,
         },
       },
-      { onSuccess: () => onDone() },
+      {
+        onSuccess: () => {
+          notify.success(`${monthDayLabel(day.work_date)}の勤怠の補正を保存しました`)
+          onDone()
+        },
+      },
     )
   }
 
@@ -1128,7 +1155,6 @@ function ShiftSwapRequestDialog({
   const [substituteDate, setSubstituteDate] = useState<string | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
-  const [completed, setCompleted] = useState(false)
   const createRequest = useCreateShiftSwapRequest()
 
   const canSubmit = Boolean(substituteDate) && (!approvalRequired || Boolean(approverUserId))
@@ -1146,8 +1172,8 @@ function ShiftSwapRequestDialog({
       },
       {
         onSuccess: () => {
+          notify.success(`${monthDayLabel(targetDate)}の振替休日を申請しました`)
           onOpenChange(false)
-          setCompleted(true)
         },
       },
     )
@@ -1163,7 +1189,6 @@ function ShiftSwapRequestDialog({
             setSubstituteDate(undefined)
             setApproverUserId(undefined)
             setReason('')
-            setCompleted(false)
             createRequest.reset()
           }
         }}
@@ -1218,7 +1243,6 @@ function ShiftSwapRequestDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {completed && <p className="text-sm text-success">振替休日を申請しました。</p>}
     </div>
   )
 }

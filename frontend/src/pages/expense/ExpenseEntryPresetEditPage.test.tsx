@@ -2,11 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as expenseEntryPresetsApi from '../../api/expenseEntryPresets'
 import type { ExpenseCategory, ExpenseEntryPreset } from '../../api/types'
 import { ExpenseEntryPresetEditPage } from './ExpenseEntryPresetEditPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const categories: ExpenseCategory[] = [
   {
@@ -91,6 +94,10 @@ function renderPage(initialPath: string | { pathname: string; state?: unknown },
 }
 
 describe('ExpenseEntryPresetEditPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('starts blank in create mode with one empty item row', async () => {
     renderPage('/expenses/presets/new')
 
@@ -159,6 +166,7 @@ describe('ExpenseEntryPresetEditPage', () => {
       ),
     )
     expect(await screen.findByText('入力プリセット一覧ページ')).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('経費プリセットを作成しました')
   })
 
   it('creates a 宿泊費 preset from 宿泊先名/内容 and auto-composes the description', async () => {

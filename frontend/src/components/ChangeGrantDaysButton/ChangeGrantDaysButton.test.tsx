@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { notify } from '../../lib/notify'
 import { ChangeGrantDaysButton } from './ChangeGrantDaysButton'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 function setup(overrides: Partial<React.ComponentProps<typeof ChangeGrantDaysButton>> = {}) {
   const onChange = vi.fn().mockResolvedValue(undefined)
@@ -19,6 +22,10 @@ function setup(overrides: Partial<React.ComponentProps<typeof ChangeGrantDaysBut
 }
 
 describe('ChangeGrantDaysButton', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('opens the dialog with the current days and calls onChange with the days and reason', async () => {
     const onChange = setup()
 
@@ -31,6 +38,7 @@ describe('ChangeGrantDaysButton', () => {
     await userEvent.click(screen.getByRole('button', { name: '変更する' }))
 
     expect(onChange).toHaveBeenCalledWith(12, '訂正')
+    expect(notify.success).toHaveBeenCalledWith('2026-07-01付与の付与日数を12日に変更しました')
   })
 
   it('passes undefined reason when empty', async () => {

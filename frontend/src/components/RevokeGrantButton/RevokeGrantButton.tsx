@@ -2,10 +2,13 @@ import { useState } from 'react'
 import { Button } from '../Button/Button'
 import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { FormField } from '../FormField/FormField'
+import { notify } from '../../lib/notify'
 import { Input } from '../ui/input'
 
 export interface RevokeGrantButtonProps {
   id: string
+  /** 取消する付与の付与日(成功トーストの文言に使う)。 */
+  grantedOn: string
   title: string
   description: string
   onRevoke: (reason?: string) => Promise<unknown>
@@ -23,6 +26,7 @@ export interface RevokeGrantButtonProps {
  */
 export function RevokeGrantButton({
   id,
+  grantedOn,
   title,
   description,
   onRevoke,
@@ -49,7 +53,10 @@ export function RevokeGrantButton({
       confirmLabel="取消する"
       isPending={isPending}
       error={error}
-      onConfirm={() => onRevoke(reason || undefined)}
+      onConfirm={async () => {
+        await onRevoke(reason || undefined)
+        notify.success(`${grantedOn}付与を取り消しました`)
+      }}
       onOpenChange={(open) => {
         if (open) setReason('')
       }}

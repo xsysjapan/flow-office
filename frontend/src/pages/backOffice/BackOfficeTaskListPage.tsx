@@ -4,6 +4,8 @@ import { useForwardState, useSearchParamsKeepingBackState } from '../../navigati
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import { Badge } from '../../components/Badge/Badge'
+import { BulkActionBar } from '../../components/BulkActionBar/BulkActionBar'
+import { BulkActionDialog, type BulkActionFailure, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
@@ -12,6 +14,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
+import { FormField } from '../../components/FormField/FormField'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -169,9 +172,11 @@ export function BackOfficeTaskListPage() {
   useEffect(() => setSearchInput(search), [search])
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [bulkAssignee, setBulkAssignee] = useState<string | undefined>(undefined)
-  const [isBulkAssigning, setIsBulkAssigning] = useState(false)
-  const [bulkError, setBulkError] = useState<Error | null>(null)
+  /** 一括操作ダイアログを開いた時点の選択(実行中・結果表示中に選択が変わっても件数がぶれないようにする) */
+  const [dialogTasks, setDialogTasks] = useState<BackOfficeTask[]>([])
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false)
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false)
+  const [bulkAssignee, setBulkAssignee] = useState<{ id: string; name: string } | undefined>(undefined)
 
   const tasksQuery = useBackOfficeTasks({ search: search || undefined, assignee, status, page })
   const assignTask = useAssignBackOfficeTask()
@@ -205,13 +210,16 @@ export function BackOfficeTaskListPage() {
   const selectedCount = selectedIds.size
   const selectedTasks = tasks.filter((task) => selectedIds.has(task.id))
 
-  // 担当者の設定は選択可能な(完了・取消以外の)タスクなら担当者の状態に関係なく可能。完了は自分のタスクだけ(自分の判定は担当者IDの一致)
+  // 完了は自分のタスクだけ(自分の判定は担当者IDの一致)。担当者の変更は完了・取消以外のタスクなら担当者の状態に関係なく可能
   const isMine = (task: BackOfficeTask) => user !== null && task.assignee?.id === user.id
   const allMine = selectedTasks.every(isMine)
-  const assignReason = !bulkAssignee ? '担当者を選択してください' : undefined
-  const canAssign = assignReason === undefined
-  const completeReason = allMine ? undefined : '自分のタスクのみ一括完了できます'
-  const canComplete = completeReason === undefined
+  const completeReason = allMine ? undefined : '自分のタスクのみ完了にできます'
+
+  /** 担当者を変更するダイアログの対象。変更先がすでに担当者の行は「変更不要」として実行対象から外す。 */
+  const assignTargets = dialogTasks.filter((task) => task.assignee?.id !== bulkAssignee?.id || !bulkAssignee)
+  const unchangedCount = bulkAssignee ? dialogTasks.length - assignTargets.length : 0
+  const unassignedCount = dialogTasks.filter((task) => !task.assignee).length
+  const assignedCount = dialogTasks.length - unassignedCount
 
   function updateParams(patch: Record<string, string | null>) {
     setSearchParams(
@@ -277,31 +285,52 @@ export function BackOfficeTaskListPage() {
     clearSelection()
   }
 
-  async function handleBulkAssign() {
-    if (!bulkAssignee || !canAssign) return
-    setBulkError(null)
-    setIsBulkAssigning(true)
-    try {
-      await Promise.all(
-        Array.from(selectedIds).map((id) => assignTask.mutateAsync({ id, assignedUserId: bulkAssignee })),
-      )
-      clearSelection()
-      setBulkAssignee(undefined)
-    } catch (e) {
-      setBulkError(e as Error)
-    } finally {
-      setIsBulkAssigning(false)
-    }
+  function removeFromSelection(ids: string[]) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      ids.forEach((id) => next.delete(id))
+      return next
+    })
   }
 
-  async function handleBulkComplete() {
-    if (!canComplete) return
-    try {
-      await bulkComplete.mutateAsync(Array.from(selectedIds))
-      clearSelection()
-    } catch {
-      // 失敗時の表示はbulkComplete.errorでErrorMessageに出す
-    }
+  function openAssignDialog() {
+    setDialogTasks(selectedTasks)
+    setBulkAssignee(undefined)
+    setAssignDialogOpen(true)
+  }
+
+  function openCompleteDialog() {
+    setDialogTasks(selectedTasks)
+    setCompleteDialogOpen(true)
+  }
+
+  async function executeBulkAssign(): Promise<BulkActionResult> {
+    if (!bulkAssignee) return { succeededIds: [], failures: [] }
+    const results = await Promise.allSettled(
+      assignTargets.map((task) => assignTask.mutateAsync({ id: task.id, assignedUserId: bulkAssignee.id })),
+    )
+    const succeededIds: string[] = []
+    const failures: BulkActionFailure[] = []
+    results.forEach((result, index) => {
+      const task = assignTargets[index]
+      if (result.status === 'fulfilled') {
+        succeededIds.push(task.id)
+      } else {
+        failures.push({
+          id: task.id,
+          label: task.title,
+          message: result.reason instanceof ApiError ? result.reason.message : '担当者を変更できませんでした。',
+        })
+      }
+    })
+    return { succeededIds, failures }
+  }
+
+  async function executeBulkComplete(): Promise<BulkActionResult> {
+    // 全体成功/全体失敗のAPI。失敗はそのまま例外にして、ダイアログ内のErrorMessageに出す
+    const ids = dialogTasks.map((task) => task.id)
+    await bulkComplete.mutateAsync(ids)
+    return { succeededIds: ids, failures: [] }
   }
 
   const currentTab = ASSIGNEE_TABS.find((tab) => tab.scope === assignee) ?? ASSIGNEE_TABS[0]
@@ -365,47 +394,20 @@ export function BackOfficeTaskListPage() {
       </Tabs>
 
       <Card>
-        {selectedCount > 0 && (
-          <div className="mb-4 flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <div className="flex items-center justify-between gap-2 sm:contents">
-              <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedCount}件を選択中</span>
-              <Button variant="secondary" size="sm" className="sm:order-last" onClick={clearSelection}>
-                キャンセル
-              </Button>
-            </div>
-            <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0">
-              <div className="w-56 shrink-0">
-                <UserPicker id="bulk-assignee" value={bulkAssignee} onChange={setBulkAssignee} placeholder="担当者を選択" />
-              </div>
-              <Button
-                size="sm"
-                className="shrink-0"
-                onClick={() => void handleBulkAssign()}
-                isLoading={isBulkAssigning}
-                disabled={!canAssign}
-              >
-                担当者を設定
-              </Button>
-              <Button
-                size="sm"
-                className="shrink-0"
-                onClick={() => void handleBulkComplete()}
-                isLoading={bulkComplete.isPending}
-                disabled={!canComplete}
-              >
-                選択したタスクを完了
-              </Button>
-            </div>
-            {(assignReason || completeReason) && (
-              <div className="flex flex-col text-xs text-muted-foreground">
-                {assignReason && <p>{assignReason}</p>}
-                {completeReason && <p>{completeReason}</p>}
-              </div>
-            )}
-          </div>
-        )}
-        {bulkError && <ErrorMessage error={bulkError} />}
-        {bulkComplete.error && <ErrorMessage error={bulkComplete.error} fallback="タスクの一括完了に失敗しました。" />}
+        <BulkActionBar
+          selectedCount={selectedCount}
+          onClear={clearSelection}
+          actions={[
+            { key: 'assign', label: '担当者を変更', onClick: openAssignDialog },
+            {
+              key: 'complete',
+              label: '完了にする',
+              onClick: openCompleteDialog,
+              disabled: completeReason !== undefined,
+              disabledReason: completeReason,
+            },
+          ]}
+        />
 
         {tasks.length === 0 ? (
           isFiltered ? (
@@ -439,6 +441,44 @@ export function BackOfficeTaskListPage() {
           </>
         )}
       </Card>
+
+      <BulkActionDialog
+        open={assignDialogOpen}
+        onOpenChange={setAssignDialogOpen}
+        title="担当者を変更しますか?"
+        summary={`選択した${dialogTasks.length}件(未割り当て${unassignedCount}件・割り当て済み${assignedCount}件${
+          bulkAssignee ? `。変更不要${unchangedCount}件` : ''
+        })`}
+        description="ステータスは変わりません。未着手のタスクは確認中になります(申請種別の遷移ルールで許可されている場合)。新しい担当者と前の担当者に通知されます。"
+        confirmLabel={`${assignTargets.length}件の担当者を変更`}
+        confirmDisabled={!bulkAssignee || assignTargets.length === 0}
+        resultTitle="担当者の変更結果"
+        onExecute={executeBulkAssign}
+        onSucceeded={removeFromSelection}
+        successMessage={(count) => `${count}件のタスクの担当者を${bulkAssignee?.name ?? ''}さんに変更しました`}
+      >
+        <FormField label="変更先の担当者" htmlFor="bulk-assignee">
+          <UserPicker
+            id="bulk-assignee"
+            value={bulkAssignee?.id}
+            onChange={(id, picked) => setBulkAssignee(id && picked ? { id, name: picked.name } : undefined)}
+            placeholder="担当者を選択"
+          />
+        </FormField>
+      </BulkActionDialog>
+
+      <BulkActionDialog
+        open={completeDialogOpen}
+        onOpenChange={setCompleteDialogOpen}
+        title={`選択した${dialogTasks.length}件を完了にしますか?`}
+        summary={`選択した${dialogTasks.length}件`}
+        description="完了すると担当者を変更できなくなります。申請種別の遷移ルールで完了にできないタスクが含まれていると、全件とも完了になりません。"
+        confirmLabel={`${dialogTasks.length}件を完了にする`}
+        resultTitle="完了の結果"
+        onExecute={executeBulkComplete}
+        onSucceeded={removeFromSelection}
+        successMessage={(count) => `${count}件のタスクを完了にしました`}
+      />
     </div>
   )
 }

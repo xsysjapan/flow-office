@@ -252,3 +252,40 @@ describe('useSearchParamsKeepingBackState', () => {
     expect(read('state')).toBeNull()
   })
 })
+
+describe('useSearchParamsKeepingBackState with functional updates', () => {
+  function DoubleUpdatePage() {
+    const [params, setParams] = useSearchParamsKeepingBackState()
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            // 同一イベント内で2回続けて関数形式で更新する(再描画前に2回目が呼ばれる)
+            setParams((prev) => {
+              const next = new URLSearchParams(prev)
+              next.set('a', '1')
+              return next
+            })
+            setParams((prev) => {
+              const next = new URLSearchParams(prev)
+              next.set('b', '2')
+              return next
+            })
+          }}
+        >
+          double
+        </button>
+        <span data-testid="query">{params.toString()}</span>
+      </>
+    )
+  }
+
+  it('keeps both updates when two functional updates run in the same event', async () => {
+    renderAt('/requests?status=x', <DoubleUpdatePage />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'double' }))
+
+    expect(screen.getByTestId('query')).toHaveTextContent('status=x&a=1&b=2')
+  })
+})

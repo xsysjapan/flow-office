@@ -4,6 +4,7 @@ import { BackLink } from '../../components/BackLink/BackLink'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
@@ -115,6 +116,7 @@ export function WorkCalendarCreatePage() {
           setNewSourceIcsUrl('')
           setNewSourceIcsFile(undefined)
           setIsRegisteringSource(false)
+          notify.success('iCalendarソースを登録しました')
           patch({ holidaySourceId: created.id })
         },
       },
@@ -134,8 +136,10 @@ export function WorkCalendarCreatePage() {
       },
       {
         // 作成後は作成された会社カレンダーの詳細画面(正史画面)へ遷移する(SKILL.md §2.5)。
-        onSuccess: (created) =>
-          navigate(`/admin/work-calendars/${created.id}`, { state: keepBackState }),
+        onSuccess: (created) => {
+          notify.success(`「${created.name}」を作成しました`)
+          navigate(`/admin/work-calendars/${created.id}`, { state: keepBackState })
+        },
       },
     )
   }

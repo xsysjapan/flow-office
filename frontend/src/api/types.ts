@@ -794,6 +794,8 @@ export interface BackOfficeTask {
   due_on: string | null;
   completed_at: string | null;
   created_at: string | null;
+  /** 現在の状態を除く、遷移ルールで移れる状態。詳細系のレスポンス(show・assign・status)にだけ含まれる。 */
+  allowed_next_statuses?: BackOfficeTaskStatus[];
 }
 
 /** `GET /backoffice-tasks` の担当者区分。unassigned=未割り当て、me=自分、others=自分以外、all=すべて */

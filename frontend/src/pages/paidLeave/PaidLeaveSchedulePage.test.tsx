@@ -11,7 +11,10 @@ import type {
   PaidLeaveScheduleEntry,
   PaidLeaveScheduleEntryDetail,
 } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { PaidLeaveSchedulePage } from './PaidLeaveSchedulePage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const eligibleEntry: PaidLeaveScheduleEntry = {
   id: 'entry-1',
@@ -315,10 +318,38 @@ describe('PaidLeaveSchedulePage', () => {
     expect(within(dialog).getByText(/付与後は付与予定画面から取り消せません。/)).toBeInTheDocument()
     expect(bulkSpy).not.toHaveBeenCalled()
 
-    await userEvent.click(within(dialog).getByRole('button', { name: '一括付与する' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: '1件を付与する' }))
 
     await waitFor(() => expect(bulkSpy).toHaveBeenCalledWith(['entry-1']))
-    expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('1件の有給を付与しました'))
+    await waitFor(() => expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument())
+  })
+
+  it('shows the failures in the result and keeps only the failed entries selected', async () => {
+    vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeaveScheduleEntries').mockResolvedValue({
+      success_count: 1,
+      failure_count: 1,
+      results: [
+        { schedule_entry_id: 'entry-1', success: true, message: null, grant_id: 'grant-1' },
+        { schedule_entry_id: 'entry-5', success: false, message: '既に付与済みです。', grant_id: null },
+      ],
+    } satisfies PaidLeaveScheduleBulkGrantResponse)
+
+    renderPage({ entries: [eligibleEntry, futureEntry] })
+    await screen.findByText('山田花子')
+    await userEvent.click(screen.getByRole('checkbox', { name: '鈴木一郎を選択' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '山田花子を選択' }))
+    await userEvent.click(screen.getByRole('button', { name: '一括付与する' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: '2件を付与する' }))
+
+    expect(await within(dialog).findByText('一括付与の結果')).toBeInTheDocument()
+    expect(within(dialog).getByText('山田花子(2026-10-25): 既に付与済みです。')).toBeInTheDocument()
+    await userEvent.click(within(dialog).getAllByRole('button', { name: '閉じる' }).at(-1)!)
+    expect(notify.success).toHaveBeenCalledWith('1件の有給を付与しました')
+    expect(await screen.findByText('1件を選択中')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: '鈴木一郎を選択' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '山田花子を選択' })).toBeChecked()
   })
 
   it('does not call the bulk grant API when the confirmation is cancelled', async () => {
@@ -540,7 +571,7 @@ describe('PaidLeaveSchedulePage', () => {
 
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('2件(合計21日)を付与します。')).toBeInTheDocument()
-    await userEvent.click(within(dialog).getByRole('button', { name: '一括付与する' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: '2件を付与する' }))
 
     await waitFor(() => expect(bulkSpy).toHaveBeenCalledWith(expect.arrayContaining(['pair-6', 'pair-18'])))
     expect(bulkSpy.mock.calls[0][0]).toHaveLength(2)

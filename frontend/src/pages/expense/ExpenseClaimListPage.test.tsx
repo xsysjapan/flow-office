@@ -2,10 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as expenseClaimsApi from '../../api/expenseClaims'
 import type { ExpenseClaim, Paginated } from '../../api/types'
 import { ExpenseClaimListPage } from './ExpenseClaimListPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 function paginated(data: ExpenseClaim[]): Paginated<ExpenseClaim> {
   return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
@@ -23,6 +26,10 @@ function renderPage() {
 }
 
 describe('ExpenseClaimListPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
   })
@@ -187,6 +194,7 @@ describe('ExpenseClaimListPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
     await waitFor(() => expect(deleteClaim).toHaveBeenCalledWith('expense-claim-draft'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('無題の下書きを削除しました'))
   })
 
   it('does not delete when the confirmation dialog is cancelled', async () => {

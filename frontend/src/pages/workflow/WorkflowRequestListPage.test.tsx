@@ -6,7 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as workflowRequestsApi from '../../api/workflowRequests'
 import { ApiError } from '../../api/client'
 import type { Paginated, WorkflowRequest } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { WorkflowRequestListPage } from './WorkflowRequestListPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const navigate = vi.fn()
 
@@ -34,6 +37,7 @@ describe('WorkflowRequestListPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     navigate.mockClear()
+    vi.mocked(notify.success).mockClear()
   })
 
   it('shows an empty state when there are no requests', async () => {
@@ -136,15 +140,57 @@ describe('WorkflowRequestListPage', () => {
     expect(screen.getByText('2件を選択中')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'まとめて取消' }))
+    expect(await screen.findByText('選択した2件の申請を取り消しますか?')).toBeInTheDocument()
     await userEvent.type(screen.getByPlaceholderText('取消理由'), '重複申請のため')
-    await userEvent.click(screen.getByRole('button', { name: 'まとめて取り消す' }))
+    await userEvent.click(screen.getByRole('button', { name: '2件を取り消す' }))
 
     await waitFor(() => expect(cancelSpy).toHaveBeenCalledTimes(2))
     expect(cancelSpy).toHaveBeenCalledWith('workflow-request-1', '重複申請のため')
     expect(cancelSpy).toHaveBeenCalledWith('workflow-request-2', '重複申請のため')
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2件の申請を取り消しました'))
+    await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument())
   })
 
-  it('does not cancel and keeps the confirmation dialog open when no reason is entered', async () => {
+  it('shows failed cancellations in the result and keeps only the failed requests selected', async () => {
+    const base = {
+      form_data: {},
+      submitted_at: null,
+      approved_at: null,
+      returned_at: null,
+      cancelled_at: null,
+      created_at: null,
+    }
+    const withData: Paginated<WorkflowRequest> = {
+      data: [
+        { ...base, id: 'workflow-request-1', title: 'タクシー代', status: 'submitted' },
+        { ...base, id: 'workflow-request-2', title: '名刺の再作成', status: 'draft' },
+      ],
+      meta: { current_page: 1, last_page: 1, total: 2 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockResolvedValue(withData)
+    vi.spyOn(workflowRequestsApi, 'cancelWorkflowRequest').mockImplementation((id: string) =>
+      id === 'workflow-request-1' ? Promise.resolve(withData.data[0]) : Promise.reject(new ApiError(422, '取消できない状態です。')),
+    )
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'タクシー代を選択' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '名刺の再作成を選択' }))
+    await userEvent.click(screen.getByRole('button', { name: 'まとめて取消' }))
+    await userEvent.type(await screen.findByPlaceholderText('取消理由'), '重複申請のため')
+    await userEvent.click(screen.getByRole('button', { name: '2件を取り消す' }))
+
+    expect(await screen.findByText('取消の結果')).toBeInTheDocument()
+    expect(screen.getByText('名刺の再作成: 取消できない状態です。')).toBeInTheDocument()
+    await userEvent.click(screen.getAllByRole('button', { name: '閉じる' }).at(-1)!)
+    expect(notify.success).toHaveBeenCalledWith('1件の申請を取り消しました')
+    expect(await screen.findByText('1件を選択中')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'タクシー代を選択' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '名刺の再作成を選択' })).toBeChecked()
+  })
+
+  it('does not allow cancelling while no reason is entered', async () => {
     const withData: Paginated<WorkflowRequest> = {
       data: [
         {
@@ -169,11 +215,9 @@ describe('WorkflowRequestListPage', () => {
 
     await userEvent.click(await screen.findByRole('checkbox', { name: 'タクシー代を選択' }))
     await userEvent.click(screen.getByRole('button', { name: 'まとめて取消' }))
-    expect(screen.getByText('この操作は元に戻せません。選択した申請はすべて取消状態になります。')).toBeInTheDocument()
+    expect(screen.getByText('この操作は元に戻せません。取り消した申請はすべて取消状態になります。')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'まとめて取り消す' }))
-
-    expect(await screen.findByText('取消理由を入力してください。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '1件を取り消す' })).toBeDisabled()
     expect(cancelSpy).not.toHaveBeenCalled()
   })
 

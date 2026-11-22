@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as systemSettingsApi from '../../api/systemSettings'
 import type { SystemSettings } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { SystemSettingsPage } from './SystemSettingsPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const settings: SystemSettings = {
   default_timezone: 'Asia/Tokyo',
@@ -39,6 +42,10 @@ function renderPage() {
 }
 
 describe('SystemSettingsPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('shows the current default timezone', async () => {
     renderPage()
 
@@ -78,7 +85,7 @@ describe('SystemSettingsPage', () => {
         compensatory_leave_requires_approval: true,
       }),
     )
-    expect(await screen.findByText('保存しました。')).toBeInTheDocument()
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('システム設定を保存しました'))
   })
 
   it('toggles the attendance and expense-claim approval checkboxes and includes them when saving', async () => {

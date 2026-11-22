@@ -16,6 +16,7 @@ import {
   useStartBreak,
   useTodayAttendance,
 } from '../../hooks/useAttendance'
+import { notify } from '../../lib/notify'
 import { cn } from '../../lib/utils'
 import { formatDate } from '../../utils/weekDates'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
@@ -262,22 +263,22 @@ export function TodayAttendancePanel() {
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
               {/* 全休の日は出勤しない(バックエンドも出勤を422で拒否する)ため出勤ボタンを出さない。 */}
               {day.status === 'not_started' && !isFullDayLeave(day.leaves) && (
-                <Button onClick={() => clockIn.mutate()} isLoading={clockIn.isPending}>
+                <Button onClick={() => clockIn.mutate(undefined, { onSuccess: () => notify.success('出勤を記録しました') })} isLoading={clockIn.isPending}>
                   出勤
                 </Button>
               )}
               {day.status === 'working' && (
                 <>
-                  <Button variant="secondary" onClick={() => startBreak.mutate()} isLoading={startBreak.isPending}>
+                  <Button variant="secondary" onClick={() => startBreak.mutate(undefined, { onSuccess: () => notify.success('休憩開始を記録しました') })} isLoading={startBreak.isPending}>
                     休憩開始
                   </Button>
-                  <Button onClick={() => clockOut.mutate()} isLoading={clockOut.isPending}>
+                  <Button onClick={() => clockOut.mutate(undefined, { onSuccess: () => notify.success('退勤を記録しました') })} isLoading={clockOut.isPending}>
                     退勤
                   </Button>
                 </>
               )}
               {day.status === 'on_break' && (
-                <Button onClick={() => endBreak.mutate()} isLoading={endBreak.isPending}>
+                <Button onClick={() => endBreak.mutate(undefined, { onSuccess: () => notify.success('休憩終了を記録しました') })} isLoading={endBreak.isPending}>
                   休憩終了
                 </Button>
               )}

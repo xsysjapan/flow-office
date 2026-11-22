@@ -1,14 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseClaimsApi from '../../api/expenseClaims'
 import type { Paginated, User, WorkflowRequest } from '../../api/types'
 import * as workflowRequestsApi from '../../api/workflowRequests'
+import { notify } from '../../lib/notify'
 import { ApprovalsPage } from './ApprovalsPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const currentUser: User = {
   id: 'approver-1',
@@ -150,6 +154,7 @@ function renderPage(initialEntries?: string[]) {
 describe('ApprovalsPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.mocked(notify.success).mockClear()
   })
 
   it('shows an empty state when there is nothing to approve', async () => {
@@ -195,9 +200,14 @@ describe('ApprovalsPage', () => {
 
     await user.click(await screen.findByText('2026-07 月次勤怠'))
     await user.click(await screen.findByRole('button', { name: '承認する' }))
+    expect(approveMonth).not.toHaveBeenCalled()
+    expect(await screen.findByText('この申請を承認しますか?')).toBeInTheDocument()
+    expect(screen.getByText('承認すると取り消せません。申請者に承認の通知が届きます。')).toBeInTheDocument()
+    await user.click(within(screen.getByRole('dialog', { name: 'この申請を承認しますか?' })).getByRole('button', { name: '承認する' }))
 
-    expect(approveMonth).toHaveBeenCalledWith('attendance-month-1')
+    await waitFor(() => expect(approveMonth).toHaveBeenCalledWith('attendance-month-1'))
     expect(approveWorkflowRequest).not.toHaveBeenCalled()
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('申請を承認しました'))
   })
 
   it('opens the detail panel and returns an expense claim via the expense-claims API, not the workflow-request API', async () => {
@@ -220,6 +230,7 @@ describe('ApprovalsPage', () => {
 
     expect(returnExpenseClaim).toHaveBeenCalledWith('expense-claim-1', '要修正')
     expect(returnWorkflowRequest).not.toHaveBeenCalled()
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('申請を差し戻しました'))
   })
 
   it('approves a generic workflow request (subject_type=null) via the workflow-request API', async () => {
@@ -237,8 +248,9 @@ describe('ApprovalsPage', () => {
 
     await user.click(await screen.findByText('名刺作成申請'))
     await user.click(await screen.findByRole('button', { name: '承認する' }))
+    await user.click(within(screen.getByRole('dialog', { name: 'この申請を承認しますか?' })).getByRole('button', { name: '承認する' }))
 
-    expect(approveWorkflowRequest).toHaveBeenCalledWith('workflow-request-1')
+    await waitFor(() => expect(approveWorkflowRequest).toHaveBeenCalledWith('workflow-request-1'))
   })
 
   it('sends status=submitted on initial load', async () => {
@@ -384,11 +396,51 @@ describe('ApprovalsPage', () => {
     expect(await screen.findByText('2件を選択中')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'まとめて承認する' }))
+    expect(await screen.findByText('選択した2件を承認しますか?')).toBeInTheDocument()
+    expect(screen.getByText('承認すると取り消せません。申請者に承認の通知が届きます。')).toBeInTheDocument()
+    expect(approveWorkflowRequest).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: '2件を承認する' }))
 
     await waitFor(() => expect(approveWorkflowRequest).toHaveBeenCalledTimes(2))
     expect(approveWorkflowRequest).toHaveBeenCalledWith(genericRequest.id)
     expect(approveWorkflowRequest).toHaveBeenCalledWith(secondGenericRequest.id)
     await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument())
+    expect(notify.success).toHaveBeenCalledWith('2件の申請を承認しました')
+  })
+
+  it('shows failures (including detail fetch errors) in the result and keeps only the failed rows selected', async () => {
+    const user = userEvent.setup()
+    const secondGenericRequest: WorkflowRequest = {
+      ...genericRequest,
+      id: 'workflow-request-generic-2',
+      title: '交通費申請',
+    }
+    const withData: Paginated<WorkflowRequest> = {
+      data: [genericRequest, secondGenericRequest],
+      meta: { current_page: 1, last_page: 1, total: 2 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockImplementation((id: string) =>
+      id === genericRequest.id
+        ? Promise.resolve(genericRequest)
+        : Promise.reject(new ApiError(404, '申請が見つかりません。')),
+    )
+    vi.spyOn(workflowRequestsApi, 'approveWorkflowRequest').mockResolvedValue({} as never)
+
+    renderPage()
+
+    await screen.findByText('名刺作成申請')
+    await user.click(screen.getByLabelText('名刺作成申請を選択'))
+    await user.click(screen.getByLabelText('交通費申請を選択'))
+    await user.click(screen.getByRole('button', { name: 'まとめて承認する' }))
+    await user.click(await screen.findByRole('button', { name: '2件を承認する' }))
+
+    expect(await screen.findByText('承認の結果')).toBeInTheDocument()
+    expect(screen.getByText('交通費申請: 申請が見つかりません。')).toBeInTheDocument()
+    expect(screen.getByText('1件を選択中')).toBeInTheDocument()
+    expect(screen.getByLabelText('名刺作成申請を選択')).not.toBeChecked()
+    expect(screen.getByLabelText('交通費申請を選択')).toBeChecked()
   })
 
   it('clears selection when the status filter changes', async () => {

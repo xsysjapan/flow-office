@@ -3,6 +3,7 @@ import type { AttachmentOwnerType } from '../../api/attachments'
 import { downloadAttachment } from '../../api/attachments'
 import { useAttachments, useUploadAttachment } from '../../hooks/useAttachments'
 import { formatFileSize } from '../../utils/formatFileSize'
+import { notify } from '../../lib/notify'
 import { cn } from '../../lib/utils'
 import { Button } from '../Button/Button'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
@@ -90,6 +91,7 @@ export function AttachmentPanel({ ownerType, ownerId, readOnly = false, required
                 { ownerType, ownerId, file },
                 {
                   onSuccess: () => {
+                    notify.success(`${file.name}を添付しました`)
                     if (fileInputRef.current) fileInputRef.current.value = ''
                   },
                 },

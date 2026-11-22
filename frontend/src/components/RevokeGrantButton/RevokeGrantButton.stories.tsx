@@ -13,6 +13,7 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   args: {
     id: 'revoke-reason',
+    grantedOn: '2026-07-01',
     title: '付与を取り消しますか?',
     description: 'この操作は元に戻せません。',
     onRevoke: fn(),
@@ -22,6 +23,7 @@ export const Default: Story = {
 export const Disabled: Story = {
   args: {
     id: 'revoke-reason',
+    grantedOn: '2026-07-01',
     title: '付与を取り消しますか?',
     description: 'この操作は元に戻せません。',
     onRevoke: fn(),

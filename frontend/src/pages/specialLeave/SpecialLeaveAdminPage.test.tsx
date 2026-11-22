@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
 import type {
@@ -14,6 +14,7 @@ import type {
   SpecialLeaveUsage,
   User,
 } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { SpecialLeaveAdminPage } from './SpecialLeaveAdminPage'
 
@@ -61,12 +62,37 @@ function renderPage(
   )
 }
 
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
+
 describe('SpecialLeaveAdminPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('lists existing special leave types', async () => {
     renderPage()
 
     expect((await screen.findAllByText('誕生日休暇')).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: '無効にする' })).toBeInTheDocument()
+    // 行内の操作は行末の「⋯」メニューにまとめる(行内に切替ボタンを並べない)。
+    expect(screen.queryByRole('button', { name: '無効にする' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '誕生日休暇の操作' }))
+    expect(await screen.findByRole('menuitem', { name: '無効にする' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: '付与不要にする' })).toBeInTheDocument()
+  })
+
+  it('toggles a special leave type from the row menu instantly and notifies', async () => {
+    const update = vi
+      .spyOn(specialLeaveApi, 'updateSpecialLeaveType')
+      .mockResolvedValue({ ...birthdayType, is_active: false })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: '誕生日休暇の操作' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: '無効にする' }))
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(1, { name: '誕生日休暇', is_active: false, requires_grant: true }),
+    )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('誕生日休暇を無効にしました'))
   })
 
   it('creates a new special leave type with the entered name', async () => {
@@ -80,6 +106,7 @@ describe('SpecialLeaveAdminPage', () => {
     await waitFor(() =>
       expect(specialLeaveApi.createSpecialLeaveType).toHaveBeenCalledWith({ name: 'リフレッシュ休暇', requires_grant: true }),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('特別休暇の種類「リフレッシュ休暇」を追加しました'))
   })
 
   it('lists existing grant rules with their steps and expiry', async () => {

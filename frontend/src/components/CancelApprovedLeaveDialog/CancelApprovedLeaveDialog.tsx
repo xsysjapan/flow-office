@@ -1,3 +1,4 @@
+import { notify } from '../../lib/notify'
 import { useCancelCompensatoryLeaveRequest } from '../../hooks/useCompensatoryLeave'
 import { useCancelPaidLeaveRequest } from '../../hooks/usePaidLeave'
 import { useCancelSpecialLeaveRequest } from '../../hooks/useSpecialLeave'
@@ -65,7 +66,12 @@ export function CancelApprovedLeaveDialog({
             isLoading={mutation.isPending}
             onClick={() => {
               if (!target) return
-              mutation.mutate(target.id, { onSuccess: () => onCancelled() })
+              mutation.mutate(target.id, {
+                onSuccess: () => {
+                  notify.success(`${target.label}の承認を取り消しました`)
+                  onCancelled()
+                },
+              })
             }}
           >
             取り消す

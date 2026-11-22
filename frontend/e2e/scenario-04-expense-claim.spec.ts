@@ -111,7 +111,7 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await applicantPage.getByRole('button', { name: '明細を保存して続けて入力する' }).click()
 
     await expect(applicantPage.getByText(/保存済みの明細\(1件/)).toBeVisible()
-    await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
+    await expect(applicantPage.getByRole('main').getByText('dummy-receipt.png')).toBeVisible()
 
     await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
     await applicantPage.getByRole('button', { name: '申請する' }).click()
@@ -131,6 +131,7 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await expect(approvalRow).toBeVisible()
     await approvalRow.getByRole('button').click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // 3. 小林誠(経理担当者)が未担当タスクを自分に割り当て、
@@ -142,8 +143,11 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await expect(taskRow).toBeVisible()
     await taskRow.getByRole('link').click()
 
-    await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com')
-    await accountingPage.getByRole('button', { name: '割り当てる' }).click()
+    // 担当者の割り当てはダイアログ(ボタン→ダイアログ内のUserPicker→「割り当てる」)で行う
+    await accountingPage.getByRole('button', { name: '担当者を割り当てる' }).click()
+    const assignDialog = accountingPage.getByRole('dialog')
+    await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com', { root: assignDialog, exact: true })
+    await assignDialog.getByRole('button', { name: '割り当てる' }).click()
     await expect(accountingPage.getByText('未割り当て')).toHaveCount(0)
 
     // request_types方式の廃止後もtask_type='expense_reimbursement'固定の許可遷移
@@ -263,7 +267,7 @@ for (const scenario of singleCategoryScenarios) {
       await applicantPage.getByRole('button', { name: '明細を保存して続けて入力する' }).click()
 
       await expect(applicantPage.getByText(/保存済みの明細\(1件/)).toBeVisible()
-      await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
+      await expect(applicantPage.getByRole('main').getByText('dummy-receipt.png')).toBeVisible()
 
       await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
       await applicantPage.getByRole('button', { name: '申請する' }).click()
@@ -279,6 +283,7 @@ for (const scenario of singleCategoryScenarios) {
       await expect(approvalRow).toBeVisible()
       await approvalRow.getByRole('button').click()
       await approverPage.getByRole('button', { name: '承認する' }).click()
+      await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
       await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
       await applicantPage.goto(claimUrl)
@@ -345,7 +350,7 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     await applicantPage.getByRole('button', { name: /明細を保存する\(2件\)/ }).click()
 
     await expect(applicantPage.getByText(/保存済みの明細\(2件/)).toBeVisible()
-    await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
+    await expect(applicantPage.getByRole('main').getByText('dummy-receipt.png')).toBeVisible()
 
     // 3. UC-X013: 別の区分(宿泊費)の明細を同じ申請に追加する。
     await applicantPage.getByRole('button', { name: '別の区分の明細を追加する' }).click()
@@ -379,6 +384,7 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     await expect(approverPage.getByRole('heading', { name: title })).toBeVisible()
     await expect(approverPage.getByRole('heading', { name: '明細(3件)' })).toBeVisible()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     await applicantPage.goto(claimUrl)

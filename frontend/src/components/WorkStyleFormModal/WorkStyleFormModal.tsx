@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { notify } from '../../lib/notify'
 import { Button } from '../Button/Button'
 import { DatePicker } from '../DatePicker/DatePicker'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
@@ -141,9 +142,22 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
     }
 
     if (isEditing && workStyle) {
-      updateWorkStyle.mutate({ id: workStyle.id, input }, { onSuccess: () => onOpenChange(false) })
+      updateWorkStyle.mutate(
+        { id: workStyle.id, input },
+        {
+          onSuccess: () => {
+            notify.success(`働き方「${input.name}」を保存しました`)
+            onOpenChange(false)
+          },
+        },
+      )
     } else {
-      createWorkStyle.mutate(input, { onSuccess: () => onOpenChange(false) })
+      createWorkStyle.mutate(input, {
+        onSuccess: () => {
+          notify.success(`働き方「${input.name}」を作成しました`)
+          onOpenChange(false)
+        },
+      })
     }
   }
 

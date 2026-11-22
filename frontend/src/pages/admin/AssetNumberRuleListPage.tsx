@@ -9,6 +9,7 @@ import { Input } from '../../components/ui/input'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import type { AssetNumberRule } from '../../api/assetNumberRules'
+import { notify } from '../../lib/notify'
 import {
   useAssetNumberRules,
   useUpdateAssetNumberRule,
@@ -70,15 +71,22 @@ export function AssetNumberRuleListPage() {
   function saveCategoryEdit(category: string) {
     updateRule.mutate(
       { category, input: { prefix: editForm.prefix, digitCount: Number(editForm.digitCount) || 1, enabled: editForm.enabled } },
-      { onSuccess: () => setEditingCategory(null) },
+      {
+        onSuccess: () => {
+          notify.success(`${category}の採番ルールを保存しました`)
+          setEditingCategory(null)
+        },
+      },
     )
   }
 
   function saveNewCategory() {
+    const category = newCategory.trim()
     updateRule.mutate(
-      { category: newCategory.trim(), input: { prefix: newForm.prefix, digitCount: Number(newForm.digitCount) || 1, enabled: newForm.enabled } },
+      { category, input: { prefix: newForm.prefix, digitCount: Number(newForm.digitCount) || 1, enabled: newForm.enabled } },
       {
         onSuccess: () => {
+          notify.success(`${category}の採番ルールを追加しました`)
           setNewCategory('')
           setNewForm({ prefix: '', digitCount: '5', enabled: true })
         },
@@ -94,7 +102,12 @@ export function AssetNumberRuleListPage() {
   function saveDefault() {
     updateDefaultRule.mutate(
       { prefix: defaultForm.prefix, digitCount: Number(defaultForm.digitCount) || 1, enabled: defaultForm.enabled },
-      { onSuccess: () => setEditingDefault(false) },
+      {
+        onSuccess: () => {
+          notify.success('デフォルトの採番ルールを保存しました')
+          setEditingDefault(false)
+        },
+      },
     )
   }
 

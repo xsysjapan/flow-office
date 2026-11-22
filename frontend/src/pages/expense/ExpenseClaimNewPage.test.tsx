@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
@@ -11,6 +11,7 @@ import * as expenseEntryPresetsApi from '../../api/expenseEntryPresets'
 import * as usersApi from '../../api/users'
 import type { ExpenseCategory, ExpenseClaim, ExpenseEntryPreset, User } from '../../api/types'
 import { AppSettingsContext } from '../../contexts/AppSettingsContext'
+import { notify } from '../../lib/notify'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { ExpenseClaimNewPage } from './ExpenseClaimNewPage'
 
@@ -23,6 +24,8 @@ const applicant: User = {
   employment_status: 'active',
   last_login_at: null,
 }
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 vi.mock('../../auth/useAuth', () => ({
   useAuth: () => ({ user: applicant }),
@@ -183,6 +186,10 @@ async function selectBulkEntryMode(title = 'テスト用タイトル') {
 }
 
 describe('ExpenseClaimNewPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
   })
@@ -1043,5 +1050,71 @@ describe('ExpenseClaimNewPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
 
     expect(deleteItem).not.toHaveBeenCalled()
+  })
+
+  describe('定期区間控除額の入力', () => {
+    const itemWithDeduction = {
+      id: 'item-1',
+      category_id: 1,
+      usage_date: '2026-07-10',
+      description: '客先訪問',
+      amount: 1000,
+      project_id: null,
+      evidence_type: 'fact_reference_available' as const,
+      fact_reference_type: null,
+      fact_reference_id: null,
+      commuting_deduction_amount: 200,
+    }
+
+    function setup() {
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim({ items: [itemWithDeduction] }))
+      const updateItem = vi
+        .spyOn(expenseClaimsApi, 'updateExpenseItem')
+        .mockResolvedValue({ ...itemWithDeduction, commuting_deduction_amount: 250 })
+      renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+      return updateItem
+    }
+
+    it('does not save or notify while typing, and saves once with one toast on blur', async () => {
+      const updateItem = setup()
+
+      const input = await screen.findByLabelText('2026-07-10の定期区間控除額')
+      await userEvent.clear(input)
+      await userEvent.type(input, '250')
+      expect(updateItem).not.toHaveBeenCalled()
+      expect(notify.success).not.toHaveBeenCalledWith('明細を保存しました')
+
+      await userEvent.tab()
+
+      await waitFor(() => expect(updateItem).toHaveBeenCalledTimes(1))
+      expect(updateItem).toHaveBeenCalledWith(
+        'claim-1',
+        'item-1',
+        expect.objectContaining({ commuting_deduction_amount: 250 }),
+      )
+      await waitFor(() => expect(notify.success).toHaveBeenCalledTimes(1))
+      expect(notify.success).toHaveBeenCalledWith('明細を保存しました')
+    })
+
+    it('saves once on Enter, and does not save again when the value is unchanged', async () => {
+      const updateItem = setup()
+
+      const input = await screen.findByLabelText('2026-07-10の定期区間控除額')
+      await userEvent.clear(input)
+      await userEvent.type(input, '250{Enter}')
+      await waitFor(() => expect(updateItem).toHaveBeenCalledTimes(1))
+      expect(updateItem).toHaveBeenCalledTimes(1)
+    })
+
+    it('neither saves nor notifies when blurred without changing the value', async () => {
+      const updateItem = setup()
+
+      const input = await screen.findByLabelText('2026-07-10の定期区間控除額')
+      await userEvent.click(input)
+      await userEvent.tab()
+
+      expect(updateItem).not.toHaveBeenCalled()
+      expect(notify.success).not.toHaveBeenCalled()
+    })
   })
 })

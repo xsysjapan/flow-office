@@ -8,6 +8,7 @@ import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
+import { notify } from "../../lib/notify";
 import * as userManagement from "../../hooks/useUserManagement";
 
 export function GroupTypeManagementPage() {
@@ -44,9 +45,6 @@ export function GroupTypeManagementPage() {
       />
     );
 
-  const mutationError =
-    createGroupType.error ?? updateGroupType.error ?? undefined;
-
   return (
     <div className="space-y-6">
       <div>
@@ -55,7 +53,6 @@ export function GroupTypeManagementPage() {
           グループの分類と所属数・主所属の制約を管理します。
         </p>
       </div>
-      {mutationError && <ErrorMessage error={mutationError} />}
       <Card title="グループ種別管理">
         <h2 className="mb-3 text-base font-semibold">新規作成</h2>
         <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -157,24 +154,30 @@ export function GroupTypeManagementPage() {
             disabled={!createForm.code || !createForm.name}
             isLoading={createGroupType.isPending}
             onClick={() =>
-              createGroupType.mutate({
-                code: createForm.code,
-                name: createForm.name,
-                display_order: Number(createForm.display_order) || 0,
-                membership_limit_type: createForm.membership_limit_type,
-                max_memberships_per_user: createForm.max_memberships_per_user
-                  ? Number(createForm.max_memberships_per_user)
-                  : null,
-                primary_membership_required:
-                  createForm.primary_membership_required,
-                max_primary_memberships: createForm.max_primary_memberships
-                  ? Number(createForm.max_primary_memberships)
-                  : null,
-              })
+              createGroupType.mutate(
+                {
+                  code: createForm.code,
+                  name: createForm.name,
+                  display_order: Number(createForm.display_order) || 0,
+                  membership_limit_type: createForm.membership_limit_type,
+                  max_memberships_per_user: createForm.max_memberships_per_user
+                    ? Number(createForm.max_memberships_per_user)
+                    : null,
+                  primary_membership_required:
+                    createForm.primary_membership_required,
+                  max_primary_memberships: createForm.max_primary_memberships
+                    ? Number(createForm.max_primary_memberships)
+                    : null,
+                },
+                {
+                  onSuccess: () => notify.success("グループ種別を作成しました"),
+                },
+              )
             }
           >
             グループ種別を作成
           </Button>
+          {createGroupType.error && <ErrorMessage error={createGroupType.error} />}
           {(!createForm.code || !createForm.name) && (
             <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4">
               コードと名称を入力してください。
@@ -341,27 +344,31 @@ export function GroupTypeManagementPage() {
             disabled={!editForm.id || !editForm.name}
             isLoading={updateGroupType.isPending}
             onClick={() =>
-              updateGroupType.mutate({
-                id: Number(editForm.id),
-                input: {
-                  name: editForm.name,
-                  display_order: Number(editForm.display_order) || 0,
-                  status: editForm.status,
-                  membership_limit_type: editForm.membership_limit_type,
-                  max_memberships_per_user: editForm.max_memberships_per_user
-                    ? Number(editForm.max_memberships_per_user)
-                    : null,
-                  primary_membership_required:
-                    editForm.primary_membership_required,
-                  max_primary_memberships: editForm.max_primary_memberships
-                    ? Number(editForm.max_primary_memberships)
-                    : null,
+              updateGroupType.mutate(
+                {
+                  id: Number(editForm.id),
+                  input: {
+                    name: editForm.name,
+                    display_order: Number(editForm.display_order) || 0,
+                    status: editForm.status,
+                    membership_limit_type: editForm.membership_limit_type,
+                    max_memberships_per_user: editForm.max_memberships_per_user
+                      ? Number(editForm.max_memberships_per_user)
+                      : null,
+                    primary_membership_required:
+                      editForm.primary_membership_required,
+                    max_primary_memberships: editForm.max_primary_memberships
+                      ? Number(editForm.max_primary_memberships)
+                      : null,
+                  },
                 },
-              })
+                { onSuccess: () => notify.success("グループ種別を保存しました") },
+              )
             }
           >
             変更を保存
           </Button>
+          {updateGroupType.error && <ErrorMessage error={updateGroupType.error} />}
           {(!editForm.id || !editForm.name) && (
             <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4">
               {editForm.id ? "名称を入力してください。" : "編集するグループ種別を選択してください。"}

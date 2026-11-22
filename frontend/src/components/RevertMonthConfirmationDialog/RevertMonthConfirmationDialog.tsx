@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { FormField } from '../FormField/FormField'
+import { notify } from '../../lib/notify'
 import { Textarea } from '../ui/textarea'
 import { useRevertMonthConfirmation } from '../../hooks/useAttendance'
 
@@ -41,7 +42,9 @@ export function RevertMonthConfirmationDialog({ monthId, yearMonth }: RevertMont
           return
         }
         setValidationError(undefined)
-        return revertMonth.mutateAsync({ id: monthId, reason: message })
+        return revertMonth
+          .mutateAsync({ id: monthId, reason: message })
+          .then(() => notify.success(`${yearMonth}の月次勤怠を未提出に戻しました`))
       }}
     >
       <FormField label="社員へのメッセージ" htmlFor="revert-month-message" required error={validationError}>

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { pickYearMonth } from '../../test-support/pickerInteractions'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as employeeRotationAssignmentsApi from '../../api/employeeRotationAssignments'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import * as rotationPatternsApi from '../../api/rotationPatterns'
@@ -10,6 +10,7 @@ import * as shiftPatternsApi from '../../api/shiftPatterns'
 import * as usersApi from '../../api/users'
 import * as workStylesApi from '../../api/workStyles'
 import type { Paginated, RotationPattern, ShiftPattern, User, WorkStyle } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { pickDate, pickTime } from '../../test-support/pickerInteractions'
 import { ShiftsPage } from './ShiftsPage'
 
@@ -80,7 +81,13 @@ function renderPage({
   )
 }
 
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
+
 describe('ShiftsPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('generates and shows shifts for the selected user and period', async () => {
     const paginatedUsers: Paginated<User> = {
       data: [targetUser],
@@ -237,6 +244,32 @@ describe('ShiftsPage', () => {
         is_legal_holiday: false,
       }),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('勤務予定を下書きとして割り当てました'))
+  }, 15000)
+
+  it('asks for confirmation before publishing the shift schedule, and notifies once published', async () => {
+    vi.spyOn(employeeShiftAssignmentsApi, 'reviewShiftSchedule').mockResolvedValue({
+      legal_holiday_shortages: [],
+      consecutive_work_violations: [],
+      monthly_hours_over_cap: [],
+    })
+    const publish = vi
+      .spyOn(employeeShiftAssignmentsApi, 'publishShiftSchedule')
+      .mockResolvedValue({ published_count: 12 })
+
+    renderPage()
+    await screen.findByRole('heading', { name: '3交代制シフト表' })
+
+    await userEvent.type(screen.getByLabelText('対象部署'), '製造1課')
+    await pickYearMonth(userEvent.setup(), '対象月', '2026-08')
+    await userEvent.click(screen.getByRole('button', { name: '公開する' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'シフト表を公開しますか?' })
+    expect(publish).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getByRole('button', { name: '公開する' }))
+
+    await waitFor(() => expect(publish).toHaveBeenCalledWith({ department: '製造1課', year_month: '2026-08' }))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('12件のシフトを公開しました'))
   }, 15000)
 
   it('creates a rotation pattern from a sequence of shift patterns', async () => {

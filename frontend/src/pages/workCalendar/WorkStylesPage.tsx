@@ -5,6 +5,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
@@ -58,16 +59,19 @@ function WorkStyleOnboardingCard() {
   if (hasDefault) return null
 
   const handleStart = () => {
-    createDefault.mutate({})
+    createDefault.mutate({}, { onSuccess: () => notify.success('一般的な勤務設定を作成しました') })
   }
 
   const handleSaveEdited = () => {
-    createDefault.mutate({
-      name,
-      default_start_time: startTime,
-      default_end_time: endTime,
-      default_break_minutes: Number(breakMinutes),
-    })
+    createDefault.mutate(
+      {
+        name,
+        default_start_time: startTime,
+        default_end_time: endTime,
+        default_break_minutes: Number(breakMinutes),
+      },
+      { onSuccess: () => notify.success('一般的な勤務設定を作成しました') },
+    )
   }
 
   return (
@@ -266,7 +270,11 @@ function WorkStyleListCard() {
                         <Button
                           variant="secondary"
                           isLoading={setDefaultWorkStyle.isPending}
-                          onClick={() => setDefaultWorkStyle.mutate(style.id)}
+                          onClick={() =>
+                            setDefaultWorkStyle.mutate(style.id, {
+                              onSuccess: () => notify.success(`「${style.name}」をデフォルトに設定しました`),
+                            })
+                          }
                         >
                           デフォルトに設定
                         </Button>
@@ -338,9 +346,13 @@ function MonthlyWorkStyleAssignmentCard() {
       { user_id: targetUserId, year_month: yearMonth, work_style_id: workStyleId },
       {
         onSuccess: () => {
+          notify.success(`${targetUser?.name ?? '対象社員'}さんの${yearMonth}の働き方を設定しました`)
           if (autoGenerateShifts) {
             const { from, to } = monthBoundaries(yearMonth)
-            generateShifts.mutate({ user_id: targetUserId, work_style_id: workStyleId, from, to })
+            generateShifts.mutate(
+              { user_id: targetUserId, work_style_id: workStyleId, from, to },
+              { onSuccess: () => notify.success('勤務予定を生成しました') },
+            )
           }
           setYearMonth('')
           setIsConfirming(false)

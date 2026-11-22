@@ -7,6 +7,7 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Ms365CredentialsFields, type Ms365CredentialsFieldsValue } from '../../components/Ms365CredentialsFields/Ms365CredentialsFields'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
+import { notify } from '../../lib/notify'
 import { useSystemSettings, useUpdateSystemSettings } from '../../hooks/useSystemSettings'
 
 /**
@@ -38,7 +39,6 @@ export function SystemSettingsPage() {
   const [expenseClaimRequiresApproval, setExpenseClaimRequiresApproval] = useState(true)
   const [prohibitSelfPrivilegedRoleAssignment, setProhibitSelfPrivilegedRoleAssignment] = useState(false)
   const [compensatoryLeaveRequiresApproval, setCompensatoryLeaveRequiresApproval] = useState(true)
-  const [savedMessage, setSavedMessage] = useState(false)
 
   useEffect(() => {
     if (!data) return
@@ -68,7 +68,6 @@ export function SystemSettingsPage() {
   if (error) return <ErrorMessage error={error} fallback="システム設定の取得に失敗しました。" />
 
   const handleSave = () => {
-    setSavedMessage(false)
     updateSettings.mutate(
       {
         default_timezone: defaultTimezone,
@@ -95,7 +94,7 @@ export function SystemSettingsPage() {
       },
       {
         onSuccess: () => {
-          setSavedMessage(true)
+          notify.success('システム設定を保存しました')
           setMs365Value((current) => ({ ...current, clientSecret: '' }))
         },
       },
@@ -109,18 +108,12 @@ export function SystemSettingsPage() {
         タイムゾーンは変更されません)。
       </p>
 
-      {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
-      {savedMessage && <p className="mb-3 text-sm text-success">保存しました。</p>}
-
       <FormField label="既定タイムゾーン" htmlFor="system-settings-default-timezone" required>
         <Input
           id="system-settings-default-timezone"
           placeholder="Asia/Tokyo"
           value={defaultTimezone}
-          onChange={(e) => {
-            setDefaultTimezone(e.target.value)
-            setSavedMessage(false)
-          }}
+          onChange={(e) => setDefaultTimezone(e.target.value)}
         />
       </FormField>
 
@@ -135,10 +128,7 @@ export function SystemSettingsPage() {
           min={1}
           max={31}
           value={submissionDeadlineDay}
-          onChange={(e) => {
-            setSubmissionDeadlineDay(e.target.value)
-            setSavedMessage(false)
-          }}
+          onChange={(e) => setSubmissionDeadlineDay(e.target.value)}
         />
         <p className="mt-1 text-xs text-muted-foreground">
           この日を過ぎても前月分の勤怠が未提出の在籍社員に、解消するまで毎日通知する。
@@ -156,10 +146,7 @@ export function SystemSettingsPage() {
           min={1}
           max={31}
           value={monthCloseDeadlineDay}
-          onChange={(e) => {
-            setMonthCloseDeadlineDay(e.target.value)
-            setSavedMessage(false)
-          }}
+          onChange={(e) => setMonthCloseDeadlineDay(e.target.value)}
         />
         <p className="mt-1 text-xs text-muted-foreground">
           この日の3日前になっても前月分の月次勤怠が締められていない場合に通知する。
@@ -174,10 +161,7 @@ export function SystemSettingsPage() {
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={attendanceRequiresApproval}
-          onCheckedChange={(checked) => {
-            setAttendanceRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
+          onCheckedChange={(checked) => setAttendanceRequiresApproval(checked === true)}
         />
         月次勤怠の提出に承認を必須にする
       </label>
@@ -185,10 +169,7 @@ export function SystemSettingsPage() {
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={paidLeaveRequiresApproval}
-          onCheckedChange={(checked) => {
-            setPaidLeaveRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
+          onCheckedChange={(checked) => setPaidLeaveRequiresApproval(checked === true)}
         />
         有給休暇の申請に承認を必須にする
       </label>
@@ -196,10 +177,7 @@ export function SystemSettingsPage() {
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={specialLeaveRequiresApproval}
-          onCheckedChange={(checked) => {
-            setSpecialLeaveRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
+          onCheckedChange={(checked) => setSpecialLeaveRequiresApproval(checked === true)}
         />
         特別休暇の申請に承認を必須にする
       </label>
@@ -207,10 +185,7 @@ export function SystemSettingsPage() {
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={shiftSwapRequiresApproval}
-          onCheckedChange={(checked) => {
-            setShiftSwapRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
+          onCheckedChange={(checked) => setShiftSwapRequiresApproval(checked === true)}
         />
         振替休日の申請に承認を必須にする
       </label>
@@ -218,10 +193,7 @@ export function SystemSettingsPage() {
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={expenseClaimRequiresApproval}
-          onCheckedChange={(checked) => {
-            setExpenseClaimRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
+          onCheckedChange={(checked) => setExpenseClaimRequiresApproval(checked === true)}
         />
         経費精算の申請に承認を必須にする
       </label>
@@ -229,10 +201,7 @@ export function SystemSettingsPage() {
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={compensatoryLeaveRequiresApproval}
-          onCheckedChange={(checked) => {
-            setCompensatoryLeaveRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
+          onCheckedChange={(checked) => setCompensatoryLeaveRequiresApproval(checked === true)}
         />
         代休の消化申請に承認を必須にする
       </label>
@@ -241,10 +210,7 @@ export function SystemSettingsPage() {
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={prohibitSelfPrivilegedRoleAssignment}
-          onCheckedChange={(checked) => {
-            setProhibitSelfPrivilegedRoleAssignment(checked === true)
-            setSavedMessage(false)
-          }}
+          onCheckedChange={(checked) => setProhibitSelfPrivilegedRoleAssignment(checked === true)}
         />
         自分自身への特権Role付与を禁止する
       </label>
@@ -258,10 +224,7 @@ export function SystemSettingsPage() {
       <Ms365CredentialsFields
         idPrefix="system-settings-m365"
         value={ms365Value}
-        onChange={(value) => {
-          setMs365Value(value)
-          setSavedMessage(false)
-        }}
+        onChange={(value) => setMs365Value(value)}
         clientSecretConfigured={data?.m365_client_secret_configured}
       />
 
@@ -275,10 +238,7 @@ export function SystemSettingsPage() {
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={notificationMailEnabled}
-          onCheckedChange={(checked) => {
-            setNotificationMailEnabled(checked === true)
-            setSavedMessage(false)
-          }}
+          onCheckedChange={(checked) => setNotificationMailEnabled(checked === true)}
         />
         メール通知を有効にする
       </label>
@@ -288,10 +248,7 @@ export function SystemSettingsPage() {
           id="system-settings-mail-sender-address"
           type="email"
           value={notificationMailSenderAddress}
-          onChange={(e) => {
-            setNotificationMailSenderAddress(e.target.value)
-            setSavedMessage(false)
-          }}
+          onChange={(e) => setNotificationMailSenderAddress(e.target.value)}
         />
       </FormField>
 
@@ -299,10 +256,7 @@ export function SystemSettingsPage() {
         <Input
           id="system-settings-mail-sender-name"
           value={notificationMailSenderName}
-          onChange={(e) => {
-            setNotificationMailSenderName(e.target.value)
-            setSavedMessage(false)
-          }}
+          onChange={(e) => setNotificationMailSenderName(e.target.value)}
         />
       </FormField>
 
@@ -313,6 +267,7 @@ export function SystemSettingsPage() {
       >
         保存する
       </Button>
+      {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
       {(!defaultTimezone || !submissionDeadlineDay || !monthCloseDeadlineDay) && (
         <p className="mt-1.5 text-xs text-muted-foreground">
           既定タイムゾーン・勤怠未提出の警告基準日・月次締め前警告の基準日をすべて入力してください。

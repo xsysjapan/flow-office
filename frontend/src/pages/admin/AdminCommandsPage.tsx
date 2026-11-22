@@ -12,6 +12,7 @@ import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { useAdminCommandRuns, useAdminCommands, useRunAdminCommand } from '../../hooks/useAdminCommands'
 import type { AdminCommandParameter, AdminCommandRun } from '../../api/types'
+import { notify } from '../../lib/notify'
 
 function formatDateTime(value: string | null): string {
   return value ? new Date(value).toLocaleString('ja-JP') : '—'
@@ -90,7 +91,10 @@ export function AdminCommandsPage() {
               {parameterControl(parameter)}
               {parameter.description && <p className="text-xs text-muted-foreground">{parameter.description}</p>}
             </FormField>)}
-            <ConfirmActionDialog triggerLabel="実行" triggerVariant="primary" title={`${command.label}を実行`} description="実行は約1分以内に始まり、実行結果は履歴に記録されます。" confirmLabel="実行" isPending={execute.isPending} error={execute.error} onConfirm={() => execute.mutateAsync({ command: command.name, parameters: Object.fromEntries(Object.entries(parameters).filter(([, value]) => value !== undefined && value !== '')) })} />
+            <ConfirmActionDialog triggerLabel="実行" triggerVariant="primary" title={`${command.label}を実行`} description="実行は約1分以内に始まり、実行結果は履歴に記録されます。" confirmLabel="実行" isPending={execute.isPending} error={execute.error} onConfirm={async () => {
+              await execute.mutateAsync({ command: command.name, parameters: Object.fromEntries(Object.entries(parameters).filter(([, value]) => value !== undefined && value !== '')) })
+              notify.success(`${command.label}の実行を依頼しました`, { description: '実行は約1分以内に始まります。結果は実行履歴に表示されます。' })
+            }} />
           </div>}
         </>}
       </Card>

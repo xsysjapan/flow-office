@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { User } from '../../api/types'
+import { notify } from '../../lib/notify'
 import type { StatusMeta } from '../../utils/statusLabels'
 import { WeeklyAttendanceBulkEntryModal } from './WeeklyAttendanceBulkEntryModal'
 
@@ -17,17 +18,18 @@ const currentUser: User = {
   last_login_at: null,
 }
 
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
+
 vi.mock('../../auth/useAuth', () => ({
   useAuth: () => ({ user: currentUser }),
 }))
 
-function renderModal(onCompleted?: (message: string) => void, dayOffBadgesByDate?: Record<string, StatusMeta[]>) {
+function renderModal(dayOffBadgesByDate?: Record<string, StatusMeta[]>) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
       <WeeklyAttendanceBulkEntryModal
         defaultFrom="2026-08-03" defaultTo="2026-08-09"
-        onCompleted={onCompleted}
         dayOffBadgesByDate={dayOffBadgesByDate}
       />
     </QueryClientProvider>,
@@ -37,6 +39,7 @@ function renderModal(onCompleted?: (message: string) => void, dayOffBadgesByDate
 describe('WeeklyAttendanceBulkEntryModal', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.mocked(notify.success).mockClear()
   })
 
   it('does not confirm directly from the simple tab: it expands into the detailed tab first', async () => {
@@ -47,8 +50,7 @@ describe('WeeklyAttendanceBulkEntryModal', () => {
       skipped_count: 0,
       rejected_count: 0,
     })
-    const onCompleted = vi.fn()
-    renderModal(onCompleted)
+    renderModal()
 
     expect(screen.queryByText('週次の一括入力')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
@@ -78,8 +80,8 @@ describe('WeeklyAttendanceBulkEntryModal', () => {
       ),
     )
 
-    // 完了後はモーダルを閉じ、結果は呼び出し元(onCompleted)に渡すだけでモーダル内には表示しない。
-    await waitFor(() => expect(onCompleted).toHaveBeenCalledWith('5件作成・0件更新しました。'))
+    // 完了後はモーダルを閉じ、結果はトーストで通知しモーダル内には表示しない。
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('5件作成・0件更新しました。'))
     await waitFor(() => expect(screen.queryByText('週次の一括入力')).not.toBeInTheDocument())
   })
 
@@ -130,7 +132,7 @@ describe('WeeklyAttendanceBulkEntryModal', () => {
 
   it('shows the day-off badges only on the row of the matching date in the detailed tab', async () => {
     // 2026-08-03(月)に有給、2026-08-09(日)に法定休日と祝日名。
-    renderModal(undefined, {
+    renderModal({
       '2026-08-03': [{ label: '有給休暇(全休)', tone: 'info' }],
       '2026-08-09': [
         { label: '法定休日', tone: 'danger' },

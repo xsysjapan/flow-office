@@ -89,6 +89,10 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   ).not.toBeDisabled();
 
   await page.getByRole("button", { name: "公開する" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "公開する" })
+    .click();
   await expect(page.getByRole("status", { name: "公開済み" })).toBeVisible();
 
   // --- UC-C002: 勤務形態作成(一覧のモーダル経由) ---
@@ -135,8 +139,9 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   // 付与日数の初期値は法定表の写し(通常・比例の全区分)。通常の6か月は10日。
   await expect(page.getByLabel("通常 継続勤務6か月の付与日数")).toHaveValue("10");
   await page.getByRole("button", { name: "ルールを作成" }).click();
+  // 作成成功トースト(「…を作成しました」)と重ならないよう本文(main)側に絞る。
   await expect(
-    page.getByText(`E2Eテスト用付与ルール${fiscalYear}`),
+    page.getByRole("main").getByText(`E2Eテスト用付与ルール${fiscalYear}`),
   ).toBeVisible();
 
   // --- UC-P002: 手動付与 ---

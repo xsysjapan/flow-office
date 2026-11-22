@@ -8,11 +8,13 @@ import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { Checkbox } from '../../components/ui/checkbox'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import type { ApplicationIntegration, IntegrationClientType, IntegrationScopeType } from '../../api/types'
 import { useMyIntegrations, useReissueIntegrationToken, useRegisterIntegration, useRevokeIntegration } from '../../hooks/useIntegrations'
+import { notify } from '../../lib/notify'
 
 const CLIENT_TYPE_LABELS: Record<IntegrationClientType, string> = {
   api_client: 'APIクライアント',
@@ -59,6 +61,10 @@ export function MyIntegrationsPage() {
   const [purpose, setPurpose] = useState('')
   const [scopes, setScopes] = useState<IntegrationScopeType[]>([])
   const [issuedToken, setIssuedToken] = useState<{ integrationId: string; token: string } | null>(null)
+  const revokeIntegration = useRevokeIntegration()
+  // 行内の「⋯」メニューから開く再発行・停止の確認ダイアログの対象
+  const [reissueTarget, setReissueTarget] = useState<ApplicationIntegration | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<ApplicationIntegration | null>(null)
 
   const toggleScope = (scope: IntegrationScopeType) => {
     setScopes((prev) => (prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]))
@@ -72,10 +78,12 @@ export function MyIntegrationsPage() {
   }
 
   const handleRegister = () => {
+    const registeredName = clientName
     registerIntegration.mutate(
       { client_type: clientType, client_name: clientName, purpose: purpose || undefined, scopes },
       {
         onSuccess: (result) => {
+          notify.success(`${registeredName}を登録しました`)
           setIssuedToken({ integrationId: result.integration.id, token: result.token })
           resetForm()
           setIsFormOpen(false)
@@ -84,10 +92,35 @@ export function MyIntegrationsPage() {
     )
   }
 
-  const handleReissue = (integration: ApplicationIntegration) => {
-    reissueToken.mutate(integration.id, {
+  const closeReissueDialog = () => {
+    reissueToken.reset()
+    setReissueTarget(null)
+  }
+
+  const handleReissue = () => {
+    const target = reissueTarget
+    if (!target) return
+    reissueToken.mutate(target.id, {
       onSuccess: (result) => {
+        notify.success('トークンを再発行しました')
         setIssuedToken({ integrationId: result.integration.id, token: result.token })
+        closeReissueDialog()
+      },
+    })
+  }
+
+  const closeRevokeDialog = () => {
+    revokeIntegration.reset()
+    setRevokeTarget(null)
+  }
+
+  const handleRevoke = () => {
+    const target = revokeTarget
+    if (!target) return
+    revokeIntegration.mutate(target.id, {
+      onSuccess: () => {
+        notify.success(`${target.client_name}を停止しました`)
+        closeRevokeDialog()
       },
     })
   }
@@ -106,8 +139,6 @@ export function MyIntegrationsPage() {
         </Button>
       }
     >
-      {registerIntegration.error && <ErrorMessage error={registerIntegration.error} />}
-      {reissueToken.error && <ErrorMessage error={reissueToken.error} />}
 
       {issuedToken && (
         <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
@@ -177,6 +208,7 @@ export function MyIntegrationsPage() {
               名称を入力し、許可する操作を1つ以上選択してください。
             </p>
           )}
+          {registerIntegration.error && <ErrorMessage error={registerIntegration.error} />}
         </div>
       )}
 
@@ -220,17 +252,17 @@ export function MyIntegrationsPage() {
                 </TableCell>
                 <TableCell>
                   {integration.status === 'active' && (
-                    <div className="flex flex-col items-start gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        isLoading={reissueToken.isPending}
-                        onClick={() => handleReissue(integration)}
-                      >
-                        トークン再発行
-                      </Button>
-                      <RevokeIntegrationDialog integration={integration} />
-                    </div>
+                    <IntegrationRowMenu
+                      integration={integration}
+                      onReissue={() => {
+                        reissueToken.reset()
+                        setReissueTarget(integration)
+                      }}
+                      onRevoke={() => {
+                        revokeIntegration.reset()
+                        setRevokeTarget(integration)
+                      }}
+                    />
                   )}
                 </TableCell>
               </TableRow>
@@ -238,25 +270,73 @@ export function MyIntegrationsPage() {
           </TableBody>
         </Table>
       )}
+
+      <ConfirmActionDialog
+        open={reissueTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) closeReissueDialog()
+        }}
+        title="トークンを再発行しますか?"
+        description="再発行すると今のトークンは使えなくなります。"
+        confirmLabel="再発行する"
+        isPending={reissueToken.isPending}
+        error={reissueToken.error}
+        onConfirm={handleReissue}
+      />
+
+      <ConfirmActionDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) closeRevokeDialog()
+        }}
+        title="連携を停止しますか?"
+        description={
+          revokeTarget
+            ? `「${revokeTarget.client_name}」を停止します。発行済みのトークンは使用できなくなり、元に戻せません。`
+            : ''
+        }
+        confirmLabel="停止する"
+        isPending={revokeIntegration.isPending}
+        error={revokeIntegration.error}
+        onConfirm={handleRevoke}
+      />
     </Card>
   )
 }
 
-function RevokeIntegrationDialog({ integration }: { integration: ApplicationIntegration }) {
-  const revokeIntegration = useRevokeIntegration()
+/**
+ * 行末の「⋯」メニュー。トークン再発行・停止をまとめる。項目を選ぶとメニューを閉じてから
+ * 確認ダイアログを開く(ダイアログをメニュー内に残さない)。
+ */
+function IntegrationRowMenu({
+  integration,
+  onReissue,
+  onRevoke,
+}: {
+  integration: ApplicationIntegration
+  onReissue: () => void
+  onRevoke: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const runAfterClose = (action: () => void) => (event: Event) => {
+    event.preventDefault()
+    setOpen(false)
+    action()
+  }
 
   return (
-    <ConfirmActionDialog
-      triggerLabel="停止する"
-      title="連携を停止しますか?"
-      description={`「${integration.client_name}」を停止します。発行済みのトークンは使用できなくなり、元に戻せません。`}
-      confirmLabel="停止する"
-      isPending={revokeIntegration.isPending}
-      error={revokeIntegration.error}
-      onOpenChange={(open) => {
-        if (open) revokeIntegration.reset()
-      }}
-      onConfirm={() => revokeIntegration.mutate(integration.id)}
-    />
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="secondary" aria-label={`${integration.client_name}の操作`}>
+          ⋯
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={runAfterClose(onReissue)}>トークン再発行</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onSelect={runAfterClose(onRevoke)}>
+          停止する
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

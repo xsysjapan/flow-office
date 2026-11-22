@@ -8,6 +8,9 @@ import * as workCalendarsApi from '../../api/workCalendars'
 import type { HolidayCalendarSource, WorkCalendar, WorkCalendarYear } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { WorkCalendarDetailPage } from './WorkCalendarDetailPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const calendar: WorkCalendar = {
   id: 'calendar-1',
@@ -78,6 +81,10 @@ function renderPage(calendars: WorkCalendar[] = [calendar]) {
 
 describe('WorkCalendarDetailPage', () => {
   beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
+  beforeEach(() => {
     vi.clearAllMocks()
   })
 
@@ -134,6 +141,7 @@ describe('WorkCalendarDetailPage', () => {
         allow_daily_holiday_override: true,
       }),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('カレンダーの基本設定を保存しました'))
   })
 
   it('warns before leaving the tab once the fiscal year settings are edited, and stops warning after saving', async () => {
@@ -240,6 +248,7 @@ describe('WorkCalendarDetailPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'デフォルトに設定する' }))
 
     await waitFor(() => expect(workCalendarsApi.setDefaultWorkCalendar).toHaveBeenCalledWith('calendar-1'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(`「${calendar.name}」をデフォルトに設定しました`))
   })
 
   it('assigns an existing source to the calendar', async () => {

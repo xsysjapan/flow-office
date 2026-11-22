@@ -6,6 +6,7 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -71,6 +72,7 @@ export function CalendarBulkOperationsPage() {
   const apply = useCreateCalendarBulkOperation()
   const revert = useRevertCalendarBulkOperation()
 
+  const [isApplyConfirmOpen, setIsApplyConfirmOpen] = useState(false)
   const [operationType, setOperationType] = useState<CalendarBulkOperationType>('calendar_apply')
   const [conflictPolicy, setConflictPolicy] = useState<CalendarBulkOperationConflictPolicy>('skip_existing')
   const [reason, setReason] = useState('')
@@ -120,23 +122,22 @@ export function CalendarBulkOperationsPage() {
     })
   }
 
-  const handleApply = () => {
-    apply.mutate(
-      {
+  const handleApply = () =>
+    apply
+      .mutateAsync({
         operation_type: operationType,
         target_scope: buildTargetScope(),
         conflict_policy: conflictPolicy,
         reason,
-      },
-      { onSuccess: () => preview.reset() },
-    )
-  }
+      })
+      .then(() => {
+        notify.success('一括操作を適用しました')
+        preview.reset()
+      })
 
   return (
     <div className="flex flex-col gap-6">
       <Card title="一括操作を作成">
-        {(preview.error || apply.error) && <ErrorMessage error={preview.error ?? apply.error} />}
-
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="操作種別" htmlFor="bulk-op-type" required>
             <NativeSelect
@@ -285,6 +286,7 @@ export function CalendarBulkOperationsPage() {
         <Button isLoading={preview.isPending} disabled={!canPreview} onClick={handlePreview}>
           プレビューする
         </Button>
+        {preview.error && <ErrorMessage error={preview.error} />}
         {!canPreview && (
           <p className="mt-1 text-xs text-muted-foreground">
             {isEntryBased
@@ -338,13 +340,23 @@ export function CalendarBulkOperationsPage() {
             </div>
           )}
 
-          <Button
-            isLoading={apply.isPending}
-            disabled={!preview.data.executable || !reason}
-            onClick={handleApply}
-          >
+          <Button disabled={!preview.data.executable || !reason} onClick={() => setIsApplyConfirmOpen(true)}>
             この内容で確定適用する
           </Button>
+          <ConfirmActionDialog
+            open={isApplyConfirmOpen}
+            onOpenChange={(open) => {
+              setIsApplyConfirmOpen(open)
+              if (open) apply.reset()
+            }}
+            title="この内容で確定適用しますか?"
+            description={`「${OPERATION_TYPE_OPTIONS.find((o) => o.value === operationType)?.label ?? operationType}」を対象${preview.data.targets.length}件に適用します。適用後は履歴から取り消せます。`}
+            confirmLabel="確定適用する"
+            confirmVariant="primary"
+            isPending={apply.isPending}
+            error={apply.error}
+            onConfirm={handleApply}
+          />
           {(!preview.data.executable || !reason) && (
             <p className="mt-1 text-xs text-muted-foreground">
               {!preview.data.executable && !reason
@@ -385,7 +397,9 @@ export function CalendarBulkOperationsPage() {
                     confirmLabel="取り消す"
                     isPending={revert.isPending && revert.variables === operation.id}
                     error={revert.variables === operation.id ? revert.error : undefined}
-                    onConfirm={() => revert.mutateAsync(operation.id)}
+                    onConfirm={() =>
+                      revert.mutateAsync(operation.id).then(() => notify.success('一括操作を取り消しました'))
+                    }
                   />
                 )}
               </li>

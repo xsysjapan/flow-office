@@ -1,10 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import * as api from '../../api/adminCommands'
+import { notify } from '../../lib/notify'
 import { AdminCommandsPage } from './AdminCommandsPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
+
+beforeEach(() => {
+  vi.mocked(notify.success).mockClear()
+})
 
 it('公開されたコマンドのArtisanメタデータをフォームとして表示する', async () => {
   vi.spyOn(api, 'fetchAdminCommands').mockResolvedValue({ data: [{
@@ -86,4 +93,25 @@ it('writes the selected command to the URL', async () => {
 
   expect(await screen.findByText('2番目の説明')).toBeInTheDocument()
   expect(screen.getByTestId('location-search')).toHaveTextContent('?command=cmd%3Asecond')
+})
+
+it('confirms the run and shows a toast once the run is requested', async () => {
+  vi.spyOn(api, 'fetchAdminCommands').mockResolvedValue({ data: [{
+    name: 'attendance:recalculate-month-snapshots', label: '月次勤怠スナップショット再計算',
+    description: '提出済みの月次勤怠を再計算する', without_overlapping: true,
+    parameters: [],
+  }] })
+  vi.spyOn(api, 'fetchAdminCommandRuns').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 }, links: { next: null, prev: null } })
+  const runSpy = vi.spyOn(api, 'runAdminCommand').mockResolvedValue({ data: {} as never })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={client}><MemoryRouter><AdminCommandsPage /></MemoryRouter></QueryClientProvider>)
+
+  await screen.findByText('提出済みの月次勤怠を再計算する')
+  await userEvent.click(screen.getByRole('button', { name: '実行' }))
+  const dialog = await screen.findByRole('dialog')
+  expect(runSpy).not.toHaveBeenCalled()
+  await userEvent.click(within(dialog).getByRole('button', { name: '実行' }))
+
+  await waitFor(() => expect(runSpy).toHaveBeenCalledWith('attendance:recalculate-month-snapshots', {}))
+  await waitFor(() => expect(notify.success).toHaveBeenCalledWith('月次勤怠スナップショット再計算の実行を依頼しました', expect.anything()))
 })

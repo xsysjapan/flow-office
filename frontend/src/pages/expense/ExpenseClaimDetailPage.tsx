@@ -24,6 +24,7 @@ import {
   useReturnExpenseClaim,
   useSubmitExpenseClaim,
 } from '../../hooks/useExpenseClaims'
+import { notify } from '../../lib/notify'
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import {
   expenseClaimStatusLabel,
@@ -87,6 +88,7 @@ export function ExpenseClaimDetailPage() {
   const [comment, setComment] = useState('')
   const [reason, setReason] = useState('')
   const [cancelValidationError, setCancelValidationError] = useState<Error | null>(null)
+  const [approveOpen, setApproveOpen] = useState(false)
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="経費精算の取得に失敗しました。" />
@@ -95,7 +97,6 @@ export function ExpenseClaimDetailPage() {
   const { label, tone } = expenseClaimStatusLabel(claim.status)
   const isApplicant = user?.id === claim.employee_id
   const isApprover = user?.id === claim.approver_user_id
-  const actionError = submitClaim.error ?? approveClaim.error ?? returnClaim.error ?? cancelClaim.error
 
   const periodLabel = claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '対象期間未確定'
 
@@ -107,8 +108,6 @@ export function ExpenseClaimDetailPage() {
         title={claim.title ? `${claim.title}(${periodLabel})` : `経費精算(${periodLabel})`}
         actions={<Badge tone={tone}>{label}</Badge>}
       >
-        {actionError && <ErrorMessage error={actionError} />}
-
         <div className="flex flex-col gap-6">
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
             <dt className="font-medium text-muted-foreground">申請者</dt>
@@ -207,7 +206,11 @@ export function ExpenseClaimDetailPage() {
                   <Button
                     isLoading={submitClaim.isPending}
                     disabled={!(approverUserId ?? claim.approver_user_id)}
-                    onClick={() => submitClaim.mutate((approverUserId ?? claim.approver_user_id) as string)}
+                    onClick={() =>
+                      submitClaim.mutate((approverUserId ?? claim.approver_user_id) as string, {
+                        onSuccess: () => notify.success('経費精算を提出しました'),
+                      })
+                    }
                   >
                     申請する
                   </Button>
@@ -215,6 +218,7 @@ export function ExpenseClaimDetailPage() {
                 {!(approverUserId ?? claim.approver_user_id) && (
                   <p className="text-xs text-muted-foreground">承認者を選択してください</p>
                 )}
+                {submitClaim.error && <ErrorMessage error={submitClaim.error} />}
               </div>
             )}
 
@@ -233,13 +237,14 @@ export function ExpenseClaimDetailPage() {
                     cancelClaim.reset()
                   }
                 }}
-                onConfirm={() => {
+                onConfirm={async () => {
                   if (!reason) {
                     setCancelValidationError(new Error('取消理由を入力してください'))
                     throw new Error('取消理由を入力してください')
                   }
                   setCancelValidationError(null)
-                  return cancelClaim.mutateAsync(reason)
+                  await cancelClaim.mutateAsync(reason)
+                  notify.success('経費精算を取り消しました')
                 }}
               >
                 <Input
@@ -253,9 +258,24 @@ export function ExpenseClaimDetailPage() {
 
             {isApprover && claim.status === 'in_review' && (
               <>
-                <Button isLoading={approveClaim.isPending} onClick={() => approveClaim.mutate()}>
-                  承認する
-                </Button>
+                <Button onClick={() => setApproveOpen(true)}>承認する</Button>
+                <ConfirmActionDialog
+                  open={approveOpen}
+                  onOpenChange={(open) => {
+                    setApproveOpen(open)
+                    if (open) approveClaim.reset()
+                  }}
+                  title="この経費精算を承認しますか?"
+                  description="承認すると取り消せません。申請者に承認の通知が届きます。"
+                  confirmLabel="承認する"
+                  confirmVariant="primary"
+                  isPending={approveClaim.isPending}
+                  error={approveClaim.error}
+                  onConfirm={async () => {
+                    await approveClaim.mutateAsync()
+                    notify.success('経費精算を承認しました')
+                  }}
+                />
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
                     <Input placeholder="差戻しコメント" value={comment} onChange={(e) => setComment(e.target.value)} />
@@ -263,12 +283,15 @@ export function ExpenseClaimDetailPage() {
                       variant="secondary"
                       isLoading={returnClaim.isPending}
                       disabled={!comment}
-                      onClick={() => returnClaim.mutate(comment)}
+                      onClick={() =>
+                        returnClaim.mutate(comment, { onSuccess: () => notify.success('経費精算を差し戻しました') })
+                      }
                     >
                       差戻す
                     </Button>
                   </div>
                   {!comment && <p className="text-xs text-muted-foreground">差戻しコメントを入力してください</p>}
+                  {returnClaim.error && <ErrorMessage error={returnClaim.error} />}
                 </div>
               </>
             )}

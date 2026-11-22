@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Paginated, User } from "../../api/types";
 import type { GroupType, ManagedGroup } from "../../api/userManagement";
 import * as userManagementApi from "../../api/userManagement";
@@ -10,6 +10,9 @@ import * as usersApi from "../../api/users";
 import * as accessControlApi from "../../api/accessControl";
 import type { AccessRole, RoleAssignment } from "../../api/accessControl";
 import { GroupDetailPage } from "./GroupDetailPage";
+import { notify } from "../../lib/notify";
+
+vi.mock("../../lib/notify", () => ({ notify: { success: vi.fn() } }));
 
 const role: AccessRole = {
   id: 3,
@@ -125,6 +128,10 @@ function renderPage({
 }
 
 describe("GroupDetailPage", () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear();
+  });
+
   it("navigates to the new group's own detail page after creating it, matching the update flow", async () => {
     const newGroup: ManagedGroup = { ...parent, id: "group-new", name: "新規グループ" };
     const fetchGroupsSpy = vi
@@ -248,6 +255,9 @@ describe("GroupDetailPage", () => {
         parent_group_id: "group-parent",
         status: "inactive",
       }),
+    );
+    await waitFor(() =>
+      expect(notify.success).toHaveBeenCalledWith("グループを保存しました"),
     );
   });
 

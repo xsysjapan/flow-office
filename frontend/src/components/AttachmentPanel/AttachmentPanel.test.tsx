@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import type { Attachment } from '../../api/types'
 import { AttachmentPanel } from './AttachmentPanel'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 function renderPanel(
   props: Partial<React.ComponentProps<typeof AttachmentPanel>> = {},
@@ -21,6 +24,10 @@ function renderPanel(
 }
 
 describe('AttachmentPanel', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('renders the list of existing attachments with formatted size', async () => {
     renderPanel(
       {},
@@ -58,6 +65,7 @@ describe('AttachmentPanel', () => {
     await waitFor(() =>
       expect(attachmentsApi.uploadAttachment).toHaveBeenCalledWith('expense_item', 'expense-item-1', file),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('receipt.pdfを添付しました'))
   })
 
   it('downloads an attachment on click', async () => {

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as accessControlApi from "../../api/accessControl";
 import type {
   AccessRole,
@@ -13,6 +13,9 @@ import type {
 import * as userManagementApi from "../../api/userManagement";
 import type { ManagedGroup } from "../../api/userManagement";
 import { RoleDefinitionPage } from "./RoleDefinitionPage";
+import { notify } from "../../lib/notify";
+
+vi.mock("../../lib/notify", () => ({ notify: { success: vi.fn() } }));
 
 const groupType: ManagedGroup["type"] = {
   id: 1,
@@ -130,6 +133,10 @@ function renderPage({
 }
 
 describe("RoleDefinitionPage", () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear();
+  });
+
   it("shows the role list", async () => {
     renderPage();
 
@@ -171,6 +178,9 @@ describe("RoleDefinitionPage", () => {
         2,
         expect.arrayContaining([1, 11]),
       ),
+    );
+    await waitFor(() =>
+      expect(notify.success).toHaveBeenCalledWith("Feature構成を保存しました"),
     );
   });
 

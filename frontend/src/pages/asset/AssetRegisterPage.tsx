@@ -12,6 +12,7 @@ import { NativeSelect } from '../../components/ui/native-select'
 import { Textarea } from '../../components/ui/textarea'
 import type { AssetLendingMethod, AssetManagementType } from '../../api/types'
 import type { AssetNumberRule } from '../../api/assetNumberRules'
+import { notify } from '../../lib/notify'
 import { useRegisterAsset } from '../../hooks/useAsset'
 import { useAssetNumberRuleCategories, useAssetNumberRules } from '../../hooks/useAssetNumberRules'
 import { assetLendingMethodLabel, assetManagementTypeLabel } from '../../utils/statusLabels'
@@ -75,6 +76,7 @@ export function AssetRegisterPage() {
       default_location_text: isLending && defaultLocationText ? defaultLocationText : null,
       notes: notes || null,
     })
+    notify.success(`${name}を登録しました`)
     navigate(`/assets/${asset.id}`, { state: keepBackState })
   }
 
@@ -82,8 +84,6 @@ export function AssetRegisterPage() {
     <>
       <BackLink />
       <Card title="備品を登録">
-        {registerAsset.error && <ErrorMessage error={registerAsset.error} />}
-
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="管理番号" htmlFor="asset-no" required={!isAutoNumbered}>
@@ -165,6 +165,7 @@ export function AssetRegisterPage() {
           </FormField>
 
           <div className="mt-1 flex flex-col gap-1.5">
+            {registerAsset.error && <ErrorMessage error={registerAsset.error} />}
             <div className="flex items-center gap-2">
               <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
                 キャンセル

@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\BackOfficeTaskResource;
 use App\Models\BackOfficeTask;
 use App\Models\BackOfficeTaskStatus;
+use App\Models\WorkflowRequest;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -67,7 +68,7 @@ class BackOfficeTaskController extends Controller
     )]
     public function show(BackOfficeTask $backOfficeTask): BackOfficeTaskResource
     {
-        return new BackOfficeTaskResource($backOfficeTask->load('assignee'));
+        return $this->detailResource($backOfficeTask->load('assignee'));
     }
 
     #[OA\Post(
@@ -89,7 +90,7 @@ class BackOfficeTaskController extends Controller
             assignedByUserId: $request->user()->id,
         ));
 
-        return new BackOfficeTaskResource($backOfficeTask->refresh()->load('assignee'));
+        return $this->detailResource($backOfficeTask->refresh()->load('assignee'));
     }
 
     #[OA\Post(
@@ -115,7 +116,7 @@ class BackOfficeTaskController extends Controller
             comment: $data['comment'] ?? null,
         ));
 
-        return new BackOfficeTaskResource($backOfficeTask->refresh()->load('assignee'));
+        return $this->detailResource($backOfficeTask->refresh()->load('assignee'));
     }
 
     #[OA\Post(
@@ -165,6 +166,17 @@ class BackOfficeTaskController extends Controller
         return BackOfficeTaskResource::collection(
             BackOfficeTask::query()->with('assignee')->whereIn('id', $taskIds)->get()
         );
+    }
+
+    /**
+     * 詳細系のレスポンス。allowed_next_statuses の判定に発生源(WorkflowRequestの申請種別)を読み込む。
+     * 発生源はmorphのため無条件にrequestTypeをeager loadできない(ChangeBackOfficeTaskStatusHandler参照)。
+     */
+    private function detailResource(BackOfficeTask $task): BackOfficeTaskResource
+    {
+        $task->loadMorph('source', [WorkflowRequest::class => ['requestType']]);
+
+        return (new BackOfficeTaskResource($task))->withAllowedNextStatuses();
     }
 
     /** @return array{search?: string|null, assignee?: string, status?: string, per_page?: int} */

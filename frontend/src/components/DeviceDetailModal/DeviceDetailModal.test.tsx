@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as devicesApi from '../../api/devices'
 import type { Device } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { DeviceDetailModal } from './DeviceDetailModal'
 
 const device: Device = {
@@ -40,7 +41,13 @@ function renderModal(overrides: Partial<Device> = {}, props: { open?: boolean } 
   )
 }
 
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
+
 describe('DeviceDetailModal', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('opens the modal from the trigger button and shows device details', async () => {
     const user = userEvent.setup()
     renderModal()
@@ -192,6 +199,6 @@ describe('DeviceDetailModal', () => {
       'device-1',
       expect.objectContaining({ name: '本社1階受付', location_name: '本社2階会議室' }),
     )
-    expect(await screen.findByText('設定を保存しました。')).toBeInTheDocument()
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('本社1階受付の設定を保存しました'))
   })
 })

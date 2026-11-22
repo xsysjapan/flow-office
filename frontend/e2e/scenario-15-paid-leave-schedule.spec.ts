@@ -131,9 +131,9 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     await expect(dialog.getByText(/付与予定日: /)).toBeVisible()
     await expect(dialog.getByText(/付与後は付与予定画面から取り消せません。/)).toBeVisible()
 
-    await dialog.getByRole('button', { name: '一括付与する' }).click()
+    await dialog.getByRole('button', { name: /^\d+件を付与する$/ }).click()
 
-    await expect(page.getByText(/\d+件成功 \/ \d+件失敗/)).toBeVisible()
+    await expect(page.getByText(/\d+件の有給を付与しました/)).toBeVisible()
   })
 
   // 直前の一括付与テストで対象社員の行が付与済み(Granted)になっているため、対象社員を限定せず探す。

@@ -12,6 +12,7 @@ import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { MonthlyAttendanceBulkEntryModal } from '../../components/MonthlyAttendanceBulkEntryModal/MonthlyAttendanceBulkEntryModal'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -100,6 +101,11 @@ function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: bool
   )
 }
 
+/** 'YYYY-MM' を通知文言の「8月」に直す。 */
+function monthLabel(yearMonth: string): string {
+  return `${Number(yearMonth.split('-')[1])}月`
+}
+
 /** 「提出する」押下で開き、提出先の承認者を選んでから確定するモーダル。 */
 function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
   const { systemSettings } = useAppSettings()
@@ -142,7 +148,10 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
             disabled={approvalRequired && !approverUserId}
             onClick={() =>
               submitMonth.mutate(approverUserId, {
-                onSuccess: () => setIsOpen(false),
+                onSuccess: () => {
+                  notify.success(`${monthLabel(yearMonth)}の勤怠を提出しました`)
+                  setIsOpen(false)
+                },
               })
             }
           >
@@ -167,7 +176,6 @@ export function AttendanceMonthDetailPage() {
   const { user } = useAuth()
   const { yearMonth } = useParams<{ yearMonth: string }>()
   const forwardState = useForwardState()
-  const [bulkEntryMessage, setBulkEntryMessage] = useState<string | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const { data, isLoading, error } = useAttendanceMonth(yearMonth ?? '')
@@ -321,14 +329,12 @@ export function AttendanceMonthDetailPage() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                {bulkEntryMessage && <Badge tone="success">{bulkEntryMessage}</Badge>}
                 <Button variant="secondary" onClick={() => setSelectionMode(true)}>
                   選択
                 </Button>
                 <MonthlyAttendanceBulkEntryModal
                   yearMonth={yearMonth}
                   disabled={bulkEntryLocked}
-                  onCompleted={setBulkEntryMessage}
                   dayOffBadgesByDate={dayOffBadgesByDate}
                 />
               </div>

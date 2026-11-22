@@ -10,6 +10,7 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { Duration } from '../../components/Duration/Duration'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { RevertMonthConfirmationDialog } from '../../components/RevertMonthConfirmationDialog/RevertMonthConfirmationDialog'
@@ -126,6 +127,11 @@ function ReadOnlyDayRow({
   )
 }
 
+/** 'YYYY-MM' を通知文言の「8月」に直す。 */
+function monthLabel(yearMonth: string): string {
+  return `${Number(yearMonth.split('-')[1])}月`
+}
+
 /** 「締めを取り消す」押下で開き、取消理由を入力してから確定するダイアログ(UC-A017・管理者専用の
  *  救済コマンド)。勤怠参照画面とバックオフィスタスク詳細画面の両方から呼べるようexportする。 */
 export function ReopenMonthDialog({ monthId, yearMonth }: { monthId: string; yearMonth: string }) {
@@ -147,7 +153,10 @@ export function ReopenMonthDialog({ monthId, yearMonth }: { monthId: string; yea
           reopenMonth.reset()
         }
       }}
-      onConfirm={() => reopenMonth.mutateAsync({ id: monthId, reason })}
+      onConfirm={async () => {
+        await reopenMonth.mutateAsync({ id: monthId, reason })
+        notify.success(`${monthLabel(yearMonth)}の勤怠の締めを取り消しました`)
+      }}
     >
       <FormField label="取消理由" htmlFor="reopen-month-reason">
         <Textarea id="reopen-month-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
@@ -295,7 +304,10 @@ export function MonthlyReferenceView({
                   confirmLabel="締めを確定する"
                   isPending={closeMonth.isPending}
                   error={closeMonth.error}
-                  onConfirm={() => closeMonth.mutateAsync(month.id)}
+                  onConfirm={async () => {
+                    await closeMonth.mutateAsync(month.id)
+                    notify.success(`${monthLabel(yearMonth)}の勤怠を締めました`)
+                  }}
                 />
               )}
               {month.status === 'approved' && canRevertConfirmation && (

@@ -11,6 +11,7 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
+import { notify } from '../../lib/notify'
 import { useAsset, useUpdateAssetDetails } from '../../hooks/useAsset'
 
 /**
@@ -59,6 +60,7 @@ export function AssetEditPage() {
         notes: notes || null,
       },
     })
+    notify.success(`${name}を保存しました`)
     // 遷移先(詳細)が戻り先と同じ画面なら戻り先とその遷移元を引き継ぎ、違えば現在の遷移元を引き継ぐ。
     const detailPath = `/assets/${assetId}`
     if (backTarget && backTarget.to.split(/[?#]/)[0] === detailPath) {
@@ -72,8 +74,6 @@ export function AssetEditPage() {
     <>
       <BackLink />
       <Card title={`${asset.name}を編集`}>
-        {updateAsset.error && <ErrorMessage error={updateAsset.error} />}
-
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="名称" htmlFor="asset-edit-name" required>
@@ -92,13 +92,16 @@ export function AssetEditPage() {
             <Textarea id="asset-edit-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
 
-          <div className="mt-1 flex items-center gap-2">
-            <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? `/assets/${assetId}`, { state: backTarget?.state, replace: true })}>
-              キャンセル
-            </Button>
-            <Button isLoading={updateAsset.isPending} disabled={!isValid} onClick={() => void handleSave()}>
-              保存
-            </Button>
+          <div className="mt-1 flex flex-col gap-1.5">
+            {updateAsset.error && <ErrorMessage error={updateAsset.error} />}
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? `/assets/${assetId}`, { state: backTarget?.state, replace: true })}>
+                キャンセル
+              </Button>
+              <Button isLoading={updateAsset.isPending} disabled={!isValid} onClick={() => void handleSave()}>
+                保存
+              </Button>
+            </div>
           </div>
         </div>
       </Card>

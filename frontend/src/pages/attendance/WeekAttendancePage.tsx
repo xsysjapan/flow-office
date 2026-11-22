@@ -7,10 +7,10 @@ import { useAuth } from '../../auth/useAuth'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { AttendanceDayRow } from '../../components/AttendanceDayRow/AttendanceDayRow'
 import { AttendanceSelectionActionBar } from '../../components/AttendanceSelectionActionBar/AttendanceSelectionActionBar'
-import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { WeeklyAttendanceBulkEntryModal } from '../../components/WeeklyAttendanceBulkEntryModal/WeeklyAttendanceBulkEntryModal'
 import { useAllocateWeekOvertime, useWeek, useWeekOvertime } from '../../hooks/useAttendance'
@@ -63,17 +63,15 @@ export function WeekAttendancePage() {
       { replace: true },
     )
   }
-  const [bulkEntryMessage, setBulkEntryMessage] = useState<string | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const [allocationDraft, setAllocationDraft] = useState<Record<string, { prescribed: number; nonPrescribed: number }>>({})
 
-  // 表示中の週が変わったら、選択モード・選択中の日・一括入力の下書き・メッセージをリセットする
+  // 表示中の週が変わったら、選択モード・選択中の日・一括入力の下書きをリセットする
   // (週の移動・他画面からのリンク・Backのいずれでも同じ)。
   const [resetWeekStart, setResetWeekStart] = useState(weekStart)
   if (resetWeekStart !== weekStart) {
     setResetWeekStart(weekStart)
-    setBulkEntryMessage(null)
     setSelectionMode(false)
     setSelectedDates(new Set())
     setAllocationDraft({})
@@ -104,6 +102,12 @@ export function WeekAttendancePage() {
   )
   const unallocatedWeeklyMinutes = weeklyOvertime?.unallocated_weekly_statutory_excess_overtime_minutes ?? 0
 
+  function saveAllocations(allocations: Parameters<typeof allocateWeeklyOvertime.mutate>[0]) {
+    allocateWeeklyOvertime.mutate(allocations, {
+      onSuccess: () => notify.success('週次の残業時間の配分を保存しました'),
+    })
+  }
+
   function applySuggestedAllocation() {
     let remaining = unallocatedWeeklyMinutes
     const allocations = (data ?? []).map((day) => {
@@ -121,7 +125,7 @@ export function WeekAttendancePage() {
         ),
       }
     }).filter((allocation) => allocation.non_prescribed_minutes > 0)
-    if (remaining === 0) allocateWeeklyOvertime.mutate(allocations)
+    if (remaining === 0) saveAllocations(allocations)
   }
 
   function applyManualAllocation() {
@@ -139,7 +143,7 @@ export function WeekAttendancePage() {
         late_night_non_prescribed_minutes: Math.max(0, nonPrescribed - (nonPrescribedCapacity - (day.calculation?.late_night_non_prescribed_statutory_within_work_minutes ?? 0))),
       }
     }).filter((allocation) => allocation.prescribed_minutes + allocation.non_prescribed_minutes > 0)
-    allocateWeeklyOvertime.mutate(allocations)
+    saveAllocations(allocations)
   }
 
   const suggestedCapacity = (data ?? []).reduce(
@@ -263,14 +267,12 @@ export function WeekAttendancePage() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                {bulkEntryMessage && <Badge tone="success">{bulkEntryMessage}</Badge>}
                 <Button variant="secondary" onClick={() => setSelectionMode(true)}>
                   選択
                 </Button>
                 <WeeklyAttendanceBulkEntryModal
                   defaultFrom={dates[0]}
                   defaultTo={dates[6]}
-                  onCompleted={setBulkEntryMessage}
                   dayOffBadgesByDate={dayOffBadgesByDate}
                 />
               </div>

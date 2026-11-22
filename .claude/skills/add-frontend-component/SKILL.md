@@ -71,3 +71,4 @@ frontend/src/components/<ComponentName>/
 - [ ] `npm run build-storybook` が失敗しない
 - [ ] `getByLabelText`/`getByRole`などのクエリが、装飾テキストの混入で壊れていない
 - [ ] `npm run lint` (oxlint) が通る
+- [ ] 部品の中から変更操作を行う場合、成功は`notify.success`、確認は`ConfirmActionDialog`/`BulkActionDialog`を使い、独自のトースト・確認UIを作っていない

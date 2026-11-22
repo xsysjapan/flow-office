@@ -8,6 +8,7 @@ import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
+import { notify } from "../../lib/notify";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
@@ -95,13 +96,6 @@ export function RoleDefinitionPage() {
     setCreateDialogOpen(true);
   };
 
-  const mutationError =
-    createRole.error ??
-    cloneRole.error ??
-    updateRole.error ??
-    updateRolePermissions.error ??
-    updateRoleFeatures.error;
-
   const queries = [roles, permissions, features, assignments, groups];
   if (queries.some((query) => query.isLoading)) return <LoadingState />;
   const loadError = queries.find((query) => query.error)?.error;
@@ -118,7 +112,6 @@ export function RoleDefinitionPage() {
           ロールを選択して、名称・状態・Permission・Feature構成・割当グループを編集します。
         </p>
       </div>
-      {mutationError && <ErrorMessage error={mutationError} />}
 
       <Card
         title="ロール一覧"
@@ -235,11 +228,19 @@ export function RoleDefinitionPage() {
                   if (createMode === "clone" && selectedRole) {
                     cloneRole.mutate(
                       { id: selectedRole.id, input },
-                      { onSuccess: () => setCreateDialogOpen(false) },
+                      {
+                        onSuccess: () => {
+                          setCreateDialogOpen(false);
+                          notify.success("ロールを複製しました");
+                        },
+                      },
                     );
                   } else {
                     createRole.mutate(input, {
-                      onSuccess: () => setCreateDialogOpen(false),
+                      onSuccess: () => {
+                        setCreateDialogOpen(false);
+                        notify.success("ロールを作成しました");
+                      },
                     });
                   }
                 }}
@@ -253,6 +254,8 @@ export function RoleDefinitionPage() {
               )}
             </div>
           </DialogFooter>
+          {createRole.error && <ErrorMessage error={createRole.error} />}
+          {cloneRole.error && <ErrorMessage error={cloneRole.error} />}
         </DialogContent>
       </Dialog>
 
@@ -418,14 +421,17 @@ function RoleDetail({
           isLoading={updateRole.isPending}
           disabled={!basicForm.name}
           onClick={() =>
-            updateRole.mutate({
-              id: role.id,
-              input: {
-                name: basicForm.name,
-                description: basicForm.description || null,
-                status: basicForm.status,
+            updateRole.mutate(
+              {
+                id: role.id,
+                input: {
+                  name: basicForm.name,
+                  description: basicForm.description || null,
+                  status: basicForm.status,
+                },
               },
-            })
+              { onSuccess: () => notify.success("ロールの基本情報を保存しました") },
+            )
           }
         >
           基本情報を保存
@@ -435,6 +441,7 @@ function RoleDetail({
             ロール名を入力してください。
           </p>
         )}
+        {updateRole.error && <ErrorMessage error={updateRole.error} />}
       </div>
 
       <div className="mb-6 rounded border p-3">
@@ -443,15 +450,21 @@ function RoleDetail({
           <Button
             isLoading={updateRolePermissions.isPending}
             onClick={() =>
-              updateRolePermissions.mutate({
-                roleId: role.id,
-                permissionIds: selectedPermissions,
-              })
+              updateRolePermissions.mutate(
+                {
+                  roleId: role.id,
+                  permissionIds: selectedPermissions,
+                },
+                { onSuccess: () => notify.success("Permissionを保存しました") },
+              )
             }
           >
             Permissionを保存
           </Button>
         </div>
+        {updateRolePermissions.error && (
+          <ErrorMessage error={updateRolePermissions.error} />
+        )}
         <div className="grid gap-3 md:grid-cols-3">
           {permissionGroups.map(([resource, items]) => (
             <fieldset className="rounded border p-3" key={resource}>
@@ -492,15 +505,21 @@ function RoleDetail({
           <Button
             isLoading={updateRoleFeatures.isPending}
             onClick={() =>
-              updateRoleFeatures.mutate({
-                roleId: role.id,
-                featureIds: selectedFeatureIds,
-              })
+              updateRoleFeatures.mutate(
+                {
+                  roleId: role.id,
+                  featureIds: selectedFeatureIds,
+                },
+                { onSuccess: () => notify.success("Feature構成を保存しました") },
+              )
             }
           >
             Feature構成を保存
           </Button>
         </div>
+        {updateRoleFeatures.error && (
+          <ErrorMessage error={updateRoleFeatures.error} />
+        )}
         {allFeatures.length === 0 ? (
           <EmptyState title="Featureはまだありません。" />
         ) : (

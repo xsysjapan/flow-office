@@ -8,6 +8,7 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { notify } from '../../lib/notify'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useDeleteExpenseClaim, useMyExpenseClaims } from '../../hooks/useExpenseClaims'
 import { expenseClaimStatusLabel, isExpenseClaimDeletable, isExpenseClaimEditable } from '../../utils/statusLabels'
@@ -102,7 +103,10 @@ export function ExpenseClaimListPage() {
                           confirmLabel="削除する"
                           isPending={deleteClaim.isPending && deleteClaim.variables === claim.id}
                           error={deleteClaim.variables === claim.id ? deleteClaim.error : undefined}
-                          onConfirm={() => deleteClaim.mutateAsync(claim.id)}
+                          onConfirm={async () => {
+                            await deleteClaim.mutateAsync(claim.id)
+                            notify.success(`${claim.title ?? '無題の下書き'}を削除しました`)
+                          }}
                         />
                       )}
                     </div>

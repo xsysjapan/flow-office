@@ -250,6 +250,8 @@ test("個別Feature停止はメニュー・直URL・APIの全境界へ即時反�
 }) => {
   test.setTimeout(180000);
   const session = await loginTwoUsers(browser);
+  // 作成したfeature停止のID(finallyで解除する。後続specで月次社員の管理機能を残さないため)。
+  let createdSuspensionId: string | undefined;
   try {
     const userId = await fetchUserIdByEmail(session.adminPage, emails.monthly);
     const typeId = await createGroupType(session.adminPage, "E2E_DENIAL");
@@ -297,6 +299,9 @@ test("個別Feature停止はメニュー・直URL・APIの全境界へ即時反�
         "/admin/access-control/features",
       ),
     );
+    const administrationFeatureId = features.find(
+      (feature) => feature.code === "administration",
+    )!.id;
     await apiFetch(
       session.adminPage,
       "/admin/access-control/feature-suspensions",
@@ -304,13 +309,21 @@ test("個別Feature停止はメニュー・直URL・APIの全境界へ即時反�
         method: "POST",
         body: {
           user_id: userId,
-          feature_id: features.find(
-            (feature) => feature.code === "administration",
-          )!.id,
+          feature_id: administrationFeatureId,
           reason: "E2E boundary suspension",
         },
       },
     );
+    // POSTは本文を返さないため、一覧(作成日時の降順)から今作成した停止を引く。
+    createdSuspensionId = (
+      await apiFetch<
+        Array<{ id: string; user_id: string; feature_id: number }>
+      >(session.adminPage, "/admin/access-control/feature-suspensions")
+    ).find(
+      (suspension) =>
+        suspension.user_id === userId &&
+        suspension.feature_id === administrationFeatureId,
+    )?.id;
 
     await reloginAs(session.userPage, SCENARIO_USERS.monthlyEmployee);
     await expect(
@@ -322,6 +335,13 @@ test("個別Feature停止はメニュー・直URL・APIの全境界へ即時反�
       (await rawRequest(session.userPage, "/admin/system-settings")).status,
     ).toBe(403);
   } finally {
+    if (createdSuspensionId) {
+      await apiFetch(
+        session.adminPage,
+        `/admin/access-control/feature-suspensions/${createdSuspensionId}`,
+        { method: "DELETE" },
+      );
+    }
     await session.adminContext.close();
     await session.userContext.close();
   }
@@ -332,6 +352,8 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
 }) => {
   test.setTimeout(180000);
   const session = await loginTwoUsers(browser);
+  // 削除したglobal割当を、後続specのために同じ内容で再作成する(finallyで使用)。
+  const removedAssignmentBodies: Array<Record<string, unknown>> = [];
   try {
     const userId = await fetchUserIdByEmail(session.adminPage, emails.monthly);
     const typeId = await createGroupType(session.adminPage, "E2E_SCOPE");
@@ -442,7 +464,12 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
         id: string;
         subject_type: string;
         subject_id: string;
+        role_id: number;
         scope_type: string;
+        scope_group_id: string | null;
+        include_descendants: boolean;
+        starts_at: string | null;
+        ends_at: string | null;
         role?: { permissions?: Permission[] };
       }>
     >(session.adminPage, "/admin/access-control/role-assignments");
@@ -464,6 +491,16 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
           method: "DELETE",
         },
       );
+      removedAssignmentBodies.push({
+        subject_type: assignment.subject_type,
+        subject_id: assignment.subject_id,
+        role_id: assignment.role_id,
+        scope_type: assignment.scope_type,
+        scope_group_id: assignment.scope_group_id,
+        include_descendants: assignment.include_descendants,
+        starts_at: assignment.starts_at,
+        ends_at: assignment.ends_at,
+      });
     }
     await apiFetch(
       session.adminPage,
@@ -531,6 +568,17 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
         ?.permissions.map((permission) => permission.code),
     ).toContain("user.view");
   } finally {
+    // 上で削除したglobal割当を同じ内容で戻す(後続specのhr_staff等の権限を残さない)。
+    for (const body of removedAssignmentBodies) {
+      await apiFetch(
+        session.adminPage,
+        "/admin/access-control/role-assignments",
+        {
+          method: "POST",
+          body,
+        },
+      );
+    }
     await session.adminContext.close();
     await session.userContext.close();
   }
@@ -800,32 +848,40 @@ test("外部HR管理項目はローカル更新を拒否し、最終同期と無
     page,
     `/attendance/months/user/${punchUserId}`,
   );
-  await apiFetch(page, `/users/${punchUserId}`, {
-    method: "PATCH",
-    body: { account_status: "disabled" },
-  });
-  const disabledUser = await apiFetch<{ account_status: string }>(
-    page,
-    `/users/${punchUserId}`,
-  );
-  const after = await apiFetch<{ data: unknown[] }>(
-    page,
-    `/attendance/months/user/${punchUserId}`,
-  );
-  expect(disabledUser.account_status).toBe("disabled");
-  expect(after.data).toEqual(before.data);
-  await apiFetch(page, `/users/${punchUserId}`, {
-    method: "PATCH",
-    body: { account_status: "retired" },
-  });
-  const retiredUser = await apiFetch<{ account_status: string }>(
-    page,
-    `/users/${punchUserId}`,
-  );
-  const afterRetirement = await apiFetch<{ data: unknown[] }>(
-    page,
-    `/attendance/months/user/${punchUserId}`,
-  );
-  expect(retiredUser.account_status).toBe("retired");
-  expect(afterRetirement.data).toEqual(before.data);
+  try {
+    await apiFetch(page, `/users/${punchUserId}`, {
+      method: "PATCH",
+      body: { account_status: "disabled" },
+    });
+    const disabledUser = await apiFetch<{ account_status: string }>(
+      page,
+      `/users/${punchUserId}`,
+    );
+    const after = await apiFetch<{ data: unknown[] }>(
+      page,
+      `/attendance/months/user/${punchUserId}`,
+    );
+    expect(disabledUser.account_status).toBe("disabled");
+    expect(after.data).toEqual(before.data);
+    await apiFetch(page, `/users/${punchUserId}`, {
+      method: "PATCH",
+      body: { account_status: "retired" },
+    });
+    const retiredUser = await apiFetch<{ account_status: string }>(
+      page,
+      `/users/${punchUserId}`,
+    );
+    const afterRetirement = await apiFetch<{ data: unknown[] }>(
+      page,
+      `/attendance/months/user/${punchUserId}`,
+    );
+    expect(retiredUser.account_status).toBe("retired");
+    expect(afterRetirement.data).toEqual(before.data);
+  } finally {
+    // 後続specで高橋がログインできるよう、状態を有効に戻す(勤怠履歴の検証は上で完了)。
+    await apiFetch(page, `/users/${punchUserId}`, {
+      method: "PATCH",
+      body: { account_status: "active" },
+    });
+  }
 });

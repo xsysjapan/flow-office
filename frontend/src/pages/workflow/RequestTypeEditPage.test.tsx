@@ -5,7 +5,13 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as requestTypesApi from '../../api/requestTypes'
 import type { RequestType } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { RequestTypeEditPage } from './RequestTypeEditPage'
+
+
+vi.mock('../../lib/notify', () => ({
+  notify: { success: vi.fn() },
+}))
 
 const expenseType: RequestType = {
   id: 1,
@@ -128,6 +134,7 @@ describe('RequestTypeEditPage', () => {
       }),
     )
     expect(await screen.findByText('申請種別一覧ページ')).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('申請種別を保存しました')
   })
 
   it('updates an existing request type', async () => {

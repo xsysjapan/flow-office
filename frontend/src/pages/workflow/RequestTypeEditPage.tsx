@@ -10,6 +10,7 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Textarea } from '../../components/ui/textarea'
+import { notify } from '../../lib/notify'
 import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useCreateRequestType, useRequestTypes, useUpdateRequestType } from '../../hooks/useRequestTypes'
@@ -117,6 +118,7 @@ export function RequestTypeEditPage() {
     } else if (existing) {
       await updateType.mutateAsync({ id: existing.id, input })
     }
+    notify.success('申請種別を保存しました')
 
     if (backTarget && backTarget.to.split(/[?#]/)[0] === LIST_PATH) {
       navigate(backTarget.to, { state: backTarget.state })
@@ -138,8 +140,6 @@ export function RequestTypeEditPage() {
       <BackLink className="mb-0" />
 
       <Card title={isCreate ? '申請種別の新規作成' : '申請種別の編集'}>
-        {error && <ErrorMessage error={error} />}
-
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="コード" htmlFor="code" required>
             <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
@@ -304,6 +304,7 @@ export function RequestTypeEditPage() {
             保存する
           </Button>
         </div>
+        {error && <ErrorMessage error={error} />}
         {(!code || !name) && (
           <p className="mt-2 text-xs text-muted-foreground">コードと名称を入力すると保存できます。</p>
         )}

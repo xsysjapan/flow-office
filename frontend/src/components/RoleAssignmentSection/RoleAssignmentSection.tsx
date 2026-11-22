@@ -8,6 +8,7 @@ import { ConfirmActionDialog } from "../ConfirmActionDialog/ConfirmActionDialog"
 import { DateTimePicker } from "../DateTimePicker/DateTimePicker";
 import { EmptyState } from "../EmptyState/EmptyState";
 import { ErrorMessage } from "../ErrorMessage/ErrorMessage";
+import { notify } from "../../lib/notify";
 import { FormField } from "../FormField/FormField";
 import { Checkbox } from "../ui/checkbox";
 import {
@@ -149,9 +150,6 @@ export function RoleAssignmentSection({
     setDialogOpen(true);
   };
 
-  const mutationError =
-    createAssignment.error ?? updateAssignment.error ?? removeAssignment.error;
-
   const targetLabel = mode === "pick-group" ? "対象グループ" : "Role";
 
   return (
@@ -159,8 +157,6 @@ export function RoleAssignmentSection({
       title={title}
       actions={<Button onClick={openCreateDialog}>Roleを割り当てる</Button>}
     >
-      {mutationError && <ErrorMessage error={mutationError} />}
-
       <Dialog
         open={dialogOpen}
         onOpenChange={(open) => {
@@ -303,7 +299,12 @@ export function RoleAssignmentSection({
                 if (editingId) {
                   updateAssignment.mutate(
                     { id: editingId, input: scope },
-                    { onSuccess: closeDialog },
+                    {
+                      onSuccess: () => {
+                        closeDialog();
+                        notify.success("Role割当を保存しました");
+                      },
+                    },
                   );
                 } else {
                   createAssignment.mutate(
@@ -317,7 +318,12 @@ export function RoleAssignmentSection({
                           : Number(form.targetId),
                       ...scope,
                     },
-                    { onSuccess: closeDialog },
+                    {
+                      onSuccess: () => {
+                        closeDialog();
+                        notify.success("Roleを割り当てました");
+                      },
+                    },
                   );
                 }
               }}
@@ -388,7 +394,11 @@ export function RoleAssignmentSection({
                       confirmLabel="解除する"
                       isPending={removeAssignment.isPending}
                       error={removeAssignment.error}
-                      onConfirm={() => removeAssignment.mutateAsync(assignment.id)}
+                      onConfirm={() =>
+                        removeAssignment
+                          .mutateAsync(assignment.id)
+                          .then(() => notify.success("Role割当を解除しました"))
+                      }
                     />
                   </div>
                 </TableCell>

@@ -17,6 +17,7 @@ import { Separator } from '../../components/ui/separator'
 import { WorkflowRequestSubjectDetail } from '../../components/WorkflowRequestSubjectDetail/WorkflowRequestSubjectDetail'
 import { useForwardState } from '../../navigation/backState'
 import { useAsset } from '../../hooks/useAsset'
+import { notify } from '../../lib/notify'
 import {
   useApproveWorkflowRequest,
   useCancelWorkflowRequest,
@@ -80,6 +81,7 @@ export function WorkflowRequestDetailPage() {
   const [cancelError, setCancelError] = useState<Error | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectError, setRejectError] = useState<Error | null>(null)
+  const [approveOpen, setApproveOpen] = useState(false)
 
   if (isLoading) return <LoadingState />
   if (error) {
@@ -91,7 +93,6 @@ export function WorkflowRequestDetailPage() {
   const { label, tone } = workflowRequestStatusLabel(request.status)
   const isApplicant = user?.id === request.applicant?.id
   const isApprover = user?.id === request.approver?.id
-  const actionError = submitRequest.error ?? approveRequest.error ?? returnRequest.error
   /** 却下ボタンはspec論点2-2の通り、備品貸出申請(asset_loan)にのみ表示する
    *  (却下Command/Event自体は全申請種別で使える汎用実装だが、フロントの露出はここに限定)。
    *  業務側(subject_type)を持つ申請は却下できない(変更セット論点16。backendのRejectWorkflowRequestHandlerも拒否する)
@@ -116,6 +117,7 @@ export function WorkflowRequestDetailPage() {
     try {
       await cancelRequest.mutateAsync({ id: requestId, reason })
       setReason('')
+      notify.success('申請を取り消しました')
     } catch (e) {
       setCancelError(e as Error)
       throw e
@@ -127,8 +129,6 @@ export function WorkflowRequestDetailPage() {
       <BackLink />
 
       <Card title={request.title} actions={<Badge tone={tone}>{label}</Badge>}>
-        {actionError && <ErrorMessage error={actionError} />}
-
         <div className="flex flex-col gap-6">
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
           <dt className="font-medium text-muted-foreground">申請種別</dt>
@@ -208,9 +208,17 @@ export function WorkflowRequestDetailPage() {
             Detail Page下部への直置きを維持する。 */}
         <div className="flex flex-wrap items-center gap-3">
           {isApplicant && (request.status === 'draft' || request.status === 'returned') && (
-            <Button isLoading={submitRequest.isPending} onClick={() => submitRequest.mutate({ id: requestId })}>
-              提出する
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button
+                isLoading={submitRequest.isPending}
+                onClick={() =>
+                  submitRequest.mutate({ id: requestId }, { onSuccess: () => notify.success('申請を提出しました') })
+                }
+              >
+                提出する
+              </Button>
+              {submitRequest.error && <ErrorMessage error={submitRequest.error} />}
+            </div>
           )}
 
           {isApplicant && canCancel && ['draft', 'submitted', 'returned'].includes(request.status) && (
@@ -235,9 +243,24 @@ export function WorkflowRequestDetailPage() {
 
           {isApprover && request.status === 'submitted' && (
             <>
-              <Button isLoading={approveRequest.isPending} onClick={() => approveRequest.mutate(requestId)}>
-                承認する
-              </Button>
+              <Button onClick={() => setApproveOpen(true)}>承認する</Button>
+              <ConfirmActionDialog
+                open={approveOpen}
+                onOpenChange={(open) => {
+                  setApproveOpen(open)
+                  if (open) approveRequest.reset()
+                }}
+                title="この申請を承認しますか?"
+                description="承認すると取り消せません。申請者に承認の通知が届きます。"
+                confirmLabel="承認する"
+                confirmVariant="primary"
+                isPending={approveRequest.isPending}
+                error={approveRequest.error}
+                onConfirm={async () => {
+                  await approveRequest.mutateAsync(requestId)
+                  notify.success('申請を承認しました')
+                }}
+              />
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <Input placeholder="差戻しコメント" value={comment} onChange={(e) => setComment(e.target.value)} />
@@ -245,12 +268,18 @@ export function WorkflowRequestDetailPage() {
                     variant="secondary"
                     isLoading={returnRequest.isPending}
                     disabled={!comment}
-                    onClick={() => returnRequest.mutate({ id: requestId, comment })}
+                    onClick={() =>
+                      returnRequest.mutate(
+                        { id: requestId, comment },
+                        { onSuccess: () => notify.success('申請を差し戻しました') },
+                      )
+                    }
                   >
                     差戻す
                   </Button>
                 </div>
                 {!comment && <p className="text-xs text-muted-foreground">差戻しコメントを入力してください。</p>}
+                {returnRequest.error && <ErrorMessage error={returnRequest.error} />}
               </div>
               {canReject && (
                 <ConfirmActionDialog
@@ -271,6 +300,7 @@ export function WorkflowRequestDetailPage() {
                     try {
                       await rejectRequest.mutateAsync({ id: requestId, reason: rejectReason })
                       setRejectReason('')
+                      notify.success('申請を却下しました')
                     } catch (e) {
                       setRejectError(e as Error)
                       throw e

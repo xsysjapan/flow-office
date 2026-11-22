@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { useState } from 'react'
@@ -7,6 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../../api/asset'
 import type { Asset } from '../../../api/types'
 import { BackofficeBulkLendPage } from './BackofficeBulkLendPage'
+import { notify } from '../../../lib/notify'
+
+vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const navigate = vi.fn()
 let currentUser: { id: string; effective_permissions: string[] } | null = {
@@ -99,6 +102,10 @@ const asset: Asset = {
 
 describe('BackofficeBulkLendPage', () => {
   beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
+  beforeEach(() => {
     vi.restoreAllMocks()
     navigate.mockClear()
     currentUser = { id: 'manager-1', effective_permissions: ['asset.manage'] }
@@ -147,6 +154,37 @@ describe('BackofficeBulkLendPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '追加' }))
 
     expect(await screen.findByText('EQ-00121')).toBeInTheDocument()
+  })
+
+  it('確定操作でbulkAssetOperationがbackoffice_lendとして呼ばれ、成功件数がトーストで通知される', async () => {
+    vi.spyOn(assetApi, 'resolveAssetByScanInput').mockResolvedValue(asset)
+    vi.spyOn(assetApi, 'getAssetLoanEligibility').mockResolvedValue({
+      asset_id: 'asset-1',
+      management_type: 'lending',
+      lending_method: 'backoffice',
+      lending_status: 'available',
+      eligible: true,
+      requires_approval: false,
+      approved_loan_request_id: null,
+      reason: null,
+    })
+    const bulkSpy = vi.spyOn(assetApi, 'bulkAssetOperation').mockResolvedValue({
+      operation: 'backoffice_lend',
+      results: [{ asset_id: 'asset-1', success: true, result: 'lent' }],
+      succeeded_count: 1,
+      failed_count: 0,
+    })
+
+    renderPage()
+    await userEvent.type(screen.getByLabelText('貸出先'), 'x')
+    await userEvent.type(screen.getByLabelText('貸与対象に追加する備品'), 'EQ-00121')
+    await userEvent.click(screen.getByRole('button', { name: '追加' }))
+    await screen.findByText('EQ-00121')
+
+    await userEvent.click(screen.getByRole('button', { name: '1件を確定' }))
+
+    await waitFor(() => expect(bulkSpy).toHaveBeenCalledWith(expect.objectContaining({ operation: 'backoffice_lend', asset_ids: ['asset-1'] })))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('1件を貸与しました'))
   })
 
   it('貸出不可の備品はエラー理由を表示しリストに追加されない', async () => {

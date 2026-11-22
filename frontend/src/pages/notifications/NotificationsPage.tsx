@@ -6,6 +6,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { useForwardState } from '../../navigation/backState'
 import { useConfirmNotification, useMyNotifications } from '../../hooks/useNotifications'
@@ -76,7 +77,6 @@ export function NotificationsPage() {
     >
       {isLoading && <LoadingState />}
       {error && <ErrorMessage error={error} fallback="通知一覧の取得に失敗しました。" />}
-      {confirmNotification.error && <ErrorMessage error={confirmNotification.error} />}
 
       {!isLoading && !error && notifications.length === 0 && (
         status === 'all' ? (
@@ -127,10 +127,17 @@ export function NotificationsPage() {
                 <Button
                   variant="secondary"
                   isLoading={confirmNotification.isPending && confirmNotification.variables === notification.id}
-                  onClick={() => confirmNotification.mutate(notification.id)}
+                  onClick={() =>
+                    confirmNotification.mutate(notification.id, {
+                      onSuccess: () => notify.success('通知を確認済みにしました'),
+                    })
+                  }
                 >
                   確認済みにする
                 </Button>
+              )}
+              {confirmNotification.error && confirmNotification.variables === notification.id && (
+                <ErrorMessage error={confirmNotification.error} />
               )}
             </li>
           )

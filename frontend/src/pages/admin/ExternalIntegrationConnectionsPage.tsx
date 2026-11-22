@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -31,6 +32,7 @@ import type {
   ExternalIntegrationConnectionStatus,
   ExternalIntegrationProvider,
 } from '../../api/types'
+import { notify } from '../../lib/notify'
 
 const PROVIDER_LABELS: Record<ExternalIntegrationProvider, string> = {
   freee: 'freee',
@@ -236,6 +238,48 @@ function ConnectionFormFields({
 }
 
 /**
+ * 行末の「⋯」メニュー。編集・有効/無効・削除をまとめる。メニュー項目はメニューを閉じてから
+ * 編集ダイアログ・確認ダイアログ・即時の切替を実行する(ダイアログをメニュー内に残さない)。
+ */
+function ConnectionRowMenu({
+  connection,
+  onEdit,
+  onToggleEnabled,
+  onDelete,
+}: {
+  connection: ExternalIntegrationConnection
+  onEdit: () => void
+  onToggleEnabled: () => void
+  onDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const runAfterClose = (action: () => void) => (event: Event) => {
+    event.preventDefault()
+    setOpen(false)
+    action()
+  }
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="secondary" aria-label={`${connection.name}の操作`}>
+          ⋯
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={runAfterClose(onEdit)}>編集</DropdownMenuItem>
+        <DropdownMenuItem onSelect={runAfterClose(onToggleEnabled)}>
+          {connection.enabled ? '無効にする' : '有効にする'}
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onSelect={runAfterClose(onDelete)}>
+          削除する
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/**
  * 外部連携(freee/マネーフォワード等)の接続設定を管理する。同一providerで複数件登録できる
  * (拠点・事業所ごとに接続を分けるケースを想定)。送信実行(external-publish)自体はこの画面の
  * 対象外で、ここでは認証情報の登録・更新・有効化/無効化・削除のみを扱う。
@@ -252,6 +296,9 @@ export function ExternalIntegrationConnectionsPage() {
   const [editingConnection, setEditingConnection] = useState<ExternalIntegrationConnection | null>(null)
   const [editValue, setEditValue] = useState<ConnectionFormValue>(EMPTY_FORM)
   const [oauthNotice, setOauthNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ExternalIntegrationConnection | null>(null)
+  // 有効/無効の切替が失敗したときの表示位置(行の直近)。
+  const [toggleError, setToggleError] = useState<{ id: string; error: unknown } | null>(null)
 
   // freeeの認可コードフロー完了後、バックエンドのcallbackがこの画面へ
   // ?oauth=success/error のクエリパラメータ付きでリダイレクトしてくる。
@@ -300,6 +347,7 @@ export function ExternalIntegrationConnectionsPage() {
 
   const handleCreate = () => {
     if (validateForm(createValue, true)) return
+    const name = createValue.name
     createConnection.mutate(
       {
         provider: createValue.provider,
@@ -316,6 +364,7 @@ export function ExternalIntegrationConnectionsPage() {
       },
       {
         onSuccess: () => {
+          notify.success(`${name}を作成しました`)
           setCreateValue(EMPTY_FORM)
           setIsFormOpen(false)
         },
@@ -331,6 +380,7 @@ export function ExternalIntegrationConnectionsPage() {
 
   const handleUpdate = () => {
     if (!editingConnection || validateForm(editValue, false)) return
+    const name = editValue.name
     updateConnection.mutate(
       {
         id: editingConnection.id,
@@ -348,13 +398,36 @@ export function ExternalIntegrationConnectionsPage() {
         },
       },
       {
-        onSuccess: () => setEditingConnection(null),
+        onSuccess: () => {
+          notify.success(`${name}を保存しました`)
+          setEditingConnection(null)
+        },
       },
     )
   }
 
   const handleToggleEnabled = (connection: ExternalIntegrationConnection) => {
-    updateConnection.mutate({ id: connection.id, input: { enabled: !connection.enabled } })
+    setToggleError(null)
+    updateConnection.mutate(
+      { id: connection.id, input: { enabled: !connection.enabled } },
+      {
+        onSuccess: () => {
+          notify.success(`${connection.name}を${connection.enabled ? '無効' : '有効'}にしました`)
+        },
+        onError: (error) => setToggleError({ id: connection.id, error }),
+      },
+    )
+  }
+
+  const handleDelete = () => {
+    const target = deleteTarget
+    if (!target) return
+    deleteConnection.mutate(target.id, {
+      onSuccess: () => {
+        notify.success(`${target.name}を削除しました`)
+        setDeleteTarget(null)
+      },
+    })
   }
 
   return (
@@ -404,8 +477,6 @@ export function ExternalIntegrationConnectionsPage() {
         </div>
       )}
 
-      {createConnection.error && <ErrorMessage error={createConnection.error} />}
-      {deleteConnection.error && <ErrorMessage error={deleteConnection.error} />}
       {oauthRedirectUrl.error && <ErrorMessage error={oauthRedirectUrl.error} />}
 
       {isFormOpen && (
@@ -415,6 +486,7 @@ export function ExternalIntegrationConnectionsPage() {
             作成
           </Button>
           {createValidationError && <p className="mt-1.5 text-xs text-muted-foreground">{createValidationError}</p>}
+          {createConnection.error && <ErrorMessage error={createConnection.error} />}
         </div>
       )}
 
@@ -473,36 +545,44 @@ export function ExternalIntegrationConnectionsPage() {
                         freeeと連携する
                       </Button>
                     )}
-                    <Button size="sm" variant="secondary" onClick={() => openEditDialog(connection)}>
-                      編集
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      isLoading={updateConnection.isPending}
-                      onClick={() => handleToggleEnabled(connection)}
-                    >
-                      {connection.enabled ? '無効にする' : '有効にする'}
-                    </Button>
-                    <ConfirmActionDialog
-                      triggerLabel="削除する"
-                      title="外部連携を削除しますか?"
-                      description={`「${connection.name}」(${PROVIDER_LABELS[connection.provider]})を削除します。保存された認証情報は失われ、この操作は元に戻せません。`}
-                      confirmLabel="削除する"
-                      isPending={deleteConnection.isPending}
-                      error={deleteConnection.error}
-                      onOpenChange={(open) => {
-                        if (open) deleteConnection.reset()
+                    <ConnectionRowMenu
+                      connection={connection}
+                      onEdit={() => openEditDialog(connection)}
+                      onToggleEnabled={() => handleToggleEnabled(connection)}
+                      onDelete={() => {
+                        deleteConnection.reset()
+                        setDeleteTarget(connection)
                       }}
-                      onConfirm={() => deleteConnection.mutate(connection.id)}
                     />
                   </div>
+                  {toggleError?.id === connection.id && (
+                    <div className="mt-1">
+                      <ErrorMessage error={toggleError.error} />
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       )}
+
+      <ConfirmActionDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+        title="外部連携を削除しますか?"
+        description={
+          deleteTarget
+            ? `「${deleteTarget.name}」(${PROVIDER_LABELS[deleteTarget.provider]})を削除します。保存された認証情報は失われ、この操作は元に戻せません。`
+            : ''
+        }
+        confirmLabel="削除する"
+        isPending={deleteConnection.isPending}
+        error={deleteConnection.error}
+        onConfirm={handleDelete}
+      />
 
       <Dialog
         open={editingConnection !== null}

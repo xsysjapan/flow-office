@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ApprovalDetailPanel } from '../../components/ApprovalDetailPanel/ApprovalDetailPanel'
 import { Badge } from '../../components/Badge/Badge'
+import { BulkActionBar } from '../../components/BulkActionBar/BulkActionBar'
+import { BulkActionDialog, type BulkActionFailure, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
@@ -16,7 +19,9 @@ import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
+import { ApiError } from '../../api/client'
 import { fetchWorkflowRequest, type FetchWorkflowRequestsToApproveOptions } from '../../api/workflowRequests'
+import { notify } from '../../lib/notify'
 import { useApproveApprovalItem, useReturnApprovalItem } from '../../hooks/useApprovals'
 import { useWorkflowRequest, useWorkflowRequestsToApprove } from '../../hooks/useWorkflowRequests'
 import { isValidPageParam } from '../../utils/searchParamValidators'
@@ -186,14 +191,17 @@ export function ApprovalsPage() {
   const returnItem = useReturnApprovalItem()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [isBulkApproving, setIsBulkApproving] = useState(false)
-  const [bulkApproveError, setBulkApproveError] = useState<Error | null>(null)
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
+  /** ダイアログを開いた時点の対象。実行中に一覧が再取得されても件数・表示名が変わらないようにする。 */
+  const [bulkTargets, setBulkTargets] = useState<Array<{ id: string; title: string }>>([])
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
 
   const requests = data?.data ?? []
   const isFiltered = status !== DEFAULT_STATUS || Boolean(yearMonth)
 
   function closePanel() {
     setSelectedId(null)
+    setApproveConfirmOpen(false)
     approveItem.reset()
     returnItem.reset()
   }
@@ -225,47 +233,57 @@ export function ApprovalsPage() {
     })
   }
 
+  function openBulkDialog() {
+    setBulkTargets(requests.filter((request) => selectedIds.has(request.id)).map((request) => ({ id: request.id, title: request.title })))
+    setBulkDialogOpen(true)
+  }
+
+  function removeFromSelection(ids: string[]) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) next.delete(id)
+      return next
+    })
+  }
+
   /** 選択した各申請の実データ(subject)を個別に取得したうえで、一覧のsubject_summaryだけでは
    *  判別できない対象ドメインの承認API(useApproveApprovalItem)へ1件ずつ振り分ける。
-   *  バックエンドに一括承認エンドポイントは存在しないため、Promise.allでのクライアント側
-   *  ファンアウトで実現する。 */
-  async function handleBulkApprove() {
-    if (selectedIds.size === 0) return
-    setBulkApproveError(null)
-    setIsBulkApproving(true)
-    try {
-      await Promise.all(
-        Array.from(selectedIds).map(async (id) => {
-          const detail = await fetchWorkflowRequest(id)
-          return approveItem.mutateAsync(detail)
-        }),
-      )
-      setSelectedIds(new Set())
-    } catch (e) {
-      setBulkApproveError(e as Error)
-    } finally {
-      setIsBulkApproving(false)
-    }
+   *  バックエンドに一括承認エンドポイントは存在しないため、Promise.allSettledでのクライアント側
+   *  ファンアウトで実現し、詳細取得の失敗も承認の失敗と同じ内訳に入れる。 */
+  async function executeBulkApprove(): Promise<BulkActionResult> {
+    const results = await Promise.allSettled(
+      bulkTargets.map(async (target) => {
+        const detail = await fetchWorkflowRequest(target.id)
+        return approveItem.mutateAsync(detail)
+      }),
+    )
+    const succeededIds: string[] = []
+    const failures: BulkActionFailure[] = []
+    results.forEach((result, index) => {
+      const target = bulkTargets[index]
+      if (result.status === 'fulfilled') {
+        succeededIds.push(target.id)
+      } else {
+        failures.push({
+          id: target.id,
+          label: target.title,
+          message: result.reason instanceof ApiError ? result.reason.message : '承認できませんでした。',
+        })
+      }
+    })
+    return { succeededIds, failures }
   }
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="承認待ち一覧の取得に失敗しました。" />
 
   return (
-    <Card
-      title="承認待ち"
-      actions={
-        selectedIds.size > 0 ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedIds.size}件を選択中</span>
-            <Button onClick={() => void handleBulkApprove()} isLoading={isBulkApproving}>
-              まとめて承認する
-            </Button>
-          </div>
-        ) : undefined
-      }
-    >
-      {bulkApproveError && <ErrorMessage error={bulkApproveError} />}
+    <Card title="承認待ち">
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[{ key: 'approve', label: 'まとめて承認する', onClick: openBulkDialog }]}
+      />
       <div className="mb-4 flex flex-wrap items-end gap-4">
         <div className="w-40">
           <FormField label="状態" htmlFor="approvals-status">
@@ -340,7 +358,6 @@ export function ApprovalsPage() {
                     {isRowActionable(request) && (
                       <Checkbox
                         checked={selected}
-                        disabled={isBulkApproving}
                         onCheckedChange={() => toggleRow(request.id)}
                         aria-label={`${request.title}を選択`}
                       />
@@ -399,13 +416,47 @@ export function ApprovalsPage() {
               request={selectedRequest}
               approveIsPending={approveItem.isPending}
               returnIsPending={returnItem.isPending}
-              actionError={approveItem.error ?? returnItem.error}
-              onApprove={() => approveItem.mutate(selectedRequest)}
-              onReturn={(comment) => returnItem.mutate({ request: selectedRequest, comment })}
+              actionError={returnItem.error}
+              onApprove={() => {
+                approveItem.reset()
+                setApproveConfirmOpen(true)
+              }}
+              onReturn={(comment) =>
+                returnItem.mutate({ request: selectedRequest, comment }, { onSuccess: () => notify.success('申請を差し戻しました') })
+              }
             />
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <ConfirmActionDialog
+        open={approveConfirmOpen}
+        onOpenChange={setApproveConfirmOpen}
+        title="この申請を承認しますか?"
+        description="承認すると取り消せません。申請者に承認の通知が届きます。"
+        confirmLabel="承認する"
+        confirmVariant="primary"
+        isPending={approveItem.isPending}
+        error={approveItem.error}
+        onConfirm={async () => {
+          if (!selectedRequest) return
+          await approveItem.mutateAsync(selectedRequest)
+          notify.success('申請を承認しました')
+        }}
+      />
+
+      <BulkActionDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        title={`選択した${bulkTargets.length}件を承認しますか?`}
+        summary={`選択した${bulkTargets.length}件の申請を承認します。`}
+        description="承認すると取り消せません。申請者に承認の通知が届きます。"
+        confirmLabel={`${bulkTargets.length}件を承認する`}
+        resultTitle="承認の結果"
+        onExecute={executeBulkApprove}
+        onSucceeded={removeFromSelection}
+        successMessage={(count) => `${count}件の申請を承認しました`}
+      />
     </Card>
   )
 }

@@ -652,14 +652,20 @@ export async function createExternalEmployeeMapping(
 /**
  * フェーズ2: 勤怠月次確定データを外部API(freeeのみ)へ送信する
  * (`POST /exports/attendance/external-publish`、管理者限定)。
+ * `userIds`を省略すると対象月の全社員が送信対象になる(共有DBでは他specの社員が混ざるため、
+ * 検証対象の社員を指定する場合に使う)。
  */
 export async function publishAttendanceExternal(
   page: Page,
-  input: { yearMonth: string; provider: 'freee' },
+  input: { yearMonth: string; provider: 'freee'; userIds?: string[] },
 ): Promise<{ provider: string; successes: unknown[]; failures: unknown[] }> {
   return apiFetch(page, '/exports/attendance/external-publish', {
     method: 'POST',
-    body: { year_month: [input.yearMonth], provider: input.provider },
+    body: {
+      year_month: [input.yearMonth],
+      provider: input.provider,
+      ...(input.userIds ? { user_id: input.userIds } : {}),
+    },
   })
 }
 
@@ -709,13 +715,19 @@ export async function createAutoApprovedExpenseClaim(
 /**
  * フェーズ3: 経費確定データを外部API(freee/マネーフォワード)へ送信する
  * (`POST /exports/expenses/external-publish`、経理担当者/管理者限定)。
+ * `employeeIds`を省略すると対象月の全社員の承認済み経費が送信対象になる(共有DBでは他specの
+ * 経費が混ざるため、検証対象の社員を指定する場合に使う。バックエンドの`employee_id`に対応)。
  */
 export async function publishExpensesExternal(
   page: Page,
-  input: { yearMonth: string; provider: 'freee' | 'moneyforward' },
+  input: { yearMonth: string; provider: 'freee' | 'moneyforward'; employeeIds?: string[] },
 ): Promise<{ provider: string; successes: unknown[]; failures: unknown[] }> {
   return apiFetch(page, '/exports/expenses/external-publish', {
     method: 'POST',
-    body: { year_month: [input.yearMonth], provider: input.provider },
+    body: {
+      year_month: [input.yearMonth],
+      provider: input.provider,
+      ...(input.employeeIds ? { employee_id: input.employeeIds } : {}),
+    },
   })
 }

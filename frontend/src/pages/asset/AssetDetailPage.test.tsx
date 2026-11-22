@@ -8,12 +8,15 @@ import { ApiError } from '../../api/client'
 import * as usersApi from '../../api/users'
 import * as workflowRequestsApi from '../../api/workflowRequests'
 import type { Asset, StoredEvent } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { AssetDetailPage } from './AssetDetailPage'
 
 let currentUser: { id: string; effective_permissions: string[] } | null = {
   id: 'user-1',
   effective_permissions: ['asset.manage'],
 }
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 vi.mock('../../auth/useAuth', () => ({
   useAuth: () => ({ user: currentUser }),
@@ -97,6 +100,7 @@ function renderPage(id = 'asset-1', state?: unknown) {
 
 describe('AssetDetailPage', () => {
   beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
     vi.restoreAllMocks()
     currentUser = { id: 'user-1', effective_permissions: ['asset.manage'] }
   })
@@ -218,6 +222,7 @@ describe('AssetDetailPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '返却する' }))
 
     expect(returnSpy).toHaveBeenCalledWith('asset-1', { return_note: null })
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ThinkPad X1を返却しました'))
   })
 
   it('shows no operations for a disposed asset', async () => {
@@ -346,6 +351,9 @@ describe('AssetDetailPage', () => {
         expected_return_at: null,
         loan_request_id: 'loan-request-1',
       }),
+    )
+    await waitFor(() =>
+      expect(notify.success).toHaveBeenCalledWith('ThinkPad X1を承認者花子さんに貸与しました'),
     )
   })
 })

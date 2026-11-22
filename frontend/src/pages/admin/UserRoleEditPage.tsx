@@ -48,6 +48,7 @@ import {
   useScheduleMembershipChange,
 } from "../../hooks/useUserManagement";
 import { formatDate } from "../../utils/weekDates";
+import { notify } from "../../lib/notify";
 import { ACCOUNT_STATUS_OPTIONS } from "../../utils/userLabels";
 import {
   membershipChangeDescription,
@@ -169,16 +170,22 @@ export function UserRoleEditPage() {
   const handleSaveWorkStyle = () => {
     if (workStyleMode === "default") {
       if (currentAssignment) {
-        removeWorkStyleAssignment.mutate({ id: currentAssignment.id, userId });
+        removeWorkStyleAssignment.mutate(
+          { id: currentAssignment.id, userId },
+          { onSuccess: () => notify.success("働き方を会社のデフォルトに戻しました") },
+        );
       }
       return;
     }
     if (!selectedWorkStyleId) return;
-    assignWorkStyleForMonth.mutate({
-      user_id: userId,
-      year_month: currentYearMonth,
-      work_style_id: selectedWorkStyleId,
-    });
+    assignWorkStyleForMonth.mutate(
+      {
+        user_id: userId,
+        year_month: currentYearMonth,
+        work_style_id: selectedWorkStyleId,
+      },
+      { onSuccess: () => notify.success("働き方を保存しました") },
+    );
   };
 
   const isExternalHrField = (field: string) =>
@@ -294,8 +301,12 @@ export function UserRoleEditPage() {
       membershipChange.timing === "scheduled"
         ? scheduleMembershipChange
         : applyMembershipChangeNow;
+    const isScheduled = membershipChange.timing === "scheduled";
     mutation.mutate(input, {
-      onSuccess: () => setMembershipChangeOpen(false),
+      onSuccess: () => {
+        setMembershipChangeOpen(false);
+        notify.success(isScheduled ? "所属変更を予約しました" : "所属を変更しました");
+      },
     });
   };
 
@@ -303,8 +314,6 @@ export function UserRoleEditPage() {
     <>
       <BackLink />
       <Card title={`${user.name}のユーザー管理`}>
-        {updateUser.error && <ErrorMessage error={updateUser.error} />}
-
         <div className="mb-6 rounded border p-3">
           <h2 className="mb-3 font-medium">基本情報</h2>
           <div className="grid gap-3 md:grid-cols-2">
@@ -405,11 +414,15 @@ export function UserRoleEditPage() {
                   job_title: profile.job_title || null,
                 }).filter(([key]) => !isExternalHrField(key)),
               ) as Partial<UserProfileInput>;
-              updateUser.mutate({ id: userId, input });
+              updateUser.mutate(
+                { id: userId, input },
+                { onSuccess: () => notify.success("基本情報を保存しました") },
+              );
             }}
           >
             基本情報を保存する
           </Button>
+          {updateUser.error && <ErrorMessage error={updateUser.error} />}
           {(!profile.name || !profile.email) && (
             <p className="mt-1.5 text-xs text-muted-foreground">
               氏名とメールアドレスを入力してください。
@@ -496,9 +509,6 @@ export function UserRoleEditPage() {
             <p className="mb-3 text-xs text-muted-foreground">
               直近20件の即時変更と予約を表示します。
             </p>
-            {cancelMembershipChange.error && (
-              <ErrorMessage error={cancelMembershipChange.error} />
-            )}
             {user.membership_change_sets?.map((set) => (
               <div
                 key={set.id}
@@ -528,7 +538,11 @@ export function UserRoleEditPage() {
                     confirmLabel="取り消す"
                     isPending={cancelMembershipChange.isPending}
                     error={cancelMembershipChange.error}
-                    onConfirm={() => cancelMembershipChange.mutateAsync(set.id)}
+                    onConfirm={() =>
+                      cancelMembershipChange
+                        .mutateAsync(set.id)
+                        .then(() => notify.success("所属変更の予約を取り消しました"))
+                    }
                   />
                 )}
               </div>
@@ -719,15 +733,6 @@ export function UserRoleEditPage() {
         </Dialog>
 
         <div className="mt-6 border-t border-border pt-4">
-          {updateHireDate.error && <ErrorMessage error={updateHireDate.error} />}
-          {updateTerminationDate.error && (
-            <ErrorMessage error={updateTerminationDate.error} />
-          )}
-          {updateHireDate.isSuccess && <Badge tone="success">保存しました</Badge>}
-          {updateTerminationDate.isSuccess && (
-            <Badge tone="success">保存しました</Badge>
-          )}
-
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField
               label="入社日(有給の自動付与に使用)"
@@ -758,7 +763,12 @@ export function UserRoleEditPage() {
                 variant="secondary"
                 isLoading={updateHireDate.isPending}
                 disabled={!hireDate}
-                onClick={() => updateHireDate.mutate({ id: userId, hireDate })}
+                onClick={() =>
+                  updateHireDate.mutate(
+                    { id: userId, hireDate },
+                    { onSuccess: () => notify.success("入社日を保存しました") },
+                  )
+                }
               >
                 入社日を保存する
               </Button>
@@ -767,30 +777,34 @@ export function UserRoleEditPage() {
                   入社日を入力してください。
                 </p>
               )}
+              {updateHireDate.error && (
+                <ErrorMessage error={updateHireDate.error} />
+              )}
             </div>
-            <Button
-              variant="secondary"
-              isLoading={updateTerminationDate.isPending}
-              onClick={() =>
-                updateTerminationDate.mutate({
-                  id: userId,
-                  terminationDate: terminationDate || null,
-                })
-              }
-            >
-              退社日を保存する
-            </Button>
+            <div>
+              <Button
+                variant="secondary"
+                isLoading={updateTerminationDate.isPending}
+                onClick={() =>
+                  updateTerminationDate.mutate(
+                    {
+                      id: userId,
+                      terminationDate: terminationDate || null,
+                    },
+                    { onSuccess: () => notify.success("退社日を保存しました") },
+                  )
+                }
+              >
+                退社日を保存する
+              </Button>
+              {updateTerminationDate.error && (
+                <ErrorMessage error={updateTerminationDate.error} />
+              )}
+            </div>
           </div>
         </div>
 
         <div className="mt-6 border-t border-border pt-4">
-          {updateUsageStartDate.error && (
-            <ErrorMessage error={updateUsageStartDate.error} />
-          )}
-          {updateUsageStartDate.isSuccess && (
-            <Badge tone="success">保存しました</Badge>
-          )}
-
           <FormField
             label="利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)"
             htmlFor="user-role-edit-usage-start-date"
@@ -808,26 +822,21 @@ export function UserRoleEditPage() {
               isLoading={updateUsageStartDate.isPending}
               disabled={!usageStartDate}
               onClick={() =>
-                updateUsageStartDate.mutate({ id: userId, usageStartDate })
+                updateUsageStartDate.mutate(
+                  { id: userId, usageStartDate },
+                  { onSuccess: () => notify.success("利用開始日を保存しました") },
+                )
               }
             >
               利用開始日を保存する
             </Button>
           </div>
+          {updateUsageStartDate.error && (
+            <ErrorMessage error={updateUsageStartDate.error} />
+          )}
         </div>
 
         <div className="mt-6 border-t border-border pt-4">
-          {updatePaidLeaveAutoGrantEnabled.error && (
-            <ErrorMessage error={updatePaidLeaveAutoGrantEnabled.error} />
-          )}
-          {updateSpecialLeaveAutoGrantEnabled.error && (
-            <ErrorMessage error={updateSpecialLeaveAutoGrantEnabled.error} />
-          )}
-          {(updatePaidLeaveAutoGrantEnabled.isSuccess ||
-            updateSpecialLeaveAutoGrantEnabled.isSuccess) && (
-            <Badge tone="success">保存しました</Badge>
-          )}
-
           <h3 className="mb-3 text-sm font-semibold text-foreground">
             休暇の自動付与
           </h3>
@@ -872,32 +881,33 @@ export function UserRoleEditPage() {
               updateSpecialLeaveAutoGrantEnabled.isPending
             }
             onClick={() => {
-              updatePaidLeaveAutoGrantEnabled.mutate({
-                id: userId,
-                enabled: paidLeaveAutoGrantEnabled,
-              });
-              updateSpecialLeaveAutoGrantEnabled.mutate({
-                id: userId,
-                enabled: specialLeaveAutoGrantEnabled,
-              });
+              updatePaidLeaveAutoGrantEnabled.mutate(
+                {
+                  id: userId,
+                  enabled: paidLeaveAutoGrantEnabled,
+                },
+                { onSuccess: () => notify.success("有給の自動付与設定を保存しました") },
+              );
+              updateSpecialLeaveAutoGrantEnabled.mutate(
+                {
+                  id: userId,
+                  enabled: specialLeaveAutoGrantEnabled,
+                },
+                { onSuccess: () => notify.success("特別休暇の自動付与設定を保存しました") },
+              );
             }}
           >
             自動付与設定を保存する
           </Button>
+          {updatePaidLeaveAutoGrantEnabled.error && (
+            <ErrorMessage error={updatePaidLeaveAutoGrantEnabled.error} />
+          )}
+          {updateSpecialLeaveAutoGrantEnabled.error && (
+            <ErrorMessage error={updateSpecialLeaveAutoGrantEnabled.error} />
+          )}
         </div>
 
         <div className="mt-6 border-t border-border pt-4">
-          {assignWorkStyleForMonth.error && (
-            <ErrorMessage error={assignWorkStyleForMonth.error} />
-          )}
-          {removeWorkStyleAssignment.error && (
-            <ErrorMessage error={removeWorkStyleAssignment.error} />
-          )}
-          {(assignWorkStyleForMonth.isSuccess ||
-            removeWorkStyleAssignment.isSuccess) && (
-            <Badge tone="success">保存しました</Badge>
-          )}
-
           <h3 className="mb-3 text-sm font-semibold text-foreground">
             働き方({currentYearMonth})
           </h3>
@@ -958,6 +968,12 @@ export function UserRoleEditPage() {
           >
             働き方を保存する
           </Button>
+          {assignWorkStyleForMonth.error && (
+            <ErrorMessage error={assignWorkStyleForMonth.error} />
+          )}
+          {removeWorkStyleAssignment.error && (
+            <ErrorMessage error={removeWorkStyleAssignment.error} />
+          )}
           {workStyleMode === "specify" && !selectedWorkStyleId && (
             <p className="mt-1.5 text-xs text-muted-foreground">
               指定する働き方を選択してください。

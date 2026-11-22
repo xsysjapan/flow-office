@@ -298,6 +298,7 @@ test('§5-15: 複数の労働時間制度が混在する月の月次締め', asy
       await expect(row).toBeVisible()
       await row.getByRole('button', { name: `${yearMonth} 月次勤怠` }).click()
       await approverPage.getByRole('button', { name: '承認する' }).click()
+      await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
       await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
     }
 
@@ -351,9 +352,8 @@ test('§5-17: 締め済み月次勤怠をバックオフィス詳細から引き
   await expect(attendanceTaskRow).toBeVisible()
   await attendanceTaskRow.getByRole('link', { name: attendanceTaskTitle }).click()
 
-  await expect(
-    hrStaffPage.getByText('締め処理済みのため修正できません。月次勤怠の内容は引き続き確認できます。'),
-  ).toBeVisible()
+  // 締め済みの月は「締め済み」ステータス(Badge)で示す。
+  await expect(hrStaffPage.getByRole('status', { name: '締め済み' })).toBeVisible()
   await expect(hrStaffPage.getByText('日別の内訳')).toBeVisible()
   await expect(hrStaffPage.getByText(yearMonth, { exact: true })).toBeVisible()
 
@@ -431,6 +431,7 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await expect(expenseApprovalRow).toBeVisible()
     await expenseApprovalRow.getByRole('button').click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // タイトルは「経費精算: 高橋 健太 (期間)」形式で金額を含まないため、同じ社員が
@@ -444,8 +445,11 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     const expenseTaskRow = accountingPage.getByRole('row', { name: new RegExp(`経費精算.*高橋 健太.*${usageDateStr.slice(0, 7)}`) })
     await expect(expenseTaskRow).toBeVisible()
     await expenseTaskRow.getByRole('link').click()
-    await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com')
-    await accountingPage.getByRole('button', { name: '割り当てる' }).click()
+    // 担当者の割り当てはダイアログ(ボタン→ダイアログ内のUserPicker→「割り当てる」)で行う
+    await accountingPage.getByRole('button', { name: '担当者を割り当てる' }).click()
+    const expenseAssignDialog = accountingPage.getByRole('dialog')
+    await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com', { root: expenseAssignDialog, exact: true })
+    await expenseAssignDialog.getByRole('button', { name: '割り当てる' }).click()
     await expect(accountingPage.getByText('未割り当て')).toHaveCount(0)
 
     // task_type='expense_reimbursement'固定の許可遷移(未着手→確認中→支払予定→完了)により、
@@ -476,6 +480,7 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await expect(cardApprovalRow).toBeVisible()
     await cardApprovalRow.getByRole('button', { name: cardTitle }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     await generalAffairsPage.goto('/backoffice-tasks')
@@ -484,8 +489,11 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     const cardTaskRow = generalAffairsPage.getByRole('row', { name: cardTitle })
     await expect(cardTaskRow).toBeVisible()
     await cardTaskRow.getByRole('link', { name: cardTitle }).click()
-    await pickUser(generalAffairsPage, '担当者', SCENARIO_USERS.generalAffairsStaff, 'megumi.nakamura@example.com')
-    await generalAffairsPage.getByRole('button', { name: '割り当てる' }).click()
+    // 担当者の割り当てはダイアログ(ボタン→ダイアログ内のUserPicker→「割り当てる」)で行う
+    await generalAffairsPage.getByRole('button', { name: '担当者を割り当てる' }).click()
+    const cardAssignDialog = generalAffairsPage.getByRole('dialog')
+    await pickUser(generalAffairsPage, '担当者', SCENARIO_USERS.generalAffairsStaff, 'megumi.nakamura@example.com', { root: cardAssignDialog, exact: true })
+    await cardAssignDialog.getByRole('button', { name: '割り当てる' }).click()
     await expect(generalAffairsPage.getByText('未割り当て')).toHaveCount(0)
 
     // request_types.allowed_status_transitions(名刺申請)により、割り当て時点で自動的に

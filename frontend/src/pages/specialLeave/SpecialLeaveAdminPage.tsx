@@ -14,10 +14,12 @@ import { ChangeGrantDaysButton } from '../../components/ChangeGrantDaysButton/Ch
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { useQueryClient } from '@tanstack/react-query'
 import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
+import { notify } from '../../lib/notify'
 import {
   useAdminCancelSpecialLeaveRequest,
   useCreateSpecialLeaveGrantRule,
@@ -40,6 +42,46 @@ interface StepInput {
   grant_days: number
 }
 
+/** 種別の行末「⋯」メニュー。付与要否・有効/無効の切替を即実行する(確認なし。成功はトースト)。 */
+function SpecialLeaveTypeRowMenu({
+  typeName,
+  isPending,
+  requiresGrant,
+  isActive,
+  onToggleRequiresGrant,
+  onToggleActive,
+}: {
+  typeName: string
+  isPending: boolean
+  requiresGrant: boolean
+  isActive: boolean
+  onToggleRequiresGrant: () => void
+  onToggleActive: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const runAfterClose = (action: () => void) => (event: Event) => {
+    event.preventDefault()
+    setOpen(false)
+    action()
+  }
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="secondary" isLoading={isPending} aria-label={`${typeName}の操作`}>
+          ⋯
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={runAfterClose(onToggleRequiresGrant)}>
+          {requiresGrant ? '付与不要にする' : '要付与に戻す'}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={runAfterClose(onToggleActive)}>{isActive ? '無効にする' : '有効にする'}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function SpecialLeaveTypesCard() {
   const { data: types, isLoading, error } = useSpecialLeaveTypes()
   const createType = useCreateSpecialLeaveType()
@@ -49,14 +91,21 @@ function SpecialLeaveTypesCard() {
   const [requiresGrant, setRequiresGrant] = useState(true)
 
   const handleCreate = () => {
-    createType.mutate({ name, requires_grant: requiresGrant }, { onSuccess: () => setName('') })
+    createType.mutate(
+      { name, requires_grant: requiresGrant },
+      {
+        onSuccess: () => {
+          notify.success(`特別休暇の種類「${name}」を追加しました`)
+          setName('')
+        },
+      },
+    )
   }
 
   return (
     <Card title="特別休暇の種類">
       {error && <ErrorMessage error={error} fallback="特別休暇種別の取得に失敗しました。" />}
       {createType.error && <ErrorMessage error={createType.error} />}
-      {updateType.error && <ErrorMessage error={updateType.error} />}
 
       {isLoading ? (
         <LoadingState />
@@ -79,30 +128,38 @@ function SpecialLeaveTypesCard() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  isLoading={updateType.isPending}
-                  onClick={() =>
-                    updateType.mutate({
-                      id: type.id,
-                      input: { name: type.name, is_active: type.is_active, requires_grant: !type.requires_grant },
-                    })
+                <SpecialLeaveTypeRowMenu
+                  typeName={type.name}
+                  isPending={updateType.isPending && updateType.variables?.id === type.id}
+                  requiresGrant={type.requires_grant}
+                  isActive={type.is_active}
+                  onToggleRequiresGrant={() =>
+                    updateType.mutate(
+                      {
+                        id: type.id,
+                        input: { name: type.name, is_active: type.is_active, requires_grant: !type.requires_grant },
+                      },
+                      {
+                        onSuccess: () =>
+                          notify.success(`${type.name}を${type.requires_grant ? '付与不要' : '要付与'}にしました`),
+                      },
+                    )
                   }
-                >
-                  {type.requires_grant ? '付与不要にする' : '要付与に戻す'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  isLoading={updateType.isPending}
-                  onClick={() =>
-                    updateType.mutate({
-                      id: type.id,
-                      input: { name: type.name, is_active: !type.is_active, requires_grant: type.requires_grant },
-                    })
+                  onToggleActive={() =>
+                    updateType.mutate(
+                      {
+                        id: type.id,
+                        input: { name: type.name, is_active: !type.is_active, requires_grant: type.requires_grant },
+                      },
+                      {
+                        onSuccess: () => notify.success(`${type.name}を${type.is_active ? '無効' : '有効'}にしました`),
+                      },
+                    )
                   }
-                >
-                  {type.is_active ? '無効にする' : '有効にする'}
-                </Button>
+                />
+                {updateType.error && updateType.variables?.id === type.id && (
+                  <ErrorMessage error={updateType.error} />
+                )}
               </div>
             </li>
           ))}
@@ -138,11 +195,12 @@ function SpecialLeaveGrantRuleTargetUsersSection({ ruleId }: { ruleId: number })
 
   const filteredUsers = (targetUsers ?? []).filter((user) => user.name.includes(nameFilter))
 
-  const handleToggle = (userId: string, enabled: boolean) => {
+  const handleToggle = (user: { id: string; name: string }, enabled: boolean) => {
     updateAutoGrantEnabled.mutate(
-      { id: userId, enabled },
+      { id: user.id, enabled },
       {
         onSuccess: () => {
+          notify.success(`${user.name}の自動付与を${enabled ? '有効' : '無効'}にしました`)
           void queryClient.invalidateQueries({ queryKey: ['special-leave', 'grant-rules', ruleId, 'target-users'] })
         },
       },
@@ -152,7 +210,6 @@ function SpecialLeaveGrantRuleTargetUsersSection({ ruleId }: { ruleId: number })
   return (
     <div className="mt-3 rounded-md border border-border p-3">
       {error && <ErrorMessage error={error} fallback="対象社員の取得に失敗しました。" />}
-      {updateAutoGrantEnabled.error && <ErrorMessage error={updateAutoGrantEnabled.error} />}
 
       <FormField label="社員名で絞り込み" htmlFor={`special-leave-rule-${ruleId}-target-user-filter`}>
         <Input
@@ -184,11 +241,16 @@ function SpecialLeaveGrantRuleTargetUsersSection({ ruleId }: { ruleId: number })
                   <label className="flex items-center gap-2">
                     <Checkbox
                       checked={user.special_leave_auto_grant_enabled}
-                      onCheckedChange={(checked) => handleToggle(user.id, checked === true)}
+                      onCheckedChange={(checked) => handleToggle(user, checked === true)}
                       aria-label={`${user.name}の特別休暇自動付与`}
                     />
                     {!user.special_leave_auto_grant_enabled && <Badge tone="warning">自動付与:無効</Badge>}
                   </label>
+                  {updateAutoGrantEnabled.error && updateAutoGrantEnabled.variables?.id === user.id && (
+                    <div className="mt-1">
+                      <ErrorMessage error={updateAutoGrantEnabled.error} />
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -250,6 +312,7 @@ function SpecialLeaveGrantRulesCard() {
       },
       {
         onSuccess: () => {
+          notify.success(`${ruleName}を作成しました`)
           setRuleName('')
           setMinAttendanceRate('')
           setFirstGrantAfterMonths('')
@@ -484,6 +547,8 @@ function ManualGrantCard() {
     )
     setIsSubmitting(false)
     setResults(outcomes)
+    const successCount = outcomes.filter((o) => o.success).length
+    if (successCount > 0) notify.success(`${successCount}名に特別休暇を付与しました`)
     if (outcomes.every((o) => o.success)) {
       setGrantedOn('')
       setExpiresOn('')
@@ -601,6 +666,7 @@ function ManualGrantCard() {
                     />
                     <RevokeGrantButton
                       id={`revoke-reason-${grant.id}`}
+                      grantedOn={grant.granted_on}
                       title="特別休暇付与を取り消しますか?"
                       description={`${grant.granted_on}付与分(${grant.granted_days}日)を取り消します。この操作は元に戻せません。`}
                       isPending={revokeGrant.isPending}
@@ -691,7 +757,10 @@ function SpecialLeaveUsageCard() {
           isLoading={isLoading}
           error={error}
           errorFallback="特別休暇の使用状況の取得に失敗しました。"
-          onCancelRequest={(requestId) => adminCancel.mutateAsync(requestId)}
+          onCancelRequest={async (requestId) => {
+            await adminCancel.mutateAsync(requestId)
+            notify.success('特別休暇申請を取り消しました')
+          }}
           isCancelling={adminCancel.isPending}
           cancelError={adminCancel.error}
         />

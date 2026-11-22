@@ -1,13 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import type { AttendanceWeekOvertime } from '../../api/attendance'
+import { ApiError } from '../../api/client'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import type { AttendanceDay } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { addDays, formatDate, mondayOf } from '../../utils/weekDates'
 import { WeekAttendancePage } from './WeekAttendancePage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const currentUser = {
   id: 'user-1',
@@ -79,6 +84,7 @@ const drilledFromMonthWarning = {
 function renderPage(
   days: AttendanceDay[] = [mondayRecord],
   entry: string | { pathname: string; search?: string; state?: unknown } = '/attendance/week',
+  overtime: Partial<AttendanceWeekOvertime> = {},
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
@@ -86,6 +92,7 @@ function renderPage(
     week_start_date: weekStart,
     week_end_date: addDays(weekStart, 6),
     weekly_statutory_excess_overtime_minutes: 60,
+    ...overtime,
   })
   vi.spyOn(employeeShiftAssignmentsApi, 'fetchShiftAssignments').mockResolvedValue([])
 
@@ -102,6 +109,7 @@ function renderPage(
 describe('WeekAttendancePage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.mocked(notify.success).mockClear()
   })
 
   it('requests the current week starting on Monday', async () => {
@@ -271,5 +279,66 @@ describe('WeekAttendancePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '次週' }))
 
     expect(await screen.findByRole('button', { name: '選択' })).toBeInTheDocument()
+  })
+
+  describe('weekly overtime allocation', () => {
+    // 週40時間超の法定外労働が60分未振分で、この日は所定外法定内に180分の振替余力がある
+    const allocatableDay: AttendanceDay = {
+      ...mondayRecord,
+      calculation: {
+        ...mondayRecord.calculation!,
+        prescribed_statutory_within_work_minutes: 300,
+        non_prescribed_statutory_within_work_minutes: 180,
+      },
+    }
+    const unallocatedOvertime = { unallocated_weekly_statutory_excess_overtime_minutes: 60 }
+
+    async function allocateSixtyNonPrescribedMinutes() {
+      const table = (await screen.findByRole('columnheader', { name: '所定外から振替（分）' })).closest('table')!
+      const [nonPrescribedInput] = within(table).getAllByRole('spinbutton')
+      await userEvent.clear(nonPrescribedInput)
+      await userEvent.type(nonPrescribedInput, '60')
+    }
+
+    it('saves the manual allocation and shows the success toast once', async () => {
+      vi.spyOn(attendanceApi, 'allocateWeekOvertime').mockResolvedValue({
+        week_start_date: weekStart,
+        week_end_date: addDays(weekStart, 6),
+        weekly_statutory_excess_overtime_minutes: 60,
+        allocated_weekly_statutory_excess_overtime_minutes: 60,
+        unallocated_weekly_statutory_excess_overtime_minutes: 0,
+      })
+      renderPage([allocatableDay], '/attendance/week', unallocatedOvertime)
+
+      await allocateSixtyNonPrescribedMinutes()
+      await userEvent.click(screen.getByRole('button', { name: '手動振分を適用（60/60分）' }))
+
+      await waitFor(() => expect(notify.success).toHaveBeenCalledTimes(1))
+      expect(notify.success).toHaveBeenCalledWith('週次の残業時間の配分を保存しました')
+      expect(attendanceApi.allocateWeekOvertime).toHaveBeenCalledWith(weekStart, [
+        {
+          attendance_day_id: 'day-1',
+          prescribed_minutes: 0,
+          non_prescribed_minutes: 60,
+          late_night_prescribed_minutes: 0,
+          late_night_non_prescribed_minutes: 0,
+        },
+      ])
+    })
+
+    it('does not show the success toast and shows the error when saving fails', async () => {
+      vi.spyOn(attendanceApi, 'allocateWeekOvertime').mockRejectedValue(
+        new ApiError(422, '配分の合計が未振分の時間と一致しません。'),
+      )
+      renderPage([allocatableDay], '/attendance/week', unallocatedOvertime)
+
+      await allocateSixtyNonPrescribedMinutes()
+      await userEvent.click(screen.getByRole('button', { name: '手動振分を適用（60/60分）' }))
+
+      const message = await screen.findByText('配分の合計が未振分の時間と一致しません。')
+      expect(message.closest('[role="alert"]')).toBeInTheDocument()
+      expect(attendanceApi.allocateWeekOvertime).toHaveBeenCalledTimes(1)
+      expect(notify.success).not.toHaveBeenCalled()
+    })
   })
 })

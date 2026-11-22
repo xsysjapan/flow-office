@@ -8,6 +8,7 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -26,7 +27,6 @@ import {
   useDisableHolidayCalendarSource,
   useHolidayCalendarSources,
   useRevertLastHolidayCalendarSync,
-  useSyncHolidayCalendarSource,
   useUpdateHolidayCalendarSource,
 } from '../../hooks/useHolidayCalendarSources'
 import {
@@ -139,7 +139,6 @@ export function WorkCalendarDetailPage() {
   const { data: sourcesData, isLoading: isLoadingSources, error: sourcesError } = useHolidayCalendarSources()
   const createSource = useCreateHolidayCalendarSource()
   const updateSource = useUpdateHolidayCalendarSource()
-  const syncSource = useSyncHolidayCalendarSource()
   const disableSource = useDisableHolidayCalendarSource()
   const revertLastSync = useRevertLastHolidayCalendarSync()
   const deleteSource = useDeleteHolidayCalendarSource()
@@ -204,6 +203,7 @@ export function WorkCalendarDetailPage() {
   const [editSourceIcsUrl, setEditSourceIcsUrl] = useState('')
   const [editSourceIcsFile, setEditSourceIcsFile] = useState<File | undefined>(undefined)
 
+  const [calendarUpdateTarget, setCalendarUpdateTarget] = useState<'settings' | 'source' | null>(null)
   const [isYearModalOpen, setIsYearModalOpen] = useState(false)
   const [fiscalYear, setFiscalYear] = useState('')
   const [yearStartsOn, setYearStartsOn] = useState('')
@@ -215,18 +215,22 @@ export function WorkCalendarDetailPage() {
   if (!calendar) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
 
   const handleSaveSettings = () => {
-    updateCalendar.mutate({
-      id: calendar.id,
-      input: {
-        name,
-        week_starts_on: Number(weekStartsOn),
-        fiscal_year_start_month: Number(fiscalYearStartMonth),
-        fiscal_year_start_day: Number(fiscalYearStartDay),
-        holiday_calendar_source_id: calendar.holiday_calendar_source_id,
-        weekday_holiday_pattern: weekdayPattern ? weekdayPattern : undefined,
-        allow_daily_holiday_override: allowDailyHolidayOverride,
+    setCalendarUpdateTarget('settings')
+    updateCalendar.mutate(
+      {
+        id: calendar.id,
+        input: {
+          name,
+          week_starts_on: Number(weekStartsOn),
+          fiscal_year_start_month: Number(fiscalYearStartMonth),
+          fiscal_year_start_day: Number(fiscalYearStartDay),
+          holiday_calendar_source_id: calendar.holiday_calendar_source_id,
+          weekday_holiday_pattern: weekdayPattern ? weekdayPattern : undefined,
+          allow_daily_holiday_override: allowDailyHolidayOverride,
+        },
       },
-    })
+      { onSuccess: () => notify.success('カレンダーの基本設定を保存しました') },
+    )
   }
 
   const handleCreateSource = () => {
@@ -238,6 +242,7 @@ export function WorkCalendarDetailPage() {
       },
       {
         onSuccess: (created) => {
+          notify.success('iCalendarソースを登録しました')
           setNewSourceName('')
           setNewSourceMode('url')
           setNewSourceIcsUrl('')
@@ -271,6 +276,7 @@ export function WorkCalendarDetailPage() {
       },
       {
         onSuccess: () => {
+          notify.success('iCalendarソースを更新しました')
           setIsEditingSource(false)
         },
       },
@@ -280,16 +286,20 @@ export function WorkCalendarDetailPage() {
   const handleAssignSource = () => {
     if (selectedSourceId === (calendar.holiday_calendar_source_id ?? NONE_OPTION_VALUE)) return
 
-    updateCalendar.mutate({
-      id: calendar.id,
-      input: {
-        name: calendar.name,
-        week_starts_on: calendar.week_starts_on,
-        fiscal_year_start_month: calendar.fiscal_year_start_month,
-        fiscal_year_start_day: calendar.fiscal_year_start_day,
-        holiday_calendar_source_id: selectedSourceId || null,
+    setCalendarUpdateTarget('source')
+    updateCalendar.mutate(
+      {
+        id: calendar.id,
+        input: {
+          name: calendar.name,
+          week_starts_on: calendar.week_starts_on,
+          fiscal_year_start_month: calendar.fiscal_year_start_month,
+          fiscal_year_start_day: calendar.fiscal_year_start_day,
+          holiday_calendar_source_id: selectedSourceId || null,
+        },
       },
-    })
+      { onSuccess: () => notify.success('休日iCalendarソースの割当を保存しました') },
+    )
   }
 
   const handleFiscalYearChange = (value: string) => {
@@ -308,6 +318,7 @@ export function WorkCalendarDetailPage() {
       { fiscal_year: Number(fiscalYear), starts_on: yearStartsOn, ends_on: yearEndsOn },
       {
         onSuccess: () => {
+          notify.success(`${fiscalYear}年度を作成しました`)
           setFiscalYear('')
           setYearStartsOn('')
           setYearEndsOn('')
@@ -329,19 +340,11 @@ export function WorkCalendarDetailPage() {
 
   const selectedSource = sources.find((s) => s.id === selectedSourceId) ?? null
   const summary = selectedSource?.last_sync_summary ?? null
-  const sourceActionError =
-    createSource.error ??
-    updateSource.error ??
-    syncSource.error ??
-    disableSource.error ??
-    revertLastSync.error ??
-    deleteSource.error ??
-    updateCalendar.error
-
   const handleDeleteSource = () => {
     if (!selectedSource) return Promise.resolve()
     return deleteSource.mutateAsync(selectedSource.id, {
       onSuccess: () => {
+        notify.success('iCalendarソースを削除しました')
         setSelectedSourceId(NONE_OPTION_VALUE)
       },
     })
@@ -361,17 +364,20 @@ export function WorkCalendarDetailPage() {
             <Button
               variant="secondary"
               isLoading={setDefaultCalendar.isPending}
-              onClick={() => setDefaultCalendar.mutate(calendar.id)}
+              onClick={() =>
+                setDefaultCalendar.mutate(calendar.id, {
+                  onSuccess: () => notify.success(`「${calendar.name}」をデフォルトに設定しました`),
+                })
+              }
             >
               デフォルトに設定する
             </Button>
           )}
         </div>
+        {setDefaultCalendar.error && <ErrorMessage error={setDefaultCalendar.error} />}
       </div>
 
       <Card title="基本設定">
-        {updateCalendar.error && !sourceActionError && <ErrorMessage error={updateCalendar.error} />}
-
         <div className="flex flex-col gap-4">
           <FormField label="カレンダー名" htmlFor="company-calendar-name" required>
             <Input id="company-calendar-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -461,6 +467,7 @@ export function WorkCalendarDetailPage() {
             保存する
           </Button>
           {!name && <p className="text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
+          {updateCalendar.error && calendarUpdateTarget === 'settings' && <ErrorMessage error={updateCalendar.error} />}
         </div>
       </Card>
 
@@ -564,8 +571,6 @@ export function WorkCalendarDetailPage() {
       </Card>
 
       <Card id={HOLIDAY_SOURCE_MANAGEMENT_ANCHOR} title="休日iCalendarソース管理">
-        {sourceActionError && <ErrorMessage error={sourceActionError} />}
-
         {isLoadingSources ? (
           <LoadingState />
         ) : sourcesError ? (
@@ -659,6 +664,7 @@ export function WorkCalendarDetailPage() {
                     登録する
                   </Button>
                 </div>
+                {createSource.error && <ErrorMessage error={createSource.error} />}
               </div>
             )}
 
@@ -667,6 +673,9 @@ export function WorkCalendarDetailPage() {
                 <Button isLoading={updateCalendar.isPending} onClick={handleAssignSource}>
                   このカレンダーに設定する
                 </Button>
+                {updateCalendar.error && calendarUpdateTarget === 'source' && (
+                  <ErrorMessage error={updateCalendar.error} />
+                )}
               </div>
             )}
 
@@ -717,7 +726,11 @@ export function WorkCalendarDetailPage() {
                           <Button
                             variant="secondary"
                             isLoading={revertLastSync.isPending}
-                            onClick={() => revertLastSync.mutate(selectedSource.id)}
+                            onClick={() =>
+                              revertLastSync.mutate(selectedSource.id, {
+                                onSuccess: () => notify.success('直前の同期を取り消しました'),
+                              })
+                            }
                           >
                             直前の同期を取消す
                           </Button>
@@ -725,7 +738,11 @@ export function WorkCalendarDetailPage() {
                         <Button
                           variant="danger"
                           isLoading={disableSource.isPending}
-                          onClick={() => disableSource.mutate(selectedSource.id)}
+                          onClick={() =>
+                            disableSource.mutate(selectedSource.id, {
+                              onSuccess: () => notify.success('iCalendarソースを無効化しました'),
+                            })
+                          }
                         >
                           無効化する
                         </Button>
@@ -741,6 +758,10 @@ export function WorkCalendarDetailPage() {
                       error={deleteSource.error}
                       onConfirm={handleDeleteSource}
                     />
+                    <div className="w-full">
+                      {revertLastSync.error && <ErrorMessage error={revertLastSync.error} />}
+                      {disableSource.error && <ErrorMessage error={disableSource.error} />}
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4 rounded-md border border-border p-4">
@@ -817,6 +838,7 @@ export function WorkCalendarDetailPage() {
                         更新する
                       </Button>
                     </div>
+                    {updateSource.error && <ErrorMessage error={updateSource.error} />}
                   </div>
                 )}
               </div>

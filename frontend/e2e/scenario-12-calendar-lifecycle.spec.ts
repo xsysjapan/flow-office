@@ -99,6 +99,10 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
 
   // --- UC-C009 手順3: 公開する(年度自身のページから) ---
   await page.getByRole("button", { name: "公開する" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "公開する" })
+    .click();
   await expect(page.getByRole("status", { name: "公開済み" })).toBeVisible();
 
   // --- UC-C002: このカレンダーを使う勤務形態を作成する(一括操作の前提) ---
@@ -113,6 +117,9 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await pickTime(page, "標準終了時刻", "18:00");
   await page.getByLabel("カレンダー").selectOption({ label: calendarName });
   await page.getByRole("button", { name: "登録する" }).click();
+  // 登録成功でモーダルが閉じ、一覧が再取得されるまで待ってから探す(閉じる途中でページ送りを
+  // すると、一覧の再取得と競合して「次のページ」が無効のまま残ることがあるため)。
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   // 開発DBには過去のE2E実行で作成済みの勤務形態が蓄積し、新規作成した項目が
   // 1ページ目に収まらないことがあるため、ページ送りしながら探す。
   await findTextAcrossPages(page, workStyleCode);
@@ -145,6 +152,11 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await page
     .getByRole("button", { name: "この内容で確定適用する" })
     .click();
+  // 確認ダイアログ(「この内容で確定適用しますか?」)で確定する。
+  await page
+    .getByRole("dialog", { name: "この内容で確定適用しますか?" })
+    .getByRole("button", { name: "確定適用する" })
+    .click();
 
   const historyRow = page.locator("li", {
     hasText: `E2Eテスト: ${calendarName}の適用`,
@@ -168,10 +180,16 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
     page.getByRole("heading", { name: "カレンダー年度の日別編集" }),
   ).toBeVisible();
   const duplicateYearButton = page.getByRole("button", { name: "複製して翌年度を作成" });
-  await duplicateYearButton.click();
   // ミューテーション完了を待たずに一覧へ遷移すると、複製がまだサーバ側で終わっておらず
-  // 翌年度の行が見つからないことがあるため、isLoadingが解けるまで待つ。
-  await expect(duplicateYearButton).not.toBeDisabled();
+  // 翌年度の行が見つからないことがあるため、複製APIのレスポンスを待つ。
+  // (処理中はボタンのラベルが「処理中...」に変わるため、ボタンの状態では待ち合わせできない)
+  const duplicated = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /\/company-calendar-years\/[^/]+\/duplicate$/.test(response.url()),
+  );
+  await duplicateYearButton.click();
+  expect((await duplicated).ok()).toBeTruthy();
 
   await page.goto("/admin/work-calendars");
   await calendarRow.getByRole("link", { name: calendarName }).click();

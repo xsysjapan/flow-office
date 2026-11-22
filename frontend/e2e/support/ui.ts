@@ -10,13 +10,19 @@ export async function pickUser(
   label: string,
   name: string,
   email: string,
-  options: { timeout?: number; exact?: boolean } = {},
+  options: { timeout?: number; exact?: boolean; root?: Page | Locator } = {},
 ): Promise<void> {
-  await page.getByLabel(label, { exact: options.exact }).click(options);
+  // ラベルの探索だけ`root`(ダイアログ内など)に絞る。候補はportalに出るのでpage全体から探す。
+  const root = options.root ?? page;
+  await root
+    .getByLabel(label, { exact: options.exact })
+    .click({ timeout: options.timeout });
   await page
     .getByPlaceholder("氏名またはメールアドレスで検索")
-    .fill(name, options);
-  await page.getByRole("option", { name: `${name}(${email})` }).click(options);
+    .fill(name, { timeout: options.timeout });
+  await page
+    .getByRole("option", { name: `${name}(${email})` })
+    .click({ timeout: options.timeout });
 }
 
 /** DatePickerで任意の日付を選択する。 */
@@ -115,7 +121,10 @@ export async function findTextAcrossPages(page: Page, text: string, maxPages = 2
     if (await page.getByText(text).isVisible().catch(() => false)) return
     const nextButton = page.getByRole("button", { name: "次のページ" })
     if (!(await nextButton.isEnabled().catch(() => false))) break
-    await nextButton.click()
+    // isEnabledの直後に無効化されうる(一覧の再取得中など)ため、クリック失敗時はループを抜け、
+    // 最後の表示確認(toBeVisible)で判定させる。
+    const clicked = await nextButton.click({ timeout: 5000 }).then(() => true, () => false)
+    if (!clicked) break
   }
   await expect(page.getByText(text)).toBeVisible()
 }

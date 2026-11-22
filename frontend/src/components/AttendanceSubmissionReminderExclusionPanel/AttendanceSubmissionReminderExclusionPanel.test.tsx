@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceSubmissionReminderExclusionsApi from '../../api/attendanceSubmissionReminderExclusions'
 import type { AttendanceSubmissionReminderExclusion } from '../../api/types'
 import { AttendanceSubmissionReminderExclusionPanel } from './AttendanceSubmissionReminderExclusionPanel'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const USER_ID = '11111111-1111-1111-1111-111111111111'
 
@@ -31,6 +34,10 @@ function renderPanel(seed: AttendanceSubmissionReminderExclusion[] = exclusions)
 }
 
 describe('AttendanceSubmissionReminderExclusionPanel', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('lists existing exclusions with their reason', async () => {
     renderPanel()
 
@@ -72,5 +79,6 @@ describe('AttendanceSubmissionReminderExclusionPanel', () => {
       year_month: '2026-06',
       reason: '誤ってその月を提出対象にしていたため',
     })
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2026-06の督促を対象外にしました'))
   })
 })

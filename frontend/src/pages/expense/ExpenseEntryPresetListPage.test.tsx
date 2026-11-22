@@ -2,11 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as expenseEntryPresetsApi from '../../api/expenseEntryPresets'
 import type { ExpenseCategory, ExpenseEntryPreset, User } from '../../api/types'
 import { ExpenseEntryPresetListPage } from './ExpenseEntryPresetListPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const applicant: User = {
   id: 'applicant-1',
@@ -134,6 +137,10 @@ function renderPage(presets: ExpenseEntryPreset[], initialPath = '/expenses/pres
 }
 
 describe('ExpenseEntryPresetListPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('shows an empty state when there are no presets', async () => {
     renderPage([])
 
@@ -161,6 +168,7 @@ describe('ExpenseEntryPresetListPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
     await waitFor(() => expect(deletePreset).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(`${personalPreset.name}を削除しました`))
   })
 
   it('links back to the expense claim list when opened directly', async () => {

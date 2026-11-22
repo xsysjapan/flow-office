@@ -2,10 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as notificationsApi from '../../api/notifications'
 import type { Notification, Paginated } from '../../api/types'
 import { NotificationsPage } from './NotificationsPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 function paginated(data: Notification[]): Paginated<Notification> {
   return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
@@ -41,6 +44,10 @@ function renderPage(initialEntries: string[] = ['/notifications']) {
 }
 
 describe('NotificationsPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('shows an empty state when there are no notifications', async () => {
     vi.spyOn(notificationsApi, 'fetchMyNotifications').mockResolvedValue(paginated([]))
 
@@ -83,6 +90,7 @@ describe('NotificationsPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '確認済みにする' }))
 
     await waitFor(() => expect(confirmSpy).toHaveBeenCalledWith('1'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('通知を確認済みにしました'))
   })
 
   it('drops an invalid status from the URL and shows all notifications', async () => {

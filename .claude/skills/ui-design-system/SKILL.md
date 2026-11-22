@@ -66,6 +66,9 @@ native-select, popover, select, separator, sheet, skeleton, table, tabs, textare
 コンポーネント(`frontend/src/components/<Name>/`)を作る/直すときは、これらの`ui/`
 プリミティブを内部で使う。
 
+- `sonner.tsx`(`Toaster`): 成功通知のトースト。`App`のルートに1つだけ置く。色はトークン(`--popover`・`--foreground`・`--border`・成功のアイコンは`--success`系)に合わせ、
+  位置はPC右下・モバイル下端全幅。画面からは`src/lib/notify.ts`を使い、`sonner`を直接importしない(使い方は`ui-interaction-patterns` §2.18)。
+
 ### 2.3 Visual Variant
 
 新しい見た目のバリエーションは`class-variance-authority`(`cva`)でvariantとして定義する
