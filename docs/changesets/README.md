@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261122-backoffice-task-reassign](./20261122-backoffice-task-reassign/spec.md) | バックオフィスタスクの担当者割当とステータス変更を別イベントに分け、担当者を変更できるようにする | レビュー中 |
+| [20261122-backoffice-task-reassign](./20261122-backoffice-task-reassign/spec.md) | バックオフィスタスクの担当者割当とステータス変更を別イベントに分け、担当者を変更できるようにする | 実装中 |
 | [20261122-backoffice-others-tasks](./20261122-backoffice-others-tasks/spec.md) | バックオフィスタスク一覧を汎用検索画面にし、他の担当者のタスクも検索できるようにする | 完了 |
 | [20261122-force-testing-env](./20261122-force-testing-env/spec.md) | `php artisan test` でテストが APP_ENV=local のまま動く不具合の修正 | 完了 |
 | [20261122-history-event-label-guard](./20261122-history-event-label-guard/spec.md) | 履歴画面のイベント表示名の漏れを機械的に検出する | 完了 |

@@ -73,8 +73,11 @@
 ## BackOffice
 
 - `backoffice_task.created`
-- `backoffice_task.assigned`
-- `backoffice_task.status_changed`
+- `backoffice_task.assigned`: 担当者が設定された(初回の割当・担当者の変更とも)。`assignedUserId`・`assignedByUserId`・
+  `previousAssignedUserId`(直前の担当者。初回はnull)。**ステータスは持たない**(変更セット`20261122-backoffice-task-reassign`。
+  それ以前の記録は、割当と同時の確認中への変化を`status_changed`として分けて記録し直した)
+- `backoffice_task.status_changed`: ステータスが変わった(`previousStatus`・`newStatus`・`changedByUserId`・`comment`)。
+  未着手のタスクへの割当で確認中に進む場合も、割当とは別にこのイベントを記録する
 - `backoffice_task.completed`
 
 ## CompanyCalendar / Shift
