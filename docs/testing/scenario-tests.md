@@ -175,7 +175,7 @@ RoleAssignment・入社日を設定する。モックOIDCの
    `POST /expense-claims/{id}/approve`)。
 5. 承認により自動生成される経理向けバックオフィスタスク(`task_type=expense_reimbursement`
    固定、経費区分によらない。`source_type=expense_claim`)を確認する(UC-B001、
-   `GET /backoffice-tasks/unassigned`)。
+   `GET /backoffice-tasks?assignee=unassigned&status=open`)。
 6. 経理担当者(小林誠)がタスクを自分に割り当て(UC-B002、`POST .../assign`。割り当てと
    同時に自動的に`in_review`になる)、処理ステータスを進めて完了にする(UC-B003、
    `POST .../status`、`payment_scheduled`→`completed`。`in_review`から`processing`への
