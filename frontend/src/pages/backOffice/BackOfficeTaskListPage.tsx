@@ -1,7 +1,8 @@
-import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useForwardState } from '../../navigation/backState'
+import { type FormEvent, useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { ApiError } from '../../api/client'
+import { useAuth } from '../../auth/useAuth'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -13,16 +14,18 @@ import { Pagination } from '../../components/Pagination/Pagination'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
+import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
-import type { BackOfficeTask } from '../../api/types'
+import type { BackOfficeTask, BackOfficeTaskAssigneeScope, BackOfficeTaskStatusFilter } from '../../api/types'
 import {
   useAssignBackOfficeTask,
+  useBackOfficeTasks,
   useBulkCompleteBackOfficeTasks,
-  useMyBackOfficeTasks,
-  useUnassignedBackOfficeTasks,
 } from '../../hooks/useBackOfficeTasks'
-import { isValidPageParam } from '../../utils/searchParamValidators'
+import { BACKOFFICE_TASK_STATUSES } from '../../utils/backOfficeTaskStatuses'
+import { isOneOf, isValidPageParam } from '../../utils/searchParamValidators'
 import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
 
 interface BackOfficeTaskTableProps {
@@ -110,65 +113,110 @@ function BackOfficeTaskTable({ tasks, selectedIds, onToggleRow, onToggleAll, isR
   )
 }
 
+/** 担当者タブ。値はAPIの`assignee`と同じ。並び順はこの順に固定する。 */
+const ASSIGNEE_TABS: { scope: BackOfficeTaskAssigneeScope; label: string; emptyTitle: string }[] = [
+  { scope: 'unassigned', label: '未割り当て', emptyTitle: '未割り当てのタスクはありません。' },
+  { scope: 'me', label: '自分のタスク', emptyTitle: '担当中のタスクはありません。' },
+  { scope: 'others', label: '他の担当者', emptyTitle: '他の担当者に割り当てられたタスクはありません。' },
+  { scope: 'all', label: 'すべて', emptyTitle: 'タスクはありません。' },
+]
+const ASSIGNEE_SCOPES = ASSIGNEE_TABS.map((tab) => tab.scope)
+const DEFAULT_ASSIGNEE: BackOfficeTaskAssigneeScope = 'unassigned'
+
+/** 「未完了」(open)・「すべて」(all)・個別ステータスの順。 */
+const STATUS_FILTERS: BackOfficeTaskStatusFilter[] = ['open', 'all', ...BACKOFFICE_TASK_STATUSES]
+const DEFAULT_STATUS: BackOfficeTaskStatusFilter = 'open'
+
+function statusFilterLabel(status: BackOfficeTaskStatusFilter): string {
+  if (status === 'open') return '未完了'
+  if (status === 'all') return 'すべて'
+  return backOfficeTaskStatusLabel(status).label
+}
+
+/** 完了・取消のタスクは一括操作の対象にしない。 */
+function isSelectableTask(task: BackOfficeTask): boolean {
+  return !['completed', 'cancelled'].includes(task.status)
+}
+
 /**
- * UC-11: バックオフィス処理タスクの一覧(未割り当て / 自分のタスク)。
- * 未割り当てタスクは複数選択し、担当者を指定してまとめて割り当てられる(オブジェクトを
- * 選択してから操作を適用するUI)。
+ * UC-11: バックオフィス処理タスクの汎用検索画面。担当者タブ(未割り当て・自分のタスク・他の担当者・
+ * すべて。件数付き)で担当者区分を選び、キーワードとステータス(既定は未完了)で絞り込んで一覧する。
+ * 画面の条件(q・assignee・status・page)はURLに載せ、詳細→戻るで復元する。
+ * 行を選ぶと一括操作バーが出る。割り当ては未割り当てのタスクだけ、一括完了は自分のタスクだけ
+ * 可能で、選んだタスクの性質で押せるかを決める(タブ名では決めない)。
  */
 export function BackOfficeTaskListPage() {
-  /** 検索・ページはURLに載せ、一覧→詳細→一覧と戻っても状態が壊れないようにする(SKILL.md §2.10)。
-   *  未割り当て/自分のタスクの2つの一覧は検索語を共有しつつ、ページングは独立させる。 */
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { user } = useAuth()
+  /** 検索条件・タブ・ページはURLに載せ、一覧→詳細→一覧と戻っても状態が壊れないようにする(SKILL.md §2.10)。
+   *  戻り先の情報(backTo)は引き継ぐため、更新にはuseSearchParamsKeepingBackStateを使う。 */
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
   const search = searchParams.get('q') ?? ''
-  const unassignedPageParam = searchParams.get('unassignedPage')
-  const isInvalidUnassignedPage = unassignedPageParam !== null && !isValidPageParam(unassignedPageParam)
-  const unassignedPage = unassignedPageParam !== null && !isInvalidUnassignedPage ? Number(unassignedPageParam) : 1
-  const minePageParam = searchParams.get('minePage')
-  const isInvalidMinePage = minePageParam !== null && !isValidPageParam(minePageParam)
-  const minePage = minePageParam !== null && !isInvalidMinePage ? Number(minePageParam) : 1
-  const isFiltered = Boolean(search)
+
+  const assigneeParam = searchParams.get('assignee')
+  const statusParam = searchParams.get('status')
+  const pageParam = searchParams.get('page')
+  const isInvalidAssignee = assigneeParam !== null && !isOneOf(assigneeParam, ASSIGNEE_SCOPES)
+  const isInvalidStatus = statusParam !== null && !isOneOf(statusParam, STATUS_FILTERS)
+  const isInvalidPage = pageParam !== null && !isValidPageParam(pageParam)
+  const assignee: BackOfficeTaskAssigneeScope =
+    assigneeParam !== null && isOneOf(assigneeParam, ASSIGNEE_SCOPES) ? assigneeParam : DEFAULT_ASSIGNEE
+  const status: BackOfficeTaskStatusFilter =
+    statusParam !== null && isOneOf(statusParam, STATUS_FILTERS) ? statusParam : DEFAULT_STATUS
+  const page = pageParam !== null && isValidPageParam(pageParam) ? Number(pageParam) : 1
+  const isFiltered = search !== '' || status !== DEFAULT_STATUS
 
   const [searchInput, setSearchInput] = useState(search)
   useEffect(() => setSearchInput(search), [search])
 
-  const unassigned = useUnassignedBackOfficeTasks({ search: search || undefined, page: unassignedPage })
-  const mine = useMyBackOfficeTasks({ search: search || undefined, page: minePage })
-  const assignTask = useAssignBackOfficeTask()
-  const bulkComplete = useBulkCompleteBackOfficeTasks()
-
-  const [selectedUnassignedIds, setSelectedUnassignedIds] = useState<Set<string>>(new Set())
-  const [selectedMyTaskIds, setSelectedMyTaskIds] = useState<Set<string>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkAssignee, setBulkAssignee] = useState<string | undefined>(undefined)
   const [isBulkAssigning, setIsBulkAssigning] = useState(false)
   const [bulkError, setBulkError] = useState<Error | null>(null)
 
-  // 不正なページは1ページ目として扱い、URLからもキーを消す
+  const tasksQuery = useBackOfficeTasks({ search: search || undefined, assignee, status, page })
+  const assignTask = useAssignBackOfficeTask()
+  const bulkComplete = useBulkCompleteBackOfficeTasks()
+
+  // 不正なassignee・status・pageは既定扱いにし、URLからもそのキーを消す(不正なときだけ動かしループさせない)
   useEffect(() => {
-    if (!isInvalidUnassignedPage && !isInvalidMinePage) return
+    if (!isInvalidAssignee && !isInvalidStatus && !isInvalidPage) return
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (isInvalidUnassignedPage) next.delete('unassignedPage')
-        if (isInvalidMinePage) next.delete('minePage')
+        if (isInvalidAssignee) next.delete('assignee')
+        if (isInvalidStatus) next.delete('status')
+        if (isInvalidPage) next.delete('page')
         return next
       },
       { replace: true },
     )
-  }, [isInvalidUnassignedPage, isInvalidMinePage, setSearchParams])
+  }, [isInvalidAssignee, isInvalidStatus, isInvalidPage, setSearchParams])
 
-  if (unassigned.isLoading || mine.isLoading) return <LoadingState />
-
-  const permissionDeniedError = [unassigned.error, mine.error].find(
-    (candidate): candidate is ApiError => candidate instanceof ApiError && candidate.status === 403,
-  )
-  if (permissionDeniedError) return <PermissionDenied />
-  if (unassigned.error) {
-    return <ErrorMessage error={unassigned.error} fallback="未割り当てタスクの取得に失敗しました。" />
+  const result = tasksQuery.data
+  if (tasksQuery.error) {
+    if (tasksQuery.error instanceof ApiError && tasksQuery.error.status === 403) return <PermissionDenied />
+    return <ErrorMessage error={tasksQuery.error} fallback="タスクの取得に失敗しました。" />
   }
-  if (mine.error) return <ErrorMessage error={mine.error} fallback="自分のタスクの取得に失敗しました。" />
+  // 初回読み込みのみ画面全体をLoadingにする(条件切替中はplaceholderDataで前の結果を残す)
+  if (!result) return <LoadingState />
 
-  const unassignedTasks = unassigned.data?.data ?? []
-  const myTasks = mine.data?.data ?? []
+  const tasks = result.data
+  const counts = result.meta.assignee_counts
+  const selectedCount = selectedIds.size
+  const selectedTasks = tasks.filter((task) => selectedIds.has(task.id))
+
+  // 割り当ては未割り当てのタスクだけ。完了は自分のタスクだけ(自分の判定は担当者IDの一致)
+  const isMine = (task: BackOfficeTask) => user !== null && task.assignee?.id === user.id
+  const allUnassigned = selectedTasks.every((task) => !task.assignee)
+  const allMine = selectedTasks.every(isMine)
+  const assignReason = !allUnassigned
+    ? '未割り当てのタスクのみ割り当てられます'
+    : !bulkAssignee
+      ? '担当者を選択してください'
+      : undefined
+  const canAssign = assignReason === undefined
+  const completeReason = allMine ? undefined : '自分のタスクのみ一括完了できます'
+  const canComplete = completeReason === undefined
 
   function updateParams(patch: Record<string, string | null>) {
     setSearchParams(
@@ -184,8 +232,12 @@ export function BackOfficeTaskListPage() {
     )
   }
 
-  function toggleRow(setter: Dispatch<SetStateAction<Set<string>>>, id: string) {
-    setter((prev) => {
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+
+  function toggleRow(id: string) {
+    setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -193,8 +245,8 @@ export function BackOfficeTaskListPage() {
     })
   }
 
-  function toggleAll(setter: Dispatch<SetStateAction<Set<string>>>, ids: string[]) {
-    setter((prev) => {
+  function toggleAll(ids: string[]) {
+    setSelectedIds((prev) => {
       const next = new Set(prev)
       const shouldSelect = ids.some((id) => !next.has(id))
       ids.forEach((id) => (shouldSelect ? next.add(id) : next.delete(id)))
@@ -202,15 +254,43 @@ export function BackOfficeTaskListPage() {
     })
   }
 
+  function changeAssignee(next: BackOfficeTaskAssigneeScope) {
+    updateParams({ assignee: next === DEFAULT_ASSIGNEE ? null : next, page: null })
+    clearSelection()
+  }
+
+  function changeStatus(next: BackOfficeTaskStatusFilter) {
+    updateParams({ status: next === DEFAULT_STATUS ? null : next, page: null })
+    clearSelection()
+  }
+
+  function changePage(next: number) {
+    updateParams({ page: next > 1 ? String(next) : null })
+    clearSelection()
+  }
+
+  function submitSearch(event: FormEvent) {
+    event.preventDefault()
+    updateParams({ q: searchInput.trim() || null, page: null })
+    clearSelection()
+  }
+
+  /** 検索語とステータスを既定に戻す。担当者タブは維持する。 */
+  function clearConditions() {
+    setSearchInput('')
+    updateParams({ q: null, status: null, page: null })
+    clearSelection()
+  }
+
   async function handleBulkAssign() {
-    if (!bulkAssignee || selectedUnassignedIds.size === 0) return
+    if (!bulkAssignee || !canAssign) return
     setBulkError(null)
     setIsBulkAssigning(true)
     try {
       await Promise.all(
-        Array.from(selectedUnassignedIds).map((id) => assignTask.mutateAsync({ id, assignedUserId: bulkAssignee })),
+        Array.from(selectedIds).map((id) => assignTask.mutateAsync({ id, assignedUserId: bulkAssignee })),
       )
-      setSelectedUnassignedIds(new Set())
+      clearSelection()
       setBulkAssignee(undefined)
     } catch (e) {
       setBulkError(e as Error)
@@ -220,151 +300,147 @@ export function BackOfficeTaskListPage() {
   }
 
   async function handleBulkComplete() {
-    if (selectedMyTaskIds.size === 0) return
-    await bulkComplete.mutateAsync(Array.from(selectedMyTaskIds))
-    setSelectedMyTaskIds(new Set())
+    if (!canComplete) return
+    try {
+      await bulkComplete.mutateAsync(Array.from(selectedIds))
+      clearSelection()
+    } catch {
+      // 失敗時の表示はbulkComplete.errorでErrorMessageに出す
+    }
   }
 
-  function handleSearch(event: FormEvent) {
-    event.preventDefault()
-    updateParams({ q: searchInput.trim() || null, unassignedPage: null, minePage: null })
-    setSelectedUnassignedIds(new Set())
-    setSelectedMyTaskIds(new Set())
-  }
-
-  function clearSearch() {
-    setSearchInput('')
-    updateParams({ q: null, unassignedPage: null, minePage: null })
-    setSelectedUnassignedIds(new Set())
-    setSelectedMyTaskIds(new Set())
-  }
-
-  function handleUnassignedPageChange(page: number) {
-    updateParams({ unassignedPage: page > 1 ? String(page) : null })
-    setSelectedUnassignedIds(new Set())
-  }
-
-  function handleMinePageChange(page: number) {
-    updateParams({ minePage: page > 1 ? String(page) : null })
-    setSelectedMyTaskIds(new Set())
-  }
+  const currentTab = ASSIGNEE_TABS.find((tab) => tab.scope === assignee) ?? ASSIGNEE_TABS[0]
 
   return (
     <div className="flex flex-col gap-6">
       <Card title="タスク検索">
-        <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleSearch}>
+        <form className="flex flex-col gap-2 sm:flex-row" onSubmit={submitSearch}>
           <Input
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
             aria-label="タスクを検索"
             placeholder="タイトル・種別・担当部署・担当者名で検索"
           />
+          <NativeSelect
+            aria-label="ステータス"
+            className="sm:w-44"
+            value={status}
+            onChange={(event) => {
+              const next = event.target.value
+              if (isOneOf(next, STATUS_FILTERS)) changeStatus(next)
+            }}
+          >
+            {STATUS_FILTERS.map((option) => (
+              <option key={option} value={option}>
+                {statusFilterLabel(option)}
+              </option>
+            ))}
+          </NativeSelect>
           <Button type="submit">検索</Button>
-          {search && (
-            <Button type="button" variant="secondary" onClick={clearSearch}>
+          {isFiltered && (
+            <Button type="button" variant="secondary" onClick={clearConditions}>
               クリア
             </Button>
           )}
         </form>
       </Card>
 
-      <Card
-        title="未割り当てタスク"
-        actions={
-          selectedUnassignedIds.size > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedUnassignedIds.size}件を選択中</span>
-              <div className="w-56">
+      <Tabs
+        value={assignee}
+        onValueChange={(value) => {
+          if (isOneOf(value, ASSIGNEE_SCOPES)) changeAssignee(value)
+        }}
+      >
+        <div className="max-w-full overflow-x-auto">
+          <TabsList>
+            {ASSIGNEE_TABS.map((tab) => {
+              const count = counts[tab.scope]
+              return (
+                <TabsTrigger
+                  key={tab.scope}
+                  value={tab.scope}
+                  aria-label={`${tab.label}(${count}件)`}
+                >
+                  {tab.label} {count}
+                </TabsTrigger>
+              )
+            })}
+          </TabsList>
+        </div>
+      </Tabs>
+
+      <Card>
+        {selectedCount > 0 && (
+          <div className="mb-4 flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex items-center justify-between gap-2 sm:contents">
+              <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedCount}件を選択中</span>
+              <Button variant="secondary" size="sm" className="sm:order-last" onClick={clearSelection}>
+                キャンセル
+              </Button>
+            </div>
+            <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0">
+              <div className="w-56 shrink-0">
                 <UserPicker id="bulk-assignee" value={bulkAssignee} onChange={setBulkAssignee} placeholder="担当者を選択" />
               </div>
-              <Button onClick={() => void handleBulkAssign()} isLoading={isBulkAssigning} disabled={!bulkAssignee}>
+              <Button
+                size="sm"
+                className="shrink-0"
+                onClick={() => void handleBulkAssign()}
+                isLoading={isBulkAssigning}
+                disabled={!canAssign}
+              >
                 割り当てる
               </Button>
-              {!bulkAssignee && <span className="text-xs text-muted-foreground">担当者を選択してください</span>}
-            </div>
-          ) : undefined
-        }
-      >
-        {bulkError && <ErrorMessage error={bulkError} />}
-        {unassignedTasks.length === 0 ? (
-          isFiltered ? (
-            <EmptyState
-              title="条件に一致するタスクがありません。"
-              description="検索条件を変えると表示される場合があります。"
-              action={
-                <Button variant="secondary" size="sm" onClick={clearSearch}>
-                  検索条件をクリア
-                </Button>
-              }
-            />
-          ) : (
-            <EmptyState title="未割り当てのタスクはありません。" />
-          )
-        ) : (
-          <>
-            <BackOfficeTaskTable
-              tasks={unassignedTasks}
-              selectedIds={selectedUnassignedIds}
-              onToggleRow={(id) => toggleRow(setSelectedUnassignedIds, id)}
-              onToggleAll={(ids) => toggleAll(setSelectedUnassignedIds, ids)}
-            />
-            {unassigned.data && (
-              <Pagination
-                currentPage={unassigned.data.meta.current_page}
-                lastPage={unassigned.data.meta.last_page}
-                total={unassigned.data.meta.total}
-                onPageChange={handleUnassignedPageChange}
-              />
-            )}
-          </>
-        )}
-      </Card>
-
-      <Card
-        title="自分のタスク"
-        actions={
-          selectedMyTaskIds.size > 0 ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedMyTaskIds.size}件を選択中</span>
-              <Button isLoading={bulkComplete.isPending} onClick={() => void handleBulkComplete()}>
+              <Button
+                size="sm"
+                className="shrink-0"
+                onClick={() => void handleBulkComplete()}
+                isLoading={bulkComplete.isPending}
+                disabled={!canComplete}
+              >
                 選択したタスクを完了
               </Button>
             </div>
-          ) : undefined
-        }
-      >
+            {(assignReason || completeReason) && (
+              <div className="flex flex-col text-xs text-muted-foreground">
+                {assignReason && <p>{assignReason}</p>}
+                {completeReason && <p>{completeReason}</p>}
+              </div>
+            )}
+          </div>
+        )}
+        {bulkError && <ErrorMessage error={bulkError} />}
         {bulkComplete.error && <ErrorMessage error={bulkComplete.error} fallback="タスクの一括完了に失敗しました。" />}
-        {myTasks.length === 0 ? (
+
+        {tasks.length === 0 ? (
           isFiltered ? (
             <EmptyState
               title="条件に一致するタスクがありません。"
               description="検索条件を変えると表示される場合があります。"
               action={
-                <Button variant="secondary" size="sm" onClick={clearSearch}>
+                <Button variant="secondary" size="sm" onClick={clearConditions}>
                   検索条件をクリア
                 </Button>
               }
             />
           ) : (
-            <EmptyState title="担当中のタスクはありません。" />
+            <EmptyState title={currentTab.emptyTitle} />
           )
         ) : (
           <>
             <BackOfficeTaskTable
-              tasks={myTasks}
-              selectedIds={selectedMyTaskIds}
-              onToggleRow={(id) => toggleRow(setSelectedMyTaskIds, id)}
-              onToggleAll={(ids) => toggleAll(setSelectedMyTaskIds, ids)}
-              isRowSelectable={(task) => !['completed', 'cancelled'].includes(task.status)}
+              tasks={tasks}
+              selectedIds={selectedIds}
+              onToggleRow={toggleRow}
+              onToggleAll={toggleAll}
+              isRowSelectable={isSelectableTask}
             />
-            {mine.data && (
-              <Pagination
-                currentPage={mine.data.meta.current_page}
-                lastPage={mine.data.meta.last_page}
-                total={mine.data.meta.total}
-                onPageChange={handleMinePageChange}
-              />
-            )}
+            <Pagination
+              currentPage={result.meta.current_page}
+              lastPage={result.meta.last_page}
+              total={result.meta.total}
+              onPageChange={changePage}
+            />
           </>
         )}
       </Card>

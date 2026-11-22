@@ -6,22 +6,13 @@ import { Card } from '../../components/Card/Card'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { TodayAttendancePanel } from '../../components/TodayAttendancePanel/TodayAttendancePanel'
 import { useAuth } from '../../auth/useAuth'
-import { useMyBackOfficeTasks } from '../../hooks/useBackOfficeTasks'
+import { useBackOfficeTasks } from '../../hooks/useBackOfficeTasks'
 import { useMyExpenseClaims } from '../../hooks/useExpenseClaims'
 import { useMyWorkflowRequests, useWorkflowRequestsToApprove } from '../../hooks/useWorkflowRequests'
 
 /** 業務ステータスのうち「まだ処理が完了していない」ものだけを件数に含める。 */
 const PENDING_WORKFLOW_STATUSES = new Set(['submitted', 'returned'])
 const PENDING_EXPENSE_STATUSES = new Set(['in_review', 'returned'])
-const OPEN_BACKOFFICE_STATUSES = new Set([
-  'not_started',
-  'in_review',
-  'needs_fix',
-  'processing',
-  'ordered',
-  'payment_scheduled',
-  'shipped',
-])
 
 function DashboardCard({
   title,
@@ -99,14 +90,18 @@ export function HomeDashboardPage() {
     { status: 'submitted' },
     canSeeApprovals,
   )
-  const { data: myTasks, isLoading: isTasksLoading } = useMyBackOfficeTasks({}, canSeeBackOfficeTasks)
+  // 件数は1件だけ取得し、総件数(meta.total)を使う(一覧の1ページ分では件数が過少になるため)
+  const { data: openTasks, isLoading: isTasksLoading } = useBackOfficeTasks(
+    { assignee: 'me', status: 'open', perPage: 1 },
+    canSeeBackOfficeTasks,
+  )
 
   const pendingRequestCount =
     (myRequests?.data.filter((r) => PENDING_WORKFLOW_STATUSES.has(r.status)).length ?? 0) +
     (myExpenses?.data.filter((c) => PENDING_EXPENSE_STATUSES.has(c.status)).length ?? 0)
 
   const approvalCount = toApprove?.meta.total ?? 0
-  const openTaskCount = myTasks?.data.filter((t) => OPEN_BACKOFFICE_STATUSES.has(t.status)).length ?? 0
+  const openTaskCount = openTasks?.meta.total ?? 0
 
   return (
     <div className="flex flex-col gap-6">

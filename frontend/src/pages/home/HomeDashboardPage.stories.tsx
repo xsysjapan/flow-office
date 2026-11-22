@@ -1,7 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter } from 'react-router-dom'
-import type { AttendanceDay, BackOfficeTask, ExpenseClaim, User, WorkflowRequest } from '../../api/types'
+import type {
+  AttendanceDay,
+  BackOfficeTask,
+  BackOfficeTaskSearchResult,
+  ExpenseClaim,
+  User,
+  WorkflowRequest,
+} from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { HomeDashboardPage } from './HomeDashboardPage'
 
@@ -46,6 +53,20 @@ function paginated<T>(data: T[]) {
   return { data, meta: { current_page: 1, last_page: 1, total: data.length, per_page: 20 }, links: { next: null, prev: null } }
 }
 
+function searchResult(data: BackOfficeTask[], total: number): BackOfficeTaskSearchResult {
+  return {
+    data,
+    meta: {
+      current_page: 1,
+      last_page: 1,
+      total,
+      per_page: 1,
+      assignee_counts: { unassigned: 0, me: total, others: 0, all: total },
+    },
+    links: { next: null, prev: null },
+  }
+}
+
 function buildQueryClient() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['attendance', 'today'], todayAttendance)
@@ -60,7 +81,11 @@ function buildQueryClient() {
     ['workflow-requests', 'to-approve', 'submitted', '', 1],
     paginated([{ id: 'a1' } as WorkflowRequest, { id: 'a2' } as WorkflowRequest, { id: 'a3' } as WorkflowRequest]),
   )
-  queryClient.setQueryData(['backoffice-tasks', 'mine', {}], paginated([{ id: 't1', status: 'not_started' } as BackOfficeTask]))
+  // 件数は総件数(25件)。実際のクエリキー(options込み)でseedする
+  queryClient.setQueryData(
+    ['backoffice-tasks', 'list', { assignee: 'me', status: 'open', perPage: 1 }],
+    searchResult([{ id: 't1', status: 'not_started' } as BackOfficeTask], 25),
+  )
   return queryClient
 }
 

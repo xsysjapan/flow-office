@@ -23,6 +23,7 @@ import {
 } from '../../hooks/useBackOfficeTasks'
 import { useAttendanceMonth, useAttendanceMonthById, useRevertMonthConfirmation } from '../../hooks/useAttendance'
 import { useWorkflowRequest } from '../../hooks/useWorkflowRequests'
+import { BACKOFFICE_TASK_STATUSES } from '../../utils/backOfficeTaskStatuses'
 import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
 import { AttendanceMonthReferenceTabs } from '../attendance/AttendanceReferencePage'
 
@@ -126,17 +127,6 @@ function AttendanceConfirmationRevertSection({ workflowRequestId }: { workflowRe
   )
 }
 
-const STATUS_OPTIONS: BackOfficeTaskStatus[] = [
-  'not_started',
-  'in_review',
-  'needs_fix',
-  'processing',
-  'ordered',
-  'payment_scheduled',
-  'shipped',
-  'completed',
-  'cancelled',
-]
 
 /**
  * UC-11: バックオフィス処理タスクの詳細確認・担当者割り当て・状態更新。
@@ -212,7 +202,7 @@ export function BackOfficeTaskDetailPage() {
           <div className="flex flex-wrap items-end gap-3">
             <FormField label="状態" htmlFor="status">
               <NativeSelect id="status" value={status} onChange={(e) => setStatus(e.target.value as BackOfficeTaskStatus)}>
-                {STATUS_OPTIONS.map((option) => (
+                {BACKOFFICE_TASK_STATUSES.map((option) => (
                   <option key={option} value={option}>
                     {backOfficeTaskStatusLabel(option).label}
                   </option>

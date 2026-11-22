@@ -1,21 +1,29 @@
 import { apiFetch } from './client'
-import type { BackOfficeTask, BackOfficeTaskStatus, Paginated } from './types'
+import type {
+  BackOfficeTask,
+  BackOfficeTaskAssigneeScope,
+  BackOfficeTaskSearchResult,
+  BackOfficeTaskStatus,
+  BackOfficeTaskStatusFilter,
+} from './types'
 
 export interface BackOfficeTaskListOptions {
   search?: string
+  assignee?: BackOfficeTaskAssigneeScope
+  status?: BackOfficeTaskStatusFilter
   page?: number
-  per_page?: number
+  perPage?: number
 }
 
-export function fetchUnassignedTasks(options: BackOfficeTaskListOptions = {}): Promise<Paginated<BackOfficeTask>> {
-  return apiFetch('/backoffice-tasks/unassigned', {
-    query: { search: options.search, page: options.page, per_page: options.per_page },
-  })
-}
-
-export function fetchMyTasks(options: BackOfficeTaskListOptions = {}): Promise<Paginated<BackOfficeTask>> {
-  return apiFetch('/backoffice-tasks/mine', {
-    query: { search: options.search, page: options.page, per_page: options.per_page },
+export function fetchBackOfficeTasks(options: BackOfficeTaskListOptions = {}): Promise<BackOfficeTaskSearchResult> {
+  return apiFetch('/backoffice-tasks', {
+    query: {
+      search: options.search,
+      assignee: options.assignee,
+      status: options.status,
+      page: options.page,
+      per_page: options.perPage,
+    },
   })
 }
 
