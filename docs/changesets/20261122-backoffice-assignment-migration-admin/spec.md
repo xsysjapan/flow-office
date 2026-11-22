@@ -11,130 +11,154 @@
 管理画面「運用コマンド」から、試し実行と本実行を安全に行えるようにする。
 
 ## 現状(As-Is)
-- 運用コマンド: `#[AdminExecutable(label, rules, ui)]`(`backend/app/Console/Attributes/AdminExecutable.php`)を付けたコマンドが
-  `AdminCommandRegistry`で一覧化され、管理画面`/admin/commands`(`frontend/src/pages/admin/AdminCommandsPage.tsx`)から依頼できる。
-  実行は毎分起動の実行役`admin-commands:run-pending`(`docs/27` 3.4)。画面は`rules`/`ui`から入力欄を作る汎用実装。
-- メンテナンス(全API 503): `BlockDuringReadModelRebuild`ミドルウェアが`ReadModelRebuildRunService::isRunning()`(`command_name`=
-  `read-models:rebuild`の`running`記録+心拍)のときだけ503にする。`read-models:rebuild`は心拍を書き、60秒(設定値)待ってから作り直す。
-- 移行コマンド: `backend/app/Console/Commands/RebuildBackOfficeAssignmentEventsCommand.php`(`--apply`/`--verify`/`--swap`。既定は試し実行)。
-  作り直しの表`stored_events_rebuilt`に書き、`swap`で入れ替える(元表は`stored_events_before_rebuild_YYYYMMDDHHMMSS`)。
-- `docs/27-release-runbook.md` 3.6: 新コードの配備から入れ替え・確認までを1回のメンテナンスで行う手順。
+- 運用コマンド: `#[AdminExecutable(label, rules, ui)]`を付けたコマンドが`AdminCommandRegistry`で一覧化され、管理画面`/admin/commands`から依頼できる。
+  **レジストリはコマンドの全オプションを画面に出し**(`AdminCommandRegistry.php`:288-299)、値を取らないオプションはチェックボックスになる。
+  実行は毎分起動の実行役`admin-commands:run-pending`で、実行役はコマンドを呼ぶ前に記録を`running`にする(`AdminCommandRunner.php`:103)。
+  排他の期限は240分(`routes/console.php`:122-126)。画面の履歴は`error_message ?? output`を表示し、`summary`は表示しない。
+- メンテナンス(全API 503): `BlockDuringReadModelRebuild`が`ReadModelRebuildRunService::isRunning()`(`command_name`=`read-models:rebuild`の
+  `running`記録が心拍または`started_at`で10分以内)のとき503にする。実行役は作り直しの依頼を他より先に扱い(`nextQueuedRun`:56-63)、
+  スケジューラーは作り直し中に他のスケジュールを飛ばす(`routes/console.php`:17)。有給付与予定の判定の実行中は作り直しを開始しない(`startDirectRun`)。
+- `ReadModelRebuilder::rebuild($dryRun)`: 全ReadModelを1つのトランザクションで空にして全Projectorをreplay。外側のトランザクションがあればその中で動く
+  (`DB::transactionLevel()`を見る)。試し実行は最後にロールバック。心拍(`Cache::store('file')`)と時間の上限(180分)を持つ。
+- 移行: `BackOfficeTaskAssignmentSplitter`(純粋変換。挿入があると全行のidを1から振り直す)・`BackOfficeTaskAssignmentRebuildVerifier`・
+  `RebuildBackOfficeAssignmentEventsCommand`(`stored_events_rebuilt`に書いて`swap`で入れ替える段階的なCLI)。
+- `stored_events.id`を参照するもの: Projectionの`*_history_entries.stored_event_id`等(リビルドで直る)、補正ログ`stored_event_corrections.stored_event_id`と
+  metaの`history-normalization.source_event_id`(リビルドで直らない)。
+- `projections:rebuild {projector?}`(`RebuildProjectionsCommand`)でもBackOfficeTaskProjectorを再生できる。
 
 ## 設計前提の検証
-- 正データと派生データ: 移行は`stored_events`(正)の作り直しで、ReadModelはその後のリビルドで揃える(設計原則2、`data-correction`)。変更なし。
-- 配備から移行までの間の整合: 新コードは旧形式の`assigned`でステータスを変えないが、ReadModelは旧Projectorで作られた正しい値のまま。
-  その間に新しく記録される`assigned`は新形式(`previousAssignedUserId`キー付き)で、移行はイベント単位で冪等なので混在しても正しく変換される。
-  よって**配備と移行を同じメンテナンスで行う必要はなく**、危険なのは「移行前に`read-models:rebuild`を行うと旧形式の`assigned`の確認中への変化が
-  失われること」と「`--apply`後〜`--swap`の間に書かれたイベントが失われること」の2点だけである。
-- 原因の分類: 機能追加(実行経路の追加)。
-- 横展開: 他の作り直し(休暇の作り直し・有給口座の付け替え)もCLI専用だが、今回の要望の対象外。
+- 正データと派生データ: 移行は`stored_events`(正)の作り直しで、ReadModelはリビルドで揃える(設計原則2、`data-correction`)。
+- 配備から移行までの整合: 新コードは旧形式の`assigned`でステータスを変えないが、ReadModelは旧Projectorで作った正しい値のまま。配備後に記録される
+  `assigned`は新形式で、Splitterはイベント単位で冪等なので混在しても正しく変換される。危険なのは(1)移行前にReadModelをリビルドすること、
+  (2)作り直しの表への書き出し〜入れ替えの間の書き込みが失われること、(3)入れ替え後にReadModelのリビルドが終わらないまま運用が再開すること(idの振り直しで
+  `stored_event_id`が別のイベントを指す)。
+- 段階的な方式(作り直しの表→swap→リビルド)を画面から行うと、上の(2)(3)を防ぐためにメンテナンスの開始・維持・回復の仕組みを新しく作る必要があり、
+  DDL(swap)はトランザクションで戻せない(設計レビューで判明)。
+- 原因の分類: 機能追加(実行経路の追加)。前版の設計(段階的な方式をそのまま画面に出す)は、上記の理由で作り直した。
+- 横展開: 休暇の作り直し・有給口座の付け替えもCLI専用だが対象外。
 - 一覧のページング: 該当なし。
 
 ## 仕様検討
 
-### 論点1: 管理画面からの実行単位
+### 論点1: 管理画面からの実行方式
 - 選択肢:
-  - A. 既存の段階(`--apply`/`--verify`/`--swap`)をそれぞれ画面に出す
-  - B. 画面からは「試し実行」と「本実行」の2つだけにし、本実行は1回の実行の中で 書き出し→検証→入れ替え→ReadModelの作り直し まで行う
+  - A. 段階的な方式(`--apply`/`--verify`/`--swap`)を画面から実行し、メンテナンスの開始・維持・回復を新しく作る
+  - B. 移行(`stored_events`の書き換え)とReadModelの作り直しを**1つのトランザクション**で行う運用コマンドにする。トランザクションの前にバックアップ表を作る。
+    メンテナンス・心拍・排他・有給判定との調整・試し実行(ロールバック)は`read-models:rebuild`の仕組みをそのまま使う
 - 決定: B
-- 理由: 段階を分けると、`--apply`と`--swap`の間に書かれたイベントが失われる・入れ替え後にReadModelを作り直し忘れる、という手順ミスの余地が残る。
-  1回の実行で完結させ、その間だけメンテナンスにすれば安全。CLIの段階的なオプションはリハーサル・障害時の調査用にそのまま残す。
+- 理由: 失敗・プロセス停止時はトランザクションごと戻るため、`stored_events`とReadModelがずれた状態が生じない。新しい回復手順が要らない。
+  試し実行も本実行と同じ処理を最後にロールバックするだけで、実際の差分(移行の件数とReadModelの変化)をそのまま確かめられる。
+- `data-correction`の「新しい表に書いてから入れ替える」との違い: 入れ替え(DDL)の代わりに、トランザクション内で`stored_events`を書き換え、
+  コミット前に検証(バックアップ表との比較)を行う。元の表はトランザクション前にバックアップ表として残すので、「検証してから反映」「元の表を残す」という
+  規定の目的は満たす。ReadModelの作り直しと同じトランザクションにまとめるための方式で、`data-correction`に選択肢として追記する。
 - 未確定・要確認事項: なし
 
-### 論点2: 本実行中のメンテナンス(書き込みの停止)
+### 論点2: コマンドの構成
 - 選択肢:
-  - A. `ReadModelRebuildRunService`のメンテナンス判定を、`read-models:rebuild`に加えて本移行の本実行の`running`記録でも真にする
-    (心拍・60秒待ちも`read-models:rebuild`と同じ)
-  - B. 別のミドルウェア・判定を新設する
-- 決定: A
-- 理由: 503の応答・解除の検知・画面の表示(メンテナンス中の文言)をそのまま使える。判定の対象を「メンテナンスを要する運用コマンド名の一覧」に広げるだけで済む。
-  試し実行はDBを変えないのでメンテナンスにしない。
+  - A. 既存の`backoffice:rebuild-assignment-events`に画面用のオプションを足す
+  - B. 画面用の新しいコマンドを作り、段階的なCLIコマンドは削除する
+- 決定: B。新しいコマンド`backoffice:migrate-assignment-events {--dry-run}`(ラベル「バックオフィス割当イベントの移行」)。
+  旧`RebuildBackOfficeAssignmentEventsCommand`とそのテスト・`docs/27` 3.6の段階的な手順は削除する(`Splitter`・`Verifier`は再利用する)。
+- 理由: レジストリは全オプションを画面に出すため、既存コマンドに足すと`--swap`等も画面から押せてしまう。移行の経路を1つにして手順の取り違えを防ぐ。
+  画面の入力は`read-models:rebuild`と同じ「試し実行」チェックボックス1つにそろえる。
 - 未確定・要確認事項: なし
 
-### 論点3: 移行前の`read-models:rebuild`の防止
-- 選択肢:
-  - A. `read-models:rebuild`(本実行)は、`stored_events`に旧形式の`backoffice_task.assigned`(`previousAssignedUserId`キー無し)が1件でもあれば
-    拒否し、「先に『バックオフィス割当イベントの移行』を実行してください」と出す(試し実行は警告のみで実行する)
-  - B. 手順書の注意書きだけにする
-- 決定: A
-- 理由: 管理画面から誰でも(権限者が)`read-models:rebuild`を押せるため、手順書だけではステータスが失われる事故を防げない。
+### 論点3: メンテナンスと排他
+- 決定: `ReadModelRebuildRunService`・`AdminCommandRunner::nextQueuedRun`・スケジューラーの「作り直し中」判定・有給判定との調整・`LOCK_NAME`の
+  対象を、コマンド名1つから**メンテナンスを要するコマンド名の一覧**(`read-models:rebuild`と`backoffice:migrate-assignment-events`)に広げる。
+  記録の取得は`command_name IN (...)`と`status='running'`で行い、JSON式は使わない。試し実行も`read-models:rebuild`と同じく実行中はメンテナンスにする
+  (試し実行もReadModelを空にして作り直すため)。どちらかの実行中はもう一方を開始しない(自分の記録は除外して判定)。
+- 理由: 既存の仕組みに乗せれば、拾われた時点からの503、心拍、有給判定の後回し、他スケジュールの停止がそのまま効く。
 - 未確定・要確認事項: なし
 
-### 論点4: 画面の入力と表示
-- 決定:
-  - ラベル「バックオフィス割当イベントの移行」。入力はチェックボックス「本実行する(メンテナンス中に移行し、ReadModelを作り直す)」1つ
-    (rulesのキー`execute`。未チェック=試し実行)。説明文(`description`)に、本実行中は全利用者がメンテナンス中(全API 503)になること、
-    日次バッチの時刻(1:00〜2:20)を避けること、事前に試し実行で件数を確認することを書く。
-  - 出力: 試し実行・本実行とも、対象件数・挿入件数・直前ステータス別件数・完了/取消からの変化の集約ID・事前条件・violationsを表示する。本実行はさらに
-    検証結果、入れ替え後のバックアップ表名、ReadModelの作り直しの結果(変更のあったテーブル)を表示し、記録の`summary`にも残す。
-  - 対象0件なら本実行でも何もしない(メンテナンスにもしない)。violations・事前条件違反があれば何もせず失敗にする。
+### 論点4: 処理の流れ
+- 決定(`backoffice:migrate-assignment-events`):
+  1. 心拍を書き、`read_model_rebuild.claim_wait_seconds`秒待つ(`read-models:rebuild`と同じ)。
+  2. `stored_events`を読み、Splitterで変換結果を作る(心拍を書く)。violationsがあれば何もせず失敗。対象0件ならReadModelを作り直さず「対象なし」で成功。
+  3. 本実行のみ: トランザクションの前に`stored_events`をバックアップ表`stored_events_before_rebuild_YYYYMMDDHHMMSS`へ複製する。
+  4. トランザクション開始 → `stored_events`の全行を削除し、変換後の行を入れる → 補正ログ`stored_event_corrections.stored_event_id`とmetaの
+     `history-normalization.source_event_id`を旧id→新idの対応で付け替える → Verifier(変換後の`stored_events`とバックアップ表(試し実行は変換前の行)を比較) →
+     `ReadModelRebuilder::rebuild($dryRun)`(外側のトランザクション内で動く) → 本実行はコミット、試し実行はロールバック。
+  5. 時間の上限は`ReadModelRebuilder`と同じ設定を、手順1からの合計で適用する。各段階の間と行の書き込みのチャンクごとに心拍を書く。
 - 未確定・要確認事項: なし
 
-### 論点5: 失敗時の扱い
-- 決定:
-  - 書き出し・検証で失敗したら入れ替えずに終了し、`stored_events_rebuilt`は削除する(次回の事前条件違反を残さない)。`stored_events`は変わらない。
-  - 入れ替え後のReadModelの作り直しで失敗した場合は、`stored_events`は移行済みのまま失敗を記録し、出力に「『データの作り直し(ReadModel)』を
-    実行してください」とバックアップ表名を出す(移行済みなので論点3の拒否には当たらない)。
-- 理由: 入れ替え(DDL)はトランザクションで戻せないため、入れ替え前に検証を完了させ、入れ替え後の失敗は再実行可能な作り直しで回復させる。
+### 論点5: 移行前のReadModelのリビルドの防止
+- 決定: `read-models:rebuild`と`projections:rebuild`は、本実行の前に旧形式の`backoffice_task.assigned`(payloadに`previousAssignedUserId`キーが無い)が
+  1件でもあれば拒否し、「先に運用コマンド『バックオフィス割当イベントの移行』を実行してください」と出す。`read-models:rebuild`の試し実行は警告のみ。
+  件数は`event_class='backoffice_task.assigned'`の行だけを読み、PHPで`array_key_exists`する(DBの違いに依存しない)。判定は小さなクラス
+  `App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector`に置き、3コマンドで使う。
+- 理由: 管理画面から`read-models:rebuild`を押されるとステータスが失われるため。`event-sourcing:replay`(パッケージのコマンド)は対象外とし、手順書に注意を書く。
+- 未確定・要確認事項: なし
+
+### 論点6: 画面の表示
+- 決定: 説明文(`description`)に、実行中は全利用者がメンテナンス中(全API 503)になること、日次バッチの時刻(1:00〜2:20)を避けること、
+  先に試し実行で確かめることを書く。出力(`output`)に、対象件数・挿入件数・直前ステータス別件数・完了/取消からの変化の集約ID・付け替えた補正ログの件数・
+  バックアップ表名(本実行)・ReadModelの変更のあったテーブル(`read-models:rebuild`と同じ表)を出す。失敗時の`error_message`には原因と、
+  何も変わっていない(ロールバックした)ことを書く。`summary`にも同じ要約を残す。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
 - backend
-  - `RebuildBackOfficeAssignmentEventsCommand`に`{--execute}`を追加し、`#[AdminExecutable(label: 'バックオフィス割当イベントの移行',
-    rules: ['execute' => ['nullable', 'boolean']], ui: ['execute' => ['control' => 'checkbox']])]`を付ける。既存の`--apply`/`--verify`/`--swap`はCLI用に残す
-    (運用コマンドの画面には出さない。`--execute`と同時指定は拒否)。
-  - `--execute`の流れ: 試し実行と同じ集計 → 対象0件なら終了 → violations・事前条件違反なら失敗 → メンテナンス開始(実行記録`running`+心拍、
-    `config('read_model_rebuild.claim_wait_seconds')`秒待つ) → split→write(`stored_events_rebuilt`)→Verifier→swap→`ReadModelRebuilder::rebuild(false)`
-    → 心拍の解除。画面から依頼された場合は`CurrentAdminCommandRun`の記録を、CLIから直接の場合は`ReadModelRebuildRunService`と同様に記録を作って使う
-    (`RebuildReadModelsCommand`の書き方を写す)。
-  - `ReadModelRebuildRunService::isRunning()`の判定対象を、`read-models:rebuild`と`backoffice:rebuild-assignment-events`(`parameters.execute`が真の記録)に広げる。
-    同時実行の排他(`LOCK_NAME`)も共通にし、どちらかの実行中はもう一方を開始しない。
-  - 失敗時(論点5): 入れ替え前の失敗は`stored_events_rebuilt`を削除して終了。入れ替え後のReadModel作り直しの失敗は失敗として記録し案内を出力。
-  - `RebuildReadModelsCommand`(論点3): 本実行の前に旧形式の`backoffice_task.assigned`の件数を数え、1件以上なら拒否(終了コード1、記録は失敗)。試し実行は警告のみ。
-    件数の判定は`BackOfficeTaskAssignmentSplitter`側に静的な判定(例: `countLegacyAssigned(): int`をクエリで行う小さなクラス)を置き、両コマンドで使う。
-- frontend: 変更なし(運用コマンドの画面は`rules`/`ui`から汎用に描画する)。表示を確認し、崩れる場合のみ対応する。
+  - 新規`app/Console/Commands/MigrateBackOfficeAssignmentEventsCommand.php`: `backoffice:migrate-assignment-events {--dry-run}`、
+    `#[AdminExecutable(label: 'バックオフィス割当イベントの移行')]`(オプションは`--dry-run`だけ)。論点4の流れ。画面から依頼された場合は`CurrentAdminCommandRun`、
+    CLIから直接の場合は`ReadModelRebuildRunService::startDirectRun`相当で記録を作る(`RebuildReadModelsCommand`の書き方を写す)。
+  - 新規`app/Domain/EventSourcing/Rebuild/BackOfficeAssignmentMigrator.php`: 論点4の手順2〜4(読み込み・変換・バックアップ・書き換え・id参照の付け替え・検証・
+    `ReadModelRebuilder::rebuild`呼び出し)をまとめる。結果は要約の配列。
+  - `BackOfficeTaskAssignmentSplitter`: 旧id→新idの対応を結果に含め、metaの`history-normalization.source_event_id`も付け替える。
+  - `BackOfficeTaskAssignmentRebuildVerifier`: 比較する2つの表名(または行配列)を引数で受け取れるようにする。
+  - 新規`LegacyBackOfficeAssignmentDetector`(論点5)。`RebuildReadModelsCommand`・`RebuildProjectionsCommand`に拒否を追加。
+  - `ReadModelRebuildRunService`・`AdminCommandRunner`・`routes/console.php`: 論点3のコマンド名の一覧化。
+  - 削除: `RebuildBackOfficeAssignmentEventsCommand.php`とそのコマンド用テスト(Splitter・Verifierの単体テストは残す)。
 - テスト(Feature):
-  - 運用コマンドの一覧に出る(`rules`に`execute`)。
-  - `--execute`なし=試し実行でDB不変。
-  - `--execute`: 旧形式の行を投入→実行→`stored_events`が新構成・旧形式0件・`backoffice_tasks`が移行前と一致・`*_history_entries.stored_event_id`が新id・
-    `stored_events_rebuilt`が残らない・バックアップ表がある。
-  - `--execute`の実行中は`isRunning()`が真(心拍)。終了後は偽。
-  - 対象0件の`--execute`は何もせずメンテナンスにもならない。violationsで失敗し`stored_events`不変。
-  - 検証失敗(テストでVerifierを差し替え)で入れ替えず、`stored_events_rebuilt`が削除され`stored_events`不変。
-  - `read-models:rebuild`本実行は旧形式があると拒否、試し実行は警告のみで成功。移行後は通常どおり実行できる。
-  - `read-models:rebuild`実行中は移行の本実行を開始できない(逆も)。
-  - 既存の`ReadModelRebuildCommandTest`・移行のシナリオテストが通る。
+  - 運用コマンドの一覧に出て、オプションは`dry-run`だけ。
+  - 試し実行: 旧形式を投入→実行→`stored_events`・ReadModel・補正ログが不変、出力に件数とReadModelの差分。
+  - 本実行: `stored_events`が新構成・旧形式0件・idと版が連番、`backoffice_tasks`が移行前と一致、`*_history_entries.stored_event_id`が新id、
+    補正ログとmetaの`source_event_id`が新idを指す、バックアップ表がある。
+  - 失敗時のロールバック: ReadModelの作り直しで例外(テストで差し替え)→`stored_events`・ReadModel・補正ログが元のまま(バックアップ表は残る)。
+  - violationsで何もせず失敗。対象0件は何も変えず成功。
+  - 実行中は`isRunning()`が真、`read-models:rebuild`と互いに開始できない、有給判定の実行中は開始しない。
+  - `read-models:rebuild`本実行・`projections:rebuild`は旧形式があると拒否、`read-models:rebuild`の試し実行は警告のみ。移行後は通常どおり実行できる。
+    新形式(`previousAssignedUserId: null`)を旧形式と数えない。
+  - 既存の`ReadModelRebuildCommandTest`・移行のシナリオテスト(コマンドを新しいものへ書き換え)が通る。
 
 ## 受け入れ条件
-- 管理画面「運用コマンド」に「バックオフィス割当イベントの移行」が表示され、試し実行で件数を確認できる。
-- 本実行で、メンテナンス(全API 503)の間に移行とReadModelの作り直しが完了し、`backoffice_tasks`が移行前と一致する。
-- 移行前に「データの作り直し(ReadModel)」を本実行しようとすると拒否される。
+- 管理画面「運用コマンド」に「バックオフィス割当イベントの移行」が表示され、試し実行で件数とReadModelの差分を確認できる。
+- 本実行で、メンテナンス(全API 503)の間に移行とReadModelの作り直しが1つのトランザクションで完了し、`backoffice_tasks`が移行前と一致する。
+  途中で失敗しても`stored_events`・ReadModelは元のまま。
+- 移行前に「データの作り直し(ReadModel)」の本実行と`projections:rebuild`は拒否される。
 - 関連テストがPASSする。
 
 ## 対象外
 - 休暇の作り直し・有給口座の付け替えの運用コマンド化
 - 移行コマンドの削除(本番実行後の別変更)
+- `event-sourcing:replay`(パッケージのコマンド)での拒否
 
 ## ドキュメントへの影響
-- `docs/27-release-runbook.md` 3.6: 配備と移行を同じメンテナンスで行う手順から、「配備→(業務時間外に)管理画面で試し実行→本実行」に改める。移行前の
-  `read-models:rebuild`は拒否される旨。
-- `docs/32-stored-event-history-normalization.md`: 実行経路(運用コマンド)を追記。
-- `docs/changesets/20261122-backoffice-task-reassign/spec.md`: 論点6の「実行のタイミング」に本変更セットへの参照を追記。
+- `docs/27-release-runbook.md` 3.6: 段階的な手順を削除し、「配備→業務時間外に管理画面で試し実行→結果をユーザーに確認→本実行」に改める。
+  本番の件数でのメモリ・所要時間の見積もりをリハーサルで行うこと、移行前の`read-models:rebuild`・`projections:rebuild`は拒否されること、
+  `event-sourcing:replay`を使わないこと、実行結果(件数・バックアップ表名)を変更セット`20261122-backoffice-task-reassign`の実装結果と`docs/32`に記録することを書く。
+- `docs/32-stored-event-history-normalization.md`: 実行経路(運用コマンド、1トランザクション)に書き換え、補正ログ・metaのidの付け替えを追記。
+- `.claude/skills/data-correction/SKILL.md`: 「ReadModelの作り直しと同じトランザクションで`stored_events`を書き換える方式(事前にバックアップ表、コミット前に検証)」を
+  作り直しの選択肢として追記。
+- `docs/changesets/20261122-backoffice-task-reassign/spec.md`: 論点6の実行方法に本変更セットへの参照を追記。
 - `docs/16`・`docs/17`: 変更なし。
 
 ## モック・アセット
-なし(既存の運用コマンド画面にコマンドが1つ増えるのみ)
+なし(既存の運用コマンド画面にコマンドが1つ増えるのみ。frontendの変更なし)
 
 ## 実装対象
-- backend: `app/Console/Commands/RebuildBackOfficeAssignmentEventsCommand.php`、`app/Console/Commands/RebuildReadModelsCommand.php`、
-  `app/Services/EventSourcing/ReadModelRebuildRunService.php`、`app/Domain/EventSourcing/Rebuild/`(旧形式の件数の判定)、`tests/Feature/`
+- backend: 上記の新規・変更ファイル、`tests/Feature/`
 - docs: 上記
 
 ## 検証方法
-- `cd backend && ./vendor/bin/phpunit --filter='BackOfficeAssignment|ReadModelRebuild|AdminCommand'`、CI同条件の全件`php artisan test`
+- `cd backend && ./vendor/bin/phpunit --filter='BackOffice|ReadModelRebuild|AdminCommand|RebuildProjections'`、CI同条件の全件`php artisan test`
 
 ## レビュー履歴
-初版
+- 初版(2026-11-22)
+- 2026-11-22 独立設計レビュー(general-purpose)で、段階的な方式を画面から行う設計に重大な問題(レジストリが全オプションを画面に出し`--swap`を単独で押せる、
+  拾われた時点でメンテナンスになる、書き出し中の心拍が無い、有給判定との調整漏れ、swap後の失敗でReadModelとずれたまま運用再開、240分の期限、
+  JSON式のDB差、補正ログのid参照、`projections:rebuild`の経路)が判明したため、「設計前提の検証」から作り直した。移行とReadModelの作り直しを
+  1トランザクションで行う新しいコマンドにし、メンテナンス等は`read-models:rebuild`の仕組みを一覧化して共有、段階的なCLIは削除する。
 
 ## 実装結果
 未着手
