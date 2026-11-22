@@ -1,6 +1,6 @@
 # バックオフィスタスク一覧を汎用検索画面にし、他の担当者のタスクも検索できるようにする
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > バックオフィスタスクで自分以外の人に割り当てたタスクが全くみられなくなります。
@@ -233,4 +233,19 @@
   `useSearchParamsKeepingBackState`/初回のみ全体Loading/書き換えるテスト3か所を明記。
 
 ## 実装結果
-未着手
+- コミット: `4e3c9b2`(backend)、`23ae136`(frontend)、`fb897dc`(docs)。
+- backend: `BackOfficeTaskController::index`追加・`indexUnassigned`/`indexMine`削除、`BackOfficeTask::scopeAssigneeScope`/`scopeStatusFilter`、
+  `routes/api.php`、`tests/Feature/BackOffice/BackOfficeTaskTest.php`(既存3件書き換え+新規5件)。
+- frontend: `api/types.ts`・`api/backOfficeTasks.ts`・`hooks/useBackOfficeTasks.ts`・`utils/backOfficeTaskStatuses.ts`(新規)・
+  `pages/backOffice/BackOfficeTaskListPage.{tsx,test.tsx,stories.tsx}`・`BackOfficeTaskDetailPage.tsx`(ステータス配列の共通化のみ)・
+  `pages/home/HomeDashboardPage.{tsx,test.tsx,stories.tsx}`。e2eは変更なし(詳細画面での判定のためタブ名と衝突しないことを確認)。
+- docs: `docs/11-usecases-backoffice.md`、`docs/testing/scenario-tests.md`(「ドキュメントへの影響」の2件とも更新済み)。
+- 仕様からの差異: 一括操作バーは選択バー内に`UserPicker`(ID・role付き)を含むため§2.21の二重描画にせず、Card本文先頭に1つだけ
+  2行構成で描画した(`ui-interaction-patterns` §2.21に例外として追記)。
+- 検証結果:
+  - `./vendor/bin/phpunit --filter=BackOfficeTaskTest`: 14件pass(委譲元で再実行)。CI同条件の`php artisan test`全件: 2295件pass(implementer実行)。
+  - `npx vitest run --project unit src/pages/backOffice src/pages/home src/hooks src/components/AppLayout`: 80件pass、
+    `npx tsc -p tsconfig.app.json --noEmit`: OK、`npx oxlint src`: 新規の指摘なし(委譲元で再実行)。
+  - e2eは未実行(環境依存)。
+- 受け入れ条件: 既定タブ=未割り当て・未完了と一括割当/自分のタスクの一括完了/他の担当者・すべてタブでの一覧・検索と件数/
+  ステータス切替/URL保持はVitestで、件数が21件以上でも正しいことはホーム画面のテスト(total=25)で、APIはFeatureテストで確認。

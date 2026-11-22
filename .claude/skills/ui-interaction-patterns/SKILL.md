@@ -421,6 +421,9 @@ Pagination
   `Card`の子要素側先頭に`sm:hidden`で同じコンポーネントをもう一度描画している)。**今後、
   同様の「複数選択→一括操作」UIをモバイル対応込みで新規実装する際はこのパターンに従う**
   (画面ごとに独自のラップ/縮小処理を発明しない)。
+- **例外: バーにID・roleを持つ入力(`UserPicker`等)を含む場合**は二重描画するとIDとcomboboxが重複するため、
+  `actions`スロットへは渡さず、`Card`の子要素の先頭に1つだけ描画し、PC幅でも上の2行構成のまま使う
+  (実装例: `frontend/src/pages/backOffice/BackOfficeTaskListPage.tsx`)。
 
 ### 2.22 Keyboard / Accessibility
 
