@@ -1,8 +1,8 @@
 import { apiFetch } from './client'
-import type { Notification, Paginated } from './types'
+import type { MyNotificationsResult, Notification } from './types'
 
-export function fetchMyNotifications(status?: 'unread' | 'read'): Promise<Paginated<Notification>> {
-  return apiFetch('/notifications/mine', { query: { status } })
+export function fetchMyNotifications(status?: 'unread' | 'read', page?: number): Promise<MyNotificationsResult> {
+  return apiFetch('/notifications/mine', { query: { status, page } })
 }
 
 export function confirmNotification(id: string): Promise<Notification> {

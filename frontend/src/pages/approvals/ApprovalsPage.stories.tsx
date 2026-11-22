@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter } from 'react-router-dom'
-import type { Paginated, WorkflowRequest } from '../../api/types'
+import type { WorkflowRequest, WorkflowRequestsToApproveResult } from '../../api/types'
 import { ApprovalsPage } from './ApprovalsPage'
 
 const applicant = {
@@ -58,7 +58,9 @@ const sample: WorkflowRequest[] = [
   },
 ]
 
-function withSeededList(data: Paginated<WorkflowRequest>) {
+const statusCounts = { submitted: 3, approved: 5, returned: 2, cancelled: 1, all: 11 }
+
+function withSeededList(data: WorkflowRequestsToApproveResult) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['workflow-requests', 'to-approve'], data)
 
@@ -82,9 +84,9 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const MixedSubjectTypes: Story = {
-  render: withSeededList({ data: sample, meta: { current_page: 1, last_page: 1, total: sample.length }, links: { next: null, prev: null } }),
+  render: withSeededList({ data: sample, meta: { current_page: 1, last_page: 1, total: sample.length, status_counts: statusCounts }, links: { next: null, prev: null } }),
 }
 
 export const Empty: Story = {
-  render: withSeededList({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }),
+  render: withSeededList({ data: [], meta: { current_page: 1, last_page: 1, total: 0, status_counts: statusCounts }, links: { next: null, prev: null } }),
 }

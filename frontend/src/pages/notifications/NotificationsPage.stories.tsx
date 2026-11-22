@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter } from 'react-router-dom'
-import type { Notification, Paginated } from '../../api/types'
+import type { Notification, MyNotificationsResult } from '../../api/types'
 import { NotificationsPage } from './NotificationsPage'
 
 const notifications: Notification[] = [
@@ -27,9 +27,9 @@ const notifications: Notification[] = [
 
 function withSeeded(data: Notification[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  const page: Paginated<Notification> = {
+  const page: MyNotificationsResult = {
     data,
-    meta: { current_page: 1, last_page: 1, total: data.length },
+    meta: { current_page: 1, last_page: 1, total: data.length, status_counts: { all: data.length, unread: data.filter((n) => n.confirmed_at === null).length, read: data.filter((n) => n.confirmed_at !== null).length } },
     links: { next: null, prev: null },
   }
   queryClient.setQueryData(['notifications', 'mine', 'all'], page)

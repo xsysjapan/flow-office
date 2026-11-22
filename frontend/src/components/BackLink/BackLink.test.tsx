@@ -38,7 +38,7 @@ describe('BackLink', () => {
   it('uses the to override', () => {
     renderAt('/paid-leave/history', { to: '/approvals' })
 
-    expect(screen.getByRole('link', { name: '承認待ちに戻る' })).toHaveAttribute('href', '/approvals')
+    expect(screen.getByRole('link', { name: '承認一覧に戻る' })).toHaveAttribute('href', '/approvals')
   })
 
   it('renders nothing for a first-level page without an origin', () => {

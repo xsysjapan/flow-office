@@ -811,6 +811,20 @@ export type BackOfficeTaskSearchResult = Paginated<BackOfficeTask> & {
   }
 }
 
+/** `GET /workflow-requests/to-approve` の応答。`meta.status_counts`は年月を適用し、状態・ページは適用しない件数(`all`は下書きを除く) */
+export type WorkflowRequestsToApproveResult = Paginated<WorkflowRequest> & {
+  meta: {
+    status_counts: Record<"submitted" | "approved" | "returned" | "cancelled" | "all", number>
+  }
+}
+
+/** `GET /notifications/mine` の応答。`meta.status_counts`は状態を適用しない件数 */
+export type MyNotificationsResult = Paginated<Notification> & {
+  meta: {
+    status_counts: Record<"all" | "unread" | "read", number>
+  }
+}
+
 export type LeaveGrantStatus = "active" | "revoked";
 
 export interface PaidLeaveGrant {

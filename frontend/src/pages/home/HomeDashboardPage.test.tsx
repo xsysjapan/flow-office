@@ -108,9 +108,10 @@ describe('HomeDashboardPage', () => {
     vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(
       paginated([{ id: 'e1', status: 'in_review' } as ExpenseClaim]),
     )
-    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(
-      paginated([{ id: 'a1' } as WorkflowRequest]),
-    )
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue({
+      ...paginated([{ id: 'a1' } as WorkflowRequest]),
+      meta: { ...paginated([]).meta, status_counts: { submitted: 1, approved: 0, returned: 0, cancelled: 0, all: 1 } },
+    })
     vi.spyOn(backOfficeTasksApi, 'fetchBackOfficeTasks').mockResolvedValue(
       searchResult([{ id: 't1', status: 'not_started' } as BackOfficeTask], 25),
     )

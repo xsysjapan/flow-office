@@ -116,7 +116,7 @@ export const routeManifest: RouteManifestEntry[] = [
     group: "requests",
   },
   {
-    label: "承認待ち",
+    label: "承認一覧",
     to: "/approvals",
     feature: [
       "attendance.timesheet",

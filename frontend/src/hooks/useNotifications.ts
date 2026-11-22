@@ -1,10 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { confirmNotification, fetchMyNotifications } from '../api/notifications'
 
-export function useMyNotifications(status?: 'unread' | 'read') {
+export function useMyNotifications(status?: 'unread' | 'read', page = 1) {
   return useQuery({
-    queryKey: ['notifications', 'mine', status ?? 'all'],
-    queryFn: () => fetchMyNotifications(status),
+    queryKey: ['notifications', 'mine', status ?? 'all', page],
+    queryFn: () => fetchMyNotifications(status, page === 1 ? undefined : page),
+    placeholderData: keepPreviousData,
   })
 }
 

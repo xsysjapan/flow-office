@@ -1,22 +1,26 @@
 import { useEffect } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { getSafeRedirectTarget } from '../../auth/redirectTarget'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { ListQueueTabs } from '../../components/ListQueueTabs/ListQueueTabs'
+import { Pagination } from '../../components/Pagination/Pagination'
 import { notify } from '../../lib/notify'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
-import { useForwardState } from '../../navigation/backState'
+import { isValidPageParam } from '../../utils/searchParamValidators'
+import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { useConfirmNotification, useMyNotifications } from '../../hooks/useNotifications'
 
 type StatusFilter = 'all' | 'unread' | 'read'
 
-const FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: 'all', label: 'すべて' },
-  { value: 'unread', label: '未読' },
-  { value: 'read', label: '既読' },
+/** 状態タブ。並び順はこの順に固定する。emptyTitleは該当する通知が無いときの文言。 */
+const STATUS_TABS: { value: StatusFilter; label: string; emptyTitle: string }[] = [
+  { value: 'all', label: 'すべて', emptyTitle: '通知はありません。' },
+  { value: 'unread', label: '未読', emptyTitle: '未読の通知はありません。' },
+  { value: 'read', label: '既読', emptyTitle: '既読の通知はありません。' },
 ]
 
 function isStatusFilter(value: string | null): value is StatusFilter {
@@ -26,73 +30,64 @@ function isStatusFilter(value: string | null): value is StatusFilter {
 /** UC-N001: 自分宛て通知の一覧・既読管理。 */
 export function NotificationsPage() {
   const forwardState = useForwardState()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
   const statusParam = searchParams.get('status')
   const status: StatusFilter = isStatusFilter(statusParam) ? statusParam : 'all'
   const isInvalidStatus = statusParam !== null && !isStatusFilter(statusParam)
-  // 不正な値は既定表示(すべて)として扱い、URLからもキーを消す
+  const pageParam = searchParams.get('page')
+  const isInvalidPage = pageParam !== null && !isValidPageParam(pageParam)
+  const page = pageParam !== null && isValidPageParam(pageParam) ? Number(pageParam) : 1
+  // 不正なstatus・pageは既定表示として扱い、URLからもそのキーを消す
   useEffect(() => {
-    if (!isInvalidStatus) return
+    if (!isInvalidStatus && !isInvalidPage) return
     setSearchParams(
       (prev) => {
         const params = new URLSearchParams(prev)
-        params.delete('status')
+        if (isInvalidStatus) params.delete('status')
+        if (isInvalidPage) params.delete('page')
         return params
       },
       { replace: true },
     )
-  }, [isInvalidStatus, setSearchParams])
-  function setStatus(next: StatusFilter) {
+  }, [isInvalidStatus, isInvalidPage, setSearchParams])
+  function updateParams(patch: Record<string, string | null>) {
     setSearchParams(
       (prev) => {
         const params = new URLSearchParams(prev)
-        if (next === 'all') params.delete('status')
-        else params.set('status', next)
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === null) params.delete(key)
+          else params.set(key, value)
+        }
         return params
       },
       { replace: true },
     )
   }
-  const { data, isLoading, error } = useMyNotifications(status === 'all' ? undefined : status)
+  function setStatus(next: string) {
+    updateParams({ status: next === 'all' ? null : next, page: null })
+  }
+  function changePage(next: number) {
+    updateParams({ page: next > 1 ? String(next) : null })
+  }
+  const { data, error } = useMyNotifications(status === 'all' ? undefined : status, page)
   const confirmNotification = useConfirmNotification()
 
   const notifications = data?.data ?? []
+  const currentTab = STATUS_TABS.find((tab) => tab.value === status) ?? STATUS_TABS[0]
 
   return (
-    <Card
-      title="通知"
-      actions={
-        <div className="flex items-center gap-1">
-          {FILTERS.map((filter) => (
-            <Button
-              key={filter.value}
-              variant={status === filter.value ? 'primary' : 'secondary'}
-              onClick={() => setStatus(filter.value)}
-            >
-              {filter.label}
-            </Button>
-          ))}
-        </div>
-      }
-    >
-      {isLoading && <LoadingState />}
+    <Card title="通知">
+      <ListQueueTabs
+        aria-label="表示する通知"
+        className="mb-4"
+        value={status}
+        onChange={setStatus}
+        tabs={STATUS_TABS.map((tab) => ({ value: tab.value, label: tab.label, count: data?.meta.status_counts[tab.value] }))}
+      />
+      {!data && !error && <LoadingState />}
       {error && <ErrorMessage error={error} fallback="通知一覧の取得に失敗しました。" />}
 
-      {!isLoading && !error && notifications.length === 0 && (
-        status === 'all' ? (
-          <EmptyState title="通知はありません。" description="新しい通知が届くとここに表示されます。" />
-        ) : (
-          <EmptyState
-            title="条件に一致する通知がありません。"
-            description="フィルターを変更すると他の通知が表示されることがあります。"
-            action={
-              <Button variant="secondary" onClick={() => setStatus('all')}>
-                すべて表示する
-              </Button>
-            }
-          />
-        )
-      )}
+      {data && !error && notifications.length === 0 && <EmptyState title={currentTab.emptyTitle} />}
 
       <ul className="divide-y divide-border">
         {notifications.map((notification) => {
@@ -143,6 +138,15 @@ export function NotificationsPage() {
           )
         })}
       </ul>
+
+      {data && !error && (
+        <Pagination
+          currentPage={data.meta.current_page}
+          lastPage={data.meta.last_page}
+          total={data.meta.total}
+          onPageChange={changePage}
+        />
+      )}
     </Card>
   )
 }

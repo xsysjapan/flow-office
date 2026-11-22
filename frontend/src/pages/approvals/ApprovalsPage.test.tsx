@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,7 @@ import { ApiError } from '../../api/client'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseClaimsApi from '../../api/expenseClaims'
-import type { Paginated, User, WorkflowRequest } from '../../api/types'
+import type { User, WorkflowRequest, WorkflowRequestsToApproveResult } from '../../api/types'
 import * as workflowRequestsApi from '../../api/workflowRequests'
 import { notify } from '../../lib/notify'
 import { ApprovalsPage } from './ApprovalsPage'
@@ -133,6 +133,8 @@ const expenseDetail: WorkflowRequest = {
   },
 }
 
+const statusCounts = { submitted: 3, approved: 5, returned: 2, cancelled: 1, all: 11 }
+
 function LocationProbe() {
   const location = useLocation()
   return <div data-testid="location-search">{location.search}</div>
@@ -158,7 +160,7 @@ describe('ApprovalsPage', () => {
   })
 
   it('shows an empty state when there is nothing to approve', async () => {
-    const empty: Paginated<WorkflowRequest> = { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }
+    const empty: WorkflowRequestsToApproveResult = { data: [], meta: { current_page: 1, last_page: 1, total: 0, status_counts: statusCounts }, links: { next: null, prev: null } }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(empty)
 
     renderPage()
@@ -167,9 +169,9 @@ describe('ApprovalsPage', () => {
   })
 
   it('lists requests of every subject_type with a type badge', async () => {
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest, attendanceRow, expenseRow],
-      meta: { current_page: 1, last_page: 1, total: 3 },
+      meta: { current_page: 1, last_page: 1, total: 3, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -186,9 +188,9 @@ describe('ApprovalsPage', () => {
 
   it('opens the detail panel and approves an attendance month via the attendance API, not the workflow-request API', async () => {
     const user = userEvent.setup()
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [attendanceRow],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -212,9 +214,9 @@ describe('ApprovalsPage', () => {
 
   it('opens the detail panel and returns an expense claim via the expense-claims API, not the workflow-request API', async () => {
     const user = userEvent.setup()
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [expenseRow],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -235,9 +237,9 @@ describe('ApprovalsPage', () => {
 
   it('approves a generic workflow request (subject_type=null) via the workflow-request API', async () => {
     const user = userEvent.setup()
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -254,9 +256,9 @@ describe('ApprovalsPage', () => {
   })
 
   it('sends status=submitted on initial load', async () => {
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -268,11 +270,11 @@ describe('ApprovalsPage', () => {
     expect(fetchToApprove).toHaveBeenCalledWith({ status: 'submitted', yearMonth: undefined, page: 1 })
   })
 
-  it('changing the status filter refetches with the new status and resets to page 1', async () => {
+  it('changing the status tab refetches with the new status and resets to page 1', async () => {
     const user = userEvent.setup()
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -280,16 +282,16 @@ describe('ApprovalsPage', () => {
     renderPage()
     await screen.findByText('名刺作成申請')
 
-    await user.selectOptions(screen.getByLabelText('状態'), '承認済み')
+    await user.click(screen.getByRole('tab', { name: '承認済み 5件' }))
 
     expect(fetchToApprove).toHaveBeenLastCalledWith({ status: 'approved', yearMonth: undefined, page: 1 })
   })
 
-  it('the "すべて" option omits filtering by sending status=all', async () => {
+  it('the "すべて" tab sends status=all', async () => {
     const user = userEvent.setup()
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -297,16 +299,16 @@ describe('ApprovalsPage', () => {
     renderPage()
     await screen.findByText('名刺作成申請')
 
-    await user.selectOptions(screen.getByLabelText('状態'), 'すべて')
+    await user.click(screen.getByRole('tab', { name: 'すべて 11件' }))
 
     expect(fetchToApprove).toHaveBeenLastCalledWith({ status: 'all', yearMonth: undefined, page: 1 })
   })
 
   it('pagination controls call onPageChange and refetch with the new page', async () => {
     const user = userEvent.setup()
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest],
-      meta: { current_page: 1, last_page: 2, total: 2 },
+      meta: { current_page: 1, last_page: 2, total: 2, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -320,9 +322,9 @@ describe('ApprovalsPage', () => {
   })
 
   it('shows a subtitle line with the specific special-leave type name, distinguishing it from other special leaves', async () => {
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [specialLeaveRow, paidLeaveRow],
-      meta: { current_page: 1, last_page: 1, total: 2 },
+      meta: { current_page: 1, last_page: 1, total: 2, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -335,9 +337,9 @@ describe('ApprovalsPage', () => {
   })
 
   it('shows the year_month subtitle for an attendance month row', async () => {
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [attendanceRow],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -355,9 +357,9 @@ describe('ApprovalsPage', () => {
       title: '2026-06 月次勤怠(承認済み)',
       subject_summary: { year_month: '2026-06', status: 'approved' },
     }
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [attendanceRow, approvedAttendanceRow],
-      meta: { current_page: 1, last_page: 1, total: 2 },
+      meta: { current_page: 1, last_page: 1, total: 2, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -376,9 +378,9 @@ describe('ApprovalsPage', () => {
       id: 'workflow-request-generic-2',
       title: '交通費申請',
     }
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest, secondGenericRequest],
-      meta: { current_page: 1, last_page: 1, total: 2 },
+      meta: { current_page: 1, last_page: 1, total: 2, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -415,9 +417,9 @@ describe('ApprovalsPage', () => {
       id: 'workflow-request-generic-2',
       title: '交通費申請',
     }
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest, secondGenericRequest],
-      meta: { current_page: 1, last_page: 1, total: 2 },
+      meta: { current_page: 1, last_page: 1, total: 2, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -443,16 +445,16 @@ describe('ApprovalsPage', () => {
     expect(screen.getByLabelText('交通費申請を選択')).toBeChecked()
   })
 
-  it('clears selection when the status filter changes', async () => {
+  it('clears selection when the status tab changes', async () => {
     const user = userEvent.setup()
     const secondGenericRequest: WorkflowRequest = {
       ...genericRequest,
       id: 'workflow-request-generic-2',
       title: '交通費申請',
     }
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest, secondGenericRequest],
-      meta: { current_page: 1, last_page: 1, total: 2 },
+      meta: { current_page: 1, last_page: 1, total: 2, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -463,15 +465,15 @@ describe('ApprovalsPage', () => {
     await user.click(screen.getByLabelText('名刺作成申請を選択'))
     expect(await screen.findByText('1件を選択中')).toBeInTheDocument()
 
-    await user.selectOptions(screen.getByLabelText('状態'), '承認済み')
+    await user.click(screen.getByRole('tab', { name: '承認済み 5件' }))
 
     expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument()
   })
 
   it('opens the detail panel automatically when the URL has a requestId query parameter', async () => {
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [attendanceRow],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -484,9 +486,9 @@ describe('ApprovalsPage', () => {
 
   it('clears selection when the year-month filter changes', async () => {
     const user = userEvent.setup()
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -503,9 +505,9 @@ describe('ApprovalsPage', () => {
     await waitFor(() => expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument())
   })
   it('ignores an invalid yearMonth query param and removes it from the URL', async () => {
-    const withData: Paginated<WorkflowRequest> = {
+    const withData: WorkflowRequestsToApproveResult = {
       data: [genericRequest],
-      meta: { current_page: 1, last_page: 1, total: 1 },
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
       links: { next: null, prev: null },
     }
     const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
@@ -524,12 +526,96 @@ describe('ApprovalsPage', () => {
   it('removes an invalid page from the URL', async () => {
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue({
       data: [],
-      meta: { current_page: 1, last_page: 1, total: 0 },
+      meta: { current_page: 1, last_page: 1, total: 0, status_counts: statusCounts },
       links: { next: null, prev: null },
-    } as Paginated<WorkflowRequest>)
+    } as WorkflowRequestsToApproveResult)
 
     renderPage(['/approvals?page=0&status=approved'])
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?status=approved$/))
+  })
+
+  function emptyResult(): WorkflowRequestsToApproveResult {
+    return { data: [], meta: { current_page: 1, last_page: 1, total: 0, status_counts: statusCounts }, links: { next: null, prev: null } }
+  }
+
+  it('shows the count on each status tab', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(emptyResult())
+
+    renderPage()
+
+    expect(await screen.findByRole('tab', { name: '承認待ち 3件' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: '承認済み 5件' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '差戻し済み 2件' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '取消 1件' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'すべて 11件' })).toBeInTheDocument()
+  })
+
+  it('switching the tab changes status in the URL, drops page and keeps yearMonth and requestId', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(emptyResult())
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockResolvedValue(attendanceDetail)
+
+    renderPage(['/approvals?yearMonth=2026-07&page=2&requestId=workflow-request-2'])
+    // 詳細パネル(モーダル)が開いている間もタブ操作でrequestIdが保たれることを確かめる
+    const tab = await screen.findByRole('tab', { name: '承認済み 5件', hidden: true })
+    fireEvent.mouseDown(tab, { button: 0 })
+
+    await waitFor(() => expect(screen.getByTestId('location-search').textContent).toContain('status=approved'))
+    const search = screen.getByTestId('location-search').textContent ?? ''
+    expect(search).not.toContain('page=')
+    expect(search).toContain('yearMonth=2026-07')
+    expect(search).toContain('requestId=workflow-request-2')
+  })
+
+  it('clearing the search conditions removes yearMonth and keeps the status tab', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(emptyResult())
+
+    renderPage(['/approvals?status=approved'])
+    expect(screen.queryByRole('button', { name: '検索条件をクリア' })).not.toBeInTheDocument()
+    await screen.findByRole('tab', { name: '承認済み 5件' })
+
+    await user.click(screen.getByRole('button', { name: '年月' }))
+    await user.click(screen.getByRole('button', { name: '今月' }))
+    await waitFor(() => expect(screen.getByTestId('location-search').textContent).toContain('yearMonth='))
+
+    await user.click(screen.getAllByRole('button', { name: '検索条件をクリア' })[0])
+
+    await waitFor(() => expect(screen.getByTestId('location-search').textContent).not.toContain('yearMonth'))
+    expect(screen.getByTestId('location-search').textContent).toContain('status=approved')
+    expect(screen.getByRole('tab', { name: '承認済み 5件' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('shows the tab specific empty state when the approved tab has no rows', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(emptyResult())
+
+    renderPage(['/approvals?status=approved'])
+
+    expect(await screen.findByText('承認済みの申請はありません。')).toBeInTheDocument()
+  })
+
+  it('shows the filtered empty state when a year-month yields no rows', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(emptyResult())
+
+    renderPage(['/approvals?yearMonth=2026-07'])
+
+    expect(await screen.findByText('条件に一致する申請はありません。')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '検索条件をクリア' })).toHaveLength(2)
+  })
+
+  it('keeps the tabs and filter bar when a later fetch fails', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove')
+      .mockResolvedValueOnce(emptyResult())
+      .mockRejectedValue(new ApiError(500, '取得に失敗'))
+
+    renderPage()
+    await screen.findByRole('tab', { name: '承認済み 5件' })
+
+    await user.click(screen.getByRole('tab', { name: '承認済み 5件' }))
+
+    expect(await screen.findByText('取得に失敗')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '承認済み' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '年月' })).toBeInTheDocument()
   })
 })

@@ -65,7 +65,7 @@ export const pageNodes: PageNode[] = [
   { pattern: "/requests", title: "申請一覧", parent: null },
   { pattern: "/requests/new", title: "新規申請", parent: "/requests" },
   { pattern: "/requests/:id", title: "申請詳細", parent: "/requests" },
-  { pattern: "/approvals", title: "承認待ち", parent: null },
+  { pattern: "/approvals", title: "承認一覧", parent: null },
   { pattern: "/expenses", title: "経費精算", parent: null },
   { pattern: "/expenses/new", title: "経費精算を作成", parent: "/expenses" },
   { pattern: "/expenses/:id", title: "経費精算詳細", parent: "/expenses" },

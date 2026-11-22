@@ -346,8 +346,8 @@ test('§5-17: 締め済み月次勤怠をバックオフィス詳細から引き
   await hrStaffPage.goto('/backoffice-tasks')
   // 開発DBには他シナリオ実行分のバックオフィスタスクが蓄積しており、デフォルト一覧の
   // 1ページ目に収まらないことがあるため、タイトルで検索して絞り込む。
-  await hrStaffPage.getByLabel('タスクを検索').fill(attendanceTaskTitle)
-  await hrStaffPage.getByRole('button', { name: '検索' }).click()
+  await hrStaffPage.getByLabel('キーワード').fill(attendanceTaskTitle)
+  await hrStaffPage.getByLabel('キーワード').press('Enter')
   const attendanceTaskRow = hrStaffPage.getByRole('row', { name: attendanceTaskTitle })
   await expect(attendanceTaskRow).toBeVisible()
   await attendanceTaskRow.getByRole('link', { name: attendanceTaskTitle }).click()
@@ -440,8 +440,8 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     // 開発DBには他シナリオ実行分のバックオフィスタスクが蓄積しており、デフォルト一覧の
     // 1ページ目に収まらないことがあるため、担当者名で検索して絞り込む。
     await accountingPage.goto('/backoffice-tasks')
-    await accountingPage.getByLabel('タスクを検索').fill(SCENARIO_USERS.punchEmployee)
-    await accountingPage.getByRole('button', { name: '検索' }).click()
+    await accountingPage.getByLabel('キーワード').fill(SCENARIO_USERS.punchEmployee)
+    await accountingPage.getByLabel('キーワード').press('Enter')
     const expenseTaskRow = accountingPage.getByRole('row', { name: new RegExp(`経費精算.*高橋 健太.*${usageDateStr.slice(0, 7)}`) })
     await expect(expenseTaskRow).toBeVisible()
     await expenseTaskRow.getByRole('link').click()
@@ -484,8 +484,8 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     await generalAffairsPage.goto('/backoffice-tasks')
-    await generalAffairsPage.getByLabel('タスクを検索').fill(cardTitle)
-    await generalAffairsPage.getByRole('button', { name: '検索' }).click()
+    await generalAffairsPage.getByLabel('キーワード').fill(cardTitle)
+    await generalAffairsPage.getByLabel('キーワード').press('Enter')
     const cardTaskRow = generalAffairsPage.getByRole('row', { name: cardTitle })
     await expect(cardTaskRow).toBeVisible()
     await cardTaskRow.getByRole('link', { name: cardTitle }).click()

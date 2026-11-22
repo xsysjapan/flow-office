@@ -85,10 +85,10 @@ describe('AppLayout', () => {
     )
   })
 
-  it('shows 承認待ち as a direct link to the unified approvals screen', () => {
+  it('shows 承認一覧 as a direct link to the unified approvals screen', () => {
     renderLayout()
 
-    expect(sidebar().getByRole('link', { name: '承認待ち' })).toHaveAttribute('href', '/approvals')
+    expect(sidebar().getByRole('link', { name: '承認一覧' })).toHaveAttribute('href', '/approvals')
   })
 
   it('shows タスク一覧 when its feature is effective', () => {
@@ -147,7 +147,7 @@ describe('AppLayout', () => {
     expect(await dialog.findByRole('heading', { name: 'メニュー' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: '週次勤怠' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: '申請一覧' })).toBeInTheDocument()
-    expect(dialog.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
+    expect(dialog.getByRole('link', { name: '承認一覧' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
   })

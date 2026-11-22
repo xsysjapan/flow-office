@@ -119,7 +119,7 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await expect(applicantPage.getByRole('status', { name: '申請中' })).toBeVisible()
     const claimUrl = applicantPage.url()
 
-    // 2. 渡辺直樹が承認待ち一覧から開いて承認する。承認によりバックオフィスタスク(経理向け)が
+    // 2. 渡辺直樹が承認一覧から開いて承認する。承認によりバックオフィスタスク(経理向け)が
     //    自動生成される。
     await loginAs(approverPage, SCENARIO_USERS.approver)
     await approverPage.goto('/approvals')
@@ -308,7 +308,7 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
   const transportAmount2 = randomAmountAboveApprovalSkipThreshold()
   const lodgingAmount = randomAmountAboveApprovalSkipThreshold()
   // claim.period_from/period_toは保存済み明細のusage_dateの最小値・最大値から自動算出される
-  // (原則2)。承認待ち一覧の行は期間表示で特定するため、3件の日付を昇順で固定しておく。
+  // (原則2)。承認一覧の行は期間表示で特定するため、3件の日付を昇順で固定しておく。
   const baseDate = new Date(`${randomFutureDate()}T00:00:00`)
   const usageDateStr1 = baseDate.toISOString().slice(0, 10)
   const usageDateStr2 = new Date(baseDate.getTime() + 1 * 86400000).toISOString().slice(0, 10)

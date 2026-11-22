@@ -4,14 +4,20 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as notificationsApi from '../../api/notifications'
-import type { Notification, Paginated } from '../../api/types'
+import type { MyNotificationsResult, Notification } from '../../api/types'
 import { NotificationsPage } from './NotificationsPage'
 import { notify } from '../../lib/notify'
 
 vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
-function paginated(data: Notification[]): Paginated<Notification> {
-  return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
+const statusCounts = { all: 7, unread: 3, read: 4 }
+
+function paginated(data: Notification[], meta: { current_page?: number; last_page?: number } = {}): MyNotificationsResult {
+  return {
+    data,
+    meta: { current_page: meta.current_page ?? 1, last_page: meta.last_page ?? 1, total: data.length, status_counts: statusCounts },
+    links: { next: null, prev: null },
+  }
 }
 
 const unreadNotification: Notification = {
@@ -100,7 +106,7 @@ describe('NotificationsPage', () => {
 
     expect(await screen.findByText('承認依頼')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('location-search')).toBeEmptyDOMElement())
-    expect(spy).toHaveBeenLastCalledWith(undefined)
+    expect(spy).toHaveBeenLastCalledWith(undefined, undefined)
   })
 
   it('keeps a valid status in the URL', async () => {
@@ -110,5 +116,60 @@ describe('NotificationsPage', () => {
 
     expect(await screen.findByText('承認依頼')).toBeInTheDocument()
     expect(screen.getByTestId('location-search')).toHaveTextContent('?status=unread')
+  })
+
+  it('shows the count on each status tab', async () => {
+    vi.spyOn(notificationsApi, 'fetchMyNotifications').mockResolvedValue(paginated([unreadNotification]))
+
+    renderPage()
+
+    expect(await screen.findByRole('tab', { name: 'すべて 7件' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '未読 3件' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '既読 4件' })).toBeInTheDocument()
+  })
+
+  it('switching the tab puts status in the URL and drops page', async () => {
+    const spy = vi.spyOn(notificationsApi, 'fetchMyNotifications').mockResolvedValue(paginated([unreadNotification]))
+
+    renderPage(['/notifications?page=2'])
+    await screen.findByText('承認依頼')
+
+    await userEvent.click(screen.getByRole('tab', { name: '未読 3件' }))
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('?status=unread'))
+    expect(screen.getByTestId('location-search')).not.toHaveTextContent('page')
+    expect(spy).toHaveBeenLastCalledWith('unread', undefined)
+  })
+
+  it('moves to page 2 and puts it in the URL', async () => {
+    const spy = vi
+      .spyOn(notificationsApi, 'fetchMyNotifications')
+      .mockResolvedValue(paginated([unreadNotification], { last_page: 2 }))
+
+    renderPage()
+    await screen.findByText('承認依頼')
+
+    await userEvent.click(screen.getByRole('button', { name: '次のページ' }))
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('?page=2'))
+    expect(spy).toHaveBeenLastCalledWith(undefined, 2)
+  })
+
+  it('shows the tab specific empty state for unread', async () => {
+    vi.spyOn(notificationsApi, 'fetchMyNotifications').mockResolvedValue(paginated([]))
+
+    renderPage(['/notifications?status=unread'])
+
+    expect(await screen.findByText('未読の通知はありません。')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'すべて表示する' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the tabs when the fetch fails', async () => {
+    vi.spyOn(notificationsApi, 'fetchMyNotifications').mockRejectedValue(new Error('boom'))
+
+    renderPage()
+
+    expect(await screen.findByRole('tab', { name: 'すべて' })).toBeInTheDocument()
+    expect(await screen.findByText(/boom|通知一覧の取得に失敗しました。/)).toBeInTheDocument()
   })
 })

@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as notificationsApi from '../../api/notifications'
-import type { Notification, Paginated } from '../../api/types'
+import type { Notification, MyNotificationsResult } from '../../api/types'
 import { NotificationBell } from './NotificationBell'
 
 function renderBell() {
@@ -17,8 +17,8 @@ function renderBell() {
   )
 }
 
-function paginated(data: Notification[]): Paginated<Notification> {
-  return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
+function paginated(data: Notification[]): MyNotificationsResult {
+  return { data, meta: { current_page: 1, last_page: 1, total: data.length, status_counts: { all: data.length, unread: data.length, read: 0 } }, links: { next: null, prev: null } }
 }
 
 describe('NotificationBell', () => {

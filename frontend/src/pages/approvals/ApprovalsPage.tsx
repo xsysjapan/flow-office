@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { ApprovalDetailPanel } from '../../components/ApprovalDetailPanel/ApprovalDetailPanel'
 import { Badge } from '../../components/Badge/Badge'
 import { BulkActionBar } from '../../components/BulkActionBar/BulkActionBar'
@@ -11,16 +10,19 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
+import { filterWidth } from '../../components/ListFilterBar/filterWidth'
+import { ListQueueTabs } from '../../components/ListQueueTabs/ListQueueTabs'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
-import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
 import { ApiError } from '../../api/client'
 import { fetchWorkflowRequest, type FetchWorkflowRequestsToApproveOptions } from '../../api/workflowRequests'
+import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { notify } from '../../lib/notify'
 import { useApproveApprovalItem, useReturnApprovalItem } from '../../hooks/useApprovals'
 import { useWorkflowRequest, useWorkflowRequestsToApprove } from '../../hooks/useWorkflowRequests'
@@ -29,12 +31,15 @@ import { attendanceMonthStatusLabel, expenseClaimStatusLabel, workflowRequestSta
 
 const DEFAULT_STATUS: NonNullable<FetchWorkflowRequestsToApproveOptions['status']> = 'submitted'
 
-const STATUS_FILTER_OPTIONS: Array<{ value: NonNullable<FetchWorkflowRequestsToApproveOptions['status']>; label: string }> = [
-  { value: 'submitted', label: '承認待ち' },
-  { value: 'approved', label: '承認済み' },
-  { value: 'returned', label: '差戻し済み' },
-  { value: 'cancelled', label: '取消' },
-  { value: 'all', label: 'すべて' },
+type ApprovalStatus = NonNullable<FetchWorkflowRequestsToApproveOptions['status']>
+
+/** 状態タブ。並び順はこの順に固定する。emptyTitleはフィルターが無いときの空状態の文言。 */
+const STATUS_TABS: Array<{ value: 'submitted' | 'approved' | 'returned' | 'cancelled' | 'all'; label: string; emptyTitle: string }> = [
+  { value: 'submitted', label: '承認待ち', emptyTitle: '承認待ちの申請はありません。' },
+  { value: 'approved', label: '承認済み', emptyTitle: '承認済みの申請はありません。' },
+  { value: 'returned', label: '差戻し済み', emptyTitle: '差戻し済みの申請はありません。' },
+  { value: 'cancelled', label: '取消', emptyTitle: '取消された申請はありません。' },
+  { value: 'all', label: 'すべて', emptyTitle: '承認対象の申請はありません。' },
 ]
 
 const SUBJECT_TYPE_LABELS: Record<Exclude<WorkflowRequestSubjectType, null>, string> = {
@@ -123,12 +128,12 @@ function formatSubmittedAt(value: string | null): string {
  * 切り替える(オブジェクト指向UI: どの種別の申請かをまず選び、その後で内容確認・操作する)。
  */
 export function ApprovalsPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
 
   /** フィルター・ページ・詳細パネル対象IDはすべてURLに載せる(SKILL.md §2.10)。ローカルstateを
    *  正にせず、URLを唯一の正として都度読み出すことで、Browser Back・リロード・URL共有で状態が
    *  壊れないようにする。 */
-  const status = (searchParams.get('status') as NonNullable<FetchWorkflowRequestsToApproveOptions['status']> | null) ?? DEFAULT_STATUS
+  const status = (searchParams.get('status') as ApprovalStatus | null) ?? DEFAULT_STATUS
   const yearMonthParam = searchParams.get('yearMonth')
   const isInvalidYearMonth = yearMonthParam !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonthParam)
   // 不正な年月は絞り込みなしとして扱い、URLからもキーを消す(表示とURLを一致させる)
@@ -137,7 +142,7 @@ export function ApprovalsPage() {
   const page = isValidPageParam(pageParam) ? Number(pageParam) : 1
   const selectedId = searchParams.get('requestId')
 
-  const { data, isLoading, error } = useWorkflowRequestsToApprove({ status, yearMonth, page })
+  const { data, error } = useWorkflowRequestsToApprove({ status, yearMonth, page })
 
   /** 指定したキーだけをURLクエリパラメータへ反映する(他のキーはそのまま維持)。値`null`は
    *  パラメータの削除を意味する。 */
@@ -197,7 +202,9 @@ export function ApprovalsPage() {
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
 
   const requests = data?.data ?? []
-  const isFiltered = status !== DEFAULT_STATUS || Boolean(yearMonth)
+  // タブ(status)は含めない。フィルターバーの条件だけで判定する
+  const isFiltered = Boolean(yearMonth)
+  const currentTab = STATUS_TABS.find((tab) => tab.value === status) ?? STATUS_TABS[0]
 
   function closePanel() {
     setSelectedId(null)
@@ -206,16 +213,19 @@ export function ApprovalsPage() {
     returnItem.reset()
   }
 
-  function handleFilterChange(next: { status?: NonNullable<FetchWorkflowRequestsToApproveOptions['status']>; yearMonth?: string }) {
-    const patch: Record<string, string | null> = { page: null }
-    if (next.status !== undefined) patch.status = next.status
-    if (next.yearMonth !== undefined) patch.yearMonth = next.yearMonth || null
-    updateParams(patch)
+  function changeStatus(next: string) {
+    updateParams({ status: next === DEFAULT_STATUS ? null : next, page: null })
     setSelectedIds(new Set())
   }
 
+  function changeYearMonth(value: string | undefined) {
+    updateParams({ yearMonth: value || null, page: null })
+    setSelectedIds(new Set())
+  }
+
+  /** 年月と page を消す。状態タブ・詳細パネルの対象ID(requestId)は残す。 */
   function clearFilters() {
-    updateParams({ status: null, yearMonth: null, page: null })
+    updateParams({ yearMonth: null, page: null })
     setSelectedIds(new Set())
   }
 
@@ -274,61 +284,44 @@ export function ApprovalsPage() {
     return { succeededIds, failures }
   }
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="承認待ち一覧の取得に失敗しました。" />
+  // 初回読み込みのみ画面全体をLoadingにする(以降はplaceholderDataで前の結果を残す)。取得エラーは表の場所に出す
+  if (!data && !error) return <LoadingState />
 
   return (
-    <Card title="承認待ち">
+    <Card title="承認一覧">
+      <ListQueueTabs
+        aria-label="状態"
+        className="mb-4"
+        value={currentTab.value}
+        onChange={changeStatus}
+        tabs={STATUS_TABS.map((tab) => ({ value: tab.value, label: tab.label, count: data?.meta.status_counts[tab.value] }))}
+      />
+      <ListFilterBar className="mb-4" isFiltered={isFiltered} onClear={clearFilters}>
+        <FormField label="年月" htmlFor="approvals-year-month" className={filterWidth.yearMonth}>
+          <YearMonthPicker id="approvals-year-month" value={yearMonth} onChange={(value) => changeYearMonth(value ?? undefined)} />
+        </FormField>
+      </ListFilterBar>
       <BulkActionBar
         selectedCount={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
         actions={[{ key: 'approve', label: 'まとめて承認する', onClick: openBulkDialog }]}
       />
-      <div className="mb-4 flex flex-wrap items-end gap-4">
-        <div className="w-40">
-          <FormField label="状態" htmlFor="approvals-status">
-            <NativeSelect
-              id="approvals-status"
-              value={status}
-              onChange={(event) => handleFilterChange({ status: event.target.value as NonNullable<FetchWorkflowRequestsToApproveOptions['status']> })}
-            >
-              {STATUS_FILTER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </NativeSelect>
-          </FormField>
-        </div>
-        <div className="w-48">
-          <FormField label="年月" htmlFor="approvals-year-month">
-            <YearMonthPicker
-              id="approvals-year-month"
-              value={yearMonth}
-              onChange={(value) => handleFilterChange({ yearMonth: value ?? '' })}
-            />
-          </FormField>
-        </div>
-        {isFiltered && (
-          <Button variant="secondary" onClick={clearFilters}>
-            フィルターをクリア
-          </Button>
-        )}
-      </div>
 
-      {requests.length === 0 ? (
+      {error ? (
+        <ErrorMessage error={error} fallback="承認一覧の取得に失敗しました。" />
+      ) : requests.length === 0 ? (
         isFiltered ? (
           <EmptyState
             title="条件に一致する申請はありません。"
-            description="状態や年月の条件を変えると表示される場合があります。"
+            description="年月の条件を変えると表示される場合があります。"
             action={
               <Button variant="secondary" size="sm" onClick={clearFilters}>
-                フィルターをクリア
+                検索条件をクリア
               </Button>
             }
           />
         ) : (
-          <EmptyState title="承認待ちの申請はありません。" />
+          <EmptyState title={currentTab.emptyTitle} />
         )
       ) : (
         <Table>
@@ -393,7 +386,7 @@ export function ApprovalsPage() {
         </Table>
       )}
 
-      {data && (
+      {data && !error && (
         <Pagination
           currentPage={data.meta.current_page}
           lastPage={data.meta.last_page}

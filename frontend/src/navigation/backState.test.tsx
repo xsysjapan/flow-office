@@ -107,7 +107,7 @@ describe('useBackTarget', () => {
   it('prefers override.to and override.label', () => {
     const state = { backTo: { pathname: '/requests', search: '', hash: '' } }
     renderAt({ pathname: '/requests/abc', state }, <Probe override={{ to: '/approvals' }} />)
-    expect(read('target')).toEqual({ to: '/approvals', label: '承認待ち' })
+    expect(read('target')).toEqual({ to: '/approvals', label: '承認一覧' })
   })
 
   it('uses override.label over the resolved title', () => {
