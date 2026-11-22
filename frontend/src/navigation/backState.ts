@@ -82,7 +82,7 @@ function labelFor(to: string): string {
 
 /**
  * 戻り先を解決する。優先順: override.to → 遷移元(`location.state.backTo`) → 階層上の親。
- * いずれも無ければnull。`state`は戻り先が持っていた遷移元を復元したもの(親へ戻るときはundefined)。
+ * ただし`menuEntry`の画面は遷移元が無ければ親へ戻さない。いずれも無ければnull。`state`は戻り先が持っていた遷移元を復元したもの(親へ戻るときはundefined)。
  */
 export function useBackTarget(override?: {
   to?: string;
@@ -114,7 +114,10 @@ export function useBackTarget(override?: {
       }
     }
 
-    const parentPath = resolvePage(location.pathname)?.parentPath;
+    // サイドバーから開ける画面は、遷移元が無ければ掘り下げで来ていないので戻るリンクを出さない。
+    const page = resolvePage(location.pathname);
+    if (page?.menuEntry) return null;
+    const parentPath = page?.parentPath;
     if (parentPath) {
       return {
         to: parentPath,

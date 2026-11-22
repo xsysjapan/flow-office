@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { WorkCalendar, WorkCalendarDay, WorkCalendarYear } from '../../api/types'
@@ -59,6 +59,16 @@ function buildAprilDays(): WorkCalendarDay[] {
   })
 }
 
+function CalendarDetailStub() {
+  const location = useLocation()
+  return (
+    <>
+      <p>カレンダー詳細ページ</p>
+      <p data-testid="location-state">{location.state ? 'with-state' : 'no-state'}</p>
+    </>
+  )
+}
+
 function renderPage(calendars: WorkCalendar[] = [calendar], years: WorkCalendarYear[] = [year]) {
   vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue(calendars)
   vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue(years)
@@ -70,7 +80,7 @@ function renderPage(calendars: WorkCalendar[] = [calendar], years: WorkCalendarY
       <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/2026/days']}>
         <Routes>
           <Route path="/admin/work-calendars/:calendarId/years/:fiscalYear/days" element={<WorkCalendarDaysPage />} />
-          <Route path="/admin/work-calendars/:id" element={<p>カレンダー詳細ページ</p>} />
+          <Route path="/admin/work-calendars/:id" element={<CalendarDetailStub />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -378,6 +388,17 @@ describe('WorkCalendarDaysPage', () => {
 
       expect(await screen.findByRole('button', { name: 'この年度を休日と同期する' })).toBeDisabled()
       expect(screen.getByRole('link', { name: '休日iCalendarソース管理' })).toBeInTheDocument()
+    })
+
+    it('opens the calendar detail from the holiday source link without passing the back state', async () => {
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('link', { name: '休日iCalendarソース管理' }))
+
+      expect(await screen.findByText('カレンダー詳細ページ')).toBeInTheDocument()
+      expect(screen.getByTestId('location-state')).toHaveTextContent(/^no-state$/)
     })
 
     it('syncs the year holiday calendar and shows the reflected summary', async () => {

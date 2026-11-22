@@ -13,6 +13,11 @@ function LocationProbe() {
   return <div data-testid="location-search">{location.search}</div>
 }
 
+function LocationStateProbe() {
+  const location = useLocation()
+  return <div data-testid="location-state">{`${location.pathname}|${location.state ? 'with-state' : 'no-state'}`}</div>
+}
+
 function renderPage(initialEntry = '/') {
   vi.spyOn(userManagementApi, 'fetchManagedGroups').mockResolvedValue([
     {
@@ -53,6 +58,7 @@ function renderPage(initialEntry = '/') {
       <MemoryRouter initialEntries={[initialEntry]}>
         <UserListPage />
         <LocationProbe />
+        <LocationStateProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -66,6 +72,16 @@ describe('UserListPage', () => {
     renderPage()
 
     expect(await screen.findByText('該当するユーザーはいません。')).toBeInTheDocument()
+  })
+
+  it('opens the HR import page from the header link without passing the back state', async () => {
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
+
+    renderPage('/admin/users')
+
+    await userEvent.click(await screen.findByRole('link', { name: '外部ID・HR連携' }))
+
+    await waitFor(() => expect(screen.getByTestId('location-state')).toHaveTextContent(/^\/admin\/hr-import\|no-state$/))
   })
 
   it('lists users with their group memberships and links to the detail page', async () => {

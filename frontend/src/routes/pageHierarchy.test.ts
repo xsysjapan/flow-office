@@ -56,9 +56,17 @@ describe('pageHierarchy: App.tsx coverage', () => {
 
 describe('resolvePage', () => {
   it('resolves static pages', () => {
-    expect(resolvePage('/paid-leave/history')).toEqual({ title: '有給履歴', parentPath: '/paid-leave' })
-    expect(resolvePage('/paid-leave')).toEqual({ title: '有給', parentPath: null })
-    expect(resolvePage('/')).toEqual({ title: 'ホーム', parentPath: null })
+    expect(resolvePage('/paid-leave/history')).toEqual({ title: '有給履歴', parentPath: '/paid-leave', menuEntry: false })
+    expect(resolvePage('/paid-leave')).toEqual({ title: '有給', parentPath: null, menuEntry: false })
+    expect(resolvePage('/')).toEqual({ title: 'ホーム', parentPath: null, menuEntry: false })
+  })
+
+  it('marks only the day and month detail pages as menu entries', () => {
+    expect(resolvePage('/attendance/days/2026-11-21')?.menuEntry).toBe(true)
+    expect(resolvePage('/attendance/months/2026-11')?.menuEntry).toBe(true)
+    expect(resolvePage('/attendance/week')?.menuEntry).toBe(false)
+    expect(resolvePage('/attendance/months')?.menuEntry).toBe(false)
+    expect(resolvePage('/paid-leave/history')?.menuEntry).toBe(false)
   })
 
   it('returns null for unknown paths', () => {
@@ -74,17 +82,18 @@ describe('resolvePage', () => {
   })
 
   it('builds dynamic titles and parents for months and days', () => {
-    expect(resolvePage('/attendance/months/2026-11')).toEqual({ title: '2026年11月の勤怠', parentPath: '/attendance/months' })
+    expect(resolvePage('/attendance/months/2026-11')).toEqual({ title: '2026年11月の勤怠', parentPath: '/attendance/months', menuEntry: true })
     expect(resolvePage('/attendance/days/2026-11-21')).toEqual({
       title: '11月21日の勤怠',
       parentPath: '/attendance/months/2026-11',
+      menuEntry: true,
     })
   })
 
   it('falls back to generic names for malformed parameters without throwing', () => {
-    expect(resolvePage('/attendance/months/abc')).toEqual({ title: '月次勤怠', parentPath: '/attendance/months' })
-    expect(resolvePage('/attendance/days/2026-13-40')).toEqual({ title: '日次勤怠', parentPath: '/attendance/months' })
-    expect(resolvePage('/attendance/days/xyz')).toEqual({ title: '日次勤怠', parentPath: '/attendance/months' })
+    expect(resolvePage('/attendance/months/abc')).toEqual({ title: '月次勤怠', parentPath: '/attendance/months', menuEntry: true })
+    expect(resolvePage('/attendance/days/2026-13-40')).toEqual({ title: '日次勤怠', parentPath: '/attendance/months', menuEntry: true })
+    expect(resolvePage('/attendance/days/xyz')).toEqual({ title: '日次勤怠', parentPath: '/attendance/months', menuEntry: true })
     expect(resolvePage('/admin/work-calendars/c1/years/abc/days')?.title).toBe('日別設定')
   })
 
@@ -94,6 +103,7 @@ describe('resolvePage', () => {
     expect(resolvePage('/admin/work-calendars/c1/years/2026/days')).toEqual({
       title: '2026年度の日別設定',
       parentPath: '/admin/work-calendars/c1',
+      menuEntry: false,
     })
   })
 
@@ -109,7 +119,7 @@ describe('resolvePage', () => {
   it('uses the admin nav label for admin list pages with no parent', () => {
     for (const group of adminNavGroups) {
       for (const item of group.items) {
-        expect(resolvePage(item.to)).toEqual({ title: item.label, parentPath: null })
+        expect(resolvePage(item.to)).toEqual({ title: item.label, parentPath: null, menuEntry: false })
       }
     }
   })

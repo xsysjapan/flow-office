@@ -1308,7 +1308,7 @@ export function AttendanceDayPage() {
               </Button>
             )}
             <Button asChild variant="secondary" title="この週で見る">
-              <Link to={`/attendance/week?start=${monday}`} state={forwardState}>
+              <Link to={`/attendance/week?start=${monday}`}>
                 <CalendarRange aria-hidden="true" />
                 週次
               </Link>

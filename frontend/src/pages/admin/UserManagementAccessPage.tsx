@@ -919,7 +919,6 @@ export function UserManagementAccessPage({
                 上記以外の項目(氏名など)を外部HRから取り込みたい場合は、先に
                 <Link
                   to="/admin/identity-settings"
-                  state={forwardState}
                   className="underline"
                 >
                   外部ID・項目管理責任
@@ -990,7 +989,6 @@ export function UserManagementAccessPage({
                 {csvApplySummary.changed}件)。反映結果は
                 <Link
                   to="/admin/users"
-                  state={forwardState}
                   className="underline"
                 >
                   ユーザー一覧

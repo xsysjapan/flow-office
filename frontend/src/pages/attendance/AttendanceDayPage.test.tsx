@@ -114,7 +114,12 @@ function leavePage<T>(data: T[]) {
 
 function LocationProbe() {
   const location = useLocation()
-  return <div data-testid="location">{location.pathname + location.search}</div>
+  return (
+    <>
+      <div data-testid="location">{location.pathname + location.search}</div>
+      <div data-testid="location-state">{JSON.stringify(location.state ?? null)}</div>
+    </>
+  )
 }
 
 function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date, shiftSwapRequiresApproval = true, initialState?: unknown) {
@@ -223,10 +228,26 @@ describe('AttendanceDayPage', () => {
     expect(await screen.findByTestId('location')).toHaveTextContent('/attendance/week?start=2026-07-06')
   })
 
-  it('shows a back link to the month of the day when opened directly', async () => {
+  it('shows no back link when opened from the menu (no origin)', async () => {
     renderPage([recordedDay])
 
-    expect(await screen.findByRole('link', { name: '2026年7月の勤怠に戻る' })).toHaveAttribute('href', '/attendance/months/2026-07')
+    await screen.findByText('日次勤怠')
+    expect(screen.queryByRole('link', { name: /に戻る$/ })).not.toBeInTheDocument()
+  })
+
+  it('shows a back link to the week when drilled down from the week page', async () => {
+    renderPage([recordedDay], date, true, { backTo: { pathname: '/attendance/week', search: '?start=2026-07-06', hash: '' } })
+
+    expect(await screen.findByRole('link', { name: '週次勤怠に戻る' })).toHaveAttribute('href', '/attendance/week?start=2026-07-06')
+  })
+
+  it('opens the week page from the 週次 link without the origin state', async () => {
+    renderPage([recordedDay], date, true, { backTo: { pathname: '/attendance/week', search: '?start=2026-07-06', hash: '' } })
+
+    await userEvent.click(await screen.findByRole('link', { name: '週次' }))
+
+    expect(await screen.findByTestId('location')).toHaveTextContent('/attendance/week?start=2026-07-06')
+    expect(screen.getByTestId('location-state')).toHaveTextContent('null')
   })
 
   it('deletes the day after confirming with a reason (UC-A015)', async () => {

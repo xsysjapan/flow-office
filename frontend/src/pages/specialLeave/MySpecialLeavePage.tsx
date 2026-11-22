@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useForwardState } from '../../navigation/backState'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -284,7 +285,7 @@ function SpecialLeaveRequestForm() {
 }
 
 function MySpecialLeaveRequestList() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
   const requestPageParam = searchParams.get('requestPage')
   const requestPage = isValidPageParam(requestPageParam) ? Number(requestPageParam) : 1
   const { data, isLoading, error } = useMySpecialLeaveRequests({ page: requestPage })
@@ -390,6 +391,7 @@ export function MySpecialLeavePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <BackLink />
       <Card
         title="自分の特別休暇"
         actions={

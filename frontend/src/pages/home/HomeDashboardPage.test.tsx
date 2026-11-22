@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
@@ -42,6 +43,11 @@ function paginated<T>(data: T[]) {
   return { data, meta: { current_page: 1, last_page: 1, total: data.length, per_page: 20 }, links: { next: null, prev: null } }
 }
 
+function LocationStateProbe() {
+  const location = useLocation()
+  return <div data-testid="location-state">{`${location.pathname}|${location.state ? 'with-state' : 'no-state'}`}</div>
+}
+
 function renderPage(user: User = mockUser) {
   const authValue: AuthContextValue = {
     user,
@@ -58,6 +64,7 @@ function renderPage(user: User = mockUser) {
       <AuthContext.Provider value={authValue}>
         <MemoryRouter>
           <HomeDashboardPage />
+          <LocationStateProbe />
         </MemoryRouter>
       </AuthContext.Provider>
     </QueryClientProvider>,
@@ -115,6 +122,17 @@ describe('HomeDashboardPage', () => {
 
     expect(await screen.findByText('バックオフィスタスク')).toBeInTheDocument()
     expect(backOfficeTasksApi.fetchMyTasks).toHaveBeenCalled()
+  })
+
+  it('opens the menu screen from a summary card without passing the back state', async () => {
+    renderPage()
+
+    const links = await screen.findAllByRole('link', { name: '詳しく見る' })
+    const requestsLink = links.find((link) => link.getAttribute('href') === '/requests')
+    expect(requestsLink).toBeDefined()
+    await userEvent.click(requestsLink!)
+
+    await waitFor(() => expect(screen.getByTestId('location-state')).toHaveTextContent(/^\/requests\|no-state$/))
   })
 
   it('hides cards for features the user does not have', async () => {

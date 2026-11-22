@@ -19,7 +19,7 @@ import type {
   WorkCalendarYearStatus,
 } from '../../api/types'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
-import { useBackTarget, useForwardState, useKeepBackState } from '../../navigation/backState'
+import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { cn } from '../../lib/utils'
 import { addDays, addMonths, datesInMonth } from '../../utils/weekDates'
 import {
@@ -305,7 +305,6 @@ function DayCell({ date, state, inRange, allowOverride, weekdayClassification, o
 export function WorkCalendarDaysPage() {
   const { calendarId = '', fiscalYear = '' } = useParams<{ calendarId: string; fiscalYear: string }>()
   const navigate = useNavigate()
-  const forwardState = useForwardState()
   const backTarget = useBackTarget()
   const keepBackState = useKeepBackState()
   const putDays = usePutWorkCalendarDays()
@@ -542,7 +541,6 @@ export function WorkCalendarDaysPage() {
               休日iCalendarソースが未設定のため、同期は行えません。
               <Link
                 to={`/admin/work-calendars/${calendar.id}#${HOLIDAY_SOURCE_MANAGEMENT_ANCHOR}`}
-                state={forwardState}
                 className="ml-1 underline hover:text-foreground"
               >
                 休日iCalendarソース管理

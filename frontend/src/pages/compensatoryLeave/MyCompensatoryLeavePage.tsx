@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -263,7 +265,7 @@ function CompensatoryLeaveRequestForm() {
 }
 
 function MyCompensatoryLeaveRequestList() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
   const requestPageParam = searchParams.get('requestPage')
   const requestPage = isValidPageParam(requestPageParam) ? Number(requestPageParam) : 1
   const { data, isLoading, error } = useMyCompensatoryLeaveRequests({ page: requestPage })
@@ -367,6 +369,7 @@ export function MyCompensatoryLeavePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <BackLink />
       <Card title="自分の代休">
         <p className="mb-4 text-sm text-foreground">
           残り<strong className="mx-1 text-lg font-semibold">{totalRemaining}</strong>日

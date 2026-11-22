@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { useForwardState } from '../../navigation/backState'
+import { Link } from 'react-router-dom'
+import { BackLink } from '../../components/BackLink/BackLink'
+import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { useAuth } from '../../auth/useAuth'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { AttendanceDayRow } from '../../components/AttendanceDayRow/AttendanceDayRow'
@@ -33,8 +34,7 @@ import { addDays, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
  */
 export function WeekAttendancePage() {
   const { user } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const forwardState = useForwardState()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
   const startParam = searchParams.get('start')
   // 表示中の週はURLのstartを正として毎回読む。月曜以外の正しい日付はその週に寄せて表示し(URLは書き換えない)、
   // 不正値は今週として扱ってURLからキーを消す。
@@ -168,6 +168,7 @@ export function WeekAttendancePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <BackLink />
       <Card
         title="週次勤怠"
         navigation={
@@ -179,7 +180,7 @@ export function WeekAttendancePage() {
               今週
             </Button>
             <Button asChild variant="secondary" title="月次で見る">
-              <Link to={`/attendance/months/${weekStart.slice(0, 7)}`} state={forwardState}>
+              <Link to={`/attendance/months/${weekStart.slice(0, 7)}`}>
                 <CalendarRange aria-hidden="true" />
                 月次
               </Link>
