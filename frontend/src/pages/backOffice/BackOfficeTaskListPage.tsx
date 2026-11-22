@@ -142,8 +142,8 @@ function isSelectableTask(task: BackOfficeTask): boolean {
  * UC-11: バックオフィス処理タスクの汎用検索画面。担当者タブ(未割り当て・自分のタスク・他の担当者・
  * すべて。件数付き)で担当者区分を選び、キーワードとステータス(既定は未完了)で絞り込んで一覧する。
  * 画面の条件(q・assignee・status・page)はURLに載せ、詳細→戻るで復元する。
- * 行を選ぶと一括操作バーが出る。割り当ては未割り当てのタスクだけ、一括完了は自分のタスクだけ
- * 可能で、選んだタスクの性質で押せるかを決める(タブ名では決めない)。
+ * 行を選ぶと一括操作バーが出る。担当者の設定は完了・取消以外のタスクなら担当者の状態に関係なく可能、
+ * 一括完了は自分のタスクだけ可能で、選んだタスクの性質で押せるかを決める(タブ名では決めない)。
  */
 export function BackOfficeTaskListPage() {
   const { user } = useAuth()
@@ -205,15 +205,10 @@ export function BackOfficeTaskListPage() {
   const selectedCount = selectedIds.size
   const selectedTasks = tasks.filter((task) => selectedIds.has(task.id))
 
-  // 割り当ては未割り当てのタスクだけ。完了は自分のタスクだけ(自分の判定は担当者IDの一致)
+  // 担当者の設定は選択可能な(完了・取消以外の)タスクなら担当者の状態に関係なく可能。完了は自分のタスクだけ(自分の判定は担当者IDの一致)
   const isMine = (task: BackOfficeTask) => user !== null && task.assignee?.id === user.id
-  const allUnassigned = selectedTasks.every((task) => !task.assignee)
   const allMine = selectedTasks.every(isMine)
-  const assignReason = !allUnassigned
-    ? '未割り当てのタスクのみ割り当てられます'
-    : !bulkAssignee
-      ? '担当者を選択してください'
-      : undefined
+  const assignReason = !bulkAssignee ? '担当者を選択してください' : undefined
   const canAssign = assignReason === undefined
   const completeReason = allMine ? undefined : '自分のタスクのみ一括完了できます'
   const canComplete = completeReason === undefined
@@ -389,7 +384,7 @@ export function BackOfficeTaskListPage() {
                 isLoading={isBulkAssigning}
                 disabled={!canAssign}
               >
-                割り当てる
+                担当者を設定
               </Button>
               <Button
                 size="sm"

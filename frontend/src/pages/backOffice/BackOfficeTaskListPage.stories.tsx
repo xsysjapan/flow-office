@@ -193,7 +193,7 @@ export const AllTasksWithKeyword: Story = {
   ),
 }
 
-/** 未割り当てと割当済みを選ぶと、割り当てが無効になり理由が出る */
+/** 未割り当てと割当済みを選んでも「担当者を設定」は担当者選択まで無効で、未選択の理由だけが出る(未割り当て限定の理由は出ない) */
 export const SelectedWithAssignedTask: Story = {
   render: () => (
     <StoryFrame
@@ -211,8 +211,9 @@ export const SelectedWithAssignedTask: Story = {
     await userEvent.click(await canvas.findByRole('checkbox', { name: 'タクシー代の経理処理を選択' }))
     await userEvent.click(canvas.getByRole('checkbox', { name: '経費精算の差戻し対応を選択' }))
     await expect(canvas.getByText('2件を選択中')).toBeInTheDocument()
-    await expect(canvas.getByRole('button', { name: '割り当てる' })).toBeDisabled()
-    await expect(canvas.getByText('未割り当てのタスクのみ割り当てられます')).toBeInTheDocument()
+    await expect(canvas.getByRole('button', { name: '担当者を設定' })).toBeDisabled()
+    await expect(canvas.getByText('担当者を選択してください')).toBeInTheDocument()
+    await expect(canvas.queryByText('未割り当てのタスクのみ割り当てられます')).not.toBeInTheDocument()
   },
 }
 

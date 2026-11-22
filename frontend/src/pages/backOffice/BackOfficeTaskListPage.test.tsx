@@ -213,12 +213,14 @@ describe('BackOfficeTaskListPage', () => {
     )
   })
 
-  it('disables bulk assignment with a reason when the selection contains an assigned task', async () => {
+  it('allows setting the assignee for a selection that mixes unassigned and assigned tasks', async () => {
     const tasks = [
       makeTask({ id: 'task-unassigned', title: '未割り当てのタスク' }),
-      makeTask({ id: 'task-assigned', title: '割当済みのタスク', assignee: colleague }),
+      makeTask({ id: 'task-assigned', title: '割当済みのタスク', status: 'processing', assignee: colleague }),
     ]
     vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginate([me]))
+    const assignSpy = vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockResolvedValue(tasks[0])
 
     renderPage()
 
@@ -226,12 +228,23 @@ describe('BackOfficeTaskListPage', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: '割当済みのタスクを選択' }))
 
     expect(screen.getByText('2件を選択中')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '割り当てる' })).toBeDisabled()
-    expect(screen.getByText('未割り当てのタスクのみ割り当てられます')).toBeInTheDocument()
-    expect(screen.queryByText('担当者を選択してください')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '担当者を設定' })).toBeDisabled()
+    expect(screen.getByText('担当者を選択してください')).toBeInTheDocument()
+    expect(screen.queryByText('未割り当てのタスクのみ割り当てられます')).not.toBeInTheDocument()
+
+    await userEvent.click(userPickerTrigger())
+    await userEvent.type(await screen.findByPlaceholderText('担当者を選択'), '自分')
+    await userEvent.click(await screen.findByRole('option', { name: '自分 太郎(me@example.com)' }))
+
+    expect(screen.getByRole('button', { name: '担当者を設定' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: '担当者を設定' }))
+
+    await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(2))
+    expect(assignSpy).toHaveBeenCalledWith('task-unassigned', 'me-1')
+    expect(assignSpy).toHaveBeenCalledWith('task-assigned', 'me-1')
   })
 
-  it('bulk-assigns selected unassigned tasks to the picked user', async () => {
+  it('sets the assignee for selected unassigned tasks to the picked user', async () => {
     const tasks = [
       makeTask({ id: 'backoffice-task-1', title: 'タクシー代の経理処理' }),
       makeTask({ id: 'backoffice-task-3', title: '名刺の再作成', task_type: 'business_card_order' }),
@@ -245,19 +258,34 @@ describe('BackOfficeTaskListPage', () => {
     await userEvent.click(await screen.findByRole('checkbox', { name: 'タクシー代の経理処理を選択' }))
     await userEvent.click(screen.getByRole('checkbox', { name: '名刺の再作成を選択' }))
     expect(screen.getByText('2件を選択中')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '割り当てる' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '担当者を設定' })).toBeDisabled()
     expect(screen.getByText('担当者を選択してください')).toBeInTheDocument()
 
     await userEvent.click(userPickerTrigger())
     await userEvent.type(await screen.findByPlaceholderText('担当者を選択'), '花子')
     await userEvent.click(await screen.findByRole('option', { name: '担当者花子(hanako@example.com)' }))
 
-    expect(screen.getByRole('button', { name: '割り当てる' })).toBeEnabled()
-    await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
+    expect(screen.getByRole('button', { name: '担当者を設定' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: '担当者を設定' }))
 
     await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(2))
     expect(assignSpy).toHaveBeenCalledWith('backoffice-task-1', 'assignee-1')
     expect(assignSpy).toHaveBeenCalledWith('backoffice-task-3', 'assignee-1')
+  })
+
+  it('does not allow selecting completed or cancelled tasks for bulk assignment', async () => {
+    const tasks = [
+      makeTask({ id: 'task-open', title: '未完了のタスク' }),
+      makeTask({ id: 'task-done', title: '完了のタスク', status: 'completed', assignee: colleague }),
+      makeTask({ id: 'task-cancelled', title: '取消のタスク', status: 'cancelled', assignee: colleague }),
+    ]
+    vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
+
+    renderPage(['/backoffice-tasks?assignee=all&status=all'])
+
+    expect(await screen.findByRole('checkbox', { name: '完了のタスクを選択' })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: '取消のタスクを選択' })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: '未完了のタスクを選択' })).toBeEnabled()
   })
 
   it('disables bulk completion with a reason when the selection contains others or unassigned tasks', async () => {

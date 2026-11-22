@@ -156,6 +156,8 @@ export function BackOfficeTaskDetailPage() {
 
   const { label, tone } = backOfficeTaskStatusLabel(task.status)
   const actionError = assignTask.error ?? changeStatus.error
+  /** 完了・取消のタスクは担当者を設定・変更できない(フォームを出さない)。 */
+  const isClosedTask = task.status === 'completed' || task.status === 'cancelled'
 
   return (
     <div className="flex flex-col gap-3">
@@ -180,18 +182,25 @@ export function BackOfficeTaskDetailPage() {
           <dd className="text-foreground">{task.completed_at ?? '-'}</dd>
         </dl>
 
-        {!task.assignee && (
+        {!isClosedTask && (
           <div className="mt-5 border-t border-border pt-4">
-            <h3 className="mb-3 text-sm font-semibold text-foreground">担当者を割り当てる</h3>
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
+              {task.assignee ? '担当者を変更' : '担当者を割り当てる'}
+            </h3>
             <FormField label="担当者" htmlFor="assignee">
               <UserPicker id="assignee" value={assignedUserId} onChange={setAssignedUserId} />
             </FormField>
             <Button
               isLoading={assignTask.isPending}
               disabled={!assignedUserId}
-              onClick={() => assignTask.mutate({ id: taskId, assignedUserId: assignedUserId! })}
+              onClick={() =>
+                assignTask.mutate(
+                  { id: taskId, assignedUserId: assignedUserId! },
+                  { onSuccess: () => setAssignedUserId(undefined) },
+                )
+              }
             >
-              割り当てる
+              {task.assignee ? '変更する' : '割り当てる'}
             </Button>
             {!assignedUserId && <p className="text-xs text-muted-foreground">担当者を選択してください</p>}
           </div>
