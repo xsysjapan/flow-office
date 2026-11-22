@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { ApiError } from '../../api/client'
@@ -15,11 +15,13 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { FormField } from '../../components/FormField/FormField'
+import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
+import { filterWidth } from '../../components/ListFilterBar/filterWidth'
+import { ListQueueTabs } from '../../components/ListQueueTabs/ListQueueTabs'
+import { TextFilterInput } from '../../components/TextFilterInput/TextFilterInput'
 import { Checkbox } from '../../components/ui/checkbox'
-import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { BackOfficeTask, BackOfficeTaskAssigneeScope, BackOfficeTaskStatusFilter } from '../../api/types'
 import {
@@ -168,9 +170,6 @@ export function BackOfficeTaskListPage() {
   const page = pageParam !== null && isValidPageParam(pageParam) ? Number(pageParam) : 1
   const isFiltered = search !== '' || status !== DEFAULT_STATUS
 
-  const [searchInput, setSearchInput] = useState(search)
-  useEffect(() => setSearchInput(search), [search])
-
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   /** 一括操作ダイアログを開いた時点の選択(実行中・結果表示中に選択が変わっても件数がぶれないようにする) */
   const [dialogTasks, setDialogTasks] = useState<BackOfficeTask[]>([])
@@ -198,15 +197,12 @@ export function BackOfficeTaskListPage() {
   }, [isInvalidAssignee, isInvalidStatus, isInvalidPage, setSearchParams])
 
   const result = tasksQuery.data
-  if (tasksQuery.error) {
-    if (tasksQuery.error instanceof ApiError && tasksQuery.error.status === 403) return <PermissionDenied />
-    return <ErrorMessage error={tasksQuery.error} fallback="タスクの取得に失敗しました。" />
-  }
-  // 初回読み込みのみ画面全体をLoadingにする(条件切替中はplaceholderDataで前の結果を残す)
-  if (!result) return <LoadingState />
+  if (tasksQuery.error instanceof ApiError && tasksQuery.error.status === 403) return <PermissionDenied />
 
-  const tasks = result.data
-  const counts = result.meta.assignee_counts
+  // 初回(データ無し)のみ表の場所をLoadingにする。条件切替中はplaceholderDataで前の結果を残し、
+  // 取得エラー時もタブ・フィルターバーは残す(不正な条件を直せるように)
+  const tasks = result?.data ?? []
+  const counts = result?.meta.assignee_counts
   const selectedCount = selectedIds.size
   const selectedTasks = tasks.filter((task) => selectedIds.has(task.id))
 
@@ -272,15 +268,13 @@ export function BackOfficeTaskListPage() {
     clearSelection()
   }
 
-  function submitSearch(event: FormEvent) {
-    event.preventDefault()
-    updateParams({ q: searchInput.trim() || null, page: null })
+  function changeSearch(next: string | null) {
+    updateParams({ q: next, page: null })
     clearSelection()
   }
 
   /** 検索語とステータスを既定に戻す。担当者タブは維持する。 */
   function clearConditions() {
-    setSearchInput('')
     updateParams({ q: null, status: null, page: null })
     clearSelection()
   }
@@ -337,109 +331,99 @@ export function BackOfficeTaskListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card title="タスク検索">
-        <form className="flex flex-col gap-2 sm:flex-row" onSubmit={submitSearch}>
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            aria-label="タスクを検索"
-            placeholder="タイトル・種別・担当部署・担当者名で検索"
-          />
-          <NativeSelect
-            aria-label="ステータス"
-            className="sm:w-44"
-            value={status}
-            onChange={(event) => {
-              const next = event.target.value
-              if (isOneOf(next, STATUS_FILTERS)) changeStatus(next)
-            }}
-          >
-            {STATUS_FILTERS.map((option) => (
-              <option key={option} value={option}>
-                {statusFilterLabel(option)}
-              </option>
-            ))}
-          </NativeSelect>
-          <Button type="submit">検索</Button>
-          {isFiltered && (
-            <Button type="button" variant="secondary" onClick={clearConditions}>
-              クリア
-            </Button>
-          )}
-        </form>
-      </Card>
-
-      <Tabs
-        value={assignee}
-        onValueChange={(value) => {
-          if (isOneOf(value, ASSIGNEE_SCOPES)) changeAssignee(value)
-        }}
-      >
-        <div className="max-w-full overflow-x-auto">
-          <TabsList>
-            {ASSIGNEE_TABS.map((tab) => {
-              const count = counts[tab.scope]
-              return (
-                <TabsTrigger
-                  key={tab.scope}
-                  value={tab.scope}
-                  aria-label={`${tab.label}(${count}件)`}
-                >
-                  {tab.label} {count}
-                </TabsTrigger>
-              )
-            })}
-          </TabsList>
-        </div>
-      </Tabs>
-
       <Card>
-        <BulkActionBar
-          selectedCount={selectedCount}
-          onClear={clearSelection}
-          actions={[
-            { key: 'assign', label: '担当者を変更', onClick: openAssignDialog },
-            {
-              key: 'complete',
-              label: '完了にする',
-              onClick: openCompleteDialog,
-              disabled: completeReason !== undefined,
-              disabledReason: completeReason,
-            },
-          ]}
-        />
+        <div className="flex flex-col gap-4">
+          <ListQueueTabs
+            aria-label="タスクの担当者区分"
+            tabs={ASSIGNEE_TABS.map((tab) => ({
+              value: tab.scope,
+              label: tab.label,
+              count: counts?.[tab.scope],
+            }))}
+            value={assignee}
+            onChange={(value) => {
+              if (isOneOf(value, ASSIGNEE_SCOPES)) changeAssignee(value)
+            }}
+          />
 
-        {tasks.length === 0 ? (
-          isFiltered ? (
-            <EmptyState
-              title="条件に一致するタスクがありません。"
-              description="検索条件を変えると表示される場合があります。"
-              action={
-                <Button variant="secondary" size="sm" onClick={clearConditions}>
-                  検索条件をクリア
-                </Button>
-              }
+          <ListFilterBar isFiltered={isFiltered} onClear={clearConditions}>
+            <TextFilterInput
+              label="キーワード"
+              placeholder="タイトル・種別・担当部署・担当者名"
+              maxLength={100}
+              className={filterWidth.keyword}
+              value={search || null}
+              onChange={changeSearch}
             />
+            <FormField label="ステータス" htmlFor="task-status-filter" className={filterWidth.select}>
+              <NativeSelect
+                id="task-status-filter"
+                value={status}
+                onChange={(event) => {
+                  const next = event.target.value
+                  if (isOneOf(next, STATUS_FILTERS)) changeStatus(next)
+                }}
+              >
+                {STATUS_FILTERS.map((option) => (
+                  <option key={option} value={option}>
+                    {statusFilterLabel(option)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          </ListFilterBar>
+
+          <BulkActionBar
+            selectedCount={selectedCount}
+            onClear={clearSelection}
+            actions={[
+              { key: 'assign', label: '担当者を変更', onClick: openAssignDialog },
+              {
+                key: 'complete',
+                label: '完了にする',
+                onClick: openCompleteDialog,
+                disabled: completeReason !== undefined,
+                disabledReason: completeReason,
+              },
+            ]}
+          />
+
+          {tasksQuery.error && !result ? (
+            <ErrorMessage error={tasksQuery.error} fallback="タスクの取得に失敗しました。" />
+          ) : !result ? (
+            <LoadingState />
+          ) : tasks.length === 0 ? (
+            isFiltered ? (
+              <EmptyState
+                title="条件に一致するタスクがありません。"
+                description="検索条件を変えると表示される場合があります。"
+                action={
+                  <Button variant="secondary" size="sm" onClick={clearConditions}>
+                    検索条件をクリア
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState title={currentTab.emptyTitle} />
+            )
           ) : (
-            <EmptyState title={currentTab.emptyTitle} />
-          )
-        ) : (
-          <>
-            <BackOfficeTaskTable
-              tasks={tasks}
-              selectedIds={selectedIds}
-              onToggleRow={toggleRow}
-              onToggleAll={toggleAll}
-              isRowSelectable={isSelectableTask}
-            />
-            <Pagination
-              currentPage={result.meta.current_page}
-              lastPage={result.meta.last_page}
-              total={result.meta.total}
-              onPageChange={changePage}
-            />
-          </>
-        )}
+            <>
+              <BackOfficeTaskTable
+                tasks={tasks}
+                selectedIds={selectedIds}
+                onToggleRow={toggleRow}
+                onToggleAll={toggleAll}
+                isRowSelectable={isSelectableTask}
+              />
+              <Pagination
+                currentPage={result.meta.current_page}
+                lastPage={result.meta.last_page}
+                total={result.meta.total}
+                onPageChange={changePage}
+              />
+            </>
+          )}
+        </div>
       </Card>
 
       <BulkActionDialog

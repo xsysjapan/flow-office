@@ -126,10 +126,10 @@ describe('BackOfficeTaskListPage', () => {
 
     renderPage()
 
-    expect(await screen.findByRole('tab', { name: '未割り当て(12件)' })).toHaveTextContent('未割り当て 12')
-    expect(screen.getByRole('tab', { name: '自分のタスク(5件)' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '他の担当者(40件)' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'すべて(57件)' })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: '未割り当て 12件' })).toHaveTextContent('未割り当て12')
+    expect(screen.getByRole('tab', { name: '自分のタスク 5件' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '他の担当者 40件' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'すべて 57件' })).toBeInTheDocument()
   })
 
   it('lists tasks with status, due date and assignee name', async () => {
@@ -168,7 +168,7 @@ describe('BackOfficeTaskListPage', () => {
     renderPage()
     await screen.findByText('未割り当てのタスクはありません。')
 
-    await userEvent.click(screen.getByRole('tab', { name: '他の担当者(0件)' }))
+    await userEvent.click(screen.getByRole('tab', { name: '他の担当者 0件' }))
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?assignee=others$/))
     expect(backOfficeTasksApi.fetchBackOfficeTasks).toHaveBeenLastCalledWith(
@@ -176,7 +176,7 @@ describe('BackOfficeTaskListPage', () => {
     )
     expect(await screen.findByText('他の担当者に割り当てられたタスクはありません。')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('tab', { name: 'すべて(0件)' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'すべて 0件' }))
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?assignee=all$/))
   })
 
@@ -192,20 +192,50 @@ describe('BackOfficeTaskListPage', () => {
     )
   })
 
-  it('passes the keyword to the API and keeps it in the URL', async () => {
+  it('updates q in the URL 300ms after typing, drops page, and has no search button', async () => {
+    renderPage(['/backoffice-tasks?page=2'])
+
+    await userEvent.type(await screen.findByLabelText('キーワード'), '名刺')
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?q=%E5%90%8D%E5%88%BA$/))
+    expect(backOfficeTasksApi.fetchBackOfficeTasks).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: '名刺', assignee: 'unassigned', status: 'open', page: 1 }),
+    )
+    expect(screen.queryByRole('button', { name: '検索' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '検索条件をクリア' }).length).toBeGreaterThan(0)
+  })
+
+  it('applies the keyword immediately on Enter', async () => {
     renderPage()
 
-    await userEvent.type(await screen.findByRole('textbox', { name: 'タスクを検索' }), '名刺')
-    await userEvent.click(screen.getByRole('button', { name: '検索' }))
+    await userEvent.type(await screen.findByLabelText('キーワード'), '名刺{Enter}')
 
-    await waitFor(() =>
-      expect(backOfficeTasksApi.fetchBackOfficeTasks).toHaveBeenLastCalledWith(
-        expect.objectContaining({ search: '名刺', assignee: 'unassigned', status: 'open', page: 1 }),
-      ),
-    )
     expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?q=%E5%90%8D%E5%88%BA$/)
-    expect(screen.getByRole('textbox', { name: 'タスクを検索' })).toHaveValue('名刺')
-    expect(screen.getByRole('button', { name: 'クリア' })).toBeInTheDocument()
+  })
+
+  it('labels the keyword and status controls visibly', async () => {
+    renderPage()
+
+    expect(await screen.findByLabelText('キーワード')).toBeInTheDocument()
+    expect(screen.getByLabelText('ステータス')).toBeInTheDocument()
+  })
+
+  it('clears q and status but keeps the assignee tab', async () => {
+    renderPage(['/backoffice-tasks?assignee=me&q=a&status=completed&page=2'])
+
+    await userEvent.click(await screen.findByRole('button', { name: '検索条件をクリア' }))
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?assignee=me$/))
+    expect(screen.getByLabelText('キーワード')).toHaveValue('')
+  })
+
+  it('keeps the tabs and keyword field when the fetch fails with a non-403 error', async () => {
+    vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockRejectedValue(new ApiError(422, '検索語が不正です。'))
+
+    renderPage(['/backoffice-tasks?q=a'])
+
+    expect(await screen.findByText('検索語が不正です。')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /未割り当て/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('キーワード')).toHaveValue('a')
   })
 
   it('removes invalid assignee, status and page from the URL and falls back to the defaults', async () => {
@@ -460,7 +490,7 @@ describe('BackOfficeTaskListPage', () => {
     await userEvent.click(await screen.findByRole('checkbox', { name: '未割当を選択' }))
     expect(screen.getByText('1件を選択中')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('tab', { name: 'すべて(0件)' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'すべて 0件' }))
 
     await waitFor(() => expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument())
   })
@@ -486,13 +516,13 @@ describe('BackOfficeTaskListPage', () => {
 
     expect(await screen.findByText('未割り当てのタスクはありません。')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('tab', { name: '自分のタスク(0件)' }))
+    await userEvent.click(screen.getByRole('tab', { name: '自分のタスク 0件' }))
     expect(await screen.findByText('担当中のタスクはありません。')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('tab', { name: '他の担当者(0件)' }))
+    await userEvent.click(screen.getByRole('tab', { name: '他の担当者 0件' }))
     expect(await screen.findByText('他の担当者に割り当てられたタスクはありません。')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('tab', { name: 'すべて(0件)' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'すべて 0件' }))
     expect(await screen.findByText('タスクはありません。')).toBeInTheDocument()
     expect(screen.queryByText('条件に一致するタスクがありません。')).not.toBeInTheDocument()
   })
@@ -503,7 +533,7 @@ describe('BackOfficeTaskListPage', () => {
     expect(await screen.findByText('条件に一致するタスクがありません。')).toBeInTheDocument()
     expect(screen.queryByText('未割り当てのタスクはありません。')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: '検索条件をクリア' }))
+    await userEvent.click(screen.getAllByRole('button', { name: '検索条件をクリア' })[1])
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/))
   })
