@@ -5,6 +5,7 @@ namespace App\Services\EventSourcing;
 use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
 use App\Models\AdminCommandRun;
 use App\Services\PaidLeave\ScheduleAssessmentRunService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
 
@@ -19,6 +20,11 @@ class ReadModelRebuildRunService
 {
     public const COMMAND_NAME = 'read-models:rebuild';
 
+    public const MIGRATE_COMMAND_NAME = 'backoffice:migrate-assignment-events';
+
+    /** メンテナンス(全API 503)を要するコマンド名。いずれかが`running`の間はメンテナンスで、互いに同時には開始しない。 */
+    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME];
+
     public const LOCK_NAME = 'read-model-rebuild-run';
 
     public const REBUILD_ACTIVE_MESSAGE = '作り直しを実行中です。';
@@ -26,17 +32,18 @@ class ReadModelRebuildRunService
     public const ASSESSMENT_ACTIVE_MESSAGE = '有給付与予定の判定の実行中です。終わってから実行してください。';
 
     /**
-     * CLIから直接実行するときの記録(`running`、依頼者なし、心拍あり)を作る。作り直しが実行中(`isRunning()`)、または有給付与予定の判定が`queued`/`running`ならnull。
+     * CLIから直接実行するときの記録(`running`、依頼者なし、心拍あり)を作る。メンテナンスを要するコマンドが実行中(`isRunning()`)、または有給付与予定の判定が`queued`/`running`ならnull。
+     * `$commandName`は記録するコマンド名(`MAINTENANCE_COMMANDS`のいずれか)。
      */
-    public function startDirectRun(bool $dryRun): ?AdminCommandRun
+    public function startDirectRun(bool $dryRun, string $commandName = self::COMMAND_NAME): ?AdminCommandRun
     {
-        return Cache::lock(self::LOCK_NAME, 30)->block(10, function () use ($dryRun): ?AdminCommandRun {
+        return Cache::lock(self::LOCK_NAME, 30)->block(10, function () use ($dryRun, $commandName): ?AdminCommandRun {
             if ($this->isRunning() || $this->isAssessmentActive()) {
                 return null;
             }
 
             $run = AdminCommandRun::query()->create([
-                'command_name' => self::COMMAND_NAME,
+                'command_name' => $commandName,
                 'parameters' => ['dry-run' => $dryRun],
                 'status' => 'running',
                 'started_at' => now(),
@@ -82,16 +89,32 @@ class ReadModelRebuildRunService
     }
 
     /**
-     * メンテナンス中か(作り直しの`running`の記録があり、心拍が10分以内)。読むだけで、書かない。
-     * 全APIのミドルウェアとスケジューラーから呼ばれるので、テーブルが無い環境(migrate前)でも壊さずfalseを返す。
+     * 実行役から呼ばれたコマンドが、自分の記録以外のメンテナンスを要するコマンドが実行中かを`LOCK_NAME`のロックの中で確かめる
+     * (直接実行の`startDirectRun`と同じ排他。ロックが取れなければ実行中とみなす)。
      */
-    public function isRunning(): bool
+    public function isOtherMaintenanceRunning(AdminCommandRun $own): bool
     {
         try {
-            $runs = AdminCommandRun::query()
-                ->where('command_name', self::COMMAND_NAME)
-                ->where('status', 'running')
-                ->get(['id', 'started_at']);
+            return Cache::lock(self::LOCK_NAME, 30)->block(10, fn (): bool => $this->isRunning($own->id));
+        } catch (LockTimeoutException) {
+            return true;
+        }
+    }
+
+    /**
+     * メンテナンス中か(`MAINTENANCE_COMMANDS`のいずれかの`running`の記録があり、心拍が10分以内)。読むだけで、書かない。
+     * 全APIのミドルウェアとスケジューラーから呼ばれるので、テーブルが無い環境(migrate前)でも壊さずfalseを返す。
+     */
+    public function isRunning(?string $exceptRunId = null): bool
+    {
+        try {
+            $query = AdminCommandRun::query()
+                ->whereIn('command_name', self::MAINTENANCE_COMMANDS)
+                ->where('status', 'running');
+            if ($exceptRunId !== null) {
+                $query->where('id', '!=', $exceptRunId);
+            }
+            $runs = $query->get(['id', 'started_at']);
             foreach ($runs as $run) {
                 if ($this->isRunningAlive($run)) {
                     return true;

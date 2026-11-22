@@ -205,6 +205,49 @@ class BackOfficeTaskAssignmentSplitterTest extends TestCase
         $this->assertSame($first->rows, $second->rows);
     }
 
+    public function test_legacy_assigned_with_no_inserted_status_changed_still_gets_previous_assigned_user_id(): void
+    {
+        $rows = [
+            $this->row(self::T, 'backoffice_task.created', []),
+            $this->row(self::T, 'backoffice_task.status_changed', ['previousStatus' => 'not_started', 'newStatus' => 'in_review', 'changedByUserId' => 'M', 'comment' => null]),
+            $this->row(self::T, 'backoffice_task.assigned', ['assignedUserId' => 'A', 'assignedByUserId' => 'M']),
+            $this->row(self::T, 'backoffice_task.assigned', ['assignedUserId' => 'B', 'assignedByUserId' => 'M']),
+        ];
+
+        $result = $this->splitter->split($rows);
+
+        $this->assertSame([], $result->violations);
+        $this->assertSame(2, $result->targetCount);
+        $this->assertSame(0, $result->insertedStatusChanged);
+        $this->assertSame(['in_review' => 2], $result->previousStatusCounts);
+        $this->assertCount(4, $result->rows);
+        $this->assertSame(['assignedUserId' => 'A', 'assignedByUserId' => 'M', 'previousAssignedUserId' => null], $result->rows[2]['event_properties']);
+        $this->assertSame(['assignedUserId' => 'B', 'assignedByUserId' => 'M', 'previousAssignedUserId' => 'A'], $result->rows[3]['event_properties']);
+        $this->assertSame([1 => 1, 2 => 2, 3 => 3, 4 => 4], $result->idMap);
+        $this->assertSame([1 => 1, 2 => 2, 3 => 3, 4 => 4], $result->versionMap);
+    }
+
+    public function test_id_and_version_maps_and_meta_source_event_id_follow_the_new_ids(): void
+    {
+        $rows = [
+            $this->row('wf-1', 'workflow_request.submitted', []),
+            $this->row(self::T, 'backoffice_task.created', []),
+            $this->row(self::T, 'backoffice_task.assigned', ['assignedUserId' => 'A', 'assignedByUserId' => 'M']),
+            $this->row(self::T, 'backoffice_task.completed', []),
+        ];
+        // 欠番(補正で削除された想定)と、meta が旧idを指す行。
+        $rows[3]['id'] = 10;
+        $rows[2]['meta_data']['history-normalization'] = ['source' => 'x', 'source_event_id' => 1];
+        $rows[1]['meta_data']['history-normalization'] = ['source' => 'x', 'source_event_id' => 999];
+
+        $result = $this->splitter->split($rows);
+
+        $this->assertSame([1 => 1, 2 => 2, 3 => 3, 10 => 5], $result->idMap);
+        $this->assertSame([1 => 1, 2 => 1, 3 => 2, 10 => 4], $result->versionMap);
+        $this->assertSame(1, $result->rows[2]['meta_data']['history-normalization']['source_event_id']);
+        $this->assertSame(999, $result->rows[1]['meta_data']['history-normalization']['source_event_id'], '対応の無いidは変えない');
+    }
+
     public function test_assigned_before_created_is_a_violation_and_rows_are_empty(): void
     {
         $rows = [

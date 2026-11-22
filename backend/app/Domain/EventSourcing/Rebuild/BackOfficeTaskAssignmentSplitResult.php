@@ -17,6 +17,8 @@ final readonly class BackOfficeTaskAssignmentSplitResult
      * @param  array<string, list<string>>  $terminalTransitions  直前が completed/cancelled だった assigned の集約ID(直前の status => 集約IDの一覧)
      * @param  int  $skippedConverted  変換済みでそのまま写した assigned の件数
      * @param  list<string>  $violations  変換できない並びの説明(空なら問題なし)
+     * @param  array<int, int>  $idMap  旧id => 新id(元の行すべて。変換対象があったときだけ)
+     * @param  array<int, int>  $versionMap  旧id => 新しい aggregate_version(版を持つ元の行)
      */
     public function __construct(
         public array $rows,
@@ -26,5 +28,7 @@ final readonly class BackOfficeTaskAssignmentSplitResult
         public array $terminalTransitions,
         public int $skippedConverted,
         public array $violations,
+        public array $idMap = [],
+        public array $versionMap = [],
     ) {}
 }

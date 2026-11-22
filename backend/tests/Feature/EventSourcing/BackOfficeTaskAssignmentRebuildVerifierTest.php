@@ -41,6 +41,18 @@ class BackOfficeTaskAssignmentRebuildVerifierTest extends TestCase
         $this->assertSame([], (new BackOfficeTaskAssignmentRebuildVerifier)->verify());
     }
 
+    public function test_the_source_can_be_a_row_array_instead_of_a_table(): void
+    {
+        $this->seedAndRebuild();
+        $source = (new EventStoreRebuildWriter)->readRowArrays();
+
+        $this->assertSame([], (new BackOfficeTaskAssignmentRebuildVerifier)->verify(EventStoreRebuildWriter::TABLE, $source));
+
+        $source[0]['event_properties']['approverUserId'] = 'tampered';
+        $problems = (new BackOfficeTaskAssignmentRebuildVerifier)->verify(EventStoreRebuildWriter::TABLE, $source);
+        $this->assertNotEmpty(array_filter($problems, fn (string $p) => str_starts_with($p, '(3)')));
+    }
+
     public function test_remaining_legacy_assigned_is_detected(): void
     {
         $this->seedAndRebuild();

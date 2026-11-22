@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * バックオフィスタスクの担当者割当イベントの作り直し(BackOfficeTaskAssignmentSplitter)の検証。作り直し後の表($table)と
- * 元の表($source)を読む(読み取りのみ)。
+ * 元の表(または行の配列。$source)を読む(読み取りのみ)。
  *
  * (1) EventStoreRebuildWriter::verify(id・版の連番)
  * (2) previousAssignedUserId キーの無い旧形式の backoffice_task.assigned が0件
@@ -22,8 +22,11 @@ final class BackOfficeTaskAssignmentRebuildVerifier
 
     public function __construct(private readonly EventStoreRebuildWriter $writer = new EventStoreRebuildWriter) {}
 
-    /** @return list<string> 違反の説明(空なら問題なし) */
-    public function verify(string $table = EventStoreRebuildWriter::TABLE, string $source = 'stored_events'): array
+    /**
+     * @param  string|list<array<string, mixed>>  $source  元の表の名前、または元の行の配列(EventStoreRebuildWriter::readRowArrays の形)
+     * @return list<string> 違反の説明(空なら問題なし)
+     */
+    public function verify(string $table = EventStoreRebuildWriter::TABLE, string|array $source = 'stored_events'): array
     {
         if (! Schema::hasTable($table)) {
             return ["{$table} が存在しない"];
@@ -89,10 +92,15 @@ final class BackOfficeTaskAssignmentRebuildVerifier
     /**
      * backoffice_task.* の行を持つ集約を除いた行を id順に返す。
      *
+     * @param  string|list<array<string, mixed>>  $table  表の名前、または行の配列
      * @return list<object>
      */
-    private function nonTaskRows(string $table): array
+    private function nonTaskRows(string|array $table): array
     {
+        if (is_array($table)) {
+            return $this->nonTaskRowsOfArray($table);
+        }
+
         $taskAggregates = array_flip(array_map('strval', DB::table($table)
             ->where('event_class', 'like', BackOfficeTaskAssignmentSplitter::PREFIX.'%')
             ->whereNotNull('aggregate_uuid')->distinct()->pluck('aggregate_uuid')->all()));
@@ -108,6 +116,41 @@ final class BackOfficeTaskAssignmentRebuildVerifier
         });
 
         return $rows;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<object>
+     */
+    private function nonTaskRowsOfArray(array $rows): array
+    {
+        usort($rows, fn (array $a, array $b) => (int) $a['id'] <=> (int) $b['id']);
+
+        $taskAggregates = [];
+        foreach ($rows as $row) {
+            if ($row['aggregate_uuid'] !== null && str_starts_with((string) $row['event_class'], BackOfficeTaskAssignmentSplitter::PREFIX)) {
+                $taskAggregates[(string) $row['aggregate_uuid']] = true;
+            }
+        }
+
+        $result = [];
+        foreach ($rows as $row) {
+            if ($row['aggregate_uuid'] !== null && isset($taskAggregates[(string) $row['aggregate_uuid']])) {
+                continue;
+            }
+            $result[] = (object) [
+                'id' => $row['id'],
+                'aggregate_uuid' => $row['aggregate_uuid'],
+                'aggregate_version' => $row['aggregate_version'],
+                'event_class' => $row['event_class'],
+                'event_version' => $row['event_version'],
+                'event_properties' => json_encode($row['event_properties'], JSON_THROW_ON_ERROR),
+                'meta_data' => json_encode($row['meta_data'], JSON_THROW_ON_ERROR),
+                'created_at' => $row['created_at'],
+            ];
+        }
+
+        return $result;
     }
 
     /** id・meta の stored-event-id を除いた、行の正規化したハッシュ(JSONの書式の差を吸収する)。 */

@@ -51,7 +51,7 @@ class AdminCommandRunner
     }
 
     /**
-     * 待っている記録を1件(古い順)返す。有給付与予定の判定が`queued`/`running`の間は、作り直しの記録を飛ばす(`queued`のまま残す)。
+     * 待っている記録を1件(古い順)返す。有給付与予定の判定が`queued`/`running`の間は、メンテナンスを要するコマンド(作り直し・割当イベントの移行)の記録を飛ばす(`queued`のまま残す)。
      */
     public function nextQueuedRun(): ?AdminCommandRun
     {
@@ -59,7 +59,7 @@ class AdminCommandRunner
             ->whereIn('command_name', $this->commandNames())
             ->where('status', 'queued');
         if ($this->rebuildRunService->isAssessmentActive()) {
-            $query->where('command_name', '!=', ReadModelRebuildRunService::COMMAND_NAME);
+            $query->whereNotIn('command_name', ReadModelRebuildRunService::MAINTENANCE_COMMANDS);
         }
 
         return $query->orderBy('created_at')->orderBy('id')->first();

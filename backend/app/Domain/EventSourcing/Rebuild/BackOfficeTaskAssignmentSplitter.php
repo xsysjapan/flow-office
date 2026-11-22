@@ -11,7 +11,9 @@ namespace App\Domain\EventSourcing\Rebuild;
  * - 旧形式(payload に previousAssignedUserId キーが無い) assigned: previousAssignedUserId=直前の担当者を足し、直前の status が
  *   in_review 以外なら直後に status_changed(直前 → in_review)を挿入する。変換済みの assigned はそのまま写す(イベント単位の冪等)。
  * - 直前の status が決まらない並び(created より前の旧 assigned)は violations に記録し、rows を空にする。
- * - 挿入があるときだけ、影響のある集約の版を1から振り直し、全行の id を1から振り直す(meta も合わせる)。無ければ入力のまま。
+ * - 旧形式が1件でもあれば(挿入0件でも)変換後の行を返す。影響のある集約(挿入のあった集約)の版を1から振り直し、全行の id を1から振り直す(meta も合わせる)。
+ *   旧id→新id・旧id→新しい版の対応(idMap・versionMap)と、meta の history-normalization.source_event_id の付け替えも行う。
+ * - 旧形式が無い(targetCount===0)ときは入力のまま。
  */
 final class BackOfficeTaskAssignmentSplitter
 {
@@ -38,6 +40,7 @@ final class BackOfficeTaskAssignmentSplitter
         }
 
         $out = [];
+        $origins = [];
         $state = [];
         $affected = [];
         $violations = [];
@@ -52,6 +55,7 @@ final class BackOfficeTaskAssignmentSplitter
             $class = (string) $row['event_class'];
             if ($uuid === null || ! isset($targets[$uuid]) || ! str_starts_with($class, self::PREFIX)) {
                 $out[] = $row;
+                $origins[] = (int) $row['id'];
 
                 continue;
             }
@@ -64,20 +68,24 @@ final class BackOfficeTaskAssignmentSplitter
                 case 'backoffice_task.created':
                     $current = ['status' => 'not_started', 'assignee' => null];
                     $out[] = $row;
+                    $origins[] = (int) $row['id'];
                     break;
                 case self::STATUS_CHANGED:
                     $current['status'] = isset($payload['newStatus']) ? (string) $payload['newStatus'] : null;
                     $out[] = $row;
+                    $origins[] = (int) $row['id'];
                     break;
                 case 'backoffice_task.completed':
                     $current['status'] = 'completed';
                     $out[] = $row;
+                    $origins[] = (int) $row['id'];
                     break;
                 case self::ASSIGNED:
                     if (array_key_exists('previousAssignedUserId', $payload)) {
                         $skipped++;
                         $current['assignee'] = $payload['assignedUserId'] ?? null;
                         $out[] = $row;
+                        $origins[] = (int) $row['id'];
                         break;
                     }
 
@@ -87,6 +95,7 @@ final class BackOfficeTaskAssignmentSplitter
                         $current['assignee'] = $payload['assignedUserId'] ?? null;
                         $current['status'] = self::IN_REVIEW;
                         $out[] = $row;
+                        $origins[] = (int) $row['id'];
                         break;
                     }
 
@@ -94,6 +103,7 @@ final class BackOfficeTaskAssignmentSplitter
                     $previousStatusCounts[$previousStatus] = ($previousStatusCounts[$previousStatus] ?? 0) + 1;
                     $row['event_properties'] = $payload + ['previousAssignedUserId' => $current['assignee']];
                     $out[] = $row;
+                    $origins[] = (int) $row['id'];
 
                     if ($previousStatus !== self::IN_REVIEW) {
                         $statusChanged = $row;
@@ -105,6 +115,7 @@ final class BackOfficeTaskAssignmentSplitter
                             'comment' => null,
                         ];
                         $out[] = $statusChanged;
+                        $origins[] = null;
                         $inserted++;
                         $affected[$uuid] = true;
                         if (in_array($previousStatus, ['completed', 'cancelled'], true)) {
@@ -116,6 +127,7 @@ final class BackOfficeTaskAssignmentSplitter
                     break;
                 default:
                     $out[] = $row;
+                    $origins[] = (int) $row['id'];
             }
             unset($current);
         }
@@ -123,27 +135,43 @@ final class BackOfficeTaskAssignmentSplitter
         if ($violations !== []) {
             return new BackOfficeTaskAssignmentSplitResult([], $targetCount, $inserted, $previousStatusCounts, $terminal, $skipped, $violations);
         }
-        if ($inserted === 0) {
-            return new BackOfficeTaskAssignmentSplitResult($rows, $targetCount, 0, $previousStatusCounts, $terminal, $skipped, []);
+        if ($targetCount === 0) {
+            return new BackOfficeTaskAssignmentSplitResult($rows, 0, 0, $previousStatusCounts, $terminal, $skipped, []);
         }
 
         $versions = [];
+        $versionMap = [];
         foreach ($out as $i => $row) {
             $uuid = $row['aggregate_uuid'];
-            if ($uuid === null || ! isset($affected[(string) $uuid])) {
-                continue;
+            if ($uuid !== null && isset($affected[(string) $uuid])) {
+                $version = ($versions[(string) $uuid] ?? 0) + 1;
+                $versions[(string) $uuid] = $version;
+                $out[$i]['aggregate_version'] = $version;
+                $out[$i]['meta_data']['aggregate-root-version'] = $version;
             }
-            $version = ($versions[(string) $uuid] ?? 0) + 1;
-            $versions[(string) $uuid] = $version;
-            $out[$i]['aggregate_version'] = $version;
-            $out[$i]['meta_data']['aggregate-root-version'] = $version;
+            if ($origins[$i] !== null && $out[$i]['aggregate_version'] !== null) {
+                $versionMap[$origins[$i]] = (int) $out[$i]['aggregate_version'];
+            }
         }
+
+        $idMap = [];
         foreach ($out as $i => $row) {
             $id = $i + 1;
             $out[$i]['id'] = $id;
             $out[$i]['meta_data']['stored-event-id'] = $id;
+            if ($origins[$i] !== null) {
+                $idMap[$origins[$i]] = $id;
+            }
         }
 
-        return new BackOfficeTaskAssignmentSplitResult($out, $targetCount, $inserted, $previousStatusCounts, $terminal, $skipped, []);
+        // 補正ログの対象(history-normalization.source_event_id)など、meta が stored_events.id を指すものを新しい id へ付け替える。
+        foreach ($out as $i => $row) {
+            $source = $row['meta_data']['history-normalization']['source_event_id'] ?? null;
+            if ($source !== null && isset($idMap[(int) $source])) {
+                $out[$i]['meta_data']['history-normalization']['source_event_id'] = $idMap[(int) $source];
+            }
+        }
+
+        return new BackOfficeTaskAssignmentSplitResult($out, $targetCount, $inserted, $previousStatusCounts, $terminal, $skipped, [], $idMap, $versionMap);
     }
 }

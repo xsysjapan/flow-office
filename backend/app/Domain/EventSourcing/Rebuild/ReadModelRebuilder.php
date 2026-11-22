@@ -33,11 +33,12 @@ class ReadModelRebuilder
     public const TIME_LIMIT_MESSAGE = '時間の上限を超えたため中止しました。';
 
     /**
+     * @param  float|null  $startedAt  時間の上限の起点(`microtime(true)`)。外側の処理(移行など)からの合計で上限を適用するときに渡す。既定は呼び出した時点
      * @return array{dry_run: bool, tables: list<array{table: string, before: int, after: int, changed: bool}>, changed_tables: int}
      */
-    public function rebuild(bool $dryRun): array
+    public function rebuild(bool $dryRun, ?float $startedAt = null): array
     {
-        $startedAt = microtime(true);
+        $startedAt ??= microtime(true);
         $limitSeconds = (int) config('read_model_rebuild.time_limit_minutes', 180) * 60;
 
         $tables = $this->existingTables();

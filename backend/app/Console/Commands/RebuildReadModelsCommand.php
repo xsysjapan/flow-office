@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Console\Attributes\AdminExecutable;
 use App\Console\CurrentAdminCommandRun;
+use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
 use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
 use App\Services\EventSourcing\ReadModelRebuildRunService;
 use Illuminate\Console\Command;
@@ -28,12 +29,26 @@ class RebuildReadModelsCommand extends Command
     protected $description = '全ReadModelのテーブルを空にして、イベントから作り直す。実行中は全利用者がメンテナンス中(全API 503)になる。'
         .'日次バッチの時刻(1:00〜2:20)を避けて実行すること。「試し実行」は最後にロールバックし、変更のあるテーブルを出力に表示するだけでデータは変えない。';
 
-    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService): int
+    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector): int
     {
         $dryRun = (bool) $this->option('dry-run');
 
         $run = CurrentAdminCommandRun::get();
         $direct = $run === null;
+
+        // 旧形式のバックオフィス割当イベントが残っている間は、作り直すとステータスが失われるため本実行しない(試し実行は警告のみ)。
+        $legacyCount = $legacyDetector->count();
+        if ($legacyCount > 0) {
+            $message = "旧形式のバックオフィス割当イベントが{$legacyCount}件あります。先に運用コマンド『バックオフィス割当イベントの移行』を実行してください。";
+            if (! $dryRun) {
+                $this->error($message);
+                $run?->update(['error_message' => $message]);
+
+                return self::FAILURE;
+            }
+            $this->warn('警告: '.$message);
+        }
+
         if ($direct) {
             $run = $runService->startDirectRun($dryRun);
             if ($run === null) {
@@ -43,6 +58,11 @@ class RebuildReadModelsCommand extends Command
 
                 return self::FAILURE;
             }
+        } elseif ($runService->isOtherMaintenanceRunning($run)) {
+            $this->error(ReadModelRebuildRunService::REBUILD_ACTIVE_MESSAGE);
+            $run->update(['error_message' => ReadModelRebuildRunService::REBUILD_ACTIVE_MESSAGE]);
+
+            return self::FAILURE;
         }
 
         try {
