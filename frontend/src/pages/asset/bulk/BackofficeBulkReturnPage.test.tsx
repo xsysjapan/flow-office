@@ -6,6 +6,9 @@ import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../../api/asset'
 import type { Asset } from '../../../api/types'
+import { notify } from '../../../lib/notify'
+
+vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 import { BackofficeBulkReturnPage } from './BackofficeBulkReturnPage'
 
 const navigate = vi.fn()
@@ -93,6 +96,7 @@ const asset: Asset = {
 
 describe('BackofficeBulkReturnPage', () => {
   beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
     vi.restoreAllMocks()
     navigate.mockClear()
     currentUser = { id: 'manager-1', effective_permissions: ['asset.manage'] }
@@ -131,6 +135,7 @@ describe('BackofficeBulkReturnPage', () => {
 
     expect(bulkSpy).toHaveBeenCalledWith({ operation: 'return', asset_ids: ['asset-1'] })
     expect(await screen.findByText(/成功 1件/)).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('1件を返却しました')
   })
 
   it('貸出中でない備品はエラーになる', async () => {

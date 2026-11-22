@@ -6,6 +6,9 @@ import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../../api/asset'
 import type { Asset } from '../../../api/types'
+import { notify } from '../../../lib/notify'
+
+vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 import { SelfBulkLoanPage } from './SelfBulkLoanPage'
 
 const navigate = vi.fn()
@@ -89,6 +92,7 @@ const asset: Asset = {
 
 describe('SelfBulkLoanPage', () => {
   beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
     vi.restoreAllMocks()
     navigate.mockClear()
   })
@@ -148,5 +152,6 @@ describe('SelfBulkLoanPage', () => {
 
     expect(bulkSpy).toHaveBeenCalledWith({ operation: 'self_loan', asset_ids: ['asset-1'] })
     expect(await screen.findByText(/成功 1件/)).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('1件を借りました')
   })
 })

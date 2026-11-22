@@ -10,6 +10,7 @@ import { Badge } from '../../../components/Badge/Badge'
 import { Button } from '../../../components/Button/Button'
 import { Card } from '../../../components/Card/Card'
 import { ErrorMessage } from '../../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../../lib/notify'
 import { PermissionDenied } from '../../../components/PermissionDenied/PermissionDenied'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table'
 import { useBulkAssetOperation, useResolveAssetForBulk } from '../../../hooks/useAsset'
@@ -66,6 +67,7 @@ export function BackofficeBulkReturnPage() {
       asset_ids: targets.map((t) => t.id),
     })
     setResult(res)
+    if (res.succeeded_count > 0) notify.success(`${res.succeeded_count}件を返却しました`)
     setTargets((prev) => prev.filter((t) => !res.results.some((r) => r.asset_id === t.id && r.success)))
   }
 

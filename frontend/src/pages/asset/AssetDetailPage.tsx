@@ -40,6 +40,7 @@ import {
   useSetAssetDefaultLocation,
   useStartAssetRepair,
 } from '../../hooks/useAsset'
+import { notify } from '../../lib/notify'
 import { useCreateWorkflowRequest, useSubmitWorkflowRequest } from '../../hooks/useWorkflowRequests'
 import {
   assetHistoryEventTypeLabel,
@@ -69,6 +70,7 @@ const ASSET_MANAGE_PERMISSION = 'asset.manage'
 function LendAssetDialog({ asset }: { asset: Asset }) {
   const lendAsset = useLendAsset()
   const [borrowerUserId, setBorrowerUserId] = useState<string | undefined>(undefined)
+  const [borrowerName, setBorrowerName] = useState<string | undefined>(undefined)
   const [expectedReturnAt, setExpectedReturnAt] = useState<string | undefined>(undefined)
   const [loanRequestId, setLoanRequestId] = useState<string | undefined>(undefined)
   const isApproval = asset.lending_method === 'approval'
@@ -87,6 +89,7 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
 
   const resetSelection = () => {
     setBorrowerUserId(undefined)
+    setBorrowerName(undefined)
     setExpectedReturnAt(undefined)
     setLoanRequestId(undefined)
   }
@@ -111,6 +114,11 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
             loan_request_id: isApproval ? loanRequestId : null,
           },
         })
+        notify.success(
+          borrowerName
+            ? `${asset.name}を${borrowerName}さんに貸与しました`
+            : `${asset.name}を貸与しました`,
+        )
         resetSelection()
       }}
       onOpenChange={(open) => {
@@ -121,8 +129,9 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
         <UserPicker
           id="lend-borrower"
           value={borrowerUserId}
-          onChange={(userId) => {
+          onChange={(userId, user) => {
             setBorrowerUserId(userId)
+            setBorrowerName(user?.name)
             setLoanRequestId(undefined)
           }}
         />
@@ -195,6 +204,7 @@ function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
           approver_user_id: approverUserId,
         })
         await submitRequest.mutateAsync({ id: created.id, approverUserId })
+        notify.success(`${asset.name}の貸出を申請しました`)
         setPurpose('')
         setApproverUserId(undefined)
       }}
@@ -232,7 +242,10 @@ function SelfBorrowButton({ asset, borrowerUserId }: { asset: Asset; borrowerUse
       confirmLabel="借りる"
       isPending={lendAsset.isPending}
       error={lendAsset.error}
-      onConfirm={() => lendAsset.mutateAsync({ id: asset.id, input: { borrower_user_id: borrowerUserId } })}
+      onConfirm={async () => {
+        await lendAsset.mutateAsync({ id: asset.id, input: { borrower_user_id: borrowerUserId } })
+        notify.success(`${asset.name}を借りました`)
+      }}
     />
   )
 }
@@ -252,6 +265,7 @@ function ReturnAssetDialog({ asset }: { asset: Asset }) {
       error={returnAsset.error}
       onConfirm={async () => {
         await returnAsset.mutateAsync({ id: asset.id, input: { return_note: returnNote || null } })
+        notify.success(`${asset.name}を返却しました`)
         setReturnNote('')
       }}
     >
@@ -364,7 +378,10 @@ function ManagementTypeChangeDialog({ asset }: { asset: Asset }) {
       confirmLabel="区分変更する"
       isPending={changeManagementType.isPending}
       error={changeManagementType.error}
-      onConfirm={() => changeManagementType.mutateAsync({ id: asset.id, managementType: target })}
+      onConfirm={async () => {
+        await changeManagementType.mutateAsync({ id: asset.id, managementType: target })
+        notify.success(`${asset.name}を${assetManagementTypeLabel(target)}に区分変更しました`)
+      }}
     />
   )
 }
@@ -382,7 +399,10 @@ function LendingMethodChangeDialog({ asset }: { asset: Asset }) {
       confirmLabel="変更する"
       isPending={changeLendingMethod.isPending}
       error={changeLendingMethod.error}
-      onConfirm={() => changeLendingMethod.mutateAsync({ id: asset.id, lendingMethod })}
+      onConfirm={async () => {
+        await changeLendingMethod.mutateAsync({ id: asset.id, lendingMethod })
+        notify.success(`${asset.name}の貸出方式を${assetLendingMethodLabel(lendingMethod)}に変更しました`)
+      }}
       onOpenChange={(open) => {
         if (open) setLendingMethod(asset.lending_method ?? 'backoffice')
       }}
@@ -437,6 +457,7 @@ export function AssetDetailPage() {
     return <ErrorMessage error={error} fallback="備品の取得に失敗しました。" />
   }
   if (!asset) return null
+  const assetName = asset.name
 
   const canManage = user?.effective_permissions?.includes(ASSET_MANAGE_PERMISSION) ?? false
   const isLending = asset.management_type === 'lending'
@@ -459,6 +480,7 @@ export function AssetDetailPage() {
     setDeleteError(null)
     try {
       await deleteAsset.mutateAsync(assetId)
+      notify.success(`${assetName}を削除しました`)
       navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })
     } catch (e) {
       setDeleteError(e as Error)
@@ -566,9 +588,10 @@ export function AssetDetailPage() {
                       confirmLabel="設定する"
                       isPending={setDefaultLocation.isPending}
                       error={setDefaultLocation.error}
-                      onConfirm={(locationText) =>
-                        setDefaultLocation.mutateAsync({ id: asset.id, locationText })
-                      }
+                      onConfirm={async (locationText) => {
+                        await setDefaultLocation.mutateAsync({ id: asset.id, locationText })
+                        notify.success(`${asset.name}の通常配置場所を設定しました`)
+                      }}
                     />
                   )}
                   {canManage && (
@@ -579,7 +602,7 @@ export function AssetDetailPage() {
                       confirmLabel="修理を開始する"
                       isPending={startRepair.isPending}
                       error={startRepair.error}
-                      onConfirm={(note) => startRepair.mutateAsync({ id: asset.id, note })}
+                      onConfirm={async (note) => { await startRepair.mutateAsync({ id: asset.id, note }); notify.success(`${asset.name}の修理を開始しました`) }}
                     />
                   )}
                   {canManage && (
@@ -590,7 +613,7 @@ export function AssetDetailPage() {
                       confirmLabel="紛失登録する"
                       isPending={reportLost.isPending}
                       error={reportLost.error}
-                      onConfirm={(note) => reportLost.mutateAsync({ id: asset.id, note })}
+                      onConfirm={async (note) => { await reportLost.mutateAsync({ id: asset.id, note }); notify.success(`${asset.name}を紛失として登録しました`) }}
                     />
                   )}
                   {canManage && (
@@ -602,7 +625,7 @@ export function AssetDetailPage() {
                       confirmLabel="廃棄する"
                       isPending={dispose.isPending}
                       error={dispose.error}
-                      onConfirm={(note) => dispose.mutateAsync({ id: asset.id, note })}
+                      onConfirm={async (note) => { await dispose.mutateAsync({ id: asset.id, note }); notify.success(`${asset.name}を廃棄しました`) }}
                     />
                   )}
                   {canManage && (
@@ -614,7 +637,7 @@ export function AssetDetailPage() {
                       confirmLabel="再発行する"
                       isPending={reissueQrCode.isPending}
                       error={reissueQrCode.error}
-                      onConfirm={() => reissueQrCode.mutateAsync(asset.id)}
+                      onConfirm={async () => { await reissueQrCode.mutateAsync(asset.id); notify.success(`${asset.name}のQRコードを再発行しました`) }}
                     />
                   )}
                   {canManage && canDelete && (
@@ -646,7 +669,7 @@ export function AssetDetailPage() {
                   confirmLabel="修理を完了する"
                   isPending={completeRepair.isPending}
                   error={completeRepair.error}
-                  onConfirm={(note) => completeRepair.mutateAsync({ id: asset.id, note })}
+                  onConfirm={async (note) => { await completeRepair.mutateAsync({ id: asset.id, note }); notify.success(`${asset.name}の修理を完了しました`) }}
                 />
               )}
 
@@ -659,7 +682,7 @@ export function AssetDetailPage() {
                   confirmLabel="発見として記録する"
                   isPending={recoverFromLost.isPending}
                   error={recoverFromLost.error}
-                  onConfirm={() => recoverFromLost.mutateAsync(asset.id)}
+                  onConfirm={async () => { await recoverFromLost.mutateAsync(asset.id); notify.success(`${asset.name}を発見として記録しました`) }}
                 />
               )}
 
@@ -672,7 +695,7 @@ export function AssetDetailPage() {
                     confirmLabel="設置する"
                     isPending={installAsset.isPending}
                     error={installAsset.error}
-                    onConfirm={(locationText) => installAsset.mutateAsync({ id: asset.id, locationText })}
+                    onConfirm={async (locationText) => { await installAsset.mutateAsync({ id: asset.id, locationText }); notify.success(`${asset.name}を設置しました`) }}
                   />
                   <ManagementTypeChangeDialog asset={asset} />
                   <NoteDialog
@@ -682,7 +705,7 @@ export function AssetDetailPage() {
                     confirmLabel="修理を開始する"
                     isPending={startRepair.isPending}
                     error={startRepair.error}
-                    onConfirm={(note) => startRepair.mutateAsync({ id: asset.id, note })}
+                    onConfirm={async (note) => { await startRepair.mutateAsync({ id: asset.id, note }); notify.success(`${asset.name}の修理を開始しました`) }}
                   />
                   <NoteDialog
                     triggerLabel="紛失登録"
@@ -691,7 +714,7 @@ export function AssetDetailPage() {
                     confirmLabel="紛失登録する"
                     isPending={reportLost.isPending}
                     error={reportLost.error}
-                    onConfirm={(note) => reportLost.mutateAsync({ id: asset.id, note })}
+                    onConfirm={async (note) => { await reportLost.mutateAsync({ id: asset.id, note }); notify.success(`${asset.name}を紛失として登録しました`) }}
                   />
                   <NoteDialog
                     triggerLabel="廃棄"
@@ -701,7 +724,7 @@ export function AssetDetailPage() {
                     confirmLabel="廃棄する"
                     isPending={dispose.isPending}
                     error={dispose.error}
-                    onConfirm={(note) => dispose.mutateAsync({ id: asset.id, note })}
+                    onConfirm={async (note) => { await dispose.mutateAsync({ id: asset.id, note }); notify.success(`${asset.name}を廃棄しました`) }}
                   />
                   {canDelete && (
                     <ConfirmActionDialog
@@ -730,7 +753,7 @@ export function AssetDetailPage() {
                     confirmLabel="移設する"
                     isPending={relocateAsset.isPending}
                     error={relocateAsset.error}
-                    onConfirm={(locationText) => relocateAsset.mutateAsync({ id: asset.id, locationText })}
+                    onConfirm={async (locationText) => { await relocateAsset.mutateAsync({ id: asset.id, locationText }); notify.success(`${asset.name}を移設しました`) }}
                   />
                   <ConfirmActionDialog
                     triggerLabel="撤去"
@@ -740,7 +763,7 @@ export function AssetDetailPage() {
                     confirmLabel="撤去する"
                     isPending={removeFromInstallation.isPending}
                     error={removeFromInstallation.error}
-                    onConfirm={() => removeFromInstallation.mutateAsync(asset.id)}
+                    onConfirm={async () => { await removeFromInstallation.mutateAsync(asset.id); notify.success(`${asset.name}を撤去しました`) }}
                   />
                 </>
               )}
@@ -754,7 +777,7 @@ export function AssetDetailPage() {
                   confirmLabel="修理を完了する"
                   isPending={completeRepair.isPending}
                   error={completeRepair.error}
-                  onConfirm={(note) => completeRepair.mutateAsync({ id: asset.id, note })}
+                  onConfirm={async (note) => { await completeRepair.mutateAsync({ id: asset.id, note }); notify.success(`${asset.name}の修理を完了しました`) }}
                 />
               )}
 
@@ -767,7 +790,7 @@ export function AssetDetailPage() {
                   confirmLabel="発見として記録する"
                   isPending={recoverFromLost.isPending}
                   error={recoverFromLost.error}
-                  onConfirm={() => recoverFromLost.mutateAsync(asset.id)}
+                  onConfirm={async () => { await recoverFromLost.mutateAsync(asset.id); notify.success(`${asset.name}を発見として記録しました`) }}
                 />
               )}
 

@@ -7,7 +7,10 @@ import * as assetApi from '../../api/asset'
 import * as assetNumberRulesApi from '../../api/assetNumberRules'
 import type { AssetNumberRule } from '../../api/assetNumberRules'
 import type { Asset } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { AssetRegisterPage } from './AssetRegisterPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const navigate = vi.fn()
 
@@ -50,6 +53,7 @@ const noRules: AssetNumberRule[] = []
 
 describe('AssetRegisterPage', () => {
   beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
     vi.restoreAllMocks()
     navigate.mockClear()
     vi.spyOn(assetNumberRulesApi, 'fetchAssetNumberRules').mockResolvedValue(noRules)
@@ -96,6 +100,7 @@ describe('AssetRegisterPage', () => {
       expect.objectContaining({ asset_no: 'EQ-00999', name: 'MacBook Air', category: 'ノートPC' }),
     )
     expect(navigate).toHaveBeenCalledWith('/assets/asset-new', { state: undefined })
+    expect(notify.success).toHaveBeenCalledWith('MacBook Airを登録しました')
   })
 
   it('switches the asset-no field to read-only and sends asset_no=null when the category matches an enabled rule', async () => {
