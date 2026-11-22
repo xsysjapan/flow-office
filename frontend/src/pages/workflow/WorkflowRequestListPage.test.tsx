@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as workflowRequestsApi from '../../api/workflowRequests'
 import { ApiError } from '../../api/client'
@@ -22,12 +22,18 @@ vi.mock('../../auth/useAuth', () => ({
   useAuth: () => ({ user: { id: 'user-1', effective_permissions: ['attendance.submission_revoke'] } }),
 }))
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location">{location.search}</div>
+}
+
+function renderPage(initialEntry = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <WorkflowRequestListPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -307,5 +313,34 @@ describe('WorkflowRequestListPage', () => {
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenLastCalledWith({ status: 'approved', subjectType: 'expense_claim', page: 1 }),
     )
+  })
+
+  it('updates the URL on condition change (dropping page) and clears conditions with 検索条件をクリア', async () => {
+    const fetchSpy = vi
+      .spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests')
+      .mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
+
+    renderPage('/?page=3')
+    await screen.findByText('申請はまだありません。')
+    expect(screen.queryByRole('button', { name: '検索条件をクリア' })).not.toBeInTheDocument()
+    expect(within(screen.getByLabelText('種別')).getByRole('option', { name: 'すべて' })).toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('状態'), '承認済み')
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?status=approved'))
+    expect(screen.getByTestId('location')).not.toHaveTextContent('page=')
+
+    await userEvent.click((await screen.findAllByRole('button', { name: '検索条件をクリア' }))[0])
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^$/))
+    expect(screen.getByLabelText('状態')).toHaveValue('all')
+    expect(fetchSpy).toHaveBeenLastCalledWith({ status: 'all', subjectType: 'all', page: 1 })
+  })
+
+  it('keeps the filter bar and shows the error in the table area when a later fetch fails', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockRejectedValue(new ApiError(500, '取得失敗'))
+
+    renderPage()
+
+    expect(await screen.findByText('取得失敗')).toBeInTheDocument()
+    expect(screen.getByLabelText('状態')).toBeInTheDocument()
   })
 })

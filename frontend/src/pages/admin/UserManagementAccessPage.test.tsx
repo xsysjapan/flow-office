@@ -48,7 +48,7 @@ describe('UserManagementAccessPage group type filter', () => {
 
     expect(await screen.findByText('安全衛生委員会')).toBeInTheDocument()
     expect(screen.queryByText('総務部')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('表示するグループ種別')).toHaveValue('2')
+    expect(screen.getByLabelText('グループ種別')).toHaveValue('2')
   })
 
   it('writes the selected group type to the URL', async () => {
@@ -56,13 +56,27 @@ describe('UserManagementAccessPage group type filter', () => {
     await screen.findByText('総務部')
     expect(screen.getByTestId('location-search')).toBeEmptyDOMElement()
 
-    await userEvent.selectOptions(screen.getByLabelText('表示するグループ種別'), '1')
+    await userEvent.selectOptions(screen.getByLabelText('グループ種別'), '1')
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('?group_type_id=1'))
     expect(screen.queryByText('安全衛生委員会')).not.toBeInTheDocument()
 
-    await userEvent.selectOptions(screen.getByLabelText('表示するグループ種別'), '')
+    await userEvent.selectOptions(screen.getByLabelText('グループ種別'), '')
     await waitFor(() => expect(screen.getByTestId('location-search')).toBeEmptyDOMElement())
+  })
+
+  it('removes page on change and clears the condition with 検索条件をクリア', async () => {
+    renderPage('/admin/groups?page=2')
+    await screen.findByText('総務部')
+    expect(screen.queryByRole('button', { name: '検索条件をクリア' })).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('グループ種別'), '委員会')
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?group_type_id=2$/))
+
+    await userEvent.click(screen.getByRole('button', { name: '検索条件をクリア' }))
+    await waitFor(() => expect(screen.getByTestId('location-search')).toBeEmptyDOMElement())
+    expect(screen.getByLabelText('グループ種別')).toHaveValue('')
+    expect(screen.getByText('総務部')).toBeInTheDocument()
   })
 
   it('drops an invalid group_type_id from the URL and shows all groups', async () => {

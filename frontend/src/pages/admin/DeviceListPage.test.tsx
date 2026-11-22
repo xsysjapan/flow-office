@@ -244,26 +244,22 @@ describe('DeviceListPage', () => {
     fetchSpy.mockRestore()
   })
 
-  it('toggles the with_trashed query param when showing deleted devices', async () => {
+  it('toggles with_trashed via the 削除済みの端末も表示 checkbox, updates the URL (dropping page) and clears it', async () => {
     const user = userEvent.setup()
-    const fetchSpy = vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue({
-      data: devices,
-      meta: { current_page: 1, last_page: 1, total: devices.length },
-      links: { next: null, prev: null },
-    })
-    render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <MemoryRouter>
-          <DeviceListPage />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
+    renderPage('/?page=2')
 
     await screen.findByText('本社1階受付')
-    await user.click(screen.getByRole('button', { name: '削除済みを表示' }))
+    expect(screen.queryByRole('button', { name: '検索条件をクリア' })).not.toBeInTheDocument()
+    await user.click(screen.getByLabelText('削除済みの端末も表示'))
 
-    expect(fetchSpy).toHaveBeenLastCalledWith({ ownerType: 'organization_shared', page: 1, withTrashed: true })
-    fetchSpy.mockRestore()
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?show_deleted=1$/))
+    expect(devicesApi.fetchDevices).toHaveBeenLastCalledWith({ ownerType: 'organization_shared', page: 1, withTrashed: true })
+    expect(screen.getByLabelText('削除済みの端末も表示')).toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: '検索条件をクリア' }))
+    await waitFor(() => expect(screen.getByTestId('location-search')).toBeEmptyDOMElement())
+    expect(screen.getByLabelText('削除済みの端末も表示')).not.toBeChecked()
+    expect(devicesApi.fetchDevices).toHaveBeenLastCalledWith({ ownerType: 'organization_shared', page: 1, withTrashed: false })
   })
 
   it('writes deviceId to the URL when the panel opens and removes it when closed', async () => {

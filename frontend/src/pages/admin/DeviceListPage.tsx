@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -8,6 +8,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DeviceDetailModal } from '../../components/DeviceDetailModal/DeviceDetailModal'
 import { Pagination } from '../../components/Pagination/Pagination'
@@ -82,7 +83,7 @@ function isHeartbeatStale(device: Device): boolean {
  * DeviceDetailModal(詳細画面)に集約する。
  */
 export function DeviceListPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
   const pageParam = searchParams.get('page')
   const isInvalidPage = pageParam !== null && !isValidPageParam(pageParam)
   const page = pageParam !== null && !isInvalidPage ? Number(pageParam) : 1
@@ -139,11 +140,11 @@ export function DeviceListPage() {
     )
   }, [isInvalidPage, isDeviceNotFound, setSearchParams])
 
-  const toggleShowDeleted = () => {
+  const changeShowDeleted = (checked: boolean) => {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (!showDeleted) next.set('show_deleted', '1')
+        if (checked) next.set('show_deleted', '1')
         else next.delete('show_deleted')
         next.delete('page')
         return next
@@ -151,6 +152,8 @@ export function DeviceListPage() {
       { replace: true },
     )
   }
+
+  const clearConditions = () => changeShowDeleted(false)
 
   function changePage(nextPage: number) {
     setSearchParams(
@@ -197,7 +200,6 @@ export function DeviceListPage() {
   }
 
   if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="端末一覧の取得に失敗しました。" />
 
   const list = devices?.data ?? []
   const selectedDevice = selectedInList ?? (selectedDeviceId !== null && fetchedDevice?.id === selectedDeviceId ? fetchedDevice : null)
@@ -207,15 +209,18 @@ export function DeviceListPage() {
       title="端末管理"
       actions={
         <div className="flex items-center gap-2">
-          <Button variant={showDeleted ? 'primary' : 'secondary'} onClick={toggleShowDeleted}>
-            {showDeleted ? '削除済みを非表示' : '削除済みを表示'}
-          </Button>
           <Button onClick={() => setIsFormOpen((v) => !v)} variant={isFormOpen ? 'secondary' : 'primary'}>
             {isFormOpen ? '閉じる' : '新規登録'}
           </Button>
         </div>
       }
     >
+      <ListFilterBar className="mb-4" isFiltered={showDeleted} onClear={clearConditions}>
+        <label className="flex h-10 items-center gap-2 text-sm text-foreground">
+          <Checkbox checked={showDeleted} onCheckedChange={(checked) => changeShowDeleted(checked === true)} />
+          削除済みの端末も表示
+        </label>
+      </ListFilterBar>
 
       {isFormOpen && (
         <div className="mb-6 rounded-md border border-border p-4">
@@ -291,12 +296,14 @@ export function DeviceListPage() {
         </div>
       )}
 
-      {list.length === 0 ? (
+      {error ? (
+        <ErrorMessage error={error} fallback="端末一覧の取得に失敗しました。" />
+      ) : list.length === 0 ? (
         <EmptyState
           title={showDeleted ? '削除済みの共有端末はありません。' : '登録済みの共有端末はまだありません。'}
           description={
             showDeleted
-              ? '「削除済みを非表示」に切り替えると稼働中の端末が表示されます。'
+              ? '「削除済みの端末も表示」をオフにすると稼働中の端末が表示されます。'
               : '右上の「新規登録」から打刻リーダー等の共有端末を登録できます。'
           }
         />
@@ -497,7 +504,7 @@ function DeleteDeviceDialog({ device, onClose }: { device: Device | null; onClos
       title="端末を削除しますか?"
       description={
         device
-          ? `「${device.name}」を一覧から削除します。監査記録として操作履歴は残りますが、この端末は一覧から見えなくなります(「削除済みを表示」で再表示できます)。`
+          ? `「${device.name}」を一覧から削除します。監査記録として操作履歴は残りますが、この端末は一覧から見えなくなります(「削除済みの端末も表示」で再表示できます)。`
           : ''
       }
       confirmLabel="削除する"

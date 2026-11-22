@@ -70,7 +70,7 @@ describe('AttendanceMonthsPage', () => {
 
     renderPage()
 
-    expect(await screen.findByLabelText('表示する年')).toHaveValue('')
+    expect(await screen.findByLabelText('年')).toHaveValue('')
     expect(await screen.findByText('2026-07')).toBeInTheDocument()
     expect(screen.queryByText('2026-01')).not.toBeInTheDocument()
     expect(screen.getAllByText('未提出')).toHaveLength(6)
@@ -103,11 +103,29 @@ describe('AttendanceMonthsPage', () => {
     renderPage()
 
     await screen.findByText('2026-07')
-    expect(screen.getByLabelText('表示する年')).toHaveValue('')
-    await userEvent.selectOptions(screen.getByLabelText('表示する年'), '2025')
+    expect(screen.getByLabelText('年')).toHaveValue('')
+    await userEvent.selectOptions(screen.getByLabelText('年'), '2025')
 
     expect(screen.getByText('2025-12')).toBeInTheDocument()
     expect(screen.queryByText('2026-07')).not.toBeInTheDocument()
+  })
+
+  it('updates the URL on year change (dropping page) and clears with 検索条件をクリア', async () => {
+    currentUser.hire_date = '2025-01-15'
+    vi.spyOn(attendanceApi, 'fetchMyMonths').mockResolvedValue([])
+
+    renderPage(['/attendance/months?page=2'])
+
+    await screen.findByLabelText('年')
+    expect(screen.getByRole('option', { name: 'すべて' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '検索条件をクリア' })).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('年'), '2025')
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?year=2025$/))
+
+    await userEvent.click(screen.getByRole('button', { name: '検索条件をクリア' }))
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/))
+    expect(screen.getByLabelText('年')).toHaveValue('')
   })
 
   it('shows legal holiday warning badges', async () => {
@@ -137,7 +155,7 @@ describe('AttendanceMonthsPage', () => {
 
     renderPage(['/attendance/months?year=abc'])
 
-    expect(await screen.findByLabelText('表示する年')).toHaveValue('')
+    expect(await screen.findByLabelText('年')).toHaveValue('')
     expect(await screen.findByText('2026-07')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('location-search').textContent).not.toContain('year'))
   })

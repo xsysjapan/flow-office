@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useForwardState } from "../../navigation/backState";
+import { Link, useNavigate } from "react-router-dom";
+import { useForwardState, useSearchParamsKeepingBackState } from "../../navigation/backState";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
@@ -12,6 +12,8 @@ import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { notify } from "../../lib/notify";
 import { FormField } from "../../components/FormField/FormField";
+import { ListFilterBar } from "../../components/ListFilterBar/ListFilterBar";
+import { filterWidth } from "../../components/ListFilterBar/filterWidth";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
@@ -91,7 +93,7 @@ export function UserManagementAccessPage({
   const [csvInputKey, setCsvInputKey] = useState(0);
   // グループ種別の絞り込みは一覧の絞り込みなのでURLの`group_type_id`に載せる(SKILL.md §2.10)。
   // 不正な値は絞り込みなしとして扱い、URLからもキーを消す。
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState();
   const groupTypeParam = searchParams.get("group_type_id");
   const isInvalidGroupType =
     groupTypeParam !== null && !isValidPositiveIntIdParam(groupTypeParam);
@@ -102,6 +104,7 @@ export function UserManagementAccessPage({
         const next = new URLSearchParams(prev);
         if (value) next.set("group_type_id", value);
         else next.delete("group_type_id");
+        next.delete("page");
         return next;
       },
       { replace: true },
@@ -240,19 +243,30 @@ export function UserManagementAccessPage({
               </Link>
             }
           >
-            <NativeSelect
-              aria-label="表示するグループ種別"
+            <ListFilterBar
               className="mb-3"
-              value={groupTypeFilter}
-              onChange={(event) => setGroupTypeFilter(event.target.value)}
+              isFiltered={groupTypeFilter !== ""}
+              onClear={() => setGroupTypeFilter("")}
             >
-              <option value="">すべてのグループ種別</option>
-              {types.data?.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </NativeSelect>
+              <FormField
+                label="グループ種別"
+                htmlFor="group-type-filter"
+                className={filterWidth.select}
+              >
+                <NativeSelect
+                  id="group-type-filter"
+                  value={groupTypeFilter}
+                  onChange={(event) => setGroupTypeFilter(event.target.value)}
+                >
+                  <option value="">すべて</option>
+                  {types.data?.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+            </ListFilterBar>
             {visibleGroups?.length === 0 ? (
               <EmptyState
                 title={
@@ -268,7 +282,7 @@ export function UserManagementAccessPage({
                 action={
                   groupTypeFilter ? (
                     <Button variant="secondary" onClick={() => setGroupTypeFilter("")}>
-                      絞り込みをクリア
+                      検索条件をクリア
                     </Button>
                   ) : undefined
                 }

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { useForwardState } from '../../navigation/backState'
+import { Link } from 'react-router-dom'
+import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { useAuth } from '../../auth/useAuth'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -9,6 +9,9 @@ import { Card } from '../../components/Card/Card'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { FormField } from '../../components/FormField/FormField'
+import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
+import { filterWidth } from '../../components/ListFilterBar/filterWidth'
 import { NativeSelect } from '../../components/ui/native-select'
 import { useMyMonths } from '../../hooks/useAttendance'
 import { employmentYearMonths } from '../../utils/employmentPeriod'
@@ -29,7 +32,7 @@ export function AttendanceMonthsPage() {
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const allYearMonths = employmentYearMonths(user?.hire_date, user?.termination_date, currentYearMonth)
   const years = [...new Set(allYearMonths.map((yearMonth) => yearMonth.slice(0, 4)))].reverse()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
   const forwardState = useForwardState()
   const yearParam = searchParams.get('year')
   const pageParam = searchParams.get('page')
@@ -62,7 +65,6 @@ export function AttendanceMonthsPage() {
   }, [isInvalidYear, isInvalidPage, currentPage, pageParam, setSearchParams])
 
   if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="月次勤怠の取得に失敗しました。" />
 
   const monthsByYearMonth = new Map((data ?? []).map((month) => [month.year_month, month]))
   const months = allYearMonths
@@ -84,6 +86,18 @@ export function AttendanceMonthsPage() {
     )
   }
 
+  const clearConditions = () => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('year')
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }
+
   const handlePageChange = (nextPage: number) => {
     setSearchParams(
       (prev) => {
@@ -97,22 +111,24 @@ export function AttendanceMonthsPage() {
   }
 
   return (
-    <Card
-      title="自分の月次勤怠"
-      actions={
-        years.length > 0 ? (
-          <NativeSelect aria-label="表示する年" className="w-auto" value={selectedYear} onChange={(event) => handleYearChange(event.target.value)}>
-            <option value="">すべての年</option>
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}年
-              </option>
-            ))}
-          </NativeSelect>
-        ) : undefined
-      }
-    >
-      {months.length === 0 ? (
+    <Card title="自分の月次勤怠">
+      {years.length > 0 && (
+        <ListFilterBar className="mb-4" isFiltered={selectedYear !== ''} onClear={clearConditions}>
+          <FormField label="年" htmlFor="months-year-filter" className={filterWidth.select}>
+            <NativeSelect id="months-year-filter" value={selectedYear} onChange={(event) => handleYearChange(event.target.value)}>
+              <option value="">すべて</option>
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}年
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        </ListFilterBar>
+      )}
+      {error ? (
+        <ErrorMessage error={error} fallback="月次勤怠の取得に失敗しました。" />
+      ) : months.length === 0 ? (
         <EmptyState title="入社日を設定すると、その月以降の月次勤怠を確認できます。" />
       ) : (
         <>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { CalendarClock, ClipboardList, Receipt, Sunrise } from 'lucide-react'
 import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
 import { ApiError } from '../../api/client'
@@ -15,6 +15,8 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
+import { filterWidth } from '../../components/ListFilterBar/filterWidth'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -22,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { useForwardState } from '../../navigation/backState'
+import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { useCancelWorkflowRequest, useMyWorkflowRequests } from '../../hooks/useWorkflowRequests'
 import {
   attendanceMonthStatusLabel,
@@ -108,7 +110,7 @@ const SUBJECT_TYPE_LABELS: Record<Exclude<WorkflowRequestSubjectType, null>, str
 }
 
 const SUBJECT_TYPE_FILTER_OPTIONS: Array<{ value: FetchMyWorkflowRequestsOptions['subjectType']; label: string }> = [
-  { value: 'all', label: 'すべての種別' },
+  { value: 'all', label: 'すべて' },
   { value: 'paid_leave_request', label: '有給' },
   { value: 'compensatory_leave_request', label: '代休' },
   { value: 'expense_claim', label: '経費精算' },
@@ -186,7 +188,7 @@ export function WorkflowRequestListPage() {
   const navigate = useNavigate()
   const forwardState = useForwardState()
   const { user } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
 
   const status = (searchParams.get('status') as NonNullable<FetchMyWorkflowRequestsOptions['status']> | null) ?? DEFAULT_STATUS
   const subjectTypeParam = searchParams.get('subjectType')
@@ -199,7 +201,7 @@ export function WorkflowRequestListPage() {
   const pageParam = searchParams.get('page')
   const page = isValidPageParam(pageParam) ? Number(pageParam) : 1
 
-  const { data, isLoading, error } = useMyWorkflowRequests({ status, subjectType, page })
+  const { data, error } = useMyWorkflowRequests({ status, subjectType, page })
   const cancelRequest = useCancelWorkflowRequest()
 
   useEffect(() => {
@@ -220,9 +222,7 @@ export function WorkflowRequestListPage() {
   /** ダイアログを開いた時点の対象。実行中に一覧が再取得されても件数・表示名が変わらないようにする。 */
   const [bulkTargets, setBulkTargets] = useState<Array<{ id: string; title: string }>>([])
 
-  if (isLoading) return <LoadingState />
   if (error instanceof ApiError && error.status === 403) return <PermissionDenied />
-  if (error) return <ErrorMessage error={error} fallback="申請一覧の取得に失敗しました。" />
 
   const requests = data?.data ?? []
   const isFiltered = status !== DEFAULT_STATUS || subjectType !== DEFAULT_SUBJECT_TYPE
@@ -313,54 +313,49 @@ export function WorkflowRequestListPage() {
         onClear={() => setSelectedIds(new Set())}
         actions={[{ key: 'cancel', label: 'まとめて取消', variant: 'danger', onClick: openBulkDialog }]}
       />
-      <div className="mb-4 flex flex-wrap items-end gap-4">
-        <div className="w-40">
-          <FormField label="状態" htmlFor="request-center-status">
-            <NativeSelect
-              id="request-center-status"
-              value={status}
-              onChange={(event) =>
-                handleFilterChange({ status: event.target.value as NonNullable<FetchMyWorkflowRequestsOptions['status']> })
-              }
-            >
-              {STATUS_FILTER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </NativeSelect>
-          </FormField>
-        </div>
-        <div className="w-48">
-          <FormField label="種別" htmlFor="request-center-subject-type">
-            <NativeSelect
-              id="request-center-subject-type"
-              value={subjectType === null ? 'none' : (subjectType ?? 'all')}
-              onChange={(event) => handleFilterChange({ subjectType: event.target.value })}
-            >
-              {SUBJECT_TYPE_FILTER_OPTIONS.map((option) => (
-                <option key={option.value ?? 'none'} value={option.value === null ? 'none' : option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </NativeSelect>
-          </FormField>
-        </div>
-        {isFiltered && (
-          <Button variant="secondary" onClick={clearFilters}>
-            フィルターをクリア
-          </Button>
-        )}
-      </div>
+      <ListFilterBar className="mb-4" isFiltered={isFiltered} onClear={clearFilters}>
+        <FormField label="状態" htmlFor="request-center-status" className={filterWidth.select}>
+          <NativeSelect
+            id="request-center-status"
+            value={status}
+            onChange={(event) =>
+              handleFilterChange({ status: event.target.value as NonNullable<FetchMyWorkflowRequestsOptions['status']> })
+            }
+          >
+            {STATUS_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+        <FormField label="種別" htmlFor="request-center-subject-type" className="w-full sm:w-48">
+          <NativeSelect
+            id="request-center-subject-type"
+            value={subjectType === null ? 'none' : (subjectType ?? 'all')}
+            onChange={(event) => handleFilterChange({ subjectType: event.target.value })}
+          >
+            {SUBJECT_TYPE_FILTER_OPTIONS.map((option) => (
+              <option key={option.value ?? 'none'} value={option.value === null ? 'none' : option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+      </ListFilterBar>
 
-      {requests.length === 0 ? (
+      {error ? (
+        <ErrorMessage error={error} fallback="申請一覧の取得に失敗しました。" />
+      ) : !data ? (
+        <LoadingState />
+      ) : requests.length === 0 ? (
         isFiltered ? (
           <EmptyState
             title="条件に一致する申請はありません。"
             description="状態や種別の条件を変えると表示される場合があります。"
             action={
               <Button variant="secondary" size="sm" onClick={clearFilters}>
-                フィルターをクリア
+                検索条件をクリア
               </Button>
             }
           />
@@ -429,7 +424,7 @@ export function WorkflowRequestListPage() {
         </Table>
       )}
 
-      {data && (
+      {data && !error && (
         <Pagination
           currentPage={data.meta.current_page}
           lastPage={data.meta.last_page}
