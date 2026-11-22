@@ -7,6 +7,7 @@ import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { CorrectFiscalYearDialog } from '../../components/CorrectFiscalYearDialog/CorrectFiscalYearDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
@@ -322,6 +323,7 @@ export function WorkCalendarDaysPage() {
 
   const [syncSummary, setSyncSummary] = useState<HolidayCalendarSyncSummary | null>(null)
   const [correctingYear, setCorrectingYear] = useState(false)
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false)
 
   const [daysMap, setDaysMap] = useState<Map<string, DayState>>(new Map())
   const [loadedForYearId, setLoadedForYearId] = useState<string | null>(null)
@@ -379,6 +381,7 @@ export function WorkCalendarDaysPage() {
     if (!resolvedYearId) return
     syncYearHolidayCalendar.mutate(resolvedYearId, {
       onSuccess: (updatedSource) => {
+        notify.success('この年度を休日と同期しました')
         if (updatedSource.last_sync_summary) {
           setSyncSummary(updatedSource.last_sync_summary)
         }
@@ -392,19 +395,14 @@ export function WorkCalendarDaysPage() {
 
   const hasHolidaySource = Boolean(calendar?.holiday_calendar_source_id)
   const allowDailyHolidayOverride = calendar?.allow_daily_holiday_override ?? true
-  const yearActionError =
-    publishYear.error ??
-    unpublishYear.error ??
-    deleteYear.error ??
-    duplicateYear.error ??
-    syncYearHolidayCalendar.error ??
-    regenerateYear.error
+  const yearActionError = unpublishYear.error ?? duplicateYear.error ?? syncYearHolidayCalendar.error
 
   const handleSave = () => {
     if (!resolvedYearId) return
 
-    putDays.mutate({
-      id: resolvedYearId,
+    putDays.mutate(
+      {
+        id: resolvedYearId,
       days: dates.map((date) => {
         const state = getDay(date)
         const flags = classificationToFlags(state.classification)
@@ -420,13 +418,16 @@ export function WorkCalendarDaysPage() {
           note: state.note || undefined,
         }
       }),
-    })
+      },
+      { onSuccess: () => notify.success(`${fiscalYear}年度の日別データを保存しました`) },
+    )
   }
 
   const handleDeleteYear = () => {
     if (!calendar || !year) return Promise.resolve()
     return deleteYear.mutateAsync(year.id, {
       onSuccess: () => {
+        notify.success(`${year.fiscal_year}年度を削除しました`)
         const detailPath = `/admin/work-calendars/${calendar.id}`
         if (backTarget && backTarget.to.split(/[?#]/)[0] === detailPath) {
           navigate(backTarget.to, { state: backTarget.state })
@@ -441,6 +442,7 @@ export function WorkCalendarDaysPage() {
     if (!resolvedYearId) return Promise.resolve()
     return regenerateYear.mutateAsync(resolvedYearId, {
       onSuccess: () => {
+        notify.success(`${year?.fiscal_year ?? ''}年度の日別データを作り直しました`)
         // 再作成でサーバ側の日別データが総入れ替えされるため、編集中のローカル状態を破棄して
         // 再読み込みさせる(祝日iCalendar同期後の再読み込みと同じパターン)。
         setLoadedForYearId(null)
@@ -470,8 +472,6 @@ export function WorkCalendarDaysPage() {
             <Badge tone={YEAR_STATUS_TONE[year.status]}>{YEAR_STATUS_LABEL[year.status]}</Badge>
           </div>
 
-          {yearActionError && <ErrorMessage error={yearActionError} />}
-
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
@@ -482,15 +482,36 @@ export function WorkCalendarDaysPage() {
               この年度を休日と同期する
             </Button>
             {year.status === 'draft' && (
-              <Button variant="secondary" isLoading={publishYear.isPending} onClick={() => publishYear.mutate(year.id)}>
-                公開する
-              </Button>
+              <>
+                <Button variant="secondary" onClick={() => setPublishConfirmOpen(true)}>
+                  公開する
+                </Button>
+                <ConfirmActionDialog
+                  open={publishConfirmOpen}
+                  onOpenChange={setPublishConfirmOpen}
+                  title={`${year.fiscal_year}年度のカレンダーを公開しますか?`}
+                  description={`公開すると、この年度の日別の勤務区分・休日が、対象勤務形態の従業員に適用されます。公開は取り消せますが、締め済みの月がある年度は取り消せません。`}
+                  confirmLabel="公開する"
+                  confirmVariant="primary"
+                  isPending={publishYear.isPending}
+                  error={publishYear.error}
+                  onConfirm={() =>
+                    publishYear.mutateAsync(year.id, {
+                      onSuccess: () => notify.success(`${year.fiscal_year}年度を公開しました`),
+                    })
+                  }
+                />
+              </>
             )}
             {year.status === 'published' && (
               <Button
                 variant="secondary"
                 isLoading={unpublishYear.isPending}
-                onClick={() => unpublishYear.mutate(year.id)}
+                onClick={() =>
+                  unpublishYear.mutate(year.id, {
+                    onSuccess: () => notify.success(`${year.fiscal_year}年度を下書きに戻しました`),
+                  })
+                }
               >
                 公開を取消す
               </Button>
@@ -505,7 +526,16 @@ export function WorkCalendarDaysPage() {
               error={deleteYear.error}
               onConfirm={handleDeleteYear}
             />
-            <Button variant="secondary" isLoading={duplicateYear.isPending} onClick={() => duplicateYear.mutate(year.id)}>
+            <Button
+              variant="secondary"
+              isLoading={duplicateYear.isPending}
+              onClick={() =>
+                duplicateYear.mutate(year.id, {
+                  onSuccess: () =>
+                    notify.success(`${year.fiscal_year}年度を複製して${year.fiscal_year + 1}年度を作成しました`),
+                })
+              }
+            >
               複製して翌年度を作成
             </Button>
             {year.status === 'draft' && (
@@ -520,6 +550,7 @@ export function WorkCalendarDaysPage() {
               />
             )}
           </div>
+          {yearActionError && <ErrorMessage error={yearActionError} />}
 
           <div className="flex items-center gap-2 border-t border-dashed border-border pt-3">
             <Button variant="secondary" size="sm" onClick={() => setCorrectingYear(true)}>
@@ -534,6 +565,7 @@ export function WorkCalendarDaysPage() {
             year={correctingYear ? year : null}
             companyCalendarId={calendar?.id ?? ''}
             onOpenChange={setCorrectingYear}
+            onCorrected={() => notify.success('年度を訂正しました')}
           />
 
           {!hasHolidaySource && calendar && (
@@ -601,7 +633,7 @@ export function WorkCalendarDaysPage() {
       </Card>
 
       <Card title="カレンダー年度の日別編集">
-        {(daysQuery.error || putDays.error) && <ErrorMessage error={daysQuery.error ?? putDays.error} />}
+        {daysQuery.error && <ErrorMessage error={daysQuery.error} />}
 
         {daysQuery.isLoading ? (
           <LoadingState />
@@ -680,6 +712,7 @@ export function WorkCalendarDaysPage() {
                 保存する
               </Button>
             </div>
+            {putDays.error && <ErrorMessage error={putDays.error} />}
           </div>
         )}
       </Card>

@@ -298,6 +298,7 @@ test('§5-15: 複数の労働時間制度が混在する月の月次締め', asy
       await expect(row).toBeVisible()
       await row.getByRole('button', { name: `${yearMonth} 月次勤怠` }).click()
       await approverPage.getByRole('button', { name: '承認する' }).click()
+      await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
       await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
     }
 
@@ -431,6 +432,7 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await expect(expenseApprovalRow).toBeVisible()
     await expenseApprovalRow.getByRole('button').click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // タイトルは「経費精算: 高橋 健太 (期間)」形式で金額を含まないため、同じ社員が
@@ -479,6 +481,7 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await expect(cardApprovalRow).toBeVisible()
     await cardApprovalRow.getByRole('button', { name: cardTitle }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     await generalAffairsPage.goto('/backoffice-tasks')

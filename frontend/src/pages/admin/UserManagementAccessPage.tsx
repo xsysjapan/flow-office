@@ -10,6 +10,7 @@ import { AuthenticationKeysPanel } from "../../components/AuthenticationKeysPane
 import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
+import { notify } from "../../lib/notify";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Input } from "../../components/ui/input";
@@ -88,11 +89,6 @@ export function UserManagementAccessPage({
   const [changeDialogOpen, setChangeDialogOpen] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvInputKey, setCsvInputKey] = useState(0);
-  const [csvApplySummary, setCsvApplySummary] = useState<{
-    total: number;
-    new: number;
-    changed: number;
-  } | null>(null);
   // グループ種別の絞り込みは一覧の絞り込みなのでURLの`group_type_id`に載せる(SKILL.md §2.10)。
   // 不正な値は絞り込みなしとして扱い、URLからもキーを消す。
   const [searchParams, setSearchParams] = useSearchParams();
@@ -129,19 +125,6 @@ export function UserManagementAccessPage({
         : section === "hr"
           ? [groups]
           : [groups, types, users];
-  const mutationError = [
-    linkIdentity,
-    unlinkIdentity,
-    updateAuthority,
-    scheduleChange,
-    createDraft,
-    updateChange,
-    scheduleExisting,
-    applyChange,
-    cancelChange,
-    previewCsv,
-    applyCsv,
-  ].find((mutation) => mutation.error)?.error;
   const selectedFrom = useMemo(
     () => groups.data?.find((g) => g.id === changeForm.from_group_id),
     [groups.data, changeForm.from_group_id],
@@ -243,7 +226,6 @@ export function UserManagementAccessPage({
                 : "外部HR CSVの差分確認と取込を管理します。"}
         </p>
       </div>
-      {mutationError && <ErrorMessage error={mutationError} />}
       {section === "groups" && (
         <>
           <Card
@@ -407,16 +389,19 @@ export function UserManagementAccessPage({
                   !identityForm.external_subject_id
                 }
                 onClick={() =>
-                  linkIdentity.mutate({
-                    userId: identityForm.user_id,
-                    input: {
-                      ...identityForm,
-                      external_tenant_id:
-                        identityForm.external_tenant_id || null,
-                      external_code: identityForm.external_code || null,
-                      email: identityForm.email || null,
+                  linkIdentity.mutate(
+                    {
+                      userId: identityForm.user_id,
+                      input: {
+                        ...identityForm,
+                        external_tenant_id:
+                          identityForm.external_tenant_id || null,
+                        external_code: identityForm.external_code || null,
+                        email: identityForm.email || null,
+                      },
                     },
-                  })
+                    { onSuccess: () => notify.success("外部IDを連携しました") },
+                  )
                 }
               >
                 リンク
@@ -427,6 +412,11 @@ export function UserManagementAccessPage({
                 <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4 2xl:col-span-7">
                   対象ユーザー・Provider・Subject IDを入力してください。
                 </p>
+              )}
+              {linkIdentity.error && (
+                <div className="md:col-span-2 xl:col-span-4 2xl:col-span-7">
+                  <ErrorMessage error={linkIdentity.error} />
+                </div>
               )}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -456,7 +446,11 @@ export function UserManagementAccessPage({
                       confirmLabel="解除する"
                       isPending={unlinkIdentity.isPending}
                       error={unlinkIdentity.error}
-                      onConfirm={() => unlinkIdentity.mutateAsync(i.id)}
+                      onConfirm={() =>
+                        unlinkIdentity
+                          .mutateAsync(i.id)
+                          .then(() => notify.success("外部ID連携を解除しました"))
+                      }
                     />
                   </span>
                 ))}
@@ -471,15 +465,21 @@ export function UserManagementAccessPage({
                   <NativeSelect
                     value={a.authority_type}
                     onChange={(e) =>
-                      updateAuthority.mutate({
-                        fieldKey: a.field_key,
-                        authorityType: e.target.value as
-                          "LOCAL" | "EXTERNAL_HR",
-                        provider:
-                          e.target.value === "EXTERNAL_HR"
-                            ? "EXTERNAL_HR"
-                            : null,
-                      })
+                      updateAuthority.mutate(
+                        {
+                          fieldKey: a.field_key,
+                          authorityType: e.target.value as
+                            "LOCAL" | "EXTERNAL_HR",
+                          provider:
+                            e.target.value === "EXTERNAL_HR"
+                              ? "EXTERNAL_HR"
+                              : null,
+                        },
+                        {
+                          onSuccess: () =>
+                            notify.success(`${a.field_key}の管理元を変更しました`),
+                        },
+                      )
                     }
                   >
                     <option value="LOCAL">LOCAL</option>
@@ -487,6 +487,11 @@ export function UserManagementAccessPage({
                   </NativeSelect>
                 </div>
               ))}
+              {updateAuthority.error && (
+                <div className="md:col-span-2">
+                  <ErrorMessage error={updateAuthority.error} />
+                </div>
+              )}
             </div>
           </Card>
           {identityForm.user_id && (
@@ -685,7 +690,12 @@ export function UserManagementAccessPage({
                               items: changeItems,
                             },
                           },
-                          { onSuccess: closeChangeDialog },
+                          {
+                            onSuccess: () => {
+                              closeChangeDialog();
+                              notify.success("所属変更を保存しました");
+                            },
+                          },
                         )
                       }
                     >
@@ -712,7 +722,12 @@ export function UserManagementAccessPage({
                               note: changeForm.note,
                               items: changeItems,
                             },
-                            { onSuccess: closeChangeDialog },
+                            {
+                              onSuccess: () => {
+                                closeChangeDialog();
+                                notify.success("所属変更の下書きを保存しました");
+                              },
+                            },
                           )
                         }
                       >
@@ -736,7 +751,12 @@ export function UserManagementAccessPage({
                               note: changeForm.note,
                               items: changeItems,
                             },
-                            { onSuccess: closeChangeDialog },
+                            {
+                              onSuccess: () => {
+                                closeChangeDialog();
+                                notify.success("所属変更を予約しました");
+                              },
+                            },
                           )
                         }
                       >
@@ -747,6 +767,9 @@ export function UserManagementAccessPage({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            {(scheduleExisting.error || applyChange.error) && (
+              <ErrorMessage error={scheduleExisting.error ?? applyChange.error} />
+            )}
             {changeSets.data?.length === 0 ? (
               <EmptyState
                 title="所属変更の予約はまだありません。"
@@ -807,7 +830,11 @@ export function UserManagementAccessPage({
                         <span className="flex flex-wrap gap-2">
                           <Button
                             size="sm"
-                            onClick={() => scheduleExisting.mutate(s.id)}
+                            onClick={() =>
+                              scheduleExisting.mutate(s.id, {
+                                onSuccess: () => notify.success("所属変更を予約しました"),
+                              })
+                            }
                           >
                             予約確定
                           </Button>
@@ -818,7 +845,11 @@ export function UserManagementAccessPage({
                             confirmLabel="取り消す"
                             isPending={cancelChange.isPending}
                             error={cancelChange.error}
-                            onConfirm={() => cancelChange.mutateAsync(s.id)}
+                            onConfirm={() =>
+                              cancelChange
+                                .mutateAsync(s.id)
+                                .then(() => notify.success("所属変更を取り消しました"))
+                            }
                           />
                         </span>
                       )}
@@ -826,7 +857,11 @@ export function UserManagementAccessPage({
                         <span className="flex flex-wrap gap-2">
                           <Button
                             size="sm"
-                            onClick={() => applyChange.mutate(s.id)}
+                            onClick={() =>
+                              applyChange.mutate(s.id, {
+                                onSuccess: () => notify.success("所属変更を適用しました"),
+                              })
+                            }
                           >
                             適用
                           </Button>
@@ -837,7 +872,11 @@ export function UserManagementAccessPage({
                             confirmLabel="取り消す"
                             isPending={cancelChange.isPending}
                             error={cancelChange.error}
-                            onConfirm={() => cancelChange.mutateAsync(s.id)}
+                            onConfirm={() =>
+                              cancelChange
+                                .mutateAsync(s.id)
+                                .then(() => notify.success("所属変更を取り消しました"))
+                            }
                           />
                         </span>
                       )}
@@ -935,7 +974,6 @@ export function UserManagementAccessPage({
                 accept=".csv,text/csv"
                 onChange={(e) => {
                   setCsvFile(e.target.files?.[0] ?? null);
-                  setCsvApplySummary(null);
                   previewCsv.reset();
                   applyCsv.reset();
                 }}
@@ -955,7 +993,10 @@ export function UserManagementAccessPage({
                     const summary = previewCsv.data.summary;
                     applyCsv.mutate(previewCsv.data.rows, {
                       onSuccess: () => {
-                        setCsvApplySummary(summary);
+                        notify.success(
+                          `外部HR CSVの差分を適用しました(新規${summary.new}件・変更${summary.changed}件)`,
+                          { description: "反映結果はユーザー一覧から確認できます。" },
+                        );
                         setCsvFile(null);
                         setCsvInputKey((key) => key + 1);
                         previewCsv.reset();
@@ -977,24 +1018,12 @@ export function UserManagementAccessPage({
                 </p>
               )}
             </div>
+            {previewCsv.error && <ErrorMessage error={previewCsv.error} />}
             {applyCsv.error && (
               <ErrorMessage
                 error={applyCsv.error}
                 fallback="差分の適用に失敗しました。"
               />
-            )}
-            {csvApplySummary && (
-              <p className="mt-3 text-sm text-foreground">
-                適用しました(新規{csvApplySummary.new}件・変更
-                {csvApplySummary.changed}件)。反映結果は
-                <Link
-                  to="/admin/users"
-                  className="underline"
-                >
-                  ユーザー一覧
-                </Link>
-                から確認できます。
-              </p>
             )}
             {previewCsv.data && (
               <div className="mt-4 min-w-0">

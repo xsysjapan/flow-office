@@ -22,6 +22,7 @@ import {
 } from "../../components/ui/table";
 import { useCreateUser, useUsers } from "../../hooks/useUsers";
 import { useGroupTypes, useManagedGroups } from "../../hooks/useUserManagement";
+import { notify } from "../../lib/notify";
 import {
   ACCOUNT_STATUS_OPTIONS,
   accountStatusLabel,
@@ -255,6 +256,7 @@ export function UserListPage() {
                           job_title: "",
                         });
                         setShowCreate(false);
+                        notify.success("ユーザーを作成しました");
                       },
                     },
                   )

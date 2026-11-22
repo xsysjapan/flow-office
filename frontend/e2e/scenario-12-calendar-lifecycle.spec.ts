@@ -99,6 +99,10 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
 
   // --- UC-C009 手順3: 公開する(年度自身のページから) ---
   await page.getByRole("button", { name: "公開する" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "公開する" })
+    .click();
   await expect(page.getByRole("status", { name: "公開済み" })).toBeVisible();
 
   // --- UC-C002: このカレンダーを使う勤務形態を作成する(一括操作の前提) ---

@@ -89,6 +89,10 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   ).not.toBeDisabled();
 
   await page.getByRole("button", { name: "公開する" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "公開する" })
+    .click();
   await expect(page.getByRole("status", { name: "公開済み" })).toBeVisible();
 
   // --- UC-C002: 勤務形態作成(一覧のモーダル経由) ---

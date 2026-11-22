@@ -7,6 +7,7 @@ import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { useDeleteWorkCalendar, useWorkCalendarsPage } from '../../hooks/useWorkCalendars'
@@ -113,7 +114,11 @@ export function WorkCalendarListPage() {
                     confirmLabel="削除する"
                     isPending={deleteCalendar.isPending && deleteCalendar.variables === calendar.id}
                     error={deleteCalendar.variables === calendar.id ? deleteCalendar.error : undefined}
-                    onConfirm={() => deleteCalendar.mutateAsync(calendar.id)}
+                    onConfirm={() =>
+                      deleteCalendar
+                        .mutateAsync(calendar.id)
+                        .then(() => notify.success(`「${calendar.name}」を削除しました`))
+                    }
                   />
                 </li>
               ))}

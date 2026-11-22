@@ -4,6 +4,7 @@ import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { TimePicker } from '../../components/TimePicker/TimePicker'
@@ -55,17 +56,19 @@ function ShiftGenerationCard() {
 
   const handleGenerateShifts = () => {
     if (!shiftUserId || !shiftWorkStyleId) return
-    generateShifts.mutate({
-      user_id: shiftUserId,
-      work_style_id: shiftWorkStyleId,
-      from: shiftFrom,
-      to: shiftTo,
-    })
+    generateShifts.mutate(
+      {
+        user_id: shiftUserId,
+        work_style_id: shiftWorkStyleId,
+        from: shiftFrom,
+        to: shiftTo,
+      },
+      { onSuccess: () => notify.success('勤務予定を生成しました') },
+    )
   }
 
   return (
     <Card title="シフト生成・確認">
-      {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="対象社員" htmlFor="shift-target-user" required>
@@ -99,6 +102,7 @@ function ShiftGenerationCard() {
       >
         生成する
       </Button>
+      {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
       {(!shiftUserId || !shiftWorkStyleId || !shiftFrom || !shiftTo) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・開始日・終了日を入力してください。</p>
       )}
@@ -250,20 +254,21 @@ function WeeklyPatternShiftAssignmentCard() {
 
   const handleGenerate = () => {
     if (!targetUserId || !workStyleId || !from || !to) return
-    generatePattern.mutate({
-      user_id: targetUserId,
-      work_style_id: workStyleId,
-      from,
-      to,
-      weekly_pattern: buildWeeklyPattern(weeklyPatternState),
-      overwrite_mode: overwriteMode,
-    })
+    generatePattern.mutate(
+      {
+        user_id: targetUserId,
+        work_style_id: workStyleId,
+        from,
+        to,
+        weekly_pattern: buildWeeklyPattern(weeklyPatternState),
+        overwrite_mode: overwriteMode,
+      },
+      { onSuccess: () => notify.success('週次パターンで勤務予定を確定しました') },
+    )
   }
 
   return (
     <Card title="週次の一括入力">
-      {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
-      {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="対象社員(週次)" htmlFor="weekly-pattern-user" required>
@@ -298,6 +303,7 @@ function WeeklyPatternShiftAssignmentCard() {
           <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
             週次パターンをプレビューする
           </Button>
+          {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
           {(!from || !to) && (
             <p className="mt-1 text-xs text-muted-foreground">適用開始日・適用終了日を入力してください。</p>
           )}
@@ -333,6 +339,7 @@ function WeeklyPatternShiftAssignmentCard() {
       >
         週次パターンで確定する
       </Button>
+      {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
       {(!targetUserId || !workStyleId || !from || !to) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・適用開始日・適用終了日を入力してください。</p>
       )}
@@ -432,21 +439,22 @@ function MonthlyPatternShiftAssignmentCard() {
 
   const handleGenerate = () => {
     if (!targetUserId || !workStyleId || !from || !to) return
-    generatePattern.mutate({
-      user_id: targetUserId,
-      work_style_id: workStyleId,
-      from,
-      to,
-      weekly_pattern: buildWeeklyPattern(weeklyPatternState),
-      day_overrides: buildDayOverrides(),
-      overwrite_mode: overwriteMode,
-    })
+    generatePattern.mutate(
+      {
+        user_id: targetUserId,
+        work_style_id: workStyleId,
+        from,
+        to,
+        weekly_pattern: buildWeeklyPattern(weeklyPatternState),
+        day_overrides: buildDayOverrides(),
+        overwrite_mode: overwriteMode,
+      },
+      { onSuccess: () => notify.success('月次パターンで勤務予定を確定しました') },
+    )
   }
 
   return (
     <Card title="月次の一括入力(日単位の個別設定つき)">
-      {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
-      {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="対象社員(月次)" htmlFor="monthly-pattern-user" required>
@@ -547,6 +555,7 @@ function MonthlyPatternShiftAssignmentCard() {
           <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
             月次パターンをプレビューする
           </Button>
+          {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
           {(!from || !to) && (
             <p className="mt-1 text-xs text-muted-foreground">対象年月を入力してください。</p>
           )}
@@ -583,6 +592,7 @@ function MonthlyPatternShiftAssignmentCard() {
       >
         月次パターンで確定する
       </Button>
+      {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
       {(!targetUserId || !workStyleId || !from || !to) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・対象年月を入力してください。</p>
       )}
@@ -627,6 +637,7 @@ function ShiftPatternFormCard() {
       },
       {
         onSuccess: () => {
+          notify.success(`シフトパターン「${name}」を作成しました`)
           setCode('')
           setName('')
           setStartTime('')
@@ -644,7 +655,6 @@ function ShiftPatternFormCard() {
   return (
     <Card title="シフトパターン">
       {error && <ErrorMessage error={error} fallback="シフトパターンの取得に失敗しました。" />}
-      {createShiftPattern.error && <ErrorMessage error={createShiftPattern.error} />}
 
       {isLoading ? (
         <LoadingState />
@@ -729,6 +739,7 @@ function ShiftPatternFormCard() {
       <Button isLoading={createShiftPattern.isPending} disabled={!code || !name} onClick={handleCreate}>
         シフトパターンを作成する
       </Button>
+      {createShiftPattern.error && <ErrorMessage error={createShiftPattern.error} />}
       {(!code || !name) && (
         <p className="mt-1 text-xs text-muted-foreground">パターンコード・パターン名称を入力してください。</p>
       )}
@@ -766,6 +777,7 @@ function RotationPatternFormCard() {
       },
       {
         onSuccess: () => {
+          notify.success(`ローテーションパターン「${name}」を作成しました`)
           setWorkStyleId('')
           setName('')
           setItems([''])
@@ -778,7 +790,6 @@ function RotationPatternFormCard() {
 
   return (
     <Card title="ローテーションパターン">
-      {createRotationPattern.error && <ErrorMessage error={createRotationPattern.error} />}
 
       {(rotationPatterns ?? []).length === 0 ? (
         <div className="mb-4">
@@ -857,6 +868,7 @@ function RotationPatternFormCard() {
       <Button isLoading={createRotationPattern.isPending} disabled={!canCreate} onClick={handleCreate}>
         ローテーションパターンを作成する
       </Button>
+      {createRotationPattern.error && <ErrorMessage error={createRotationPattern.error} />}
       {!canCreate && (
         <p className="mt-1 text-xs text-muted-foreground">
           対象の働き方・ローテーションパターン名称と、周期内のすべてのシフトパターンを入力してください。
@@ -889,12 +901,15 @@ function RotationAssignmentCard() {
 
   const handleAssign = () => {
     if (!targetUserId || !rotationPatternId || !rotationStartDate) return
-    assignRotation.mutate({
-      user_id: targetUserId,
-      rotation_pattern_id: rotationPatternId,
-      rotation_start_date: rotationStartDate,
-      rotation_start_position: Number(rotationStartPosition),
-    })
+    assignRotation.mutate(
+      {
+        user_id: targetUserId,
+        rotation_pattern_id: rotationPatternId,
+        rotation_start_date: rotationStartDate,
+        rotation_start_position: Number(rotationStartPosition),
+      },
+      { onSuccess: () => notify.success('ローテーションを割り当てました') },
+    )
   }
 
   const handlePreview = () => {
@@ -912,19 +927,19 @@ function RotationAssignmentCard() {
 
   const handleGenerate = () => {
     if (!targetUserId || !generateFrom || !generateTo) return
-    generateShifts.mutate({
-      user_id: targetUserId,
-      from: generateFrom,
-      to: generateTo,
-      overwrite_mode: overwriteMode,
-    })
+    generateShifts.mutate(
+      {
+        user_id: targetUserId,
+        from: generateFrom,
+        to: generateTo,
+        overwrite_mode: overwriteMode,
+      },
+      { onSuccess: () => notify.success('勤務予定を生成しました') },
+    )
   }
 
   return (
     <Card title="ローテーションの割当・生成">
-      {assignRotation.error && <ErrorMessage error={assignRotation.error} />}
-      {previewRotation.error && <ErrorMessage error={previewRotation.error} />}
-      {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="対象社員(ローテーション)" htmlFor="rotation-assignment-user" required>
@@ -980,6 +995,7 @@ function RotationAssignmentCard() {
       >
         ローテーションを割り当てる
       </Button>
+      {assignRotation.error && <ErrorMessage error={assignRotation.error} />}
       {(!targetUserId || !rotationPatternId || !rotationStartDate) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・ローテーションパターン・ローテーション開始日を入力してください。</p>
       )}
@@ -1007,6 +1023,7 @@ function RotationAssignmentCard() {
             >
               プレビューする
             </Button>
+            {previewRotation.error && <ErrorMessage error={previewRotation.error} />}
             {(!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo) && (
               <p className="mt-1 text-xs text-muted-foreground">
                 ローテーションパターン・ローテーション開始日・生成開始日・生成終了日を入力してください。
@@ -1044,6 +1061,7 @@ function RotationAssignmentCard() {
         >
           勤務予定を生成する
         </Button>
+        {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
         {(!targetUserId || !generateFrom || !generateTo) && (
           <p className="mt-1 text-xs text-muted-foreground">対象社員・生成開始日・生成終了日を入力してください。</p>
         )}
@@ -1081,23 +1099,28 @@ function ShiftScheduleBoardCard() {
 
   const handleAssign = () => {
     if (!userId || !workStyleId || !workDate || !shiftPatternId) return
-    assignPattern.mutate({
-      user_id: userId,
-      work_style_id: workStyleId,
-      work_date: workDate,
-      shift_pattern_id: shiftPatternId,
-      is_legal_holiday: isLegalHoliday,
-    })
+    assignPattern.mutate(
+      {
+        user_id: userId,
+        work_style_id: workStyleId,
+        work_date: workDate,
+        shift_pattern_id: shiftPatternId,
+        is_legal_holiday: isLegalHoliday,
+      },
+      { onSuccess: () => notify.success('勤務予定を下書きとして割り当てました') },
+    )
   }
 
   const handlePublish = () => {
     if (!department || !yearMonth) return
-    publishSchedule.mutate({ department, year_month: yearMonth })
+    publishSchedule.mutate(
+      { department, year_month: yearMonth },
+      { onSuccess: (data) => notify.success(`${data.published_count}件のシフトを公開しました`) },
+    )
   }
 
   return (
     <Card title="3交代制シフト表">
-      {assignPattern.error && <ErrorMessage error={assignPattern.error} />}
 
       <h3 className="mb-3 text-sm font-semibold text-foreground">日別にシフトパターンを割り当てる</h3>
 
@@ -1145,6 +1168,7 @@ function ShiftScheduleBoardCard() {
       >
         割り当てる(下書き)
       </Button>
+      {assignPattern.error && <ErrorMessage error={assignPattern.error} />}
       {(!userId || !workStyleId || !workDate || !shiftPatternId) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・対象日・シフトパターンを入力してください。</p>
       )}
@@ -1204,16 +1228,11 @@ function ShiftScheduleBoardCard() {
           </div>
         ) : null}
 
-        {publishSchedule.error && <ErrorMessage error={publishSchedule.error} />}
-        {publishSchedule.isSuccess && (
-          <p className="mb-3 text-sm text-foreground">
-            {publishSchedule.data.published_count}件のシフトを公開しました。
-          </p>
-        )}
 
         <Button isLoading={publishSchedule.isPending} disabled={!department || !yearMonth} onClick={handlePublish}>
           公開する
         </Button>
+        {publishSchedule.error && <ErrorMessage error={publishSchedule.error} />}
         {(!department || !yearMonth) && (
           <p className="mt-1 text-xs text-muted-foreground">対象部署・対象月を入力してください。</p>
         )}

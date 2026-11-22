@@ -5,7 +5,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { WorkCalendar, WorkCalendarDay, WorkCalendarYear } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { WorkCalendarDaysPage } from './WorkCalendarDaysPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const calendar: WorkCalendar = {
   id: 'calendar-1',
@@ -244,15 +247,35 @@ describe('WorkCalendarDaysPage', () => {
   })
 
   describe('年度アクション(旧WorkCalendarDetailPageの年度一覧行から移設)', () => {
-    it('publishes a draft year when the publish button is clicked', async () => {
+    it('publishes a draft year only after confirming in the dialog, then shows a toast', async () => {
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
       vi.spyOn(workCalendarsApi, 'publishWorkCalendarYear').mockResolvedValue({ ...year, status: 'published' })
 
       renderPage()
 
       await userEvent.click(await screen.findByRole('button', { name: '公開する' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(`${year.fiscal_year}年度のカレンダーを公開しますか?`)).toBeInTheDocument()
+      expect(workCalendarsApi.publishWorkCalendarYear).not.toHaveBeenCalled()
+
+      await userEvent.click(within(dialog).getByRole('button', { name: '公開する' }))
 
       await waitFor(() => expect(workCalendarsApi.publishWorkCalendarYear).toHaveBeenCalledWith('year-1'))
+      await waitFor(() => expect(notify.success).toHaveBeenCalledWith(`${year.fiscal_year}年度を公開しました`))
+    })
+
+    it('does not publish when the publish confirmation is cancelled', async () => {
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+      vi.spyOn(workCalendarsApi, 'publishWorkCalendarYear').mockResolvedValue({ ...year, status: 'published' })
+
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: '公開する' }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(workCalendarsApi.publishWorkCalendarYear).not.toHaveBeenCalled()
     })
 
     it('unpublishes a published year when the unpublish button is clicked', async () => {

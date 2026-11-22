@@ -131,6 +131,7 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await expect(approvalRow).toBeVisible()
     await approvalRow.getByRole('button').click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // 3. 小林誠(経理担当者)が未担当タスクを自分に割り当て、
@@ -282,6 +283,7 @@ for (const scenario of singleCategoryScenarios) {
       await expect(approvalRow).toBeVisible()
       await approvalRow.getByRole('button').click()
       await approverPage.getByRole('button', { name: '承認する' }).click()
+      await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
       await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
       await applicantPage.goto(claimUrl)
@@ -382,6 +384,7 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     await expect(approverPage.getByRole('heading', { name: title })).toBeVisible()
     await expect(approverPage.getByRole('heading', { name: '明細(3件)' })).toBeVisible()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     await applicantPage.goto(claimUrl)

@@ -6,6 +6,7 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -128,15 +129,18 @@ export function CalendarBulkOperationsPage() {
         conflict_policy: conflictPolicy,
         reason,
       },
-      { onSuccess: () => preview.reset() },
+      {
+        onSuccess: () => {
+          notify.success('一括操作を適用しました')
+          preview.reset()
+        },
+      },
     )
   }
 
   return (
     <div className="flex flex-col gap-6">
       <Card title="一括操作を作成">
-        {(preview.error || apply.error) && <ErrorMessage error={preview.error ?? apply.error} />}
-
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="操作種別" htmlFor="bulk-op-type" required>
             <NativeSelect
@@ -285,6 +289,7 @@ export function CalendarBulkOperationsPage() {
         <Button isLoading={preview.isPending} disabled={!canPreview} onClick={handlePreview}>
           プレビューする
         </Button>
+        {preview.error && <ErrorMessage error={preview.error} />}
         {!canPreview && (
           <p className="mt-1 text-xs text-muted-foreground">
             {isEntryBased
@@ -345,6 +350,7 @@ export function CalendarBulkOperationsPage() {
           >
             この内容で確定適用する
           </Button>
+          {apply.error && <ErrorMessage error={apply.error} />}
           {(!preview.data.executable || !reason) && (
             <p className="mt-1 text-xs text-muted-foreground">
               {!preview.data.executable && !reason
@@ -385,7 +391,9 @@ export function CalendarBulkOperationsPage() {
                     confirmLabel="取り消す"
                     isPending={revert.isPending && revert.variables === operation.id}
                     error={revert.variables === operation.id ? revert.error : undefined}
-                    onConfirm={() => revert.mutateAsync(operation.id)}
+                    onConfirm={() =>
+                      revert.mutateAsync(operation.id).then(() => notify.success('一括操作を取り消しました'))
+                    }
                   />
                 )}
               </li>

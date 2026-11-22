@@ -46,6 +46,7 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     await expect(approvalRow).toBeVisible()
     await approvalRow.getByRole('button', { name: title }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // 3. 中村恵(総務担当者)が未担当タスクを自分に割り当て、氏名・部署等を確認したうえで

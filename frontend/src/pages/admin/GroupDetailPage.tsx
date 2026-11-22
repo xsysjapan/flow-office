@@ -8,6 +8,7 @@ import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
+import { notify } from "../../lib/notify";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
@@ -110,7 +111,6 @@ export function GroupDetailPage() {
     <div className="space-y-4">
       <BackLink className="mb-0" />
       <Card title={isNew ? "グループを新規作成" : `${group!.name}の詳細`}>
-        {mutation.error && <ErrorMessage error={mutation.error} />}
         <div className="grid gap-3 md:grid-cols-2">
           <FormField label="グループ種別" htmlFor="group-detail-type">
             <NativeSelect
@@ -223,6 +223,7 @@ export function GroupDetailPage() {
                           ends_at: null,
                         });
                       }
+                      notify.success("グループを作成しました");
                       navigate(`/admin/groups/${newGroupId}`, {
                         replace: true,
                         state: keepBackState,
@@ -232,18 +233,22 @@ export function GroupDetailPage() {
                 );
                 return;
               }
-              updateGroup.mutate({
-                id,
-                input: {
-                  name: form.name,
-                  parent_group_id: form.parent_group_id || null,
-                  status: form.status,
+              updateGroup.mutate(
+                {
+                  id,
+                  input: {
+                    name: form.name,
+                    parent_group_id: form.parent_group_id || null,
+                    status: form.status,
+                  },
                 },
-              });
+                { onSuccess: () => notify.success("グループを保存しました") },
+              );
             }}
           >
             {isNew ? "作成する" : "変更を保存"}
           </Button>
+          {mutation.error && <ErrorMessage error={mutation.error} />}
         </div>
       </Card>
       {!isNew && group && (
@@ -346,17 +351,23 @@ function GroupMembersCard({
           },
         ],
       },
-      { onSuccess: () => setDialogOpen(false) },
+      {
+        onSuccess: () => {
+          setDialogOpen(false);
+          notify.success(
+            timing === "scheduled"
+              ? "所属変更を予約しました"
+              : operation === "add"
+                ? "所属メンバーを追加しました"
+                : "所属を解除しました",
+          );
+        },
+      },
     );
   };
 
   return (
     <Card title="所属メンバー">
-      {(applyNow.error || scheduleChange.error || cancelChange.error) && (
-        <ErrorMessage
-          error={applyNow.error ?? scheduleChange.error ?? cancelChange.error}
-        />
-      )}
       <div className="mb-4 flex justify-end">
         <Button variant="secondary" onClick={() => openChange("add")}>
           所属を追加
@@ -445,7 +456,11 @@ function GroupMembersCard({
                     confirmLabel="取り消す"
                     isPending={cancelChange.isPending}
                     error={cancelChange.error}
-                    onConfirm={() => cancelChange.mutateAsync(change.id)}
+                    onConfirm={() =>
+                      cancelChange
+                        .mutateAsync(change.id)
+                        .then(() => notify.success("所属変更の予約を取り消しました"))
+                    }
                   />
                 )}
               </div>
@@ -532,6 +547,7 @@ function GroupMembersCard({
               />
             </FormField>
           </div>
+          {mutation.error && <ErrorMessage error={mutation.error} />}
           <DialogFooter>
             <Button variant="secondary" onClick={() => setDialogOpen(false)}>
               キャンセル
