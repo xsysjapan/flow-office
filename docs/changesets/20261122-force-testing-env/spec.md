@@ -1,6 +1,6 @@
 # `php artisan test` でテストが APP_ENV=local のまま動く不具合の修正
 
-- ステータス: 実装中
+- ステータス: 完了
 - 種別: 不具合修正(backend テスト設定)
 
 ## 変更要望(原文)
@@ -49,4 +49,7 @@
 
 ## 実装結果
 
-(実装後に追記)
+- 変更: `backend/phpunit.xml`(APP_ENVを`<env>`・`<server>`の両方で`force="true"`)、`.claude/skills/delegate-implementer/SKILL.md`(2か所に注記)。
+- 検証: `cp .env.example .env && php artisan key:generate` の後、`php artisan test`(エージェント環境)2290件成功、
+  `PAO_DISABLE=1 php artisan test`(CI相当)2290件成功、`./vendor/bin/phpunit tests/Unit/EventSourcing tests/Feature/EventSourcing` 349件成功。
+- 経緯: 初回は`<env force>`のみで解消せず(`$_SERVER`がlocalのまま)。委譲元が環境の値を調べ`<server>`の追加で解消を確認した。

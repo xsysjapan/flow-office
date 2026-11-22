@@ -99,13 +99,13 @@ implementerは指示に書かれていないことを推測で埋めるか、気
       (絞り込み前の先頭が選ばれ、別の社員で進んだ)。
 - [ ] backendとfrontendを並行で委譲するときは、APIの応答の形を、包み(`{ data: ... }`)まで含めて両方の指示に同じ文で
       書いたか(包みを書かずに形だけ書いたため、backendは包み、frontendは包みを外さずに受け取り、画面に「NaN」が出た)。
-- [ ] PRを出す前に、backendをCIと同じ条件で全件流したか。手順は`cp .env.example .env && php artisan key:generate && php artisan test`で、後で`.env`と`database/database.sqlite`を消す。
+- [ ] PRを出す前に、backendをCIと同じ条件で全件流したか。手順は`cp .env.example .env && php artisan key:generate && php artisan test`で、後で`.env`と`database/database.sqlite`を消す。(APP_ENVは`<env>`と`<server>`の両方でtestingに固定している(`php artisan test`は`.env`の値を`$_SERVER`へ渡すため、`<env>`だけでは固定されない)。固定が無いと`.env`のlocalで動き、エージェント環境ではlaravel/paoが出力を書き換える)
       `./vendor/bin/phpunit`はphpunit.xmlの値(in-memoryのsqlite・同期キュー・APP_KEYなし)で動き、CI(ファイルのsqlite・databaseのキュー・APP_KEYあり)と違う。
       そのため、起動の時の行の作成やキューの前提のずれを見逃した(PR#121)。
 - [ ] backendのテストを委譲するときは、指示の中で「全件はCIと同じ条件(`.env`をコピー+`key:generate`+ファイルのsqlite+`php artisan test`)で流す」
       と書いたか(implementerが`./vendor/bin/phpunit`のメモリDBだけで確かめ、`DatabaseMigrations`の後始末(rollback)を省いた上書きで
       ファイルのDBに行が残り、後続の`RefreshDatabase`のテスト約140件を壊したのを見逃した)。`DatabaseMigrations`を使うテストには、
-      後続のテストへ状態を残さないこと(`RefreshDatabaseState::$migrated`を戻す等)を書く。
+      後続のテストへ状態を残さないこと(`RefreshDatabaseState::$migrated`を戻す等)を書く。(APP_ENVは`<env>`と`<server>`の両方でtestingに固定している(`php artisan test`は`.env`の値を`$_SERVER`へ渡すため、`<env>`だけでは固定されない)。固定が無いと`.env`のlocalで動き、エージェント環境ではlaravel/paoが出力を書き換える)
 - [ ] migrationを足したときは、down()を、データ移行(後続のmigration)の後の状態で確かめるテストがあるか(CIの`migrate-mysql`は、`migrate`の後に`migrate:rollback`を行う)。
 - [ ] frontendのvitestは`npx vitest run --project unit <対象>`、lintは`npx oxlint <対象>`を指定したか(eslintの設定は無く、
       `--project`なしではstorybookプロジェクトがブラウザ実行で失敗する)。
