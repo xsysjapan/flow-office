@@ -165,16 +165,52 @@ describe('AssetListPage', () => {
     expect(navigate).toHaveBeenCalledWith('/assets/asset-1', { state: { backTo: expect.objectContaining({ pathname: '/' }) } })
   })
 
-  it('sends search filters to the API', async () => {
+  it('sends the keyword to the API after the debounce and clears page', async () => {
+    const spy = vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([]))
+
+    renderPage('/?page=2')
+
+    await screen.findByText('登録されている備品がまだありません。')
+    await userEvent.type(screen.getByLabelText('キーワード'), 'EQ-001')
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?q=EQ-001$/))
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith({ q: 'EQ-001', page: 1 }))
+  })
+
+  it('keeps the detail fields collapsed by default and sends a detail value after the debounce', async () => {
     const spy = vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([]))
 
     renderPage()
 
     await screen.findByText('登録されている備品がまだありません。')
+    expect(screen.queryByLabelText('管理番号')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '詳細条件' }))
     await userEvent.type(screen.getByLabelText('管理番号'), 'EQ-001')
 
-    expect(await screen.findByLabelText('管理番号')).toHaveValue('EQ-001')
-    expect(spy).toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?asset_no=EQ-001$/))
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith({ asset_no: 'EQ-001', page: 1 }))
+  })
+
+  it('opens the detail fields initially with the count when a detail value is in the URL', async () => {
+    vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([]))
+
+    renderPage('/?name=ThinkPad&category=PC&q=x')
+
+    expect(await screen.findByRole('button', { name: '詳細条件(2)' })).toBeInTheDocument()
+    expect(screen.getByLabelText('名称')).toHaveValue('ThinkPad')
+    expect(screen.getByLabelText('カテゴリ')).toHaveValue('PC')
+  })
+
+  it('clears every condition including the detail ones with "検索条件をクリア"', async () => {
+    vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([]))
+
+    renderPage('/?q=x&name=ThinkPad&management_type=lending&page=2')
+
+    await userEvent.click((await screen.findAllByRole('button', { name: '検索条件をクリア' }))[0])
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/))
+    expect(screen.getByLabelText('キーワード')).toHaveValue('')
+    expect(screen.getByRole('button', { name: '詳細条件' })).toBeInTheDocument()
   })
 
   it('drops invalid enum values and page from the URL and shows the default', async () => {

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useForwardState } from '../../navigation/backState'
+import { Link, useNavigate } from 'react-router-dom'
+import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import type { SearchAssetsParams } from '../../api/asset'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
@@ -14,7 +14,9 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Button } from '../../components/Button/Button'
-import { Input } from '../../components/ui/input'
+import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
+import { filterWidth } from '../../components/ListFilterBar/filterWidth'
+import { TextFilterInput } from '../../components/TextFilterInput/TextFilterInput'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useAssetSearch } from '../../hooks/useAsset'
@@ -97,7 +99,7 @@ export function AssetListPage() {
   const forwardState = useForwardState()
   const { user } = useAuth()
   const canManage = user?.effective_permissions?.includes('asset.manage') ?? false
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
 
   const invalidKeys: string[] = FILTER_KEYS.filter((key) => isInvalidEnumParam(key, searchParams.get(key)))
   const pageRaw = searchParams.get('page')
@@ -156,13 +158,22 @@ export function AssetListPage() {
     )
   }
 
+  /** 詳細条件を含む全条件とpageを消す。 */
   function clearFilters() {
-    setSearchParams({}, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const key of FILTER_KEYS) next.delete(key)
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
   }
 
-  if (isLoading) return <LoadingState />
   if (error instanceof ApiError && error.status === 403) return <PermissionDenied />
-  if (error) return <ErrorMessage error={error} fallback="備品一覧の取得に失敗しました。" />
+
+  const advancedActiveCount = TEXT_FIELDS.filter((field) => searchParams.get(field.key)).length
 
   const assets = data?.data ?? []
 
@@ -203,84 +214,78 @@ export function AssetListPage() {
             </>
           )}
         </div>
-        <div className="w-full max-w-sm">
-          <FormField label="キーワード検索" htmlFor="asset-search-q">
-            <Input
-              id="asset-search-q"
-              placeholder="管理番号・名称・カテゴリ・シリアル番号"
-              value={searchParams.get('q') ?? ''}
-              onChange={(e) => updateParams({ q: e.target.value })}
+        <ListFilterBar
+          isFiltered={isFiltered}
+          onClear={clearFilters}
+          advancedActiveCount={advancedActiveCount}
+          advanced={TEXT_FIELDS.map((field) => (
+            <TextFilterInput
+              key={field.key}
+              id={`asset-search-${field.key}`}
+              label={field.label}
+              placeholder={field.placeholder}
+              maxLength={100}
+              className={filterWidth.select}
+              value={searchParams.get(field.key) || null}
+              onChange={(next) => updateParams({ [field.key]: next })}
             />
-          </FormField>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-4">
-          {TEXT_FIELDS.map((field) => (
-            <div key={field.key} className="w-44">
-              <FormField label={field.label} htmlFor={`asset-search-${field.key}`}>
-                <Input
-                  id={`asset-search-${field.key}`}
-                  placeholder={field.placeholder}
-                  value={searchParams.get(field.key) ?? ''}
-                  onChange={(e) => updateParams({ [field.key]: e.target.value })}
-                />
-              </FormField>
-            </div>
           ))}
-          <div className="w-36">
-            <FormField label="管理区分" htmlFor="asset-search-management-type">
-              <NativeSelect
-                id="asset-search-management-type"
-                value={searchParams.get('management_type') ?? ''}
-                onChange={(e) => updateParams({ management_type: e.target.value })}
-              >
-                {MANAGEMENT_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </NativeSelect>
-            </FormField>
-          </div>
-          <div className="w-36">
-            <FormField label="貸出状態" htmlFor="asset-search-lending-status">
-              <NativeSelect
-                id="asset-search-lending-status"
-                value={searchParams.get('lending_status') ?? ''}
-                onChange={(e) => updateParams({ lending_status: e.target.value })}
-              >
-                {LENDING_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </NativeSelect>
-            </FormField>
-          </div>
-          <div className="w-36">
-            <FormField label="設置状態" htmlFor="asset-search-installation-status">
-              <NativeSelect
-                id="asset-search-installation-status"
-                value={searchParams.get('installation_status') ?? ''}
-                onChange={(e) => updateParams({ installation_status: e.target.value })}
-              >
-                {INSTALLATION_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </NativeSelect>
-            </FormField>
-          </div>
-          {isFiltered && (
-            <Button variant="secondary" onClick={clearFilters}>
-              フィルターをクリア
-            </Button>
-          )}
-        </div>
+        >
+          <TextFilterInput
+            label="キーワード"
+            placeholder="管理番号・名称・カテゴリ・シリアル番号"
+            maxLength={100}
+            className={filterWidth.keyword}
+            value={searchParams.get('q') || null}
+            onChange={(next) => updateParams({ q: next })}
+          />
+          <FormField label="管理区分" htmlFor="asset-search-management-type" className={filterWidth.select}>
+            <NativeSelect
+              id="asset-search-management-type"
+              value={searchParams.get('management_type') ?? ''}
+              onChange={(e) => updateParams({ management_type: e.target.value })}
+            >
+              {MANAGEMENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+          <FormField label="貸出状態" htmlFor="asset-search-lending-status" className={filterWidth.select}>
+            <NativeSelect
+              id="asset-search-lending-status"
+              value={searchParams.get('lending_status') ?? ''}
+              onChange={(e) => updateParams({ lending_status: e.target.value })}
+            >
+              {LENDING_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+          <FormField label="設置状態" htmlFor="asset-search-installation-status" className={filterWidth.select}>
+            <NativeSelect
+              id="asset-search-installation-status"
+              value={searchParams.get('installation_status') ?? ''}
+              onChange={(e) => updateParams({ installation_status: e.target.value })}
+            >
+              {INSTALLATION_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        </ListFilterBar>
       </div>
 
-      {assets.length === 0 ? (
+      {error && !data ? (
+        <ErrorMessage error={error} fallback="備品一覧の取得に失敗しました。" />
+      ) : isLoading ? (
+        <LoadingState />
+      ) : assets.length === 0 ? (
         isFiltered ? (
           <EmptyState
             title="条件に一致する備品がありません。"

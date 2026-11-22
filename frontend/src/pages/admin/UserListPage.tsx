@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useForwardState } from "../../navigation/backState";
+import { Link, useNavigate } from "react-router-dom";
+import { useForwardState, useSearchParamsKeepingBackState } from "../../navigation/backState";
 import { Badge } from "../../components/Badge/Badge";
 import { Card } from "../../components/Card/Card";
 import { Button } from "../../components/Button/Button";
@@ -9,6 +9,10 @@ import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Pagination } from "../../components/Pagination/Pagination";
+import { FormField } from "../../components/FormField/FormField";
+import { ListFilterBar } from "../../components/ListFilterBar/ListFilterBar";
+import { filterWidth } from "../../components/ListFilterBar/filterWidth";
+import { TextFilterInput } from "../../components/TextFilterInput/TextFilterInput";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
@@ -54,7 +58,7 @@ const PER_PAGE = 20;
 export function UserListPage() {
   const navigate = useNavigate();
   const forwardState = useForwardState();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState();
   const query = searchParams.get("q") ?? "";
   const accountStatusParam = searchParams.get("account_status");
   const externalUnlinked = searchParams.get("external_unlinked") === "1";
@@ -120,6 +124,8 @@ export function UserListPage() {
     query || accountStatus || externalUnlinked || externalHr || groupId || groupTypeId,
   );
 
+  const advancedActiveCount = (externalUnlinked ? 1 : 0) + (externalHr ? 1 : 0);
+
   function updateParam(key: (typeof FILTER_PARAM_KEYS)[number], value: string) {
     setSearchParams(
       (prev) => {
@@ -145,18 +151,18 @@ export function UserListPage() {
     );
   }
 
+  /** 詳細条件を含む全条件とpageを消す。 */
   function clearFilters() {
-    setSearchParams({}, { replace: true });
-  }
-
-  if (isLoading) return <LoadingState />;
-  if (error)
-    return (
-      <ErrorMessage
-        error={error}
-        fallback="ユーザー一覧の取得に失敗しました。"
-      />
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const key of FILTER_PARAM_KEYS) next.delete(key);
+        next.delete("page");
+        return next;
+      },
+      { replace: true },
     );
+  }
 
   const users = data?.data ?? [];
   // フィルターの選択肢は現在のページのユーザーからではなく、グループ・グループ種別の
@@ -278,76 +284,100 @@ export function UserListPage() {
           </div>
         )}
       </div>
-      <Input
-        className="mb-4 max-w-xs"
-        placeholder="氏名またはメールアドレスで検索"
-        value={query}
-        onChange={(e) => updateParam("q", e.target.value)}
-      />
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <NativeSelect
-          aria-label="グループ種別で絞り込み"
-          value={groupTypeId}
-          onChange={(e) => updateParam("group_type_id", e.target.value)}
-        >
-          <option value="">すべてのグループ種別</option>
-          {groupTypeOptions.map((type) => (
-            <option key={type.id} value={type.id}>
-              {type.name}
-            </option>
-          ))}
-        </NativeSelect>
-        <NativeSelect
-          aria-label="グループで絞り込み"
-          value={groupId}
-          onChange={(e) => updateParam("group_id", e.target.value)}
-        >
-          <option value="">すべてのグループ</option>
-          {groupOptions.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </NativeSelect>
-        <NativeSelect
-          value={accountStatus}
-          onChange={(e) => updateParam("account_status", e.target.value)}
-        >
-          <option value="">全アカウント状態</option>
-          {ACCOUNT_STATUS_OPTIONS.map((status) => (
-            <option key={status.value} value={status.value}>
-              {status.label}
-            </option>
-          ))}
-        </NativeSelect>
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <Checkbox
-            checked={externalUnlinked}
-            onCheckedChange={(checked) => updateParam("external_unlinked", checked === true ? "1" : "")}
-          />
-          Microsoft未連携
-        </label>
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <Checkbox
-            checked={externalHr}
-            onCheckedChange={(checked) => updateParam("external_hr", checked === true ? "1" : "")}
-          />
-          外部HR管理
-        </label>
-        {isFiltered && (
-          <Button variant="secondary" onClick={clearFilters}>
-            フィルターをクリア
-          </Button>
-        )}
-      </div>
+      <ListFilterBar
+        className="mb-4"
+        isFiltered={isFiltered}
+        onClear={clearFilters}
+        advancedActiveCount={advancedActiveCount}
+        advanced={
+          <>
+            <label className="flex h-9 items-center gap-2 text-sm text-foreground">
+              <Checkbox
+                checked={externalUnlinked}
+                onCheckedChange={(checked) => updateParam("external_unlinked", checked === true ? "1" : "")}
+              />
+              Microsoft未連携
+            </label>
+            <label className="flex h-9 items-center gap-2 text-sm text-foreground">
+              <Checkbox
+                checked={externalHr}
+                onCheckedChange={(checked) => updateParam("external_hr", checked === true ? "1" : "")}
+              />
+              外部HR管理
+            </label>
+          </>
+        }
+      >
+        <TextFilterInput
+          label="キーワード"
+          placeholder="氏名・メールアドレス・社員番号"
+          maxLength={100}
+          className={filterWidth.keyword}
+          value={query || null}
+          onChange={(next) => updateParam("q", next ?? "")}
+        />
+        <FormField label="アカウント状態" htmlFor="user-account-status-filter" className={filterWidth.select}>
+          <NativeSelect
+            id="user-account-status-filter"
+            value={accountStatus}
+            onChange={(e) => updateParam("account_status", e.target.value)}
+          >
+            <option value="">すべて</option>
+            {ACCOUNT_STATUS_OPTIONS.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+        <FormField label="グループ種別" htmlFor="user-group-type-filter" className={filterWidth.select}>
+          <NativeSelect
+            id="user-group-type-filter"
+            value={groupTypeId}
+            onChange={(e) => updateParam("group_type_id", e.target.value)}
+          >
+            <option value="">すべて</option>
+            {groupTypeOptions.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+        <FormField label="グループ" htmlFor="user-group-filter" className={filterWidth.select}>
+          <NativeSelect
+            id="user-group-filter"
+            value={groupId}
+            onChange={(e) => updateParam("group_id", e.target.value)}
+          >
+            <option value="">すべて</option>
+            {groupOptions.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+      </ListFilterBar>
 
-      {users.length === 0 ? (
+      {error && !data ? (
+        <ErrorMessage error={error} fallback="ユーザー一覧の取得に失敗しました。" />
+      ) : isLoading ? (
+        <LoadingState />
+      ) : users.length === 0 ? (
         <EmptyState
           title={isFiltered ? "条件に一致するユーザーはいません。" : "該当するユーザーはいません。"}
           description={
             isFiltered
-              ? "検索条件を変更するか、上の「フィルターをクリア」から条件を解除してください。"
+              ? "検索条件を変更するか、「検索条件をクリア」から条件を解除してください。"
               : "「ユーザーを作成」から新しいユーザーを追加できます。"
+          }
+          action={
+            isFiltered ? (
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                検索条件をクリア
+              </Button>
+            ) : undefined
           }
         />
       ) : (

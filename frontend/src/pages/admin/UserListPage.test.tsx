@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -171,17 +171,50 @@ describe('UserListPage', () => {
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ユーザーを作成しました'))
   })
 
-  it('queries users with the current search text', async () => {
+  it('queries users with the entered keyword after the debounce and clears page', async () => {
     const empty: Paginated<User> = { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(empty)
 
-    renderPage()
+    renderPage('/?page=2')
     await screen.findByText('該当するユーザーはいません。')
 
-    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '山田')
-    await screen.findByDisplayValue('山田')
+    await userEvent.type(screen.getByLabelText('キーワード'), '山田')
+    expect(screen.getByLabelText('キーワード')).toHaveAttribute('placeholder', '氏名・メールアドレス・社員番号')
 
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?q=%E5%B1%B1%E7%94%B0$/))
     await waitFor(() => expect(usersApi.fetchUsers).toHaveBeenCalledWith('山田', 20, {}, 1))
+  })
+
+  it('labels the selects visibly with "すべて" as the default option', async () => {
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
+
+    renderPage()
+
+    for (const label of ['アカウント状態', 'グループ種別', 'グループ']) {
+      const select = await screen.findByLabelText(label)
+      expect(within(select).getByRole('option', { name: 'すべて' })).toBeInTheDocument()
+    }
+  })
+
+  it('opens the advanced conditions initially when a checkbox filter is on and shows the count', async () => {
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
+
+    renderPage('/?external_unlinked=1&external_hr=1')
+
+    expect(await screen.findByRole('button', { name: '詳細条件(2)' })).toBeInTheDocument()
+    expect(screen.getByText('Microsoft未連携')).toBeInTheDocument()
+    expect(screen.getByText('外部HR管理')).toBeInTheDocument()
+  })
+
+  it('clears every condition including the advanced ones with "検索条件をクリア"', async () => {
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
+
+    renderPage('/?q=yama&external_hr=1&account_status=active&page=2')
+
+    await userEvent.click((await screen.findAllByRole('button', { name: '検索条件をクリア' }))[0])
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/))
+    expect(screen.getByLabelText('キーワード')).toHaveValue('')
   })
 
   it('drops invalid group_type_id/group_id/account_status/page from the URL and shows the default', async () => {

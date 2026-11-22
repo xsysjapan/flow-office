@@ -1,19 +1,23 @@
 import { useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
-import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { DateRangePicker } from '../../components/DateRangePicker/DateRangePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
-import { Input } from '../../components/ui/input'
+import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
+import { filterWidth } from '../../components/ListFilterBar/filterWidth'
+import { TextFilterInput } from '../../components/TextFilterInput/TextFilterInput'
 import { downloadAuditLogCsv, type AuditLogFilters } from '../../api/auditLog'
 import { useAuditLog } from '../../hooks/useAuditLog'
 import { isValidDateParam, isValidPageParam } from '../../utils/searchParamValidators'
 
 const FILTER_KEYS = ['aggregate_type', 'aggregate_id', 'event_type', 'user_id', 'from', 'to'] as const
+
+const TEXT_MAX_LENGTH = 100
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
@@ -25,7 +29,7 @@ function formatDateTime(value: string): string {
  * 共有で状態が壊れないようにする(SKILL.md §2.10)。
  */
 export function AuditLogPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
 
   const aggregateType = searchParams.get('aggregate_type') ?? ''
   const aggregateId = searchParams.get('aggregate_id') ?? ''
@@ -37,26 +41,30 @@ export function AuditLogPage() {
   const isInvalidFrom = fromParam !== null && !isValidDateParam(fromParam)
   const isInvalidTo = toParam !== null && !isValidDateParam(toParam)
   const isInvalidPage = pageParam !== null && !isValidPageParam(pageParam)
-  // 不正な値は既定表示として扱い、URLからもキーを消す
+  // 不正な値は既定表示として扱い、URLからもキーを消す。DateRangePickerは開始日が無いと値を持てないため、
+  // 開始日の無い`to`だけのURLは期間なしとして扱いtoも消す
   const from = isInvalidFrom ? '' : (fromParam ?? '')
-  const to = isInvalidTo ? '' : (toParam ?? '')
+  const isOrphanTo = toParam !== null && !isInvalidTo && from === ''
+  const to = isInvalidTo || isOrphanTo ? '' : (toParam ?? '')
+  const shouldDropTo = isInvalidTo || isOrphanTo
   const page = isInvalidPage ? 1 : Number(pageParam ?? '1')
 
   useEffect(() => {
-    if (!isInvalidFrom && !isInvalidTo && !isInvalidPage) return
+    if (!isInvalidFrom && !shouldDropTo && !isInvalidPage) return
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
         if (isInvalidFrom) next.delete('from')
-        if (isInvalidTo) next.delete('to')
+        if (shouldDropTo) next.delete('to')
         if (isInvalidPage) next.delete('page')
         return next
       },
       { replace: true },
     )
-  }, [isInvalidFrom, isInvalidTo, isInvalidPage, setSearchParams])
+  }, [isInvalidFrom, shouldDropTo, isInvalidPage, setSearchParams])
 
   const isFiltered = Boolean(aggregateType || aggregateId || eventType || userId || from || to)
+  const advancedActiveCount = (aggregateType ? 1 : 0) + (aggregateId ? 1 : 0)
 
   function updateParam(key: (typeof FILTER_KEYS)[number], value: string) {
     setSearchParams(
@@ -64,6 +72,21 @@ export function AuditLogPage() {
         const next = new URLSearchParams(prev)
         if (value) next.set(key, value)
         else next.delete(key)
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  function changeRange(range: { from?: string; to?: string } | undefined) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (range?.from) next.set('from', range.from)
+        else next.delete('from')
+        if (range?.from && range.to) next.set('to', range.to)
+        else next.delete('to')
         next.delete('page')
         return next
       },
@@ -82,8 +105,17 @@ export function AuditLogPage() {
     )
   }
 
+  /** 詳細条件を含む全条件とpageを消す。 */
   function clearFilters() {
-    setSearchParams({}, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const key of FILTER_KEYS) next.delete(key)
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
   }
 
   const filters: AuditLogFilters = {
@@ -106,46 +138,57 @@ export function AuditLogPage() {
         </Button>
       }
     >
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <FormField label="対象タイプ" htmlFor="audit-aggregate-type">
-          <Input
-            id="audit-aggregate-type"
-            placeholder="workflow_request"
-            value={aggregateType}
-            onChange={(e) => updateParam('aggregate_type', e.target.value)}
+      <ListFilterBar
+        className="mb-4"
+        isFiltered={isFiltered}
+        onClear={clearFilters}
+        advancedActiveCount={advancedActiveCount}
+        advanced={
+          <>
+            <TextFilterInput
+              label="対象タイプ"
+              placeholder="workflow_request"
+              maxLength={TEXT_MAX_LENGTH}
+              className={filterWidth.select}
+              value={aggregateType || null}
+              onChange={(next) => updateParam('aggregate_type', next ?? '')}
+            />
+            <TextFilterInput
+              label="対象ID"
+              maxLength={TEXT_MAX_LENGTH}
+              className={filterWidth.keyword}
+              value={aggregateId || null}
+              onChange={(next) => updateParam('aggregate_id', next ?? '')}
+            />
+          </>
+        }
+      >
+        <TextFilterInput
+          label="イベント種別"
+          maxLength={TEXT_MAX_LENGTH}
+          className={filterWidth.keyword}
+          value={eventType || null}
+          onChange={(next) => updateParam('event_type', next ?? '')}
+        />
+        <TextFilterInput
+          label="ユーザーID"
+          maxLength={TEXT_MAX_LENGTH}
+          className={filterWidth.keyword}
+          value={userId || null}
+          onChange={(next) => updateParam('user_id', next ?? '')}
+        />
+        <FormField label="期間" htmlFor="audit-range" className={filterWidth.dateRange}>
+          <DateRangePicker
+            id="audit-range"
+            value={from ? { from, to: to || undefined } : undefined}
+            onChange={changeRange}
           />
         </FormField>
-        <FormField label="対象ID" htmlFor="audit-aggregate-id">
-          <Input
-            id="audit-aggregate-id"
-            value={aggregateId}
-            onChange={(e) => updateParam('aggregate_id', e.target.value)}
-          />
-        </FormField>
-        <FormField label="イベント種別" htmlFor="audit-event-type">
-          <Input id="audit-event-type" value={eventType} onChange={(e) => updateParam('event_type', e.target.value)} />
-        </FormField>
-        <FormField label="ユーザーID" htmlFor="audit-user-id">
-          <Input id="audit-user-id" value={userId} onChange={(e) => updateParam('user_id', e.target.value)} />
-        </FormField>
-        <FormField label="期間(開始)" htmlFor="audit-from">
-          <DatePicker id="audit-from" value={from || undefined} onChange={(date) => updateParam('from', date ?? '')} />
-        </FormField>
-        <FormField label="期間(終了)" htmlFor="audit-to">
-          <DatePicker id="audit-to" value={to || undefined} onChange={(date) => updateParam('to', date ?? '')} />
-        </FormField>
-      </div>
-      {isFiltered && (
-        <div className="mb-4">
-          <Button variant="secondary" onClick={clearFilters}>
-            フィルターをクリア
-          </Button>
-        </div>
-      )}
+      </ListFilterBar>
 
       {isLoading ? (
         <LoadingState />
-      ) : error ? (
+      ) : error && !data ? (
         <ErrorMessage error={error} fallback="監査ログの取得に失敗しました。" />
       ) : (
         <>
@@ -157,8 +200,15 @@ export function AuditLogPage() {
               title={isFiltered ? '条件に一致するログはありません。' : '監査ログはまだありません。'}
               description={
                 isFiltered
-                  ? '検索条件を変更するか、上の「フィルターをクリア」から条件を解除してください。'
+                  ? '検索条件を変更するか、「検索条件をクリア」から条件を解除してください。'
                   : '操作(作成・更新・削除など)が行われると、ここに記録されます。'
+              }
+              action={
+                isFiltered ? (
+                  <Button variant="secondary" size="sm" onClick={clearFilters}>
+                    検索条件をクリア
+                  </Button>
+                ) : undefined
               }
             />
           ) : (
