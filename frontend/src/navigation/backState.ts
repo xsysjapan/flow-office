@@ -1,5 +1,6 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import {
+  createSearchParams,
   useLocation,
   useSearchParams,
   type SetURLSearchParams,
@@ -144,9 +145,22 @@ export function useSearchParamsKeepingBackState(
 ): [URLSearchParams, SetURLSearchParams] {
   const [searchParams, setSearchParams] = useSearchParams(...args);
   const keep = useKeepBackState();
+  // 関数形式の`prev`は直前の描画時点の値になるため、同一イベント内の連続更新で古い値を元に上書きしてしまう。
+  // 確定した検索条件をrefで保持し、関数形式の更新はそこから評価する(ルーターから変わった時だけ同期する)。
+  const latestRef = useRef(searchParams);
+  const seenRef = useRef(searchParams.toString());
+  if (searchParams.toString() !== seenRef.current) {
+    seenRef.current = searchParams.toString();
+    latestRef.current = searchParams;
+  }
   const setKeeping: SetURLSearchParams = useCallback(
     (nextInit, navigateOptions) => {
-      setSearchParams(nextInit, {
+      const resolved =
+        typeof nextInit === "function"
+          ? nextInit(new URLSearchParams(latestRef.current))
+          : nextInit;
+      latestRef.current = createSearchParams(resolved);
+      setSearchParams(resolved, {
         ...navigateOptions,
         state: navigateOptions?.state ?? keep,
       });
