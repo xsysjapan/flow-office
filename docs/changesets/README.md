@@ -14,6 +14,9 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261122-force-testing-env](./20261122-force-testing-env/spec.md) | `php artisan test` でテストが APP_ENV=local のまま動く不具合の修正 | 完了 |
+| [20261122-history-event-label-guard](./20261122-history-event-label-guard/spec.md) | 履歴画面のイベント表示名の漏れを機械的に検出する | 完了 |
+| [20261121-leave-history-event-detail](./20261121-leave-history-event-detail/spec.md) | 有給・特別休暇履歴でイベントコードがそのまま表示される不具合の修正 | 完了 |
 | [20261121-navigation-hierarchy](./20261121-navigation-hierarchy/spec.md) | 画面階層と戻る導線のガイドライン策定と全画面への適用 | 完了 |
 | [20261121-url-state-followups](./20261121-url-state-followups/spec.md) | 選択状態の復元の横展開(複数社員選択の名前表示・URLの不正値・書き方の残り) | 完了 |
 | [20261115-keep-screen-selection-on-reload](./20261115-keep-screen-selection-on-reload/spec.md) | 画面の選択状態(対象社員・年月・絞り込み・ページ)をリロード後も保つ | 完了 |

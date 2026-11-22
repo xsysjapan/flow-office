@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from '../api/types'
 import {
+  assetHistoryEventTypes,
+  compensatoryLeaveHistoryEventTypes,
+  paidLeaveHistoryEventTypes,
+  specialLeaveHistoryEventTypes,
+} from '../generated/historyEventTypes'
+import {
+  assetHistoryEventTypeLabel,
   attendanceDayDisplayLabel,
   attendanceDayOffBadges,
   attendanceDayStatusLabel,
   attendanceMonthStatusLabel,
   attendanceRowDisplayLabel,
+  compensatoryLeaveEventDetail,
+  compensatoryLeaveEventTypeLabel,
   paidLeaveEventDetail,
   paidLeaveEventTypeLabel,
   specialLeaveEventDetail,
@@ -187,12 +196,12 @@ describe('statusLabels', () => {
     expect(WORK_LOCATION_TYPE_OPTIONS).toHaveLength(7)
   })
 
-  it('maps paid leave history event types to a Japanese label and tone, falling back to the raw type', () => {
+  it('maps paid leave history event types to a Japanese label and tone, falling back to その他', () => {
     expect(paidLeaveEventTypeLabel('paid_leave_account.grant_created')).toEqual({ label: '付与', tone: 'success' })
     expect(paidLeaveEventTypeLabel('paid_leave_request.returned')).toEqual({ label: '差戻し', tone: 'warning' })
     expect(paidLeaveEventTypeLabel('paid_leave_account.usage_confirmed')).toEqual({ label: '消化', tone: 'info' })
-    expect(paidLeaveEventTypeLabel('paid_leave.granted')).toEqual({ label: 'paid_leave.granted', tone: 'neutral' })
-    expect(paidLeaveEventTypeLabel('paid_leave.unknown_event')).toEqual({ label: 'paid_leave.unknown_event', tone: 'neutral' })
+    expect(paidLeaveEventTypeLabel('paid_leave.granted')).toEqual({ label: 'その他', tone: 'neutral' })
+    expect(paidLeaveEventTypeLabel('paid_leave.unknown_event')).toEqual({ label: 'その他', tone: 'neutral' })
   })
 
   it('labels the grant_amount_changed event for paid and special leave and formats its detail', () => {
@@ -204,6 +213,43 @@ describe('statusLabels', () => {
     expect(
       specialLeaveEventDetail(buildEvent('special_leave_account.grant_amount_changed', { new_granted_days: 3.5, reason: null })),
     ).toBe('付与日数を3.5日に変更')
+  })
+
+  it('formats grant revoke, date/expiry change, usage and workflow share events without event codes', () => {
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_revoked', { reason: '誤登録' }))).toBe('付与を取り消しました(誤登録)')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_revoked', { reason: null }))).toBe('付与を取り消しました')
+    expect(specialLeaveEventDetail(buildEvent('special_leave_account.grant_revoked', { reason: null }))).toBe('付与を取り消しました')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_date_changed', { new_granted_on: '2026-04-01', reason: null }))).toBe(
+      '付与日を2026-04-01に変更',
+    )
+    expect(
+      paidLeaveEventDetail(buildEvent('paid_leave_account.grant_expiry_changed', { new_expires_on: '2028-04-30', reason: '訂正' })),
+    ).toBe('有効期限を2028-04-30に変更(訂正)')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.usage_designated', { used_on: '2026-08-31', used_days: 1, hours: null }))).toBe(
+      '対象日 2026-08-31 に1日の消化を指定',
+    )
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.usage_designated', { used_on: '2026-08-31', used_days: 0.25, hours: 2 }))).toBe(
+      '対象日 2026-08-31 に2時間の消化を指定',
+    )
+    expect(
+      specialLeaveEventDetail(buildEvent('special_leave_account.usage_designated', { used_on: '2026-09-01', used_days: 0.1875, used_minutes: 90 })),
+    ).toBe('対象日 2026-09-01 に1時間30分の消化を指定')
+    expect(specialLeaveEventDetail(buildEvent('special_leave_account.usage_designated', { used_on: '2026-09-01', used_days: 0.5, used_minutes: 60 }))).toBe(
+      '対象日 2026-09-01 に1時間の消化を指定',
+    )
+    expect(specialLeaveEventDetail(buildEvent('special_leave_account.usage_designated', { used_on: '2026-09-01', used_days: 0.0625, used_minutes: 30 }))).toBe(
+      '対象日 2026-09-01 に30分の消化を指定',
+    )
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.usage_allocated', { allocated_days: 1 }))).toBe('付与へ1日を充当')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.usage_allocation_released', { released_days: 0.5 }))).toBe('付与への充当0.5日を解除')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_request.shared', {}))).toBe('申請がワークフローに連携されました')
+    expect(specialLeaveEventDetail(buildEvent('special_leave.request_shared', {}))).toBe('申請がワークフローに連携されました')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.something_new', {}))).toBe('')
+  })
+
+  it('labels grant_date_changed and grant_expiry_changed events', () => {
+    expect(paidLeaveEventTypeLabel('paid_leave_account.grant_date_changed')).toEqual({ label: '付与日の変更', tone: 'info' })
+    expect(paidLeaveEventTypeLabel('paid_leave_account.grant_expiry_changed')).toEqual({ label: '有効期限の変更', tone: 'info' })
   })
 
   it('formats each paid leave history event type using its own payload shape', () => {
@@ -259,6 +305,51 @@ describe('statusLabels', () => {
         { label: '有給休暇(全休)', tone: 'info' },
         { label: '代休(午前半休)', tone: 'info' },
       ])
+    })
+  })
+
+  // 生成ファイル(backend の events:export-history-types が書き出す)の全種別について、表示名と詳細文の漏れを検出する。
+  describe('履歴イベントの表示名・詳細文の網羅 (生成された種別一覧)', () => {
+    const leaveTypeGroups = [
+      { name: '有給', types: paidLeaveHistoryEventTypes, label: paidLeaveEventTypeLabel, detail: paidLeaveEventDetail },
+      { name: '特別休暇', types: specialLeaveHistoryEventTypes, label: specialLeaveEventTypeLabel, detail: specialLeaveEventDetail },
+      {
+        name: '代休',
+        types: compensatoryLeaveHistoryEventTypes,
+        label: compensatoryLeaveEventTypeLabel,
+        detail: compensatoryLeaveEventDetail,
+      },
+    ]
+
+    for (const group of leaveTypeGroups) {
+      it(`${group.name}: every event type has a display name and a detail without showing the event code`, () => {
+        for (const type of group.types) {
+          const meta = group.label(type)
+          expect(meta.label, type).not.toBe(type)
+          expect(meta.label, type).not.toBe('その他')
+          // payloadが空でも詳細関数は例外を投げない(詳細文の有無は種別ごとに異なる)
+          expect(() => group.detail(buildEvent(type, {})), type).not.toThrow()
+        }
+      })
+    }
+
+    it('asset: every event type has a display name without showing the event code', () => {
+      for (const type of assetHistoryEventTypes) {
+        expect(assetHistoryEventTypeLabel(type), type).not.toBe(type)
+        expect(assetHistoryEventTypeLabel(type), type).not.toBe('その他')
+      }
+    })
+
+    it('falls back to その他 and an empty detail for unknown leave event types', () => {
+      expect(compensatoryLeaveEventTypeLabel('compensatory_leave.unknown_event')).toEqual({ label: 'その他', tone: 'neutral' })
+      expect(paidLeaveEventDetail(buildEvent('paid_leave.granted', {}))).toBe('')
+      expect(specialLeaveEventDetail(buildEvent('special_leave_account.unknown_event', {}))).toBe('')
+      expect(compensatoryLeaveEventDetail(buildEvent('compensatory_leave_account.unknown_event', {}))).toBe('')
+    })
+
+    it('falls back to その他 for unknown asset event types, including Object prototype keys', () => {
+      expect(assetHistoryEventTypeLabel('asset.unknown_event')).toBe('その他')
+      expect(assetHistoryEventTypeLabel('constructor')).toBe('その他')
     })
   })
 })

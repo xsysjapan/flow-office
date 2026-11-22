@@ -76,3 +76,4 @@ ReadModelの作り直しで消える(開発用の管理者・ロールの割り�
 - [ ] シーダー・migration・運用コマンドでもReadModelの行をCommand経由で作っている
 - [ ] `docs/20-implementation-notes.md` のチェックリストに抵触していない
 - [ ] 他文脈のイベントに反応する場合、Reactor経由のCommandが冪等(`viaReactor`)で、他文脈のテーブルを読んでいない
+- [ ] 履歴画面に出る接頭辞(`paid_leave_account.` `paid_leave_request.` `special_leave.` `special_leave_account.` `compensatory_leave.` `compensatory_leave_account.` `asset.`)のイベントを足したら `php artisan events:export-history-types` で frontend/src/generated/historyEventTypes.ts を再生成し、frontend/src/utils/statusLabels.ts の表示名・詳細文を足す(足りないと backend のテストと frontend の tsc が失敗する)。新しい履歴画面を作る場合は HistoryEventTypesExporter に接頭辞を足す。

@@ -14,6 +14,9 @@ npm run storybook       # http://localhost:6006
 npm run test             # Vitest単体テスト(jsdom)
 ```
 
+`src/generated/historyEventTypes.ts` は backend の `php artisan events:export-history-types` が書き出す生成物(手で編集しない)。
+履歴画面の表示名・詳細文(`src/utils/statusLabels.ts`)はこの型で網羅させており、漏れは `npm run build` の tsc で検出される。
+
 ## ディレクトリ構成
 
 ```
