@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { Toaster } from "./components/ui/sonner";
 import { ErrorBoundary } from "./components/ErrorBoundary/ErrorBoundary";
 import { AppLayout } from "./components/AppLayout/AppLayout";
 import { AdminLayout } from "./components/AdminLayout/AdminLayout";
@@ -82,6 +83,7 @@ import { RoleDefinitionPage } from "./pages/admin/RoleDefinitionPage";
 function App() {
   return (
     <ErrorBoundary>
+      <Toaster />
       <MaintenanceGate>
       <Routes>
         <Route path="/login" element={<LoginPage />} />

@@ -7,8 +7,11 @@ import * as backOfficeTasksApi from '../../api/backOfficeTasks'
 import { ApiError } from '../../api/client'
 import * as usersApi from '../../api/users'
 import type { BackOfficeTask, BackOfficeTaskSearchResult, Paginated, User } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { BackOfficeTaskListPage } from './BackOfficeTaskListPage'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const me: User = {
   id: 'me-1',
@@ -102,6 +105,7 @@ function renderPage(initialEntries: string[] = ['/backoffice-tasks']) {
 describe('BackOfficeTaskListPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.mocked(notify.success).mockClear()
     vi.spyOn(backOfficeTasksApi, 'fetchBackOfficeTasks').mockResolvedValue(searchResult([]))
   })
 
@@ -213,7 +217,37 @@ describe('BackOfficeTaskListPage', () => {
     )
   })
 
-  it('allows setting the assignee for a selection that mixes unassigned and assigned tasks', async () => {
+  async function pickAssignee(label: string, search: string) {
+    await userEvent.click(userPickerTrigger())
+    await userEvent.type(await screen.findByPlaceholderText('担当者を選択'), search)
+    await userEvent.click(await screen.findByRole('option', { name: label }))
+  }
+
+  /** ダイアログのスコープ(role=dialog)。ページ側にも同名のボタンがあるため */
+  function dialog() {
+    return within(screen.getByRole('dialog'))
+  }
+
+  it('shows the bulk bar with the two actions and the clear button only while rows are selected', async () => {
+    vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(
+      searchResult([makeTask({ id: 'task-1', title: '未割当' })]),
+    )
+
+    renderPage()
+
+    await screen.findByRole('checkbox', { name: '未割当を選択' })
+    expect(screen.queryByRole('button', { name: '担当者を変更' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '未割当を選択' }))
+    expect(screen.getByRole('button', { name: '担当者を変更' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '完了にする' })).toBeDisabled()
+    expect(screen.getByText('自分のタスクのみ完了にできます')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '選択を解除' }))
+    expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument()
+  })
+
+  it('changes the assignee of a mixed selection from the dialog, notifies and clears the selection', async () => {
     const tasks = [
       makeTask({ id: 'task-unassigned', title: '未割り当てのタスク' }),
       makeTask({ id: 'task-assigned', title: '割当済みのタスク', status: 'processing', assignee: colleague }),
@@ -226,51 +260,111 @@ describe('BackOfficeTaskListPage', () => {
 
     await userEvent.click(await screen.findByRole('checkbox', { name: '未割り当てのタスクを選択' }))
     await userEvent.click(screen.getByRole('checkbox', { name: '割当済みのタスクを選択' }))
-
     expect(screen.getByText('2件を選択中')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '担当者を設定' })).toBeDisabled()
-    expect(screen.getByText('担当者を選択してください')).toBeInTheDocument()
-    expect(screen.queryByText('未割り当てのタスクのみ割り当てられます')).not.toBeInTheDocument()
+    // 旧バー内の入力欄・理由は無い
+    expect(screen.queryByText('担当者を選択してください')).not.toBeInTheDocument()
 
-    await userEvent.click(userPickerTrigger())
-    await userEvent.type(await screen.findByPlaceholderText('担当者を選択'), '自分')
-    await userEvent.click(await screen.findByRole('option', { name: '自分 太郎(me@example.com)' }))
+    await userEvent.click(screen.getByRole('button', { name: '担当者を変更' }))
 
-    expect(screen.getByRole('button', { name: '担当者を設定' })).toBeEnabled()
-    await userEvent.click(screen.getByRole('button', { name: '担当者を設定' }))
+    expect(await screen.findByText('担当者を変更しますか?')).toBeInTheDocument()
+    expect(screen.getByText('選択した2件(未割り当て1件・割り当て済み1件)')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'ステータスは変わりません。未着手のタスクは確認中になります(申請種別の遷移ルールで許可されている場合)。新しい担当者と前の担当者に通知されます。',
+      ),
+    ).toBeInTheDocument()
+    // 変更先を選ぶまでは実行できない
+    expect(dialog().getByRole('button', { name: '2件の担当者を変更' })).toBeDisabled()
+
+    await pickAssignee('自分 太郎(me@example.com)', '自分')
+    expect(screen.getByText('選択した2件(未割り当て1件・割り当て済み1件。変更不要0件)')).toBeInTheDocument()
+    await userEvent.click(dialog().getByRole('button', { name: '2件の担当者を変更' }))
 
     await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(2))
     expect(assignSpy).toHaveBeenCalledWith('task-unassigned', 'me-1')
     expect(assignSpy).toHaveBeenCalledWith('task-assigned', 'me-1')
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2件のタスクの担当者を自分 太郎さんに変更しました'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.queryByText('2件を選択中')).not.toBeInTheDocument()
   })
 
-  it('sets the assignee for selected unassigned tasks to the picked user', async () => {
+  it('excludes rows already assigned to the picked user as 変更不要 and disables the action when nothing is left', async () => {
     const tasks = [
-      makeTask({ id: 'backoffice-task-1', title: 'タクシー代の経理処理' }),
-      makeTask({ id: 'backoffice-task-3', title: '名刺の再作成', task_type: 'business_card_order' }),
+      makeTask({ id: 'task-a', title: 'タスクA', status: 'processing', assignee: colleague }),
+      makeTask({ id: 'task-b', title: 'タスクB', status: 'processing', assignee: me }),
+    ]
+    vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginate([colleague, me]))
+    const assignSpy = vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockResolvedValue(tasks[0])
+
+    renderPage(['/backoffice-tasks?assignee=all'])
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'タスクAを選択' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'タスクBを選択' }))
+    await userEvent.click(screen.getByRole('button', { name: '担当者を変更' }))
+
+    await pickAssignee('担当者花子(hanako@example.com)', '花子')
+    expect(screen.getByText('選択した2件(未割り当て0件・割り当て済み2件。変更不要1件)')).toBeInTheDocument()
+    await userEvent.click(dialog().getByRole('button', { name: '1件の担当者を変更' }))
+
+    await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(1))
+    // 担当者が既に花子のタスクAは対象外。タスクBだけを変更する
+    expect(assignSpy).toHaveBeenCalledWith('task-b', 'assignee-1')
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('1件のタスクの担当者を担当者花子さんに変更しました'))
+  })
+
+  it('disables the assign action when every selected task is already assigned to the picked user', async () => {
+    const tasks = [makeTask({ id: 'task-a', title: 'タスクA', status: 'processing', assignee: colleague })]
+    vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginate([colleague]))
+
+    renderPage(['/backoffice-tasks?assignee=all'])
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'タスクAを選択' }))
+    await userEvent.click(screen.getByRole('button', { name: '担当者を変更' }))
+    await pickAssignee('担当者花子(hanako@example.com)', '花子')
+
+    expect(screen.getByText('選択した1件(未割り当て0件・割り当て済み1件。変更不要1件)')).toBeInTheDocument()
+    expect(dialog().getByRole('button', { name: '0件の担当者を変更' })).toBeDisabled()
+  })
+
+  it('shows the failures inside the dialog on partial failure and keeps only the failed rows selected', async () => {
+    const tasks = [
+      makeTask({ id: 'task-ok', title: '成功するタスク' }),
+      makeTask({ id: 'task-ng', title: '失敗するタスク' }),
     ]
     vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
     vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginate([colleague]))
-    const assignSpy = vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockResolvedValue(tasks[0])
+    vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockImplementation((id) =>
+      id === 'task-ng'
+        ? Promise.reject(new ApiError(422, '完了・取消済みのタスクは担当者を変更できません。'))
+        : Promise.resolve(tasks[0]),
+    )
 
     renderPage()
 
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'タクシー代の経理処理を選択' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: '名刺の再作成を選択' }))
-    expect(screen.getByText('2件を選択中')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '担当者を設定' })).toBeDisabled()
-    expect(screen.getByText('担当者を選択してください')).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('checkbox', { name: '成功するタスクを選択' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '失敗するタスクを選択' }))
+    await userEvent.click(screen.getByRole('button', { name: '担当者を変更' }))
+    await pickAssignee('担当者花子(hanako@example.com)', '花子')
+    await userEvent.click(dialog().getByRole('button', { name: '2件の担当者を変更' }))
 
-    await userEvent.click(userPickerTrigger())
-    await userEvent.type(await screen.findByPlaceholderText('担当者を選択'), '花子')
-    await userEvent.click(await screen.findByRole('option', { name: '担当者花子(hanako@example.com)' }))
+    expect(
+      await screen.findByText('1件のタスクの担当者を担当者花子さんに変更しました。1件はできませんでした。'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('失敗するタスク: 完了・取消済みのタスクは担当者を変更できません。')).toBeInTheDocument()
+    expect(screen.getByText('できなかった1件は選択したままです。')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+    // 成功分は選択から外れ、失敗分だけ残る
+    expect(screen.getByText('1件を選択中')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: '成功するタスクを選択', hidden: true })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '失敗するタスクを選択', hidden: true })).toBeChecked()
 
-    expect(screen.getByRole('button', { name: '担当者を設定' })).toBeEnabled()
-    await userEvent.click(screen.getByRole('button', { name: '担当者を設定' }))
+    const closeButtons = screen.getAllByRole('button', { name: '閉じる' })
+    await userEvent.click(closeButtons[closeButtons.length - 1])
 
-    await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(2))
-    expect(assignSpy).toHaveBeenCalledWith('backoffice-task-1', 'assignee-1')
-    expect(assignSpy).toHaveBeenCalledWith('backoffice-task-3', 'assignee-1')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(notify.success).toHaveBeenCalledWith('1件のタスクの担当者を担当者花子さんに変更しました')
   })
 
   it('does not allow selecting completed or cancelled tasks for bulk assignment', async () => {
@@ -299,14 +393,14 @@ describe('BackOfficeTaskListPage', () => {
     renderPage(['/backoffice-tasks?assignee=all'])
 
     await userEvent.click(await screen.findByRole('checkbox', { name: '自分の確認1を選択' }))
-    expect(screen.getByRole('button', { name: '選択したタスクを完了' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '完了にする' })).toBeEnabled()
 
     await userEvent.click(screen.getByRole('checkbox', { name: '他人の確認1を選択' }))
-    expect(screen.getByRole('button', { name: '選択したタスクを完了' })).toBeDisabled()
-    expect(screen.getByText('自分のタスクのみ一括完了できます')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '完了にする' })).toBeDisabled()
+    expect(screen.getByText('自分のタスクのみ完了にできます')).toBeInTheDocument()
   })
 
-  it('bulk-completes my own tasks', async () => {
+  it('bulk-completes my own tasks after the confirmation dialog and notifies', async () => {
     const tasks = [
       makeTask({ id: 'my-task-1', title: '月次勤怠確認1', status: 'processing', assignee: me }),
       makeTask({ id: 'my-task-2', title: '月次勤怠確認2', status: 'in_review', assignee: me }),
@@ -318,9 +412,42 @@ describe('BackOfficeTaskListPage', () => {
 
     await userEvent.click(await screen.findByRole('checkbox', { name: 'このページのタスクをすべて選択' }))
     expect(screen.getByText('2件を選択中')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: '選択したタスクを完了' }))
+    await userEvent.click(screen.getByRole('button', { name: '完了にする' }))
+
+    // 確認ダイアログを経るまでAPIは呼ばれない
+    expect(await screen.findByText('選択した2件を完了にしますか?')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        '完了すると担当者を変更できなくなります。申請種別の遷移ルールで完了にできないタスクが含まれていると、全件とも完了になりません。',
+      ),
+    ).toBeInTheDocument()
+    expect(completeSpy).not.toHaveBeenCalled()
+
+    await userEvent.click(dialog().getByRole('button', { name: '2件を完了にする' }))
 
     await waitFor(() => expect(completeSpy).toHaveBeenCalledWith(['my-task-1', 'my-task-2']))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2件のタスクを完了にしました'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.queryByText('2件を選択中')).not.toBeInTheDocument()
+  })
+
+  it('shows the API reason inside the dialog and keeps the selection when bulk completion fails as a whole', async () => {
+    const tasks = [makeTask({ id: 'my-task-1', title: '月次勤怠確認1', status: 'processing', assignee: me })]
+    vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
+    vi.spyOn(backOfficeTasksApi, 'bulkCompleteBackOfficeTasks').mockRejectedValue(
+      new ApiError(422, '「処理中」から「完了」へは変更できません。'),
+    )
+
+    renderPage(['/backoffice-tasks?assignee=me'])
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: '月次勤怠確認1を選択' }))
+    await userEvent.click(screen.getByRole('button', { name: '完了にする' }))
+    await userEvent.click(dialog().getByRole('button', { name: '1件を完了にする' }))
+
+    expect(await dialog().findByText('「処理中」から「完了」へは変更できません。')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('1件を選択中')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
   })
 
   it('clears the selection when the tab changes', async () => {

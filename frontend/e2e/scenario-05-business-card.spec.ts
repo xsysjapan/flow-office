@@ -65,8 +65,11 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     // そのため、ここでは元データへのリンク表示のみを確認する。
     await expect(generalAffairsPage.getByText(/workflow_request/)).toBeVisible()
 
-    await pickUser(generalAffairsPage, '担当者', SCENARIO_USERS.generalAffairsStaff, 'megumi.nakamura@example.com')
-    await generalAffairsPage.getByRole('button', { name: '割り当てる' }).click()
+    // 担当者の割り当てはダイアログ(ボタン→ダイアログ内のUserPicker→「割り当てる」)で行う
+    await generalAffairsPage.getByRole('button', { name: '担当者を割り当てる' }).click()
+    const assignDialog = generalAffairsPage.getByRole('dialog')
+    await pickUser(generalAffairsPage, '担当者', SCENARIO_USERS.generalAffairsStaff, 'megumi.nakamura@example.com', { root: assignDialog, exact: true })
+    await assignDialog.getByRole('button', { name: '割り当てる' }).click()
     await expect(generalAffairsPage.getByText('未割り当て')).toHaveCount(0)
 
     // request_types.allowed_status_transitions(名刺申請: 未着手→確認中→発注済み→発送済み→

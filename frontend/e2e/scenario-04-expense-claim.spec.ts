@@ -142,8 +142,11 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await expect(taskRow).toBeVisible()
     await taskRow.getByRole('link').click()
 
-    await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com')
-    await accountingPage.getByRole('button', { name: '割り当てる' }).click()
+    // 担当者の割り当てはダイアログ(ボタン→ダイアログ内のUserPicker→「割り当てる」)で行う
+    await accountingPage.getByRole('button', { name: '担当者を割り当てる' }).click()
+    const assignDialog = accountingPage.getByRole('dialog')
+    await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com', { root: assignDialog, exact: true })
+    await assignDialog.getByRole('button', { name: '割り当てる' }).click()
     await expect(accountingPage.getByText('未割り当て')).toHaveCount(0)
 
     // request_types方式の廃止後もtask_type='expense_reimbursement'固定の許可遷移

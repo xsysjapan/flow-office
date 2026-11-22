@@ -174,4 +174,85 @@ describe("ConfirmActionDialog", () => {
     await user.click(screen.getByRole("button", { name: "キャンセル" }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+  describe("controlled mode", () => {
+    it("renders no trigger button and follows the open prop", () => {
+      const { rerender } = render(
+        <ConfirmActionDialog
+          open={false}
+          onOpenChange={vi.fn()}
+          title="承認しますか?"
+          description="取り消せません。"
+          confirmLabel="承認する"
+          onConfirm={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+      expect(screen.queryByText("承認しますか?")).not.toBeInTheDocument();
+
+      rerender(
+        <ConfirmActionDialog
+          open
+          onOpenChange={vi.fn()}
+          title="承認しますか?"
+          description="取り消せません。"
+          confirmLabel="承認する"
+          onConfirm={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText("承認しますか?")).toBeInTheDocument();
+    });
+
+    it("notifies the parent instead of closing itself when cancelled or after an async confirm", async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <ConfirmActionDialog
+          open
+          onOpenChange={onOpenChange}
+          title="承認しますか?"
+          description="取り消せません。"
+          confirmLabel="承認する"
+          onConfirm={() => Promise.resolve()}
+        />,
+      );
+
+      await user.click(screen.getByRole("button", { name: "キャンセル" }));
+      expect(onOpenChange).toHaveBeenLastCalledWith(false);
+
+      await user.click(screen.getByRole("button", { name: "承認する" }));
+      expect(onOpenChange).toHaveBeenCalledTimes(2);
+      // 親がopenを変えない限り開いたまま
+      expect(screen.getByText("承認しますか?")).toBeInTheDocument();
+    });
+
+    it("can hide or disable the cancel button", () => {
+      const { rerender } = render(
+        <ConfirmActionDialog
+          open
+          onOpenChange={vi.fn()}
+          title="t"
+          description="d"
+          confirmLabel="実行"
+          cancelDisabled
+          onConfirm={vi.fn()}
+        />,
+      );
+      expect(screen.getByRole("button", { name: "キャンセル" })).toBeDisabled();
+
+      rerender(
+        <ConfirmActionDialog
+          open
+          onOpenChange={vi.fn()}
+          title="t"
+          description="d"
+          confirmLabel="実行"
+          hideCancel
+          onConfirm={vi.fn()}
+        />,
+      );
+      expect(screen.queryByRole("button", { name: "キャンセル" })).not.toBeInTheDocument();
+    });
+  });
 });

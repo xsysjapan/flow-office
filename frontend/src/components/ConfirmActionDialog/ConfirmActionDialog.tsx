@@ -12,8 +12,8 @@ import {
 } from "../ui/dialog";
 
 export interface ConfirmActionDialogProps {
-  /** ダイアログを開くトリガーボタンのラベル。 */
-  triggerLabel: string;
+  /** ダイアログを開くトリガーボタンのラベル。制御モード(`open`指定)では使わない(トリガーを描画しない)。 */
+  triggerLabel?: string;
   triggerVariant?: ButtonVariant;
   title: string;
   description: ReactNode;
@@ -27,6 +27,15 @@ export interface ConfirmActionDialogProps {
   error?: unknown;
   /** ダイアログの開閉時に呼ばれる(開いた際に呼び出し側のフォーム状態・ミューテーションをリセットする用途)。 */
   onOpenChange?: (open: boolean) => void;
+  /**
+   * 制御モード。`open`と`onOpenChange`の両方を渡すと、開閉は呼び出し側が持ち、トリガーボタンを描画しない
+   * (「⋯」メニューや一括操作バーなど、別の場所から開く確認に使う)。省略時は従来どおりトリガー内蔵の非制御。
+   */
+  open?: boolean;
+  /** キャンセルボタンを出さない(一括操作の結果表示で「閉じる」だけにする用途)。 */
+  hideCancel?: boolean;
+  /** trueの間はキャンセルボタンを押せない(実行中は閉じさせない用途)。 */
+  cancelDisabled?: boolean;
   /** 説明文と確認/キャンセルボタンの間に表示する追加コンテンツ(理由入力欄など)。 */
   children?: ReactNode;
 }
@@ -48,13 +57,18 @@ export function ConfirmActionDialog({
   isPending = false,
   error,
   onOpenChange,
+  open,
+  hideCancel = false,
+  cancelDisabled = false,
   children,
 }: ConfirmActionDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined && onOpenChange !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
 
-  const handleOpenChange = (open: boolean) => {
-    setIsOpen(open);
-    onOpenChange?.(open);
+  const handleOpenChange = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
   };
 
   const handleConfirm = async () => {
@@ -71,13 +85,15 @@ export function ConfirmActionDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <Button
-        size="sm"
-        variant={triggerVariant}
-        onClick={() => handleOpenChange(true)}
-      >
-        {triggerLabel}
-      </Button>
+      {!isControlled && (
+        <Button
+          size="sm"
+          variant={triggerVariant}
+          onClick={() => handleOpenChange(true)}
+        >
+          {triggerLabel}
+        </Button>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -88,9 +104,15 @@ export function ConfirmActionDialog({
         )}
         {children}
         <DialogFooter>
-          <Button variant="secondary" onClick={() => handleOpenChange(false)}>
-            キャンセル
-          </Button>
+          {!hideCancel && (
+            <Button
+              variant="secondary"
+              disabled={cancelDisabled}
+              onClick={() => handleOpenChange(false)}
+            >
+              キャンセル
+            </Button>
+          )}
           <Button
             variant={confirmVariant}
             disabled={confirmDisabled}

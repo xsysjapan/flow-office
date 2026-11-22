@@ -10,6 +10,7 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { notify } from '../../lib/notify'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -128,6 +129,10 @@ function AttendanceConfirmationRevertSection({ workflowRequestId }: { workflowRe
 }
 
 
+/** 担当者の変更・割り当てダイアログの説明(一括変更と同じ内容)。 */
+const ASSIGN_DESCRIPTION =
+  'ステータスは変わりません。未着手のタスクは確認中になります(申請種別の遷移ルールで許可されている場合)。新しい担当者と前の担当者に通知されます。'
+
 /**
  * UC-11: バックオフィス処理タスクの詳細確認・担当者割り当て・状態更新。
  */
@@ -139,7 +144,7 @@ export function BackOfficeTaskDetailPage() {
   const assignTask = useAssignBackOfficeTask()
   const changeStatus = useChangeBackOfficeTaskStatus()
 
-  const [assignedUserId, setAssignedUserId] = useState<string | undefined>(undefined)
+  const [assigned, setAssigned] = useState<{ id: string; name: string } | undefined>(undefined)
   const [status, setStatus] = useState<BackOfficeTaskStatus>('not_started')
   const [comment, setComment] = useState('')
 
@@ -155,7 +160,13 @@ export function BackOfficeTaskDetailPage() {
   if (!task) return null
 
   const { label, tone } = backOfficeTaskStatusLabel(task.status)
-  const actionError = assignTask.error ?? changeStatus.error
+  /** 選択肢は現在の状態と、遷移ルールで移れる状態だけ(APIが返さない場合は従来どおり全件)。 */
+  const allowedNext = task.allowed_next_statuses
+  const statusOptions = allowedNext
+    ? BACKOFFICE_TASK_STATUSES.filter((option) => option === task.status || allowedNext.includes(option))
+    : BACKOFFICE_TASK_STATUSES
+  const noNextStatus = allowedNext !== undefined && allowedNext.length === 0
+  const statusUnchanged = status === task.status
   /** 完了・取消のタスクは担当者を設定・変更できない(フォームを出さない)。 */
   const isClosedTask = task.status === 'completed' || task.status === 'cancelled'
 
@@ -163,8 +174,6 @@ export function BackOfficeTaskDetailPage() {
     <div className="flex flex-col gap-3">
       <BackLink />
       <Card title={task.title} actions={<Badge tone={tone}>{label}</Badge>}>
-        {actionError && <ErrorMessage error={actionError} />}
-
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
           <dt className="font-medium text-muted-foreground">種別</dt>
           <dd className="text-foreground">{task.task_type}</dd>
@@ -184,50 +193,90 @@ export function BackOfficeTaskDetailPage() {
 
         {!isClosedTask && (
           <div className="mt-5 border-t border-border pt-4">
-            <h3 className="mb-3 text-sm font-semibold text-foreground">
-              {task.assignee ? '担当者を変更' : '担当者を割り当てる'}
-            </h3>
-            <FormField label="担当者" htmlFor="assignee">
-              <UserPicker id="assignee" value={assignedUserId} onChange={setAssignedUserId} />
-            </FormField>
-            <Button
-              isLoading={assignTask.isPending}
-              disabled={!assignedUserId}
-              onClick={() =>
-                assignTask.mutate(
-                  { id: taskId, assignedUserId: assignedUserId! },
-                  { onSuccess: () => setAssignedUserId(undefined) },
+            <ConfirmActionDialog
+              triggerLabel={task.assignee ? '担当者を変更' : '担当者を割り当てる'}
+              triggerVariant="primary"
+              title={task.assignee ? '担当者を変更しますか?' : '担当者を割り当てますか?'}
+              description={ASSIGN_DESCRIPTION}
+              confirmLabel={task.assignee ? '変更する' : '割り当てる'}
+              confirmVariant="primary"
+              confirmDisabled={!assigned}
+              isPending={assignTask.isPending}
+              error={assignTask.error}
+              onOpenChange={(open) => {
+                if (open) {
+                  setAssigned(undefined)
+                  assignTask.reset()
+                }
+              }}
+              onConfirm={async () => {
+                if (!assigned) return
+                const wasAssigned = Boolean(task.assignee)
+                await assignTask.mutateAsync({ id: taskId, assignedUserId: assigned.id })
+                notify.success(
+                  wasAssigned
+                    ? `担当者を${assigned.name}さんに変更しました`
+                    : `担当者を${assigned.name}さんに割り当てました`,
                 )
-              }
+              }}
             >
-              {task.assignee ? '変更する' : '割り当てる'}
-            </Button>
-            {!assignedUserId && <p className="text-xs text-muted-foreground">担当者を選択してください</p>}
+              <FormField label="担当者" htmlFor="assignee">
+                <UserPicker
+                  id="assignee"
+                  value={assigned?.id}
+                  onChange={(id, picked) => setAssigned(id && picked ? { id, name: picked.name } : undefined)}
+                />
+              </FormField>
+              {!assigned && <p className="text-xs text-muted-foreground">担当者を選択してください</p>}
+            </ConfirmActionDialog>
           </div>
         )}
 
         <div className="mt-5 border-t border-border pt-4">
           <h3 className="mb-3 text-sm font-semibold text-foreground">状態を変更する</h3>
-          <div className="flex flex-wrap items-end gap-3">
-            <FormField label="状態" htmlFor="status">
-              <NativeSelect id="status" value={status} onChange={(e) => setStatus(e.target.value as BackOfficeTaskStatus)}>
-                {BACKOFFICE_TASK_STATUSES.map((option) => (
-                  <option key={option} value={option}>
-                    {backOfficeTaskStatusLabel(option).label}
-                  </option>
-                ))}
-              </NativeSelect>
-            </FormField>
-            <FormField label="コメント(任意)" htmlFor="status-comment">
-              <Input id="status-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
-            </FormField>
-            <Button
-              isLoading={changeStatus.isPending}
-              onClick={() => changeStatus.mutate({ id: taskId, status, comment: comment || undefined })}
-            >
-              更新する
-            </Button>
-          </div>
+          {noNextStatus ? (
+            <p className="text-sm text-muted-foreground">この状態から変更できるステータスはありません</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-end gap-3">
+                <FormField label="状態" htmlFor="status">
+                  <NativeSelect
+                    id="status"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as BackOfficeTaskStatus)}
+                  >
+                    {statusOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {backOfficeTaskStatusLabel(option).label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+                <FormField label="コメント(任意)" htmlFor="status-comment">
+                  <Input id="status-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
+                </FormField>
+                <Button
+                  isLoading={changeStatus.isPending}
+                  disabled={statusUnchanged}
+                  onClick={() =>
+                    changeStatus.mutate(
+                      { id: taskId, status, comment: comment || undefined },
+                      {
+                        onSuccess: () => {
+                          notify.success(`ステータスを${backOfficeTaskStatusLabel(status).label}に変更しました`)
+                          setComment('')
+                        },
+                      },
+                    )
+                  }
+                >
+                  更新する
+                </Button>
+              </div>
+              {statusUnchanged && <p className="text-xs text-muted-foreground">変更後のステータスを選択してください</p>}
+              {changeStatus.error && <ErrorMessage error={changeStatus.error} />}
+            </>
+          )}
         </div>
 
         {task.task_type === 'attendance_month_confirmation' && task.source_type === 'attendance_month' && (

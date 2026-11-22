@@ -50,3 +50,15 @@ export const WithError: Story = {
   },
   play: async ({ canvasElement }) => openDialog(canvasElement),
 }
+
+/** 制御モード: open/onOpenChangeを渡すとトリガーを描画しない(外のボタンやメニューから開く) */
+export const Controlled: Story = {
+  args: {
+    open: true,
+    onOpenChange: fn(),
+    title: 'この申請を承認しますか?',
+    description: '承認すると取り消せません。申請者に承認の通知が届きます。',
+    confirmLabel: '承認する',
+    confirmVariant: 'primary',
+  },
+}

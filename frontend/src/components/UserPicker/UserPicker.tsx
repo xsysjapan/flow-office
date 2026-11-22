@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
+import type { User } from '../../api/types'
 import { useUserSearch, useUsersByIds } from '../../hooks/useUsers'
 import { cn } from '../../lib/utils'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command'
@@ -8,7 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 export interface UserPickerProps {
   id: string
   value: string | undefined
-  onChange: (userId: string | undefined) => void
+  /** 選んだ社員を第2引数にも渡す(通知文に氏名を使う画面向け)。 */
+  onChange: (userId: string | undefined, user?: Pick<User, 'id' | 'name'>) => void
   placeholder?: string
   /**
    * 指定すると、globalスコープで当該Permissionを保有するユーザーのみに選択肢を絞り込む
@@ -76,7 +78,7 @@ export function UserPicker({
                   key={user.id}
                   value={String(user.id)}
                   onSelect={() => {
-                    onChange(user.id)
+                    onChange(user.id, user)
                     setSelectedLabel({ id: user.id, label: `${user.name}(${user.email})` })
                     setQuery('')
                     setOpen(false)
