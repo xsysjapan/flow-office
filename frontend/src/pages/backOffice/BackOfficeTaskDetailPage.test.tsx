@@ -538,6 +538,7 @@ describe('BackOfficeTaskDetailPage', () => {
       await waitFor(() =>
         expect(revertConfirmation).toHaveBeenCalledWith('attendance-month-1', '手続きミスが判明したため', 'workflow-request-1'),
       )
+      await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2026-07の月次勤怠の確定を取り消しました'))
     })
   })
 })

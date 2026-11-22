@@ -109,13 +109,14 @@ function AttendanceConfirmationRevertSection({ workflowRequestId }: { workflowRe
                   revertConfirmation.reset()
                 }
               }}
-              onConfirm={() =>
-                revertConfirmation.mutateAsync({
+              onConfirm={async () => {
+                await revertConfirmation.mutateAsync({
                   id: monthData.month!.id,
                   reason,
                   workflowRequestId,
                 })
-              }
+                notify.success(`${targetYearMonth}の月次勤怠の確定を取り消しました`)
+              }}
             >
               <FormField label="取消理由" htmlFor="revert-confirmation-reason" required>
                 <Textarea id="revert-confirmation-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />

@@ -3,6 +3,8 @@ import { BackLink } from '../../components/BackLink/BackLink'
 import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Badge } from '../../components/Badge/Badge'
+import { BulkActionBar } from '../../components/BulkActionBar/BulkActionBar'
+import { BulkActionDialog, type BulkActionFailure, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
@@ -13,13 +15,12 @@ import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PaidLeaveScheduleAssessmentPanel } from '../../components/PaidLeaveScheduleAssessmentPanel/PaidLeaveScheduleAssessmentPanel'
 import { PaidLeaveScheduleAssessmentRunCard } from '../../components/PaidLeaveScheduleAssessmentRunCard/PaidLeaveScheduleAssessmentRunCard'
-import { PaidLeaveScheduleBulkGrantBar } from '../../components/PaidLeaveScheduleBulkGrantBar/PaidLeaveScheduleBulkGrantBar'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import type { PaidLeaveScheduleBulkGrantResponse, PaidLeaveScheduleEntry } from '../../api/types'
+import type { PaidLeaveScheduleEntry } from '../../api/types'
 import type { PaidLeaveScheduleEntriesParams, PaidLeaveScheduleFilter } from '../../api/paidLeave'
 import {
   useBulkGrantPaidLeaveScheduleEntries,
@@ -31,6 +32,7 @@ import {
   useReassessPaidLeaveScheduleEntry,
   useStartPaidLeaveScheduleAssessmentRun,
 } from '../../hooks/usePaidLeave'
+import { notify } from '../../lib/notify'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { paidLeaveScheduleCategoryLabel, paidLeaveScheduleStatusLabel } from '../../utils/statusLabels'
 import { isValidDateParam } from '../../utils/searchParamValidators'
@@ -52,31 +54,11 @@ function parseFilter(value: string | null): PaidLeaveScheduleFilter {
   return FILTER_OPTIONS.some((option) => option.value === value) ? (value as PaidLeaveScheduleFilter) : DEFAULT_FILTER
 }
 
-/** 一括付与実行結果(ManualGrantCardのResultSummaryと同じ「全体件数+失敗内訳」パターン、spec.md論点5)。 */
-function BulkGrantResultSummary({ result }: { result: PaidLeaveScheduleBulkGrantResponse }) {
-  return (
-    <div className="mt-4 rounded-md border border-border p-3 text-sm">
-      <p className="font-medium text-foreground">
-        {result.success_count}件成功 / {result.failure_count}件失敗
-      </p>
-      {result.failure_count > 0 && (
-        <ul className="mt-2 list-disc pl-4 text-destructive">
-          {result.results
-            .filter((r) => !r.success)
-            .map((r) => (
-              <li key={r.schedule_entry_id}>{r.message}</li>
-            ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
 /**
- * 一括付与の確認ダイアログの本文(spec.md論点5・9)。件数・合計日数・付与予定日の範囲に加え、
+ * 一括付与ダイアログの対象の要約(spec.md論点5・9)。件数・合計日数・付与予定日の範囲に加え、
  * 選んだ行に付与予定日より前(未経過)の行があれば警告を出す。「今日」はローカル日付で比べる。
  */
-function buildBulkConfirmDescription(targets: PaidLeaveScheduleEntry[]): ReactNode {
+function buildBulkSummary(targets: PaidLeaveScheduleEntry[]): ReactNode {
   const totalDays = targets.reduce((sum, entry) => sum + (entry.candidate_grant_days ?? 0), 0)
   const dates = targets.map((entry) => entry.scheduled_on ?? '').filter((date) => date !== '').sort()
   const first = dates[0]
@@ -94,10 +76,11 @@ function buildBulkConfirmDescription(targets: PaidLeaveScheduleEntry[]): ReactNo
           {`付与予定日前の付与予定が${beforeScheduledCount}件含まれます。出勤率の判定期間にまだ経過していない日が含まれています。`}
         </span>
       )}
-      <span className="block">付与後は付与予定画面から取り消せません。取消は使用状況から付与ごとに行います。</span>
     </span>
   )
 }
+
+const BULK_GRANT_DESCRIPTION = '付与後は付与予定画面から取り消せません。取消は使用状況から付与ごとに行います。'
 
 /**
  * 組の相手(spec.md論点10)。同じ社員・同じ付与予定日で、名目の月数が初回とその+12か月の2行で、
@@ -156,7 +139,9 @@ export function PaidLeaveSchedulePage() {
   const startRun = useStartPaidLeaveScheduleAssessmentRun()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [bulkResult, setBulkResult] = useState<PaidLeaveScheduleBulkGrantResponse | null>(null)
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
+  /** ダイアログを開いた時点の対象。実行中に一覧が再取得されても件数・内訳が変わらないようにする。 */
+  const [bulkTargets, setBulkTargets] = useState<PaidLeaveScheduleEntry[]>([])
   const [userNameDraft, setUserNameDraft] = useState(userName)
   const [isDetailDirty, setIsDetailDirty] = useState(false)
 
@@ -196,10 +181,9 @@ export function PaidLeaveSchedulePage() {
     )
   }
 
-  /** 絞り込みを変えたら、選択と一括付与の結果をリセットする。 */
+  /** 絞り込みを変えたら、選択をリセットする。 */
   function resetSelection() {
     setSelectedIds(new Set())
-    setBulkResult(null)
   }
 
   function handleFilterChange(next: PaidLeaveScheduleFilter) {
@@ -257,11 +241,37 @@ export function PaidLeaveSchedulePage() {
   const rows = entries ?? []
   const selectedEntries = rows.filter((entry) => selectedIds.has(entry.id) && entry.status === 'Eligible')
 
-  async function handleBulkGrant() {
-    setBulkResult(null)
-    const result = await bulkGrant.mutateAsync(selectedEntries.map((entry) => entry.id))
-    setBulkResult(result)
-    setSelectedIds(new Set())
+  function openBulkDialog() {
+    setBulkTargets(selectedEntries)
+    setBulkDialogOpen(true)
+  }
+
+  function removeFromSelection(ids: string[]) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) next.delete(id)
+      return next
+    })
+  }
+
+  /** 一括付与APIが返す1件ずつの結果を、一括操作ダイアログの結果型に詰める。 */
+  async function executeBulkGrant(): Promise<BulkActionResult> {
+    const response = await bulkGrant.mutateAsync(bulkTargets.map((entry) => entry.id))
+    const succeededIds: string[] = []
+    const failures: BulkActionFailure[] = []
+    for (const target of bulkTargets) {
+      const result = response.results.find((r) => r.schedule_entry_id === target.id)
+      if (result?.success) {
+        succeededIds.push(target.id)
+      } else {
+        failures.push({
+          id: target.id,
+          label: `${target.user_name ?? target.user_id}(${target.scheduled_on ?? ''})`,
+          message: result?.message ?? '付与できませんでした。',
+        })
+      }
+    }
+    return { succeededIds, failures }
   }
 
   if (isLoading) return <LoadingState />
@@ -278,7 +288,10 @@ export function PaidLeaveSchedulePage() {
           statusError={runStatus.error}
           isStarting={startRun.isPending}
           startError={startRun.error}
-          onStart={() => startRun.mutateAsync()}
+          onStart={async () => {
+            await startRun.mutateAsync()
+            notify.success('付与予定の判定を開始しました')
+          }}
           onConfirmOpenChange={(open) => {
             if (open) startRun.reset()
           }}
@@ -337,23 +350,11 @@ export function PaidLeaveSchedulePage() {
           </div>
         </div>
 
-        {bulkResult && <BulkGrantResultSummary result={bulkResult} />}
-
-        {selectedEntries.length > 0 && (
-          <div className="mb-4">
-            <PaidLeaveScheduleBulkGrantBar
-              selectedCount={selectedEntries.length}
-              isSubmitting={bulkGrant.isPending}
-              confirmDescription={buildBulkConfirmDescription(selectedEntries)}
-              error={bulkGrant.error}
-              onCancel={() => setSelectedIds(new Set())}
-              onBulkGrant={handleBulkGrant}
-              onConfirmOpenChange={(open) => {
-                if (open) bulkGrant.reset()
-              }}
-            />
-          </div>
-        )}
+        <BulkActionBar
+          selectedCount={selectedEntries.length}
+          onClear={() => setSelectedIds(new Set())}
+          actions={[{ key: 'grant', label: '一括付与する', onClick: openBulkDialog }]}
+        />
 
         {error ? (
           <ErrorMessage error={error} fallback="付与予定一覧の取得に失敗しました。" />
@@ -456,16 +457,32 @@ export function PaidLeaveSchedulePage() {
               <PaidLeaveScheduleAssessmentPanel
                 key={selectedEntry.id}
                 entry={selectedEntry}
-                onReassess={() => reassess.mutate(selectedEntry.id)}
+                onReassess={() => reassess.mutate(selectedEntry.id, { onSuccess: () => notify.success('付与予定を再判定しました') })}
                 reassessIsPending={reassess.isPending}
                 reassessError={reassess.error}
                 onOverride={(input) =>
-                  override.mutate({ scheduleEntryId: selectedEntry.id, input }, { onSuccess: () => setIsDetailDirty(false) })
+                  override.mutate(
+                    { scheduleEntryId: selectedEntry.id, input },
+                    {
+                      onSuccess: () => {
+                        setIsDetailDirty(false)
+                        notify.success('判定を上書きしました')
+                      },
+                    },
+                  )
                 }
                 overrideIsPending={override.isPending}
                 overrideError={override.error}
                 onEdit={(input, callbacks) =>
-                  edit.mutate({ scheduleEntryId: selectedEntry.id, input }, { onSuccess: callbacks.onSuccess })
+                  edit.mutate(
+                    { scheduleEntryId: selectedEntry.id, input },
+                    {
+                      onSuccess: () => {
+                        callbacks.onSuccess()
+                        notify.success('付与予定を修正しました')
+                      },
+                    },
+                  )
                 }
                 editIsPending={edit.isPending}
                 editError={edit.error}
@@ -476,6 +493,19 @@ export function PaidLeaveSchedulePage() {
           </SheetContent>
         </Sheet>
       </Card>
+
+      <BulkActionDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        title="付与予定を一括付与しますか?"
+        summary={buildBulkSummary(bulkTargets)}
+        description={BULK_GRANT_DESCRIPTION}
+        confirmLabel={`${bulkTargets.length}件を付与する`}
+        resultTitle="一括付与の結果"
+        onExecute={executeBulkGrant}
+        onSucceeded={removeFromSelection}
+        successMessage={(count) => `${count}件の有給を付与しました`}
+      />
     </div>
   )
 }

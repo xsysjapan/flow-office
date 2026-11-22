@@ -1,4 +1,5 @@
 import { ChevronDown } from 'lucide-react'
+import { useState } from 'react'
 import { Button, type ButtonVariant } from '../Button/Button'
 import {
   DropdownMenu,
@@ -33,6 +34,8 @@ const MAX_VISIBLE_ACTIONS = 4
  * `Card`のactionsスロットには渡さず、Card本文の先頭に1つだけ置く。
  */
 export function BulkActionBar({ selectedCount, onClear, actions }: BulkActionBarProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   if (selectedCount === 0) return null
 
   const needsMenu = actions.length > MAX_VISIBLE_ACTIONS
@@ -62,7 +65,7 @@ export function BulkActionBar({ selectedCount, onClear, actions }: BulkActionBar
           </Button>
         ))}
         {menuActions.length > 0 && (
-          <DropdownMenu>
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="secondary" className="shrink-0">
                 その他
@@ -75,7 +78,13 @@ export function BulkActionBar({ selectedCount, onClear, actions }: BulkActionBar
                   key={action.key}
                   disabled={action.disabled}
                   variant={action.variant === 'danger' ? 'destructive' : 'default'}
-                  onSelect={action.onClick}
+                  onSelect={(event) => {
+                    // 既定の閉じる処理(トリガーへのフォーカス復帰)が、メニューから開くダイアログのフォーカスと
+                    // 競合しないよう既定動作を止め、メニューは自前で閉じてから操作を呼ぶ
+                    event.preventDefault()
+                    setMenuOpen(false)
+                    action.onClick()
+                  }}
                 >
                   {action.label}
                 </DropdownMenuItem>

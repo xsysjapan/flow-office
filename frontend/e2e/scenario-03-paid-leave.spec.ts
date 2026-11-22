@@ -130,6 +130,7 @@ test('終日有給を申請〜承認し、勤怠日に反映される', async ({
     await expect(approvalRow).toBeVisible()
     await approvalRow.getByRole('button', { name: new RegExp(targetDate) }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // 勤怠週次画面で対象日が有給扱いになり、退勤していないのに「打刻漏れ」警告が
@@ -183,6 +184,7 @@ test('半休を申請〜承認し、勤怠日に反映される', async ({ brows
     await expect(approvalRow).toBeVisible()
     await approvalRow.getByRole('button', { name: new RegExp(targetDate) }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
+    await approverPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     await applicantPage.reload()

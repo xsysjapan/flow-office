@@ -6,10 +6,11 @@ import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import type { FetchMyWorkflowRequestsOptions } from '../../api/workflowRequests'
 import { Badge } from '../../components/Badge/Badge'
+import { BulkActionBar } from '../../components/BulkActionBar/BulkActionBar'
+import { BulkActionDialog, type BulkActionFailure, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
-import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
@@ -215,8 +216,9 @@ export function WorkflowRequestListPage() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkReason, setBulkReason] = useState('')
-  const [isBulkCancelling, setIsBulkCancelling] = useState(false)
-  const [bulkError, setBulkError] = useState<Error | null>(null)
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
+  /** ダイアログを開いた時点の対象。実行中に一覧が再取得されても件数・表示名が変わらないようにする。 */
+  const [bulkTargets, setBulkTargets] = useState<Array<{ id: string; title: string }>>([])
 
   if (isLoading) return <LoadingState />
   if (error instanceof ApiError && error.status === 403) return <PermissionDenied />
@@ -268,70 +270,49 @@ export function WorkflowRequestListPage() {
     })
   }
 
-  /** 取消は元に戻せない操作(SKILL.md §2.12)のため、確認ダイアログ(ConfirmActionDialog)を
-   *  経由させる。理由未入力の場合はダイアログを開いたまま留める(Promiseをthrowして
-   *  ConfirmActionDialog側のcatchで「開いたまま」を維持する)。 */
-  async function handleBulkCancel() {
-    if (selectedIds.size === 0) return
-    if (!bulkReason) {
-      const emptyReasonError = new Error('取消理由を入力してください。')
-      setBulkError(emptyReasonError)
-      throw emptyReasonError
-    }
-    setBulkError(null)
-    setIsBulkCancelling(true)
-    try {
-      await Promise.all(
-        Array.from(selectedIds).map((id) => cancelRequest.mutateAsync({ id, reason: bulkReason })),
-      )
-      setSelectedIds(new Set())
-      setBulkReason('')
-    } catch (e) {
-      setBulkError(e as Error)
-      throw e
-    } finally {
-      setIsBulkCancelling(false)
-    }
+  function openBulkDialog() {
+    setBulkReason('')
+    setBulkTargets(requests.filter((request) => selectedIds.has(request.id)).map((request) => ({ id: request.id, title: request.title })))
+    setBulkDialogOpen(true)
+  }
+
+  function removeFromSelection(ids: string[]) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) next.delete(id)
+      return next
+    })
+  }
+
+  /** 取消は元に戻せない操作(SKILL.md §2.12)のため、BulkActionDialogの確認を経由させる。
+   *  1件ずつの取消をPromise.allSettledで実行し、失敗した申請は内訳に出して選択に残す。 */
+  async function executeBulkCancel(): Promise<BulkActionResult> {
+    const reason = bulkReason.trim()
+    const results = await Promise.allSettled(bulkTargets.map((target) => cancelRequest.mutateAsync({ id: target.id, reason })))
+    const succeededIds: string[] = []
+    const failures: BulkActionFailure[] = []
+    results.forEach((result, index) => {
+      const target = bulkTargets[index]
+      if (result.status === 'fulfilled') {
+        succeededIds.push(target.id)
+      } else {
+        failures.push({
+          id: target.id,
+          label: target.title,
+          message: result.reason instanceof ApiError ? result.reason.message : '取り消せませんでした。',
+        })
+      }
+    })
+    return { succeededIds, failures }
   }
 
   return (
-    <Card
-      title="申請一覧"
-      actions={
-        selectedIds.size > 0 ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedIds.size}件を選択中</span>
-            <ConfirmActionDialog
-              triggerLabel="まとめて取消"
-              triggerVariant="danger"
-              title={`選択した${selectedIds.size}件の申請を取り消しますか?`}
-              description="この操作は元に戻せません。選択した申請はすべて取消状態になります。"
-              confirmLabel="まとめて取り消す"
-              isPending={isBulkCancelling}
-              error={bulkError}
-              onConfirm={handleBulkCancel}
-              onOpenChange={(open) => {
-                if (open) {
-                  setBulkReason('')
-                  setBulkError(null)
-                }
-              }}
-            >
-              <FormField label="取消理由" htmlFor="bulk-cancel-reason" required>
-                <Input
-                  id="bulk-cancel-reason"
-                  placeholder="取消理由"
-                  value={bulkReason}
-                  onChange={(e) => setBulkReason(e.target.value)}
-                />
-              </FormField>
-            </ConfirmActionDialog>
-          </div>
-        ) : (
-          <NewRequestDialog />
-        )
-      }
-    >
+    <Card title="申請一覧" actions={<NewRequestDialog />}>
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[{ key: 'cancel', label: 'まとめて取消', variant: 'danger', onClick: openBulkDialog }]}
+      />
       <div className="mb-4 flex flex-wrap items-end gap-4">
         <div className="w-40">
           <FormField label="状態" htmlFor="request-center-status">
@@ -456,6 +437,29 @@ export function WorkflowRequestListPage() {
           onPageChange={handlePageChange}
         />
       )}
+
+      <BulkActionDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        title={`選択した${bulkTargets.length}件の申請を取り消しますか?`}
+        summary={`選択した${bulkTargets.length}件の申請を取り消します。`}
+        description="この操作は元に戻せません。取り消した申請はすべて取消状態になります。"
+        confirmLabel={`${bulkTargets.length}件を取り消す`}
+        confirmDisabled={bulkReason.trim() === ''}
+        resultTitle="取消の結果"
+        onExecute={executeBulkCancel}
+        onSucceeded={removeFromSelection}
+        successMessage={(count) => `${count}件の申請を取り消しました`}
+      >
+        <FormField label="取消理由" htmlFor="bulk-cancel-reason" required>
+          <Input
+            id="bulk-cancel-reason"
+            placeholder="取消理由"
+            value={bulkReason}
+            onChange={(e) => setBulkReason(e.target.value)}
+          />
+        </FormField>
+      </BulkActionDialog>
     </Card>
   )
 }

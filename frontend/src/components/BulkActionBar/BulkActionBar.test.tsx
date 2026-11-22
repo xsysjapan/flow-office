@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { BulkActionBar, type BulkAction } from './BulkActionBar'
 
 function actions(count: number, overrides: Partial<BulkAction> = {}): BulkAction[] {
@@ -81,5 +83,32 @@ describe('BulkActionBar', () => {
     expect(list[4].onClick).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: '操作3' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: '操作4' })).not.toBeInTheDocument()
+  })
+
+  it('opens a controlled dialog from a menu action', async () => {
+    const user = userEvent.setup()
+    function Harness() {
+      const [open, setOpen] = useState(false)
+      const list = [...actions(4).slice(0, 3), { key: 'x', label: '操作X', onClick: () => setOpen(true) }, ...actions(1)]
+      return (
+        <>
+          <BulkActionBar selectedCount={1} onClear={vi.fn()} actions={list} />
+          <ConfirmActionDialog
+            open={open}
+            onOpenChange={setOpen}
+            title="確認ダイアログ"
+            description="説明"
+            confirmLabel="実行"
+            onConfirm={vi.fn()}
+          />
+        </>
+      )
+    }
+    render(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'その他' }))
+    await user.click(await screen.findByRole('menuitem', { name: '操作X' }))
+
+    expect(await screen.findByText('確認ダイアログ')).toBeInTheDocument()
   })
 })
