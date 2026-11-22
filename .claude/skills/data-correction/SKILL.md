@@ -61,6 +61,11 @@ ReadModel(Projection)だけを書き換える補正は、どんな場合も行�
   検証が通ってから`stored_events`と入れ替える。元の表はバックアップとして残す(表名を記録)。
   `stored_events.id`を参照している列(Projectionの`source_event_id`、補正ログ等)とスナップショットは
   リビルド・削除の対象として列挙する。
+- **別の方式(ReadModelの作り直しと同じトランザクション)**: 管理画面から1回で実行させたい場合などは、入れ替え(DDL)の代わりに、トランザクションの前に
+  バックアップ表(`CREATE TABLE ... LIKE`+`INSERT ... SELECT`。CTASは主キー・索引が付かないので使わない)を作り、1つのトランザクションの中で
+  読み込み・変換・`stored_events`の全削除と再投入・id参照(補正ログ等)の付け替え・検証・`ReadModelRebuilder::rebuild`を行ってよい。失敗時はすべて戻る。
+  トランザクション内ではDDL・TRUNCATEを発行しない(MySQLの暗黙コミット)。メンテナンス・排他は`read-models:rebuild`の仕組み(`ReadModelRebuildRunService`の
+  メンテナンス対象コマンドの一覧)に乗せる。前例: `backoffice:migrate-assignment-events`(変更セット`20261122-backoffice-assignment-migration-admin`)。
 - **試し実行を既定にする**: 既定は変換結果の件数・旧→新の対応の一覧を出すだけ。入れ替えは明示的な
   オプション指定時のみ。
 - **検証を手順に含める**: 入れ替え前に、新しいイベント列で全Projectorをリビルドした結果と、移行前の

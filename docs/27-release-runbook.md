@@ -255,26 +255,31 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 4. 提出・承認・締め済みの月の汎用CSV/TSV・Excelに新しい値(勤務予定ベースの所定労働時間・所定労働日数)を出す場合のみ、
    「月次勤怠スナップショット再計算」(`attendance:recalculate-month-snapshots`)を実行する(freee連携は実行しなくても新しい値になる)。
 
-### 3.6 バックオフィスタスクの割当イベントの分離(変更セット `20261122-backoffice-task-reassign`)のリリース手順
+### 3.6 バックオフィスタスクの割当イベントの分離(変更セット `20261122-backoffice-task-reassign`・`20261122-backoffice-assignment-migration-admin`)のリリース手順
 
 `backoffice_task.assigned`を「担当者の設定のみ」に改め、割当と同時の確認中への変化を`backoffice_task.status_changed`として分けて
-記録し直す(`stored_events`の作り直し。移行イベントは作らない)。新しいProjectorは旧形式の`assigned`でステータスを変えないため、
-**新しいコードの配備から入れ替え・確認までを1回のメンテナンス(全APIの受付停止)で行う**。途中で`read-models:rebuild`をしない。
+記録し直す(`stored_events`の作り直し。移行イベントは作らない)。移行は管理画面の運用コマンド「バックオフィス割当イベントの移行」
+(`backoffice:migrate-assignment-events {--dry-run}`)で行う。移行と全ReadModelの作り直しを1つのトランザクションで行い、途中で失敗しても
+`stored_events`・ReadModelは元のまま戻る。実行中は「データの作り直し」と同じく全利用者がメンテナンス中(全API 503)になる。
 
-1. 旧コードのまま、`backoffice_tasks`の基準値(`id`・`assigned_user_id`・`status`・`completed_at`)をCSV等で控え、DB全体のバックアップを取る。
-2. メンテナンスに入る(書き込みを止める)。新しいコードを配備する(`php artisan migrate --force`。この変更でmigrationは増えない)。
-3. `php artisan backoffice:rebuild-assignment-events`(試し実行)で、対象の`assigned`件数・挿入する`status_changed`件数・直前ステータス別の
-   件数・未対応の並び(violations)を確かめる。violationsがあれば中止する。完了・取消からの変化があれば集約IDを控え、ユーザーに確認する。
-4. `--apply`(`stored_events_rebuilt`へ書く)→`--verify`→`--swap`(元の表は`stored_events_before_rebuild_YYYYMMDDHHMMSS`として残る。表名を記録)。
-5. `php artisan read-models:rebuild --dry-run`で、`backoffice_tasks`の内容が1の基準値と一致し、他のテーブルに意図しない差分が無いことを確かめてから
-   `read-models:rebuild`を実行する(`stored_events.id`を参照する`*_history_entries.stored_event_id`等はここで新しいidに揃う)。
-6. メンテナンスを解除する。
+配備から移行までの間も、ReadModelは旧コードで作った正しい値のままで、新しく記録される割当は新形式なので整合は保たれる。ただし移行までの間は
+**「データの作り直し(ReadModel)」の本実行と`projections:rebuild`は拒否される**(旧形式の割当イベントでは確認中への変化が再現できないため)。
+`event-sourcing:replay`は拒否できないので使わない。
 
-- 同じリリースで休暇の作り直し(3.1)・有給口座の付け替え(3.2)も行う場合は、同じ`stored_events_rebuilt`を使うため、
-  休暇の作り直し→付け替え→本移行の順に、前の`--swap`が終わってから次の`--apply`を行う。
-- 補正ログ`stored_event_corrections.stored_event_id`と、metaの`history-normalization.source_event_id`は作り直し前の表のidを指したまま残る
-  (過去の作業記録。参照するときは手順4のバックアップ表を見る)。
-- 戻す場合はメンテナンス中に`stored_events`を手順4のバックアップ表から戻し、旧コードを配備して`read-models:rebuild`する。
+0. リハーサル(本番のコピーのMySQLで): 試し実行と本実行を行い、所要時間・ピークメモリ・`max_binlog_cache_size`の余裕・undoの増加・最長の単一SQL
+   (バックアップの`INSERT ... SELECT`と`stored_events`の全削除)の所要時間を測る。単一SQLが10分(心拍が途切れてメンテナンスが解ける目安)に近い場合は中止して相談する。
+1. 新しいコードを配備する(`php artisan migrate --force`。この変更でmigrationは増えない)。DB全体のバックアップを取る。
+2. 業務時間外(日次バッチの1:00〜2:20を避ける)に、管理画面「運用コマンド」で「バックオフィス割当イベントの移行」を「試し実行」で実行し、
+   対象件数・挿入件数・直前ステータス別件数(完了・取消からの変化があれば集約ID)・補正ログの付け替え件数・ReadModelの変更テーブルを確かめる。
+   `backoffice_tasks`以外に変更があれば中止する。結果をユーザーに示し、本実行の許可を得る。
+3. 「試し実行」を外して本実行する。出力のバックアップ表名(`stored_events_before_rebuild_YYYYMMDDHHMMSS`)を控える。
+4. 結果(件数・バックアップ表名・日時)を変更セット`20261122-backoffice-task-reassign`の「実装結果」と`docs/32`に記録する。
+
+- 失敗した場合は自動でロールバックされる。原因を直して再実行する。失敗時に作られたバックアップ表は、再実行の成功後に不要なら削除してよい
+  (`DROP TABLE stored_events_before_rebuild_...`。名前を確認してから)。
+- 休暇の作り直し(3.1)・有給口座の付け替え(3.2)を同じリリースで行う場合は、それらの`--swap`とReadModelの作り直しを終えてから本移行を行う。
+- 補正ログ`stored_event_corrections`とmetaの`history-normalization.source_event_id`は、新しいidへ付け替えられる。
+- 戻す場合はメンテナンス中に`stored_events`を手順3のバックアップ表から戻し、旧コードを配備して`read-models:rebuild`する。
 
 ## 4. frontend/ のデプロイ手順
 
