@@ -177,10 +177,16 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
     page.getByRole("heading", { name: "カレンダー年度の日別編集" }),
   ).toBeVisible();
   const duplicateYearButton = page.getByRole("button", { name: "複製して翌年度を作成" });
-  await duplicateYearButton.click();
   // ミューテーション完了を待たずに一覧へ遷移すると、複製がまだサーバ側で終わっておらず
-  // 翌年度の行が見つからないことがあるため、isLoadingが解けるまで待つ。
-  await expect(duplicateYearButton).not.toBeDisabled();
+  // 翌年度の行が見つからないことがあるため、複製APIのレスポンスを待つ。
+  // (処理中はボタンのラベルが「処理中...」に変わるため、ボタンの状態では待ち合わせできない)
+  const duplicated = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /\/company-calendar-years\/[^/]+\/duplicate$/.test(response.url()),
+  );
+  await duplicateYearButton.click();
+  expect((await duplicated).ok()).toBeTruthy();
 
   await page.goto("/admin/work-calendars");
   await calendarRow.getByRole("link", { name: calendarName }).click();

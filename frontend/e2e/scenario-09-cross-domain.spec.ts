@@ -352,9 +352,8 @@ test('§5-17: 締め済み月次勤怠をバックオフィス詳細から引き
   await expect(attendanceTaskRow).toBeVisible()
   await attendanceTaskRow.getByRole('link', { name: attendanceTaskTitle }).click()
 
-  await expect(
-    hrStaffPage.getByText('締め処理済みのため修正できません。月次勤怠の内容は引き続き確認できます。'),
-  ).toBeVisible()
+  // 締め済みの月は「締め済み」ステータス(Badge)で示す。
+  await expect(hrStaffPage.getByRole('status', { name: '締め済み' })).toBeVisible()
   await expect(hrStaffPage.getByText('日別の内訳')).toBeVisible()
   await expect(hrStaffPage.getByText(yearMonth, { exact: true })).toBeVisible()
 

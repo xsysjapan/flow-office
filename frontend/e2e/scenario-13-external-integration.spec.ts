@@ -115,7 +115,11 @@ test('外部連携設定の登録〜freee勤怠送信〜マネーフォワード
     await approverContext.close()
   }
 
-  const attendancePublishResult = await publishAttendanceExternal(page, { yearMonth, provider: 'freee' })
+  const attendancePublishResult = await publishAttendanceExternal(page, {
+    yearMonth,
+    provider: 'freee',
+    userIds: [monthlyEmployeeUserId],
+  })
   expect(attendancePublishResult.failures).toEqual([])
   expect(attendancePublishResult.successes).toEqual(
     expect.arrayContaining([expect.objectContaining({ user_id: monthlyEmployeeUserId, year_month: yearMonth })]),

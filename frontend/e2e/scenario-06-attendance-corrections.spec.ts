@@ -109,8 +109,10 @@ test('§5-11: 打刻ログの訂正・削除', async ({ page }) => {
 
   const duplicatePunchRow = page.getByRole('listitem').filter({ hasText: '09:45' })
   await duplicatePunchRow.getByRole('button', { name: '削除' }).click()
-  await duplicatePunchRow.getByLabel('削除理由').fill('二重打刻の削除')
-  await duplicatePunchRow.getByRole('button', { name: '削除する' }).click()
+  // 削除理由は確認ダイアログ内で入力する(ConfirmActionDialog)。
+  const deleteDialog = page.getByRole('dialog', { name: '打刻を削除しますか?' })
+  await deleteDialog.getByLabel('削除理由').fill('二重打刻の削除')
+  await deleteDialog.getByRole('button', { name: '削除する' }).click()
 
   await expect(duplicatePunchRow.filter({ hasText: '削除済み' })).toContainText('二重打刻の削除')
   // 削除後も日次勤怠(09:00〜18:00)は正しく組み立てられたままになる。
