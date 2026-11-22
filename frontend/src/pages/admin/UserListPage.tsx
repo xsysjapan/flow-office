@@ -171,7 +171,6 @@ export function UserListPage() {
         <Link
           className="text-sm font-medium text-primary hover:underline"
           to="/admin/hr-import"
-          state={forwardState}
         >
           外部ID・HR連携
         </Link>

@@ -47,11 +47,18 @@ function LocationProbe() {
   return <div data-testid="location-search">{location.search}</div>
 }
 
+/** `/paid-leave?date=...`のような文字列を、state付きのMemoryRouterの初期エントリに変換する。 */
+function toInitialEntry(path: string, state: unknown) {
+  const [pathname, query = ''] = path.split('?')
+  return { pathname, search: query ? `?${query}` : '', state }
+}
+
 function renderPage(
   requests: PaidLeaveRequest[] = [],
   paidLeaveRequiresApproval = true,
   initialPath = '/paid-leave',
   requestsPaging = { last_page: 1, total: requests.length },
+  initialState?: unknown,
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
@@ -80,7 +87,7 @@ function renderPage(
           isLoading: false,
         }}
       >
-        <MemoryRouter initialEntries={[initialPath]}>
+        <MemoryRouter initialEntries={[toInitialEntry(initialPath, initialState)]}>
           <MyPaidLeavePage />
           <LocationProbe />
         </MemoryRouter>
@@ -411,5 +418,33 @@ describe('MyPaidLeavePage', () => {
     renderPage([], true, '/paid-leave?requestPage=abc&date=2026-08-20')
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?date=2026-08-20$/))
+  })
+
+  it('shows a back link to the origin day when drilled down from the day page', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+
+    renderPage([], true, '/paid-leave?date=2026-08-10', undefined, { backTo: { pathname: '/attendance/days/2026-08-10', search: '', hash: '' } })
+
+    expect(await screen.findByRole('link', { name: '8月10日の勤怠に戻る' })).toHaveAttribute('href', '/attendance/days/2026-08-10')
+  })
+
+  it('shows no back link when opened from the menu (no origin)', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+
+    renderPage()
+
+    await screen.findByText('自分の有給')
+    expect(screen.queryByRole('link', { name: /に戻る$/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps the back link to the origin when the request list moves to another page', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+
+    renderPage([], true, '/paid-leave', { last_page: 2, total: 21 }, { backTo: { pathname: '/attendance/days/2026-08-10', search: '', hash: '' } })
+    await screen.findByText('21件中 1 / 2 ページ')
+    await userEvent.click(screen.getByRole('button', { name: '次のページ' }))
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/requestPage=2/))
+    expect(screen.getByRole('link', { name: '8月10日の勤怠に戻る' })).toBeInTheDocument()
   })
 })

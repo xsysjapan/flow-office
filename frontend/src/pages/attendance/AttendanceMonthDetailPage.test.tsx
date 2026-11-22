@@ -577,12 +577,22 @@ describe('AttendanceMonthDetailPage', () => {
         Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
 
-    it('points to the months list when opened directly', async () => {
+    it('shows no back link when opened from the menu, and links to the months list instead', async () => {
       mockMonth()
       renderPage()
       await screen.findByText('月次勤怠')
 
-      expect(screen.getByRole('link', { name: '月次勤怠に戻る' })).toHaveAttribute('href', '/attendance/months')
+      expect(screen.queryByRole('link', { name: /に戻る$/ })).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: '月の一覧' })).toHaveAttribute('href', '/attendance/months')
+    })
+
+    it('hides the 月の一覧 link while the back link to the list is shown', async () => {
+      mockMonth()
+      renderPage(yearMonth, true, { backTo: { pathname: '/attendance/months', search: '', hash: '' } })
+      await screen.findByText('月次勤怠')
+
+      expect(screen.getByRole('link', { name: '月次勤怠に戻る' })).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: '月の一覧' })).not.toBeInTheDocument()
     })
 
     it('returns to the recorded list with its query and keeps it after moving to the previous month', async () => {

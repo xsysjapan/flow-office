@@ -15,11 +15,14 @@ export interface PageNode {
   title: string | ((params: Params) => string);
   /** 親の実パス。null は第1階層。パラメータを含む親は関数で組み立てる。 */
   parent: null | string | ((params: Params) => string);
+  /** サイドバーから開ける画面。遷移元の記録が無いとき親へ戻るリンクを出さない */
+  menuEntry?: true;
 }
 
 export interface ResolvedPage {
   title: string;
   parentPath: string | null;
+  menuEntry: boolean;
 }
 
 const YEAR_MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -45,6 +48,7 @@ export const pageNodes: PageNode[] = [
       return m ? `${m[1]}年${Number(m[2])}月の勤怠` : "月次勤怠";
     },
     parent: MONTHS_PATH,
+    menuEntry: true,
   },
   {
     pattern: "/attendance/days/:date",
@@ -56,6 +60,7 @@ export const pageNodes: PageNode[] = [
       const m = DATE.exec(date ?? "");
       return m ? `${MONTHS_PATH}/${m[1]}-${m[2]}` : MONTHS_PATH;
     },
+    menuEntry: true,
   },
   { pattern: "/requests", title: "申請一覧", parent: null },
   { pattern: "/requests/new", title: "新規申請", parent: "/requests" },
@@ -202,6 +207,7 @@ export function resolvePage(pathname: string): ResolvedPage | null {
     title: typeof node.title === "function" ? node.title(params) : node.title,
     parentPath:
       typeof node.parent === "function" ? node.parent(params) : node.parent,
+    menuEntry: node.menuEntry === true,
   };
 }
 

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { BackLink } from '../../components/BackLink/BackLink'
-import { useForwardState, useKeepBackState } from '../../navigation/backState'
+import { useBackTarget, useForwardState, useKeepBackState } from '../../navigation/backState'
 import { useAuth } from '../../auth/useAuth'
 import { useAppSettings } from '../../contexts/useAppSettings'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
@@ -55,6 +55,7 @@ function useNavigableYearMonths(yearMonth: string) {
 function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: boolean }) {
   const navigate = useNavigate()
   const keepState = useKeepBackState()
+  const backTarget = useBackTarget()
   const { prevMonth, nextMonth } = useNavigableYearMonths(yearMonth)
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
 
@@ -89,6 +90,11 @@ function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: bool
       >
         <ChevronRight aria-hidden="true" />
       </Button>
+      {!backTarget && (
+        <Button asChild variant="secondary">
+          <Link to="/attendance/months">月の一覧</Link>
+        </Button>
+      )}
       {canSubmit && <SubmitMonthDialog yearMonth={yearMonth} />}
     </div>
   )
