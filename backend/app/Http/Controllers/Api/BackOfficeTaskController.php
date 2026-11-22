@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
@@ -23,41 +24,37 @@ use OpenApi\Attributes as OA;
 class BackOfficeTaskController extends Controller
 {
     #[OA\Get(
-        path: '/backoffice-tasks/unassigned',
-        operationId: 'backofficeTasks.unassigned',
-        summary: '未割当タスク一覧を取得する',
+        path: '/backoffice-tasks',
+        operationId: 'backofficeTasks.index',
+        summary: 'バックオフィスタスクを検索する',
         tags: ['バックオフィス処理'],
+        parameters: [
+            new OA\Parameter(name: 'search', in: 'query', required: false, schema: new OA\Schema(type: 'string', maxLength: 100)),
+            new OA\Parameter(name: 'assignee', in: 'query', required: false, description: '担当者区分(省略時all)', schema: new OA\Schema(type: 'string', enum: ['unassigned', 'me', 'others', 'all'])),
+            new OA\Parameter(name: 'status', in: 'query', required: false, description: 'ステータス(省略時all。openは完了・取消以外)', schema: new OA\Schema(type: 'string', enum: ['open', 'all', 'not_started', 'in_review', 'needs_fix', 'processing', 'ordered', 'payment_scheduled', 'shipped', 'completed', 'cancelled'])),
+            new OA\Parameter(name: 'page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', minimum: 1)),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', minimum: 1, maximum: 100, default: 20)),
+        ],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function indexUnassigned(Request $request): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
         $data = $this->validateListRequest($request);
-        $tasks = $this->applyListSearch(BackOfficeTask::query(), $data['search'] ?? null)
+        $search = $data['search'] ?? null;
+        $assignee = $data['assignee'] ?? 'all';
+        $status = $data['status'] ?? 'all';
+        $userId = $request->user()->id;
+
+        $tasks = $this->applyListSearch(BackOfficeTask::query(), $search)
+            ->statusFilter($status)
+            ->assigneeScope($assignee, $userId)
             ->with('assignee')
-            ->whereNull('assigned_user_id')
             ->latest()
             ->paginate($data['per_page'] ?? 20);
 
-        return BackOfficeTaskResource::collection($tasks);
-    }
-
-    #[OA\Get(
-        path: '/backoffice-tasks/mine',
-        operationId: 'backofficeTasks.mine',
-        summary: '自分の担当タスク一覧を取得する',
-        tags: ['バックオフィス処理'],
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
-    )]
-    public function indexMine(Request $request): AnonymousResourceCollection
-    {
-        $data = $this->validateListRequest($request);
-        $tasks = $this->applyListSearch(BackOfficeTask::query(), $data['search'] ?? null)
-            ->with('assignee')
-            ->where('assigned_user_id', $request->user()->id)
-            ->latest()
-            ->paginate($data['per_page'] ?? 20);
-
-        return BackOfficeTaskResource::collection($tasks);
+        return BackOfficeTaskResource::collection($tasks)->additional([
+            'meta' => ['assignee_counts' => $this->assigneeCounts($search, $status, $userId)],
+        ]);
     }
 
     #[OA\Get(
@@ -170,14 +167,42 @@ class BackOfficeTaskController extends Controller
         );
     }
 
-    /** @return array{search?: string, per_page?: int} */
+    /** @return array{search?: string|null, assignee?: string, status?: string, per_page?: int} */
     private function validateListRequest(Request $request): array
     {
         return $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
+            'assignee' => ['sometimes', 'string', Rule::in(['unassigned', 'me', 'others', 'all'])],
+            'status' => ['sometimes', 'string', Rule::in(array_merge(['open', 'all'], BackOfficeTaskStatus::all()))],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
+    }
+
+    /**
+     * 担当者区分ごとの件数。search・statusは適用し、assigneeは適用しない(タブの件数に使う)。
+     *
+     * @return array{unassigned: int, me: int, others: int, all: int}
+     */
+    private function assigneeCounts(?string $search, string $status, string $userId): array
+    {
+        $row = $this->applyListSearch(BackOfficeTask::query(), $search)
+            ->statusFilter($status)
+            ->selectRaw(
+                'SUM(CASE WHEN assigned_user_id IS NULL THEN 1 ELSE 0 END) AS unassigned_count, '
+                .'SUM(CASE WHEN assigned_user_id = ? THEN 1 ELSE 0 END) AS me_count, '
+                .'SUM(CASE WHEN assigned_user_id IS NOT NULL AND assigned_user_id <> ? THEN 1 ELSE 0 END) AS others_count, '
+                .'COUNT(*) AS all_count',
+                [$userId, $userId],
+            )
+            ->first();
+
+        return [
+            'unassigned' => (int) $row->unassigned_count,
+            'me' => (int) $row->me_count,
+            'others' => (int) $row->others_count,
+            'all' => (int) $row->all_count,
+        ];
     }
 
     private function applyListSearch(Builder $query, ?string $search): Builder

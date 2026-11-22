@@ -42,8 +42,8 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\PaidLeaveScheduleAssessmentRunController;
-use App\Http\Controllers\Api\PaidLeaveScheduleController;
 use App\Http\Controllers\Api\MaintenanceStatusController;
+use App\Http\Controllers\Api\PaidLeaveScheduleController;
 use App\Http\Controllers\Api\PublicSystemSettingController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RotationPatternController;
@@ -256,8 +256,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
 
     // --- バックオフィス処理 (docs/11-usecases-backoffice.md UC-B002〜UC-B003) ---
     Route::middleware(['feature:backoffice.tasks', 'permission:backoffice_task.execute,any'])->group(function () {
-        Route::get('/backoffice-tasks/unassigned', [BackOfficeTaskController::class, 'indexUnassigned']);
-        Route::get('/backoffice-tasks/mine', [BackOfficeTaskController::class, 'indexMine']);
+        Route::get('/backoffice-tasks', [BackOfficeTaskController::class, 'index']);
         Route::post('/backoffice-tasks/bulk-complete', [BackOfficeTaskController::class, 'bulkComplete']);
         Route::get('/backoffice-tasks/{backOfficeTask}', [BackOfficeTaskController::class, 'show']);
         Route::post('/backoffice-tasks/{backOfficeTask}/assign', [BackOfficeTaskController::class, 'assign']);
