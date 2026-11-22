@@ -121,6 +121,8 @@ implementerは指示に書かれていないことを推測で埋めるか、気
       `grep`で探し、操作手順と`getByText`の部分一致(トースト文言に対象名・社員名が含まれると2要素に一致して
       strict mode違反になる。`{ exact: true }`か`getByRole('main')`等で絞る)を直すことを書いたか
       (一覧操作の標準化で、打刻削除のダイアログ化と貸与トーストの文言衝突がe2eで失敗した)。
+- [ ] 画面名・ナビの文言・ルートの定義(`routeManifest`・`pageHierarchy`)を変える作業では、対象ディレクトリだけでなくfrontendの単体テストを全件
+      (`npx vitest run --project unit`)実行させたか(承認画面の名称変更で、AppLayout・BackLink・backStateのテストが落ちたまま「通った」と報告された)。
 - [ ] backendのテストは`./vendor/bin/phpunit`で実行させる。`backend/.env`があると`php artisan test`は開発用のDBに対して動き、
       DBを壊すことがある。e2eのために`.env`を作ったら、検証の後に消す。
 - [ ] frontendのテストでログインユーザーを差し替えさせる場合、対象のテストファイルが`useAuth`を`vi.mock`しているか、
