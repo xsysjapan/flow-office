@@ -7,7 +7,14 @@ import * as attendanceApi from '../../api/attendance'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
 import * as expenseClaimsApi from '../../api/expenseClaims'
 import * as workflowRequestsApi from '../../api/workflowRequests'
-import type { AttendanceDay, BackOfficeTask, ExpenseClaim, User, WorkflowRequest } from '../../api/types'
+import type {
+  AttendanceDay,
+  BackOfficeTask,
+  BackOfficeTaskSearchResult,
+  ExpenseClaim,
+  User,
+  WorkflowRequest,
+} from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { HomeDashboardPage } from './HomeDashboardPage'
 
@@ -41,6 +48,21 @@ const todayAttendance: AttendanceDay = {
 
 function paginated<T>(data: T[]) {
   return { data, meta: { current_page: 1, last_page: 1, total: data.length, per_page: 20 }, links: { next: null, prev: null } }
+}
+
+/** 件数はmeta.totalで表す(一覧のdataは1件だけ返す想定) */
+function searchResult(data: BackOfficeTask[], total: number): BackOfficeTaskSearchResult {
+  return {
+    data,
+    meta: {
+      current_page: 1,
+      last_page: 1,
+      total,
+      per_page: 1,
+      assignee_counts: { unassigned: 0, me: total, others: 0, all: total },
+    },
+    links: { next: null, prev: null },
+  }
 }
 
 function LocationStateProbe() {
@@ -89,8 +111,8 @@ describe('HomeDashboardPage', () => {
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(
       paginated([{ id: 'a1' } as WorkflowRequest]),
     )
-    vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(
-      paginated([{ id: 't1', status: 'not_started' } as BackOfficeTask]),
+    vi.spyOn(backOfficeTasksApi, 'fetchBackOfficeTasks').mockResolvedValue(
+      searchResult([{ id: 't1', status: 'not_started' } as BackOfficeTask], 25),
     )
   })
 
@@ -117,11 +139,14 @@ describe('HomeDashboardPage', () => {
     expect(workflowRequestsApi.fetchWorkflowRequestsToApprove).toHaveBeenCalled()
   })
 
-  it('shows the open back-office task count', async () => {
+  it('shows the open back-office task count from the total, not the first page', async () => {
     renderPage()
 
     expect(await screen.findByText('バックオフィスタスク')).toBeInTheDocument()
-    expect(backOfficeTasksApi.fetchMyTasks).toHaveBeenCalled()
+    expect(
+      await screen.findByText((_, element) => element?.tagName.toLowerCase() === 'p' && element.textContent === '25件 未完了'),
+    ).toBeInTheDocument()
+    expect(backOfficeTasksApi.fetchBackOfficeTasks).toHaveBeenCalledWith({ assignee: 'me', status: 'open', perPage: 1 })
   })
 
   it('opens the menu screen from a summary card without passing the back state', async () => {

@@ -47,9 +47,13 @@ class BackOfficeTaskAggregate extends AggregateRoot
         return $this;
     }
 
-    public function assign(string $assignedUserId, string $assignedByUserId): self
+    public function assign(string $assignedUserId, string $assignedByUserId, ?string $previousAssignedUserId = null): self
     {
-        $this->recordThat(new BackOfficeTaskAssigned(assignedUserId: $assignedUserId, assignedByUserId: $assignedByUserId));
+        $this->recordThat(new BackOfficeTaskAssigned(
+            assignedUserId: $assignedUserId,
+            assignedByUserId: $assignedByUserId,
+            previousAssignedUserId: $previousAssignedUserId,
+        ));
 
         return $this;
     }

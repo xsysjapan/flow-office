@@ -143,16 +143,53 @@ describe('BackOfficeTaskDetailPage', () => {
   it('shows the assignee picker when the task has no assignee', async () => {
     renderPage(baseTask)
 
-    expect(await screen.findByRole('button', { name: '割り当てる' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '担当者を割り当てる' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '割り当てる' })).toBeInTheDocument()
     expect(screen.getByText('未割り当て')).toBeInTheDocument()
   })
 
-  it('hides the assignee picker when the task already has an assignee', async () => {
-    renderPage({ ...baseTask, assignee })
+  it('shows the change form for an in-progress task that already has an assignee', async () => {
+    renderPage({ ...baseTask, status: 'processing', assignee })
 
-    await screen.findByText('タクシー代の経理処理')
+    expect(await screen.findByRole('heading', { name: '担当者を変更' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '変更する' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '割り当てる' })).not.toBeInTheDocument()
     expect(screen.getByText('担当者花子')).toBeInTheDocument()
+  })
+
+  it.each(['completed', 'cancelled'] as const)('hides the assignee form for a %s task', async (status) => {
+    renderPage({ ...baseTask, status, assignee, completed_at: status === 'completed' ? '2026-07-10T09:00:00+09:00' : null })
+
+    await screen.findByText('タクシー代の経理処理')
+    expect(screen.queryByRole('heading', { name: '担当者を変更' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '担当者を割り当てる' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '変更する' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '割り当てる' })).not.toBeInTheDocument()
+  })
+
+  it('changes the assignee of an in-progress task to the selected user without changing the status', async () => {
+    const previousAssignee: User = { ...assignee, id: 'user-9', name: '前担当次郎', email: 'jiro@example.com' }
+    const paginatedUsers: Paginated<User> = {
+      data: [assignee],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+    const assignSpy = vi
+      .spyOn(backOfficeTasksApi, 'assignBackOfficeTask')
+      .mockResolvedValue({ ...baseTask, status: 'processing', assignee })
+
+    renderPage({ ...baseTask, status: 'processing', assignee: previousAssignee })
+
+    await userEvent.click(await screen.findByRole('combobox', { name: '担当者' }))
+    await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
+    await userEvent.click(await screen.findByRole('option', { name: '担当者花子(hanako@example.com)' }))
+    await userEvent.click(screen.getByRole('button', { name: '変更する' }))
+
+    await waitFor(() => expect(assignSpy).toHaveBeenCalledWith('backoffice-task-1', 'assignee-1'))
+    expect(assignSpy).toHaveBeenCalledTimes(1)
+    // 成功後はUserPickerが空に戻る
+    expect(await screen.findByText('担当者を選択してください')).toBeInTheDocument()
   })
 
   it('assigns the selected user when 割り当てる is clicked', async () => {

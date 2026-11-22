@@ -261,6 +261,23 @@ php artisan leave:rekey-paid-leave-streams --swap     # 検査が通っていれ
 空にして再生)と、付け替え・swap後に空にして再生した指紋が、`paid_leave_schedule_entries`・`paid_leave_schedule_assessments`
 (付け替え後は空になる)を除いて一致すること。リリース手順は`docs/27-release-runbook.md` 3.2。
 
+## バックオフィスタスクの割当イベントの分離(変更セット 20261122-backoffice-task-reassign、論点6)
+
+旧形式の`backoffice_task.assigned`(payloadに`previousAssignedUserId`キーが無いもの)は、担当者の設定と同時にステータスを確認中にしていた。
+`App\Domain\EventSourcing\Rebuild\BackOfficeTaskAssignmentSplitter`で次のとおり作り直す。実行は運用コマンド
+`backoffice:migrate-assignment-events {--dry-run}`(`BackOfficeAssignmentMigrator`)で、バックアップ表を作った後、1つのトランザクションで
+`stored_events`の書き換え・補正ログ等のidの付け替え・検証・全ReadModelの作り直しを行う(変更セット`20261122-backoffice-assignment-migration-admin`)。
+
+- 集約ごとに直前のステータス・担当者を追跡し、旧形式の`assigned`1件に`previousAssignedUserId`(直前の担当者)を補う。直前のステータスが
+  `in_review`以外なら、その直後に`status_changed`(直前→`in_review`、操作者=割当の操作者、同じ発生日時)を挿入する。
+- 変換済み(キーがある)の`assigned`はそのまま写す(イベント単位で冪等)。直前のステータスが決まらない並びは未対応として何も書かない。
+- id・版・metaの`stored-event-id`/`aggregate-root-version`を振り直し、補正ログ`stored_event_corrections`の`stored_event_id`・`aggregate_version`と
+  metaの`history-normalization.source_event_id`も新しいidへ付け替える(対応の無い補正ログの行は変えない)。検証は、id・版の連番、旧形式の残存0件、
+  バックオフィス以外の行の不変、`EventRestorabilityChecker`。
+- 移行前は`read-models:rebuild`(本実行)・`projections:rebuild`が拒否される(`LegacyBackOfficeAssignmentDetector`)。
+- **古いバックアップから休暇の作り直し(`leave:rebuild-event-store`)をやり直す場合**、`EventStoreRebuilder`は`backoffice_task.*`を
+  そのまま写すため旧形式が戻る。その後に必ず本移行をかける。リリース手順は`docs/27-release-runbook.md` 3.6。
+
 ## ロールバック
 
 補正適用中に失敗した場合、イベント・Projection補正はロールバックされる。再実行前に原因を修正し、

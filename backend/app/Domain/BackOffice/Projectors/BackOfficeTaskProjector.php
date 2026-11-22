@@ -36,7 +36,6 @@ class BackOfficeTaskProjector extends Projector
     {
         BackOfficeTask::query()->whereKey($event->aggregateRootUuid())->update([
             'assigned_user_id' => $event->assignedUserId,
-            'status' => BackOfficeTaskStatus::IN_REVIEW,
         ]);
     }
 

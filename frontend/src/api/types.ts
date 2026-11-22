@@ -796,6 +796,19 @@ export interface BackOfficeTask {
   created_at: string | null;
 }
 
+/** `GET /backoffice-tasks` の担当者区分。unassigned=未割り当て、me=自分、others=自分以外、all=すべて */
+export type BackOfficeTaskAssigneeScope = 'unassigned' | 'me' | 'others' | 'all'
+
+/** `GET /backoffice-tasks` のステータス絞り込み。open=完了・取消以外、all=すべて、それ以外は個別ステータス */
+export type BackOfficeTaskStatusFilter = 'open' | 'all' | BackOfficeTaskStatus
+
+/** `GET /backoffice-tasks` の応答。`meta.assignee_counts`は検索語・ステータスを適用し、担当者区分は適用しない件数 */
+export type BackOfficeTaskSearchResult = Paginated<BackOfficeTask> & {
+  meta: {
+    assignee_counts: Record<BackOfficeTaskAssigneeScope, number>
+  }
+}
+
 export type LeaveGrantStatus = "active" | "revoked";
 
 export interface PaidLeaveGrant {

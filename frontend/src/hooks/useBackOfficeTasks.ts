@@ -1,24 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   assignBackOfficeTask,
   bulkCompleteBackOfficeTasks,
   changeBackOfficeTaskStatus,
   fetchBackOfficeTask,
-  fetchMyTasks,
-  fetchUnassignedTasks,
+  fetchBackOfficeTasks,
   type BackOfficeTaskListOptions,
 } from '../api/backOfficeTasks'
 import type { BackOfficeTaskStatus } from '../api/types'
 
-const UNASSIGNED_KEY = ['backoffice-tasks', 'unassigned']
-const MINE_KEY = ['backoffice-tasks', 'mine']
+const LIST_KEY = ['backoffice-tasks', 'list']
 
-export function useUnassignedBackOfficeTasks(options: BackOfficeTaskListOptions = {}) {
-  return useQuery({ queryKey: [...UNASSIGNED_KEY, options], queryFn: () => fetchUnassignedTasks(options) })
-}
-
-export function useMyBackOfficeTasks(options: BackOfficeTaskListOptions = {}, enabled = true) {
-  return useQuery({ queryKey: [...MINE_KEY, options], queryFn: () => fetchMyTasks(options), enabled })
+export function useBackOfficeTasks(options: BackOfficeTaskListOptions = {}, enabled = true) {
+  return useQuery({
+    queryKey: [...LIST_KEY, options],
+    queryFn: () => fetchBackOfficeTasks(options),
+    placeholderData: keepPreviousData,
+    enabled,
+  })
 }
 
 export function useBackOfficeTask(id: string) {
@@ -33,8 +32,7 @@ function useInvalidateBackOfficeTasks() {
   const queryClient = useQueryClient()
 
   return (id?: string) => {
-    void queryClient.invalidateQueries({ queryKey: UNASSIGNED_KEY })
-    void queryClient.invalidateQueries({ queryKey: MINE_KEY })
+    void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     if (id !== undefined) {
       void queryClient.invalidateQueries({ queryKey: ['backoffice-tasks', id] })
     }
