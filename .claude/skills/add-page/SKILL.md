@@ -110,4 +110,6 @@ account/integrations/notifications等) にドメインごとに分けて置き�
       型エラーがないことも確認する)
 - [ ] `.stories.tsx`でReact Queryのキャッシュを事前に仕込み、実APIを叩かずに描画できる
 - [ ] `.test.tsx`でapi層をモックし、`npm run test`が通る
+- [ ] 変更操作は`ui-interaction-patterns` §2.12の分類で確認の有無を決め、成功を`notify.success`(トースト)、失敗を操作の直近の`ErrorMessage`で返している。
+      一括操作は`BulkActionBar`/`BulkActionDialog`を使っている(§2.21)。テストで`notify`をモックして文言を確かめた
 - [ ] `npm run test:storybook` と `npm run build` が通る
