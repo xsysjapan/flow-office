@@ -12,11 +12,13 @@ import { DateRangePicker, type DateRangeValue } from '../../components/DateRange
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
+import { filterWidth } from '../../components/ListFilterBar/filterWidth'
+import { TextFilterInput } from '../../components/TextFilterInput/TextFilterInput'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PaidLeaveScheduleAssessmentPanel } from '../../components/PaidLeaveScheduleAssessmentPanel/PaidLeaveScheduleAssessmentPanel'
 import { PaidLeaveScheduleAssessmentRunCard } from '../../components/PaidLeaveScheduleAssessmentRunCard/PaidLeaveScheduleAssessmentRunCard'
 import { Checkbox } from '../../components/ui/checkbox'
-import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -106,9 +108,10 @@ function pairPartnerOf(entry: PaidLeaveScheduleEntry, rows: PaidLeaveScheduleEnt
  */
 export function PaidLeaveSchedulePage() {
   const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
-  const filterParam = searchParams.get('filter')
+  // URLキーは状態=status・社員名=q(標準形)。backendのパラメータ名(filter・user_name)への変換は下のlistParamsで行う。
+  const filterParam = searchParams.get('status')
   const filter = parseFilter(filterParam)
-  const userName = searchParams.get('user_name') ?? ''
+  const userName = searchParams.get('q') ?? ''
   const scheduledOnFromParam = searchParams.get('scheduled_on_from')
   const scheduledOnToParam = searchParams.get('scheduled_on_to')
   // 不正な値は既定表示(未指定)として扱い、URLからもキーを消す
@@ -142,13 +145,7 @@ export function PaidLeaveSchedulePage() {
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
   /** ダイアログを開いた時点の対象。実行中に一覧が再取得されても件数・内訳が変わらないようにする。 */
   const [bulkTargets, setBulkTargets] = useState<PaidLeaveScheduleEntry[]>([])
-  const [userNameDraft, setUserNameDraft] = useState(userName)
   const [isDetailDirty, setIsDetailDirty] = useState(false)
-
-  // 社員名の入力欄は確定(EnterまたはblurでURLへ反映)まで手元の値を持つ。URL側が変わったら同期する。
-  useEffect(() => {
-    setUserNameDraft(userName)
-  }, [userName])
 
   useUnsavedChangesGuard(isDetailDirty)
 
@@ -157,7 +154,7 @@ export function PaidLeaveSchedulePage() {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (isInvalidFilter) next.delete('filter')
+        if (isInvalidFilter) next.delete('status')
         if (isInvalidFrom) next.delete('scheduled_on_from')
         if (isInvalidTo) next.delete('scheduled_on_to')
         return next
@@ -187,14 +184,12 @@ export function PaidLeaveSchedulePage() {
   }
 
   function handleFilterChange(next: PaidLeaveScheduleFilter) {
-    updateParams({ filter: next === DEFAULT_FILTER ? null : next })
+    updateParams({ status: next === DEFAULT_FILTER ? null : next })
     resetSelection()
   }
 
-  function commitUserName() {
-    const next = userNameDraft.trim()
-    if (next === userName) return
-    updateParams({ user_name: next || null })
+  function handleUserNameChange(next: string | null) {
+    updateParams({ q: next })
     resetSelection()
   }
 
@@ -204,8 +199,7 @@ export function PaidLeaveSchedulePage() {
   }
 
   function clearFilters() {
-    updateParams({ filter: null, user_name: null, scheduled_on_from: null, scheduled_on_to: null })
-    setUserNameDraft('')
+    updateParams({ status: null, q: null, scheduled_on_from: null, scheduled_on_to: null })
     resetSelection()
   }
 
@@ -308,47 +302,36 @@ export function PaidLeaveSchedulePage() {
           </Alert>
         )}
 
-        <div className="mb-4 flex flex-wrap items-end gap-4">
-          <div className="w-52">
-            <FormField label="状態" htmlFor="paid-leave-schedule-filter">
-              <NativeSelect
-                id="paid-leave-schedule-filter"
-                value={filter}
-                onChange={(event) => handleFilterChange(parseFilter(event.target.value))}
-              >
-                {FILTER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </NativeSelect>
-            </FormField>
-          </div>
-          <div className="w-48">
-            <FormField label="社員名" htmlFor="paid-leave-schedule-user-name">
-              <Input
-                id="paid-leave-schedule-user-name"
-                value={userNameDraft}
-                placeholder="社員名で絞り込む"
-                onChange={(event) => setUserNameDraft(event.target.value)}
-                onBlur={commitUserName}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitUserName()
-                }}
-              />
-            </FormField>
-          </div>
-          <div className="w-64">
-            <FormField label="付与予定日" htmlFor="paid-leave-schedule-date-range">
-              <DateRangePicker
-                id="paid-leave-schedule-date-range"
-                value={dateRange}
-                placeholder="期間を指定"
-                onChange={handleDateRangeChange}
-              />
-            </FormField>
-          </div>
-        </div>
+        <ListFilterBar className="mb-4" isFiltered={isFiltered} onClear={clearFilters}>
+          <FormField label="状態" htmlFor="paid-leave-schedule-filter" className={filterWidth.select}>
+            <NativeSelect
+              id="paid-leave-schedule-filter"
+              value={filter}
+              onChange={(event) => handleFilterChange(parseFilter(event.target.value))}
+            >
+              {FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+          <TextFilterInput
+            label="社員名"
+            maxLength={200}
+            className={filterWidth.keyword}
+            value={userName || null}
+            onChange={handleUserNameChange}
+          />
+          <FormField label="付与予定日" htmlFor="paid-leave-schedule-date-range" className={filterWidth.dateRange}>
+            <DateRangePicker
+              id="paid-leave-schedule-date-range"
+              value={dateRange}
+              placeholder="期間を指定"
+              onChange={handleDateRangeChange}
+            />
+          </FormField>
+        </ListFilterBar>
 
         <BulkActionBar
           selectedCount={selectedEntries.length}

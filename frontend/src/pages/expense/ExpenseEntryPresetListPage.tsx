@@ -14,10 +14,12 @@ import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/Confir
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
+import { ListFilterBar } from "../../components/ListFilterBar/ListFilterBar";
+import { filterWidth } from "../../components/ListFilterBar/filterWidth";
+import { TextFilterInput } from "../../components/TextFilterInput/TextFilterInput";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Pagination } from "../../components/Pagination/Pagination";
 import { notify } from "../../lib/notify";
-import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import {
   Table,
@@ -120,7 +122,7 @@ export function ExpenseEntryPresetListPage() {
     );
   }, [rawCategoryId, rawPage, categoryIdParam, setSearchParams]);
 
-  const changeSearch = (value: string) => updateParams({ q: value || null, page: null });
+  const changeSearch = (value: string | null) => updateParams({ q: value, page: null });
   const changeCategoryFilter = (value: string) => updateParams({ category_id: value || null, page: null });
   const changePage = (value: number) => updateParams({ page: value > 1 ? String(value) : null });
   const clearFilters = () => updateParams({ q: null, category_id: null, page: null });
@@ -139,22 +141,22 @@ export function ExpenseEntryPresetListPage() {
         </Button>
       }
     >
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormField label="名称で検索" htmlFor="preset-search">
-          <Input
-            id="preset-search"
-            placeholder="例: 自宅⇔会社"
-            value={q}
-            onChange={(e) => changeSearch(e.target.value)}
-          />
-        </FormField>
-        <FormField label="経費区分で絞り込む" htmlFor="preset-category-filter">
+      <ListFilterBar className="mb-4" isFiltered={isFiltered} onClear={clearFilters}>
+        <TextFilterInput
+          label="名称"
+          placeholder="例: 自宅⇔会社"
+          maxLength={100}
+          className={filterWidth.keyword}
+          value={q || null}
+          onChange={changeSearch}
+        />
+        <FormField label="経費区分" htmlFor="preset-category-filter" className={filterWidth.select}>
           <NativeSelect
             id="preset-category-filter"
             value={categoryIdParam ?? ""}
             onChange={(e) => changeCategoryFilter(e.target.value)}
           >
-            <option value="">すべての経費区分</option>
+            <option value="">すべて</option>
             {categories
               ?.filter((category) => category.is_active)
               .map((category) => (
@@ -171,7 +173,7 @@ export function ExpenseEntryPresetListPage() {
               ))}
           </NativeSelect>
         </FormField>
-      </div>
+      </ListFilterBar>
 
       {isLoading ? (
         <LoadingState />

@@ -198,17 +198,48 @@ describe('ExpenseEntryPresetListPage', () => {
     renderPage([personalPreset, systemPreset])
 
     await screen.findByRole('link', { name: '自宅⇔会社' })
-    await userEvent.type(screen.getByLabelText('名称で検索'), '深夜')
+    await userEvent.type(screen.getByLabelText('名称'), '深夜')
 
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?q=%E6%B7%B1%E5%A4%9C'))
     await waitFor(() => expect(screen.queryByRole('link', { name: '自宅⇔会社' })).not.toBeInTheDocument())
     expect(screen.getByText('深夜タクシー')).toBeInTheDocument()
+  })
+
+  it('does not update the URL q before the 300ms debounce elapses', async () => {
+    renderPage([personalPreset, systemPreset])
+
+    await screen.findByRole('link', { name: '自宅⇔会社' })
+    await userEvent.type(screen.getByLabelText('名称'), '深')
+    expect(screen.getByTestId('location')).toHaveTextContent(/^$/)
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?q='))
+  })
+
+  it('shows an inline clear button only when filtered and clears q, category_id and page', async () => {
+    renderPage([personalPreset, systemPreset], '/expenses/presets?q=%E6%B7%B1%E5%A4%9C&category_id=2&page=1')
+
+    await screen.findByText('深夜タクシー')
+    await userEvent.click(screen.getByRole('button', { name: '検索条件をクリア' }))
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^$/))
+    expect(await screen.findByRole('link', { name: '自宅⇔会社' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '検索条件をクリア' })).not.toBeInTheDocument()
+  })
+
+  it('clears the conditions from the empty state too', async () => {
+    renderPage([personalPreset], '/expenses/presets?q=zzz')
+
+    expect(await screen.findByText('条件に一致するプリセットはありません。')).toBeInTheDocument()
+    const buttons = screen.getAllByRole('button', { name: '検索条件をクリア' })
+    await userEvent.click(buttons[buttons.length - 1])
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^$/))
   })
 
   it('preselects the 経費区分 filter when arriving with a ?category_id= param from the entry screen', async () => {
     renderPage([personalPreset, systemPreset], '/expenses/presets?category_id=2')
 
     // 区分の選択肢は経費区分の取得後に描画されるため、値が反映されるまで待つ。
-    await waitFor(() => expect(screen.getByLabelText('経費区分で絞り込む')).toHaveValue('2'))
+    await waitFor(() => expect(screen.getByLabelText('経費区分')).toHaveValue('2'))
     // 交通費のプリセットは、宿泊費で絞り込まれているので表示されない。
     expect(screen.queryByRole('link', { name: '自宅⇔会社' })).not.toBeInTheDocument()
     expect(screen.getByText('深夜タクシー')).toBeInTheDocument()
@@ -218,7 +249,9 @@ describe('ExpenseEntryPresetListPage', () => {
     renderPage([personalPreset, systemPreset])
 
     await screen.findByRole('link', { name: '自宅⇔会社' })
-    await userEvent.selectOptions(screen.getByLabelText('経費区分で絞り込む'), '宿泊費')
+    await userEvent.selectOptions(screen.getByLabelText('経費区分'), '宿泊費')
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?category_id=2'))
 
     await waitFor(() => expect(screen.queryByRole('link', { name: '自宅⇔会社' })).not.toBeInTheDocument())
     expect(screen.getByText('深夜タクシー')).toBeInTheDocument()
@@ -236,7 +269,7 @@ describe('ExpenseEntryPresetListPage', () => {
 
     expect(await screen.findByRole('link', { name: '自宅⇔会社' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^$/))
-    expect(screen.getByLabelText('経費区分で絞り込む')).toHaveValue('')
+    expect(screen.getByLabelText('経費区分')).toHaveValue('')
   })
 
   it('keeps a valid category_id in the URL', async () => {
@@ -244,6 +277,6 @@ describe('ExpenseEntryPresetListPage', () => {
 
     expect(await screen.findByRole('link', { name: '自宅⇔会社' })).toBeInTheDocument()
     expect(screen.getByTestId('location')).toHaveTextContent('?category_id=1')
-    expect(screen.getByLabelText('経費区分で絞り込む')).toHaveValue('1')
+    expect(screen.getByLabelText('経費区分')).toHaveValue('1')
   })
 })

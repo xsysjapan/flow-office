@@ -216,7 +216,7 @@ describe('PaidLeaveSchedulePage', () => {
 
     await userEvent.selectOptions(screen.getByLabelText('状態'), 'needs_review')
 
-    await waitFor(() => expect(currentLocation()).toContain('filter=needs_review'))
+    await waitFor(() => expect(currentLocation()).toContain('status=needs_review'))
     expect(paidLeaveApi.fetchPaidLeaveScheduleEntries).toHaveBeenLastCalledWith(expect.objectContaining({ filter: 'needs_review' }))
   })
 
@@ -226,8 +226,34 @@ describe('PaidLeaveSchedulePage', () => {
 
     await userEvent.type(screen.getByLabelText('社員名'), '田中{Enter}')
 
-    await waitFor(() => expect(currentLocation()).toContain('user_name=%E7%94%B0%E4%B8%AD'))
+    await waitFor(() => expect(currentLocation()).toContain('q=%E7%94%B0%E4%B8%AD'))
     expect(paidLeaveApi.fetchPaidLeaveScheduleEntries).toHaveBeenLastCalledWith(expect.objectContaining({ user_name: '田中' }))
+  })
+
+  it('applies the user name filter automatically after the debounce without Enter', async () => {
+    renderPage()
+    await screen.findByText('鈴木一郎')
+
+    await userEvent.type(screen.getByLabelText('社員名'), '田中')
+
+    await waitFor(() => expect(currentLocation()).toContain('q=%E7%94%B0%E4%B8%AD'))
+    await waitFor(() =>
+      expect(paidLeaveApi.fetchPaidLeaveScheduleEntries).toHaveBeenLastCalledWith(expect.objectContaining({ user_name: '田中' })),
+    )
+  })
+
+  it('clears status, q and the date range with the inline clear button', async () => {
+    renderPage({
+      initialPath: '/admin/paid-leave/schedule?status=eligible&q=%E9%88%B4%E6%9C%A8&scheduled_on_from=2026-10-01&scheduled_on_to=2026-10-31',
+    })
+    await screen.findByText('鈴木一郎')
+
+    await userEvent.click(screen.getByRole('button', { name: '検索条件をクリア' }))
+
+    await waitFor(() => expect(currentLocation()).toBe('/admin/paid-leave/schedule'))
+    expect(screen.getByLabelText('社員名')).toHaveValue('')
+    expect(screen.getByLabelText('状態')).toHaveValue('all')
+    expect(screen.queryByRole('button', { name: '検索条件をクリア' })).not.toBeInTheDocument()
   })
 
   it('changes the URL and the API params when the scheduled date range is picked', async () => {
@@ -247,7 +273,7 @@ describe('PaidLeaveSchedulePage', () => {
 
   it('reads the filters from the URL and passes them all to the API', async () => {
     renderPage({
-      initialPath: '/admin/paid-leave/schedule?filter=eligible&user_name=%E9%88%B4%E6%9C%A8&scheduled_on_from=2026-10-01&scheduled_on_to=2026-10-31',
+      initialPath: '/admin/paid-leave/schedule?status=eligible&q=%E9%88%B4%E6%9C%A8&scheduled_on_from=2026-10-01&scheduled_on_to=2026-10-31',
     })
     await screen.findByText('鈴木一郎')
 
@@ -267,10 +293,11 @@ describe('PaidLeaveSchedulePage', () => {
   })
 
   it('shows the filtered empty message with a clear button that removes the URL conditions', async () => {
-    renderPage({ entries: [], initialPath: '/admin/paid-leave/schedule?filter=eligible&user_name=%E9%88%B4%E6%9C%A8' })
+    renderPage({ entries: [], initialPath: '/admin/paid-leave/schedule?status=eligible&q=%E9%88%B4%E6%9C%A8' })
 
     expect(await screen.findByText('条件に一致する付与予定はありません。')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: '検索条件をクリア' }))
+    const clearButtons = screen.getAllByRole('button', { name: '検索条件をクリア' })
+    await userEvent.click(clearButtons[clearButtons.length - 1])
 
     await waitFor(() => expect(currentLocation()).toBe('/admin/paid-leave/schedule'))
     expect(paidLeaveApi.fetchPaidLeaveScheduleEntries).toHaveBeenLastCalledWith(expect.objectContaining({ filter: 'all', user_name: undefined }))
@@ -284,7 +311,7 @@ describe('PaidLeaveSchedulePage', () => {
 
     await userEvent.click(within(alert).getByRole('button', { name: '表示する' }))
 
-    await waitFor(() => expect(currentLocation()).toContain('filter=overdue'))
+    await waitFor(() => expect(currentLocation()).toContain('status=overdue'))
     expect(paidLeaveApi.fetchPaidLeaveScheduleEntries).toHaveBeenLastCalledWith(expect.objectContaining({ filter: 'overdue' }))
   })
 
@@ -578,10 +605,10 @@ describe('PaidLeaveSchedulePage', () => {
   })
 
   it('removes an invalid filter and invalid dates from the URL', async () => {
-    renderPage({ initialPath: '/admin/paid-leave/schedule?filter=bogus&scheduled_on_from=2026-02-30&scheduled_on_to=abc&user_name=taro' })
+    renderPage({ initialPath: '/admin/paid-leave/schedule?status=bogus&scheduled_on_from=2026-02-30&scheduled_on_to=abc&q=taro' })
 
-    await waitFor(() => expect(currentLocation()).toBe('/admin/paid-leave/schedule?user_name=taro'))
-    expect(currentLocation()).not.toContain('filter')
+    await waitFor(() => expect(currentLocation()).toBe('/admin/paid-leave/schedule?q=taro'))
+    expect(currentLocation()).not.toContain('status')
     expect(currentLocation()).not.toContain('scheduled_on')
   })
 

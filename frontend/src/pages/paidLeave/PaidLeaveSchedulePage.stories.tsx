@@ -155,5 +155,5 @@ export const Empty: Story = {
 }
 
 export const FilteredEmpty: Story = {
-  render: withSeeded([], { initialPath: '/admin/paid-leave/schedule?filter=needs_review' }),
+  render: withSeeded([], { initialPath: '/admin/paid-leave/schedule?status=needs_review' }),
 }
