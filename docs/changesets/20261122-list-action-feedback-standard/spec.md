@@ -212,7 +212,7 @@
   `npx tsc --noEmit -p e2e/tsconfig.json` OK、`npx oxlint src` 新規の指摘なし。backend `./vendor/bin/phpunit --filter=BackOffice` 94件pass。e2e(Playwright)とStorybookのplayは未実行。
 - 受け入れ条件: バックオフィスの一括担当者変更・一括完了のダイアログと件数通知、詳細のステータス選択肢の絞り込み・通知・エラー位置、全画面の成功トーストと確認、
   一括操作の統一と部分失敗の扱いを各Vitestで確認。ガイドライン更新済み。
-- 残課題: `WeekAttendancePage`の残業配分の保存と`GroupTypeManagementPage`(テストファイル無し)はトーストの文言テストが無い。
+- 残課題(対応済み): `WeekAttendancePage`の残業配分の保存のトースト文言テストを追加、`GroupTypeManagementPage.test.tsx`を新規作成(作成・保存の成功トースト、失敗時のエラー位置、ローディング・空・403)。
 
 ## 参考
 - Carbon Design System, Data table usage: https://carbondesignsystem.com/components/data-table/usage/
