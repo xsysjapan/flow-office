@@ -1,6 +1,6 @@
 # バックオフィス割当イベントの移行を管理画面の運用コマンドから実行できるようにする
 
-ステータス: 検討中
+ステータス: レビュー中
 
 ## 変更要望(原文)
 > 管理画面から移行バッチを実行できるようにしてください
@@ -16,11 +16,13 @@
   実行は毎分起動の実行役`admin-commands:run-pending`で、実行役はコマンドを呼ぶ前に記録を`running`にする(`AdminCommandRunner.php`:103)。
   排他の期限は240分(`routes/console.php`:122-126)。画面の履歴は`error_message ?? output`を表示し、`summary`は表示しない。
 - メンテナンス(全API 503): `BlockDuringReadModelRebuild`が`ReadModelRebuildRunService::isRunning()`(`command_name`=`read-models:rebuild`の
-  `running`記録が心拍または`started_at`で10分以内)のとき503にする。実行役は作り直しの依頼を他より先に扱い(`nextQueuedRun`:56-63)、
-  スケジューラーは作り直し中に他のスケジュールを飛ばす(`routes/console.php`:17)。有給付与予定の判定の実行中は作り直しを開始しない(`startDirectRun`)。
+  `running`記録が心拍または`started_at`で10分以内)のとき503にする。実行役は依頼を`created_at`順に拾い、有給付与予定の判定の実行中は
+  作り直しの依頼を後回しにする(`nextQueuedRun`:56-63)。スケジューラーは作り直し中に他のスケジュールを飛ばす(`routes/console.php`:17,21)。
+  CLIから直接の作り直しは`startDirectRun`(:31-39。記録のコマンド名は固定)が判定中なら開始しない。
 - `ReadModelRebuilder::rebuild($dryRun)`: 全ReadModelを1つのトランザクションで空にして全Projectorをreplay。外側のトランザクションがあればその中で動く
   (`DB::transactionLevel()`を見る)。試し実行は最後にロールバック。心拍(`Cache::store('file')`)と時間の上限(180分)を持つ。
-- 移行: `BackOfficeTaskAssignmentSplitter`(純粋変換。挿入があると全行のidを1から振り直す)・`BackOfficeTaskAssignmentRebuildVerifier`・
+- 移行: `BackOfficeTaskAssignmentSplitter`(純粋変換。挿入があると全行のidを1から振り直す。**不具合: 旧形式があっても挿入が0件
+  (直前が全てin_review)だと変換前の行を返し、`previousAssignedUserId`が付かない**(:129-131))・`BackOfficeTaskAssignmentRebuildVerifier`・
   `RebuildBackOfficeAssignmentEventsCommand`(`stored_events_rebuilt`に書いて`swap`で入れ替える段階的なCLI)。
 - `stored_events.id`を参照するもの: Projectionの`*_history_entries.stored_event_id`等(リビルドで直る)、補正ログ`stored_event_corrections.stored_event_id`と
   metaの`history-normalization.source_event_id`(リビルドで直らない)。
@@ -66,7 +68,9 @@
 ### 論点3: メンテナンスと排他
 - 決定: `ReadModelRebuildRunService`・`AdminCommandRunner::nextQueuedRun`・スケジューラーの「作り直し中」判定・有給判定との調整・`LOCK_NAME`の
   対象を、コマンド名1つから**メンテナンスを要するコマンド名の一覧**(`read-models:rebuild`と`backoffice:migrate-assignment-events`)に広げる。
-  記録の取得は`command_name IN (...)`と`status='running'`で行い、JSON式は使わない。試し実行も`read-models:rebuild`と同じく実行中はメンテナンスにする
+  記録の取得は`command_name IN (...)`と`status='running'`で行い、JSON式は使わない。変更箇所は`ReadModelRebuildRunService`(`isRunning`の
+  取得条件、`startDirectRun`の記録するコマンド名を引数化)、`AdminCommandRunner::nextQueuedRun`(:62 判定中に後回しにするコマンド名)、
+  `routes/console.php`はコメントのみ。相互排他の判定(もう一方が実行中か)は`LOCK_NAME`のロックの中で行う(実行役から呼ばれた場合も)。試し実行も`read-models:rebuild`と同じく実行中はメンテナンスにする
   (試し実行もReadModelを空にして作り直すため)。どちらかの実行中はもう一方を開始しない(自分の記録は除外して判定)。
 - 理由: 既存の仕組みに乗せれば、拾われた時点からの503、心拍、有給判定の後回し、他スケジュールの停止がそのまま効く。
 - 未確定・要確認事項: なし
@@ -74,12 +78,18 @@
 ### 論点4: 処理の流れ
 - 決定(`backoffice:migrate-assignment-events`):
   1. 心拍を書き、`read_model_rebuild.claim_wait_seconds`秒待つ(`read-models:rebuild`と同じ)。
-  2. `stored_events`を読み、Splitterで変換結果を作る(心拍を書く)。violationsがあれば何もせず失敗。対象0件ならReadModelを作り直さず「対象なし」で成功。
-  3. 本実行のみ: トランザクションの前に`stored_events`をバックアップ表`stored_events_before_rebuild_YYYYMMDDHHMMSS`へ複製する。
-  4. トランザクション開始 → `stored_events`の全行を削除し、変換後の行を入れる → 補正ログ`stored_event_corrections.stored_event_id`とmetaの
-     `history-normalization.source_event_id`を旧id→新idの対応で付け替える → Verifier(変換後の`stored_events`とバックアップ表(試し実行は変換前の行)を比較) →
+  2. 旧形式の件数を数える(`LegacyBackOfficeAssignmentDetector`)。0件ならReadModelを作り直さず「対象なし」で成功。
+  3. 本実行のみ: トランザクションの前に、`CREATE TABLE <backup> LIKE stored_events`と`INSERT INTO <backup> SELECT * FROM stored_events`で
+     バックアップ表`stored_events_before_rebuild_YYYYMMDDHHMMSS`を作る(主キー・索引を持たせる。CTASは使わない)。
+  4. トランザクション開始 → 手順2の読み込みと変換をこのトランザクションの中で行う(読み込みから削除までの間の書き込みを取りこぼさない) →
+     バックアップ表と`stored_events`の件数・最大idが一致することを確かめ、違えば中止(本実行のみ) → `stored_events`の全行を削除し、変換後の行を入れる → 補正ログ`stored_event_corrections.stored_event_id`とmetaの
+     `history-normalization.source_event_id`を旧id→新idの対応で付け替える(補正ログは`unique(correction_key, stored_event_id)`があるため、
+     いったん全行を`stored_event_id + (最大id+1)`へ逃がしてから新idに更新する2段階。`aggregate_version`列も新しい版に更新。対応の無いid
+     (補正で削除されたイベントを指す行)は変更せず件数を出力する) → violationsがあればロールバックして失敗 → Verifier(変換後の`stored_events`とバックアップ表(試し実行は変換前の行)を比較) →
      `ReadModelRebuilder::rebuild($dryRun)`(外側のトランザクション内で動く) → 本実行はコミット、試し実行はロールバック。
-  5. 時間の上限は`ReadModelRebuilder`と同じ設定を、手順1からの合計で適用する。各段階の間と行の書き込みのチャンクごとに心拍を書く。
+  5. 時間の上限は`ReadModelRebuilder`と同じ設定を、手順1からの合計で適用する(`ReadModelRebuilder::rebuild($dryRun, ?float $startedAt = null)`に変更)。
+     各段階の間と行の書き込みのチャンクごとに心拍を書く。書き込みが終わった行の配列は`unset`する。
+  6. トランザクションの中ではDDL(CREATE/ALTER/DROP/RENAME/TRUNCATE)を発行しない(MySQLの暗黙コミットで1トランザクションが崩れるため)。
 - 未確定・要確認事項: なし
 
 ### 論点5: 移行前のReadModelのリビルドの防止
@@ -104,7 +114,9 @@
     CLIから直接の場合は`ReadModelRebuildRunService::startDirectRun`相当で記録を作る(`RebuildReadModelsCommand`の書き方を写す)。
   - 新規`app/Domain/EventSourcing/Rebuild/BackOfficeAssignmentMigrator.php`: 論点4の手順2〜4(読み込み・変換・バックアップ・書き換え・id参照の付け替え・検証・
     `ReadModelRebuilder::rebuild`呼び出し)をまとめる。結果は要約の配列。
-  - `BackOfficeTaskAssignmentSplitter`: 旧id→新idの対応を結果に含め、metaの`history-normalization.source_event_id`も付け替える。
+  - `BackOfficeTaskAssignmentSplitter`: 不具合修正(旧形式があり挿入0件でも変換後の`$out`を返す。「対象なし」は`targetCount===0`)。
+    旧id→新id・新しい版の対応を結果に含め、metaの`history-normalization.source_event_id`も付け替える。
+  - `ReadModelRebuilder::rebuild($dryRun, ?float $startedAt = null)`(論点4の5)。
   - `BackOfficeTaskAssignmentRebuildVerifier`: 比較する2つの表名(または行配列)を引数で受け取れるようにする。
   - 新規`LegacyBackOfficeAssignmentDetector`(論点5)。`RebuildReadModelsCommand`・`RebuildProjectionsCommand`に拒否を追加。
   - `ReadModelRebuildRunService`・`AdminCommandRunner`・`routes/console.php`: 論点3のコマンド名の一覧化。
@@ -119,6 +131,9 @@
   - 実行中は`isRunning()`が真、`read-models:rebuild`と互いに開始できない、有給判定の実行中は開始しない。
   - `read-models:rebuild`本実行・`projections:rebuild`は旧形式があると拒否、`read-models:rebuild`の試し実行は警告のみ。移行後は通常どおり実行できる。
     新形式(`previousAssignedUserId: null`)を旧形式と数えない。
+  - Splitter単体: 旧形式があり直前が全てin_review(挿入0件)でも`previousAssignedUserId`が付く。
+  - 補正ログの付け替え: 欠番のあるidで`unique(correction_key, stored_event_id)`に衝突せず新idになる、`aggregate_version`も新しい版、対応の無い行は不変。
+  - 暗黙コミットの防止: `DB::listen`で、トランザクション中にCREATE/ALTER/DROP/RENAME/TRUNCATEが発行されないこと(テストはSQLiteのため)。
   - 既存の`ReadModelRebuildCommandTest`・移行のシナリオテスト(コマンドを新しいものへ書き換え)が通る。
 
 ## 受け入れ条件
@@ -136,7 +151,8 @@
 ## ドキュメントへの影響
 - `docs/27-release-runbook.md` 3.6: 段階的な手順を削除し、「配備→業務時間外に管理画面で試し実行→結果をユーザーに確認→本実行」に改める。
   本番の件数でのメモリ・所要時間の見積もりをリハーサルで行うこと、移行前の`read-models:rebuild`・`projections:rebuild`は拒否されること、
-  `event-sourcing:replay`を使わないこと、実行結果(件数・バックアップ表名)を変更セット`20261122-backoffice-task-reassign`の実装結果と`docs/32`に記録することを書く。
+  `event-sourcing:replay`を使わないこと、リハーサル(MySQL)でピークメモリ・`max_binlog_cache_size`・undoの増加・最長の単一SQL(バックアップの
+  `INSERT ... SELECT`、全削除)の所要時間(心拍が途切れる10分の目安を超えないこと)を測ること、失敗時に残ったバックアップ表の片付け、実行結果(件数・バックアップ表名)を変更セット`20261122-backoffice-task-reassign`の実装結果と`docs/32`に記録することを書く。
 - `docs/32-stored-event-history-normalization.md`: 実行経路(運用コマンド、1トランザクション)に書き換え、補正ログ・metaのidの付け替えを追記。
 - `.claude/skills/data-correction/SKILL.md`: 「ReadModelの作り直しと同じトランザクションで`stored_events`を書き換える方式(事前にバックアップ表、コミット前に検証)」を
   作り直しの選択肢として追記。
@@ -159,6 +175,9 @@
   拾われた時点でメンテナンスになる、書き出し中の心拍が無い、有給判定との調整漏れ、swap後の失敗でReadModelとずれたまま運用再開、240分の期限、
   JSON式のDB差、補正ログのid参照、`projections:rebuild`の経路)が判明したため、「設計前提の検証」から作り直した。移行とReadModelの作り直しを
   1トランザクションで行う新しいコマンドにし、メンテナンス等は`read-models:rebuild`の仕組みを一覧化して共有、段階的なCLIは削除する。
+- 2026-11-22 第2版の独立設計レビューの指摘を反映: Splitterの不具合(挿入0件で変換前を返す)の修正を追加/読み込み・変換をトランザクション内へ移し
+  バックアップとの件数・最大idを照合/バックアップは`CREATE TABLE LIKE`+`INSERT SELECT`/補正ログの2段階付け替えと`aggregate_version`・対応無しの扱い/
+  `rebuild($dryRun, $startedAt)`/一覧化の変更箇所とAs-Isの訂正、相互排他をロック内で/DDL不発行のテスト/リハーサルの測定項目。
 
 ## 実装結果
 未着手
