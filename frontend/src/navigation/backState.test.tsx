@@ -121,6 +121,43 @@ describe('useBackTarget', () => {
 
     expect(read('target')).toEqual({ to: '/somewhere-unknown', label: '前の画面' })
   })
+
+  it('returns null for a menu-entry day page opened without an origin', () => {
+    renderAt('/attendance/days/2026-11-21', <Probe />)
+
+    expect(read('target')).toBeNull()
+  })
+
+  it('returns null for a menu-entry month page opened without an origin', () => {
+    renderAt('/attendance/months/2026-11', <Probe />)
+
+    expect(read('target')).toBeNull()
+  })
+
+  it('returns null for a menu-entry page whose origin is unsafe', () => {
+    renderAt({ pathname: '/attendance/months/2026-11', state: { backTo: { pathname: '//evil.example/x', search: '', hash: '' } } }, <Probe />)
+
+    expect(read('target')).toBeNull()
+  })
+
+  it('returns the recorded origin for a menu-entry page drilled down from a list', () => {
+    const state = { backTo: { pathname: '/attendance/months/2026-11', search: '', hash: '' } }
+    renderAt({ pathname: '/attendance/days/2026-11-21', state }, <Probe />)
+
+    expect(read('target')).toEqual({ to: '/attendance/months/2026-11', label: '2026年11月の勤怠' })
+  })
+
+  it('still falls back to the parent for a non-menu page without an origin', () => {
+    renderAt('/requests/abc', <Probe />)
+
+    expect(read('target')).toEqual({ to: '/requests', label: '申請一覧' })
+  })
+
+  it('still uses override.to for a menu-entry page without an origin', () => {
+    renderAt('/attendance/months/2026-11', <Probe override={{ to: '/attendance/months' }} />)
+
+    expect(read('target')).toEqual({ to: '/attendance/months', label: '月次勤怠' })
+  })
 })
 
 describe('useForwardState', () => {

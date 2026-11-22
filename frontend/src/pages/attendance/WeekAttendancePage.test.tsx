@@ -62,10 +62,24 @@ const mondayRecord: AttendanceDay = {
 
 function LocationProbe() {
   const location = useLocation()
-  return <div data-testid="location-search">{location.search}</div>
+  return (
+    <>
+      <div data-testid="location-search">{location.search}</div>
+      <div data-testid="location-state">{JSON.stringify(location.state ?? null)}</div>
+    </>
+  )
 }
 
-function renderPage(days: AttendanceDay[] = [mondayRecord], entry = '/attendance/week') {
+const drilledFromMonthWarning = {
+  pathname: '/attendance/week',
+  search: `?start=${weekStart}`,
+  state: { backTo: { pathname: '/attendance/months/2026-07', search: '', hash: '' } },
+}
+
+function renderPage(
+  days: AttendanceDay[] = [mondayRecord],
+  entry: string | { pathname: string; search?: string; state?: unknown } = '/attendance/week',
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
   vi.spyOn(attendanceApi, 'fetchWeekOvertime').mockResolvedValue({
@@ -148,6 +162,36 @@ describe('WeekAttendancePage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '前週' }))
     await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(weekStart))
+  })
+
+  it('shows no back link when opened from the menu (no origin)', async () => {
+    renderPage([])
+
+    await screen.findByText('週次勤怠')
+    expect(screen.queryByRole('link', { name: /に戻る$/ })).not.toBeInTheDocument()
+  })
+
+  it('shows a back link to the month when drilled down from the month warning', async () => {
+    renderPage([], drilledFromMonthWarning)
+
+    expect(await screen.findByRole('link', { name: '2026年7月の勤怠に戻る' })).toHaveAttribute('href', '/attendance/months/2026-07')
+  })
+
+  it('keeps the back link to the origin when moving to another week', async () => {
+    renderPage([], drilledFromMonthWarning)
+    await userEvent.click(await screen.findByRole('button', { name: '前週' }))
+
+    await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(addDays(weekStart, -7)))
+    expect(screen.getByRole('link', { name: '2026年7月の勤怠に戻る' })).toBeInTheDocument()
+  })
+
+  it('opens the month page from the 月次 link without the origin state', async () => {
+    renderPage([], drilledFromMonthWarning)
+
+    await userEvent.click(await screen.findByRole('link', { name: '月次' }))
+
+    expect(screen.getByTestId('location-state')).toHaveTextContent('null')
+    expect(screen.queryByRole('link', { name: /に戻る$/ })).not.toBeInTheDocument()
   })
 
   it('links to the displayed week month and disables 今週 for the current week', async () => {

@@ -1,6 +1,6 @@
 # 戻るリンクは「掘り下げ」で開いた画面にだけ出す(日次・週次・月次勤怠の戻る導線)
 
-- ステータス: 実装中
+- ステータス: 完了
 - 種別: 仕様変更(frontend・UIガイドライン)
 
 ## 変更要望(原文)
@@ -160,4 +160,10 @@
 
 ## 実装結果
 
-(実装後に追記)
+- 共通: `pageHierarchy.ts`に`menuEntry`(日次・月次)、`useBackTarget`は`menuEntry`の画面で遷移元が無ければ戻るリンクを出さない。
+- 勤怠: 日次→「週次」・週次→「月次」の`state`を外した。週次に`BackLink`、月次の月送りに「月の一覧」(戻るリンクが出ているときは非表示)。
+  週次の前週/次週と休暇3画面の一覧のページ送りを`useSearchParamsKeepingBackState`に替え、横移動で戻り先を保つ(実装時の判断、論点1の横移動の規則どおり)。
+- 有給・特別休暇・代休に`BackLink`。ユーザー一覧・ユーザー管理(2か所)・会社カレンダー年度別日付・ホームの集計カードの`state`を外した。
+- ガイドライン: `ui-interaction-patterns` Mandatory Rule 13・§2.26・Implementation Checklistを改定。
+- 検証: `npx tsc -p tsconfig.app.json --noEmit`成功、`npm test` 154ファイル/1386件成功、`npm run lint`成功(既存の警告のみ)。
+  ユーザー管理の2か所(CSV適用後・条件付きセクションの文中リンク)は表示に前提データが多くテスト未追加(`state`の削除のみ)。

@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261122-back-link-drilldown-rule](./20261122-back-link-drilldown-rule/spec.md) | 戻るリンクは「掘り下げ」で開いた画面にだけ出す(日次・週次・月次勤怠の戻る導線) | 実装中 |
+| [20261122-back-link-drilldown-rule](./20261122-back-link-drilldown-rule/spec.md) | 戻るリンクは「掘り下げ」で開いた画面にだけ出す(日次・週次・月次勤怠の戻る導線) | 完了 |
 | [20261122-force-testing-env](./20261122-force-testing-env/spec.md) | `php artisan test` でテストが APP_ENV=local のまま動く不具合の修正 | 完了 |
 | [20261122-history-event-label-guard](./20261122-history-event-label-guard/spec.md) | 履歴画面のイベント表示名の漏れを機械的に検出する | 完了 |
 | [20261121-leave-history-event-detail](./20261121-leave-history-event-detail/spec.md) | 有給・特別休暇履歴でイベントコードがそのまま表示される不具合の修正 | 完了 |
