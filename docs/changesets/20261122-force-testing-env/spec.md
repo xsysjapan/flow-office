@@ -21,7 +21,9 @@
 
 ## 仕様確定事項
 
-1. `backend/phpunit.xml` の `APP_ENV` を `<env name="APP_ENV" value="testing" force="true"/>` にする。
+1. `backend/phpunit.xml` の `APP_ENV` を `<env name="APP_ENV" value="testing" force="true"/>` にし、直後に `<server name="APP_ENV" value="testing" force="true"/>` を足す。
+   (`php artisan test`(collisionのTestCommand)は`.env`の値を子プロセスの環境変数として渡すため`$_SERVER['APP_ENV']`=localになり、
+   Laravelは`$_SERVER`を先に読む。`<env force>`だけでは`$_ENV`・`getenv`しか変わらず解消しないことを確認済み)
 2. 他の `<env>` は変えない(DB・キュー等はCIで `.env` の値を使う前提が `delegate-implementer` に記録されているため)。
 3. 全件をCIと同じ手順で流し、エージェント環境(pao有効)・`PAO_DISABLE=1`(CI相当)の両方で全件成功を確認する。
 
