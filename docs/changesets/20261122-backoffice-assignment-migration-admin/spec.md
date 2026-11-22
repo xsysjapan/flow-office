@@ -1,6 +1,6 @@
 # バックオフィス割当イベントの移行を管理画面の運用コマンドから実行できるようにする
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 管理画面から移行バッチを実行できるようにしてください
@@ -180,4 +180,21 @@
   `rebuild($dryRun, $startedAt)`/一覧化の変更箇所とAs-Isの訂正、相互排他をロック内で/DDL不発行のテスト/リハーサルの測定項目。
 
 ## 実装結果
-未着手
+- コミット: `1252456`(backend)、docs は同ブランチの「docs: 割当イベント移行を運用コマンド(1トランザクション)で行う手順に更新」。
+- backend: 新規`MigrateBackOfficeAssignmentEventsCommand`(`backoffice:migrate-assignment-events {--dry-run}`、`#[AdminExecutable]`)、
+  `BackOfficeAssignmentMigrator`、`LegacyBackOfficeAssignmentDetector`。変更: `BackOfficeTaskAssignmentSplitter`(挿入0件の不具合修正、idMap・versionMap、
+  meta`source_event_id`の付け替え)・`SplitResult`・`RebuildVerifier`(行配列を比較元に)、`ReadModelRebuilder::rebuild($dryRun, $startedAt)`、
+  `ReadModelRebuildRunService`(`MAINTENANCE_COMMANDS`、`startDirectRun`のコマンド名引数化、ロック内の相互排他)、`AdminCommandRunner::nextQueuedRun`、
+  `RebuildReadModelsCommand`・`RebuildProjectionsCommand`(旧形式があれば拒否)、`routes/console.php`(コメント)。削除: `RebuildBackOfficeAssignmentEventsCommand`。
+- テスト: `BackOfficeAssignmentEventRebuildScenarioTest`(新コマンド向けに書き換え、13件)、`LegacyBackOfficeAssignmentGuardTest`(新規7件)、Splitter・Verifier・AdminCommandTestを更新。
+- 実装上の判断: 旧形式が1件でもあれば挿入0件でも全行のidを振り直す(Verifierがidの連番を要求するため)。violationsは本実行ではバックアップ表の作成後に
+  検出されるため、その場合はバックアップ表が残る(`error_message`に案内)。FK検査はトランザクション開始前に無効化し`finally`で戻す。
+- docs: `docs/27-release-runbook.md` 3.6、`docs/32-stored-event-history-normalization.md`、`.claude/skills/data-correction/SKILL.md`、
+  変更セット`20261122-backoffice-task-reassign`への追記(「ドキュメントへの影響」の全件を更新済み)。
+- 検証結果:
+  - 委譲元で再実行: `./vendor/bin/phpunit --filter='BackOffice|ReadModelRebuild|AdminCommand|RebuildProjections|Splitter|LegacyBackOffice'` 145件pass(APP_KEY設定時。
+    未設定では既存の`ExpenseExternalApiPublishTest` 4件がAPP_KEY不足でエラーになる既知の環境要因)。
+  - implementer実行: CI同条件の`php artisan test`全件 2347件pass。
+  - MySQLでの`CREATE TABLE LIKE`・`INSERT ... SELECT`と所要時間・メモリは未確認(テストはSQLite)。本番前のリハーサルで確認する(`docs/27` 3.6 手順0)。
+- 受け入れ条件: 運用コマンドの一覧への表示・オプション(GuardTest)、試し実行で不変かつ差分表示・本実行で新構成と`backoffice_tasks`の一致・失敗時ロールバック(シナリオテスト)、
+  移行前の`read-models:rebuild`本実行と`projections:rebuild`の拒否(GuardTest)を確認。
