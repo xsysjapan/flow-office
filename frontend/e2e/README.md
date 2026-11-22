@@ -28,7 +28,11 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
 1. backend: `composer install` → `cp .env.example .env && php artisan key:generate` →
    `touch database/database.sqlite` → `.env`の`MICROSOFT_MOCK_ENABLED`を`true`に変更
    (devcontainer/docker-compose以外ではここが自動設定されないため必須。
-   `POST /dev/reset-database`もこのフラグがtrueの時のみ有効になる) →
+   `POST /dev/reset-database`もこのフラグがtrueの時のみ有効になる)。あわせて
+   `MICROSOFT_CLIENT_ID=mock-client-id`・`MICROSOFT_CLIENT_SECRET=mock-client-secret`・
+   `MICROSOFT_TENANT_ID=mock`・`MICROSOFT_REDIRECT_URI=http://localhost:8000/api/auth/microsoft/callback`
+   を設定する(`.devcontainer/post-create.sh`と同じ値。未設定だとSSO未設定扱いになりログイン画面に
+   「Microsoftでログイン」ボタンが出ず、全シナリオがログインで失敗する) →
    `php artisan migrate --seed` → `php artisan serve`(ポート8000)。
    (`db:seed --class=ScenarioSeeder`を手動実行しておく必要はない。E2E実行時の
    `globalSetup`が`migrate:fresh --seed`+`ScenarioSeeder`を自動で行うため。
