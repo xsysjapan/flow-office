@@ -1,6 +1,6 @@
 # バックオフィスタスクの「担当者の割当」と「ステータス変更」を別イベントに分け、担当者を変更できるようにする
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > どういうことでしょうか？担当者の付け替えとステータスにどのような関係がありますか？単純に担当者を変更したいです。
@@ -236,4 +236,21 @@
   移行コマンドを残す理由(規定からの例外)/変換できない並びは失敗/判定順(完了・取消を先に)と`with('source')`。
 
 ## 実装結果
-未着手
+- コミット: `fe05ad7`(backend 業務ロジック)、`5ea7352`(backend 移行コマンド)、`05147f1`(frontend)、`87c3803`・`c23a102`(docs)。
+- backend(業務ロジック): `BackOfficeTaskAssigned`に`previousAssignedUserId`、`BackOfficeTaskAggregate::assign`、Projectorは`assigned_user_id`のみ更新、
+  `Support/BackOfficeTaskAssignmentDecision`・`Support/BackOfficeTaskTransitionPolicy`(新規)、`AssignBackOfficeTaskHandler`(未着手かつ許可なら
+  同じ集約に`status_changed`を記録、前担当者への「タスク担当変更」通知)、`ChangeBackOfficeTaskStatusHandler`(判定をPolicyに委譲。挙動・文言は不変)。
+- backend(移行): `Rebuild/BackOfficeTaskAssignmentSplitter`・`SplitResult`・`RebuildVerifier`、`backoffice:rebuild-assignment-events {--apply} {--verify} {--swap}`。
+  既存の作り直しクラスは変更なし。事前条件は休暇固有の条件が混ざらないよう`stored_events_rebuilt`が無い・`snapshots`が空の2つをコマンド内で判定。
+- frontend: 詳細画面は完了・取消以外で担当者フォーム(未割当「担当者を割り当てる」/割当済み「担当者を変更」)、一覧の一括は「担当者を設定」で担当者の有無を問わない。
+- docs: `docs/17-events.md`・`docs/11-usecases-backoffice.md`・`docs/13-usecases-notification.md`・`docs/27-release-runbook.md`(3.6)・
+  `docs/32-stored-event-history-normalization.md`(「ドキュメントへの影響」の全件を更新済み)。
+- 検証結果:
+  - 委譲元で再実行: `./vendor/bin/phpunit --filter='BackOfficeTaskAssignment|BackOfficeAssignmentEventRebuild|BackOfficeTask'` 53件pass。
+    `npx vitest run --project unit src/pages/backOffice` 39件pass、`npx tsc -p tsconfig.app.json --noEmit` OK。
+  - implementer実行: CI同条件の`php artisan test`全件 2331件pass(移行コマンド追加後)。
+  - 移行の試し実行の出力例(シナリオ入力): 旧形式assigned 3件、挿入するstatus_changed 3件、直前status not_started 2/processing 1。
+  - Storybookのplay・e2eは未実行。
+- 受け入れ条件: 担当者変更でstatus不変・未着手の割当でassigned+status_changedの2件・完了/取消は422・新旧担当者への通知はFeatureテスト、
+  画面の変更フォーム・一括の担当者設定はVitest、移行で旧形式が新構成になりリビルド後の`backoffice_tasks`が移行前と一致することはシナリオテストで確認。
+- 未実施: 本番での移行の実行(試し実行の結果を示し、許可を得てから`docs/27` 3.6の手順で行う)。
