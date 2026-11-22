@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../Button/Button'
 import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { FormField } from '../FormField/FormField'
+import { notify } from '../../lib/notify'
 import { Input } from '../ui/input'
 
 export interface ChangeGrantDaysButtonProps {
@@ -66,7 +67,10 @@ export function ChangeGrantDaysButton({
       confirmDisabled={invalid}
       isPending={isPending}
       error={error}
-      onConfirm={() => onChange(parsed, reason || undefined)}
+      onConfirm={async () => {
+        await onChange(parsed, reason || undefined)
+        notify.success(`${grantedOn}付与の付与日数を${parsed}日に変更しました`)
+      }}
       onOpenChange={(open) => {
         if (open) {
           setDays(String(currentDays))

@@ -21,6 +21,7 @@ import {
   useRevokeCompensatoryLeaveGrant,
 } from '../../hooks/useCompensatoryLeave'
 import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
+import { notify } from '../../lib/notify'
 import { isValidUuidParam } from '../../utils/searchParamValidators'
 
 function ResultSummary({ results, labels }: { results: BulkGrantResult[]; labels: Record<string, string> }) {
@@ -78,6 +79,8 @@ function ManualGrantCard() {
     )
     setIsSubmitting(false)
     setResults(outcomes)
+    const successCount = outcomes.filter((o) => o.success).length
+    if (successCount > 0) notify.success(`${successCount}名に代休を付与しました`)
     if (outcomes.every((o) => o.success)) {
       setWorkDate('')
       setExpiresOn('')
@@ -173,6 +176,7 @@ function ManualGrantCard() {
                     />
                     <RevokeGrantButton
                       id={`revoke-reason-${grant.id}`}
+                      grantedOn={grant.work_date}
                       title="代休付与を取り消しますか?"
                       description={`${grant.work_date}分の代休付与(${grant.granted_days}日)を取り消します。この操作は元に戻せません。`}
                       isPending={revokeGrant.isPending}
@@ -267,7 +271,10 @@ function CompensatoryLeaveUsageCard() {
           isLoading={isLoading}
           error={error}
           errorFallback="代休の使用状況の取得に失敗しました。"
-          onCancelRequest={(requestId) => adminCancel.mutateAsync(requestId)}
+          onCancelRequest={async (requestId) => {
+            await adminCancel.mutateAsync(requestId)
+            notify.success('代休申請を取り消しました')
+          }}
           isCancelling={adminCancel.isPending}
           cancelError={adminCancel.error}
         />

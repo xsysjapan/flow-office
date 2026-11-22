@@ -10,6 +10,7 @@ import * as paidLeaveApi from '../../api/paidLeave'
 import * as shiftSwapApi from '../../api/shiftSwap'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
+import { notify } from '../../lib/notify'
 import type {
   AttendanceDay,
   AttendanceMonth,
@@ -72,6 +73,8 @@ const currentUser: User = {
   employment_status: 'active',
   last_login_at: null,
 }
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 vi.mock('../../auth/useAuth', () => ({
   useAuth: () => ({ user: currentUser }),
@@ -760,7 +763,7 @@ describe('AttendanceDayPage', () => {
           reason: undefined,
         }),
       )
-      expect(await screen.findByText('振替休日を申請しました。')).toBeInTheDocument()
+      await waitFor(() => expect(notify.success).toHaveBeenCalledWith('7月6日の振替休日を申請しました'))
     })
 
     it('allows submitting without an approver when approval is not required', async () => {

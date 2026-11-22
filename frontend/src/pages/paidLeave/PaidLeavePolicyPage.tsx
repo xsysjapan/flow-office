@@ -55,6 +55,7 @@ import {
   pickDefaultFiscalYearStart,
   statutoryGrantSteps,
 } from '../../lib/paidLeaveGrantRule'
+import { notify } from '../../lib/notify'
 import { isValidUuidParam } from '../../utils/searchParamValidators'
 
 const STATUTORY_POLICY_WARNING =
@@ -120,7 +121,10 @@ function PaidLeaveGrantPolicyEditSheet({
 
   const handleSave = () => {
     createVersion.mutate(rows, {
-      onSuccess: () => onOpenChange(false),
+      onSuccess: () => {
+        notify.success('通常付与表の新しいバージョンを保存しました')
+        onOpenChange(false)
+      },
     })
   }
 
@@ -230,7 +234,10 @@ function PaidLeaveProportionalGrantPolicyEditSheet({
 
   const handleSave = () => {
     createVersion.mutate(rows, {
-      onSuccess: () => onOpenChange(false),
+      onSuccess: () => {
+        notify.success('比例付与表の新しいバージョンを保存しました')
+        onOpenChange(false)
+      },
     })
   }
 
@@ -315,11 +322,12 @@ function PaidLeaveGrantRuleTargetUsersSection({ ruleId }: { ruleId: number }) {
 
   const filteredUsers = (targetUsers ?? []).filter((user) => user.name.includes(nameFilter))
 
-  const handleToggle = (userId: string, enabled: boolean) => {
+  const handleToggle = (user: { id: string; name: string }, enabled: boolean) => {
     updateAutoGrantEnabled.mutate(
-      { id: userId, enabled },
+      { id: user.id, enabled },
       {
         onSuccess: () => {
+          notify.success(`${user.name}の自動付与を${enabled ? '有効' : '無効'}にしました`)
           void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grant-rules', ruleId, 'target-users'] })
         },
       },
@@ -329,7 +337,6 @@ function PaidLeaveGrantRuleTargetUsersSection({ ruleId }: { ruleId: number }) {
   return (
     <div className="mt-3 rounded-md border border-border p-3">
       {error && <ErrorMessage error={error} fallback="対象社員の取得に失敗しました。" />}
-      {updateAutoGrantEnabled.error && <ErrorMessage error={updateAutoGrantEnabled.error} />}
 
       <FormField label="社員名で絞り込み" htmlFor={`paid-leave-rule-${ruleId}-target-user-filter`}>
         <Input
@@ -361,11 +368,16 @@ function PaidLeaveGrantRuleTargetUsersSection({ ruleId }: { ruleId: number }) {
                   <label className="flex items-center gap-2">
                     <Checkbox
                       checked={user.paid_leave_auto_grant_enabled}
-                      onCheckedChange={(checked) => handleToggle(user.id, checked === true)}
+                      onCheckedChange={(checked) => handleToggle(user, checked === true)}
                       aria-label={`${user.name}の有給自動付与`}
                     />
                     {!user.paid_leave_auto_grant_enabled && <Badge tone="warning">自動付与:無効</Badge>}
                   </label>
+                  {updateAutoGrantEnabled.error && updateAutoGrantEnabled.variables?.id === user.id && (
+                    <div className="mt-1">
+                      <ErrorMessage error={updateAutoGrantEnabled.error} />
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -399,7 +411,10 @@ function DeleteRuleButton({ ruleId, ruleName, isActive }: { ruleId: number; rule
       confirmLabel="削除する"
       isPending={deleteRule.isPending}
       error={deleteRule.error}
-      onConfirm={() => deleteRule.mutateAsync(ruleId)}
+      onConfirm={async () => {
+        await deleteRule.mutateAsync(ruleId)
+        notify.success(`${ruleName}を削除しました`)
+      }}
     />
   )
 }
@@ -452,6 +467,7 @@ function PaidLeaveGrantRulesCard() {
       },
       {
         onSuccess: () => {
+          notify.success(`${ruleName}を作成しました`)
           setRuleName('')
           setMinAttendanceRate('')
           setFirstGrantAfterMonths('')
@@ -676,6 +692,8 @@ function ManualGrantCard() {
     )
     setIsSubmitting(false)
     setResults(outcomes)
+    const successCount = outcomes.filter((o) => o.success).length
+    if (successCount > 0) notify.success(`${successCount}名に有給を付与しました`)
     if (outcomes.every((o) => o.success)) {
       setGrantedOn('')
       setExpiresOn('')
@@ -785,6 +803,7 @@ function ManualGrantCard() {
                     />
                     <RevokeGrantButton
                       id={`revoke-reason-${grant.id}`}
+                      grantedOn={grant.granted_on}
                       title="有給付与を取り消しますか?"
                       description={`${grant.granted_on}付与分(${grant.granted_days}日)を取り消します。この操作は元に戻せません。${
                         grant.used_days > 0
@@ -879,7 +898,10 @@ function PaidLeaveUsageCard() {
           isLoading={isLoading}
           error={error}
           errorFallback="有給の使用状況の取得に失敗しました。"
-          onCancelRequest={(requestId) => adminCancel.mutateAsync(requestId)}
+          onCancelRequest={async (requestId) => {
+            await adminCancel.mutateAsync(requestId)
+            notify.success('有給申請を取り消しました')
+          }}
           isCancelling={adminCancel.isPending}
           cancelError={adminCancel.error}
         />

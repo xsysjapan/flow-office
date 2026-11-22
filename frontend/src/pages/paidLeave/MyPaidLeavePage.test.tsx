@@ -9,6 +9,7 @@ import type { PaidLeaveGrant, PaidLeaveRequest, Paginated, User } from '../../ap
 import { AppSettingsContext } from '../../contexts/AppSettingsContext'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { MyPaidLeavePage } from './MyPaidLeavePage'
+import { notify } from '../../lib/notify'
 
 const approver: User = {
   id: 'approver-1',
@@ -138,6 +139,8 @@ async function pickDateRange(
   await user.click(await screen.findByRole('button', { name: dayButtonLabel(to) }))
   await user.click(await screen.findByRole('button', { name: '適用' }))
 }
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 describe('MyPaidLeavePage', () => {
   beforeEach(() => {
@@ -311,7 +314,7 @@ describe('MyPaidLeavePage', () => {
     const groupIds = calls.map(([input]) => input.request_group_id)
     expect(new Set(groupIds).size).toBe(1)
 
-    expect(await screen.findByText('3日分の有給申請を送信しました。')).toBeInTheDocument()
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('3日分の有給申請を送信しました'))
   })
 
   it('hides the leave-type select once the target date range spans multiple days', async () => {

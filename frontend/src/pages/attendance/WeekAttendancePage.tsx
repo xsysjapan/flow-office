@@ -11,6 +11,7 @@ import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { notify } from '../../lib/notify'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { WeeklyAttendanceBulkEntryModal } from '../../components/WeeklyAttendanceBulkEntryModal/WeeklyAttendanceBulkEntryModal'
 import { useAllocateWeekOvertime, useWeek, useWeekOvertime } from '../../hooks/useAttendance'
@@ -104,6 +105,12 @@ export function WeekAttendancePage() {
   )
   const unallocatedWeeklyMinutes = weeklyOvertime?.unallocated_weekly_statutory_excess_overtime_minutes ?? 0
 
+  function saveAllocations(allocations: Parameters<typeof allocateWeeklyOvertime.mutate>[0]) {
+    allocateWeeklyOvertime.mutate(allocations, {
+      onSuccess: () => notify.success('週次の残業時間の配分を保存しました'),
+    })
+  }
+
   function applySuggestedAllocation() {
     let remaining = unallocatedWeeklyMinutes
     const allocations = (data ?? []).map((day) => {
@@ -121,7 +128,7 @@ export function WeekAttendancePage() {
         ),
       }
     }).filter((allocation) => allocation.non_prescribed_minutes > 0)
-    if (remaining === 0) allocateWeeklyOvertime.mutate(allocations)
+    if (remaining === 0) saveAllocations(allocations)
   }
 
   function applyManualAllocation() {
@@ -139,7 +146,7 @@ export function WeekAttendancePage() {
         late_night_non_prescribed_minutes: Math.max(0, nonPrescribed - (nonPrescribedCapacity - (day.calculation?.late_night_non_prescribed_statutory_within_work_minutes ?? 0))),
       }
     }).filter((allocation) => allocation.prescribed_minutes + allocation.non_prescribed_minutes > 0)
-    allocateWeeklyOvertime.mutate(allocations)
+    saveAllocations(allocations)
   }
 
   const suggestedCapacity = (data ?? []).reduce(

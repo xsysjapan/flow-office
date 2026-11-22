@@ -29,6 +29,7 @@ import {
   useSpecialLeaveTypes,
 } from '../../hooks/useSpecialLeave'
 import { isValidPageParam } from '../../utils/searchParamValidators'
+import { notify } from '../../lib/notify'
 import { paidLeaveRequestStatusLabel, paidLeaveTypeLabel } from '../../utils/statusLabels'
 import { addDays } from '../../utils/weekDates'
 
@@ -85,7 +86,6 @@ function SpecialLeaveRequestForm() {
   const [hours, setHours] = useState('')
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const createRequest = useCreateSpecialLeaveRequest()
 
@@ -131,8 +131,6 @@ function SpecialLeaveRequestForm() {
     if (approvalRequired && !approverUserId) return
     if (targetDates.length === 0) return
 
-    setSuccessMessage(null)
-
     // 複数日をまとめて申請する場合、承認者が1回の操作でまとめて承認できるよう
     // 同じrequest_group_idを全日分に渡す(単日申請では付与しない)。
     const requestGroupId = isMultiDay ? crypto.randomUUID() : undefined
@@ -156,16 +154,13 @@ function SpecialLeaveRequestForm() {
       }
     }
 
-    if (successCount === targetDates.length) {
-      resetForm()
-      setSuccessMessage(`${successCount}日分の特別休暇申請を送信しました。`)
-    }
+    if (successCount > 0) notify.success(`${successCount}日分の特別休暇申請を送信しました`)
+    if (successCount === targetDates.length) resetForm()
   }
 
   return (
     <div className="flex flex-col gap-4">
       {createRequest.error && <ErrorMessage error={createRequest.error} />}
-      {successMessage && <p className="text-sm text-success">{successMessage}</p>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="特別休暇の種類" htmlFor="special-leave-type" required>
@@ -351,7 +346,10 @@ function MySpecialLeaveRequestList() {
                     confirmLabel="取消する"
                     isPending={cancelRequest.isPending && cancelRequest.variables === req.id}
                     error={cancelRequest.variables === req.id ? cancelRequest.error : undefined}
-                    onConfirm={() => cancelRequest.mutateAsync(req.id)}
+                    onConfirm={async () => {
+                      await cancelRequest.mutateAsync(req.id)
+                      notify.success(`${req.target_date}の特別休暇申請を取り消しました`)
+                    }}
                   />
                 )}
               </div>
