@@ -1,5 +1,11 @@
 import type { BadgeTone } from '../components/Badge/Badge'
 import type {
+  AssetHistoryEventType,
+  CompensatoryLeaveHistoryEventType,
+  PaidLeaveHistoryEventType,
+  SpecialLeaveHistoryEventType,
+} from '../generated/historyEventTypes'
+import type {
   Asset,
   AssetInstallationStatus,
   AssetLendingMethod,
@@ -341,7 +347,14 @@ export function punchStatusLabel(status: PunchStatus): StatusMeta {
  * 申請種別。有給の申請集約は requested/approved/returned/cancelled/resubmitted/shared、特別休暇・代休は request_*)。
  * 本変更前の種別(paid_leave.granted・special_leave.used 等)は作り直しで無くなったため扱わない。
  */
-const leaveEventSuffixMeta: Record<string, StatusMeta> = {
+/** 「ドメイン.種別」から末尾の種別を取り出す型(ドメイン名にはドットを含まない前提)。 */
+type EventSuffix<T extends string> = T extends `${string}.${infer S}` ? S : never
+
+/** 生成ファイルの種別一覧(backend の events:export-history-types)から、キーの漏れを型で検出する。 */
+const leaveEventSuffixMeta: Record<
+  EventSuffix<PaidLeaveHistoryEventType | SpecialLeaveHistoryEventType | CompensatoryLeaveHistoryEventType>,
+  StatusMeta
+> = {
   grant_created: { label: '付与', tone: 'success' },
   grant_registered: { label: '付与', tone: 'success' },
   grant_manually_granted: { label: '付与', tone: 'success' },
@@ -380,9 +393,17 @@ const leaveEventSuffixMeta: Record<string, StatusMeta> = {
   usage_allocation_released: { label: '充当取消', tone: 'warning' },
 }
 
+/** 実行時に未知の種別が来た場合の表示名。イベントコードは利用者に見せない。 */
+const UNKNOWN_EVENT_LABEL = 'その他'
+
+/** Recordから自身のキーだけを引く(Object.prototype由来の値を拾わない)。 */
+function ownValue<T>(record: Record<string, T>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined
+}
+
 function leaveEventTypeLabel(eventType: string): StatusMeta {
   const suffix = eventType.split('.').slice(1).join('.')
-  return leaveEventSuffixMeta[suffix] ?? { label: eventType, tone: 'neutral' }
+  return ownValue(leaveEventSuffixMeta, suffix) ?? { label: UNKNOWN_EVENT_LABEL, tone: 'neutral' }
 }
 
 export function paidLeaveEventTypeLabel(eventType: string): StatusMeta {
@@ -402,7 +423,9 @@ export function specialLeaveEventTypeLabel(eventType: string): StatusMeta {
  */
 function leaveEventDetail(event: StoredEvent, domainLabel: string): string {
   const payload = event.payload
-  const suffix = event.event_type.split('.').slice(1).join('.')
+  const suffix = event.event_type.split('.').slice(1).join('.') as EventSuffix<
+    PaidLeaveHistoryEventType | SpecialLeaveHistoryEventType
+  >
 
   switch (suffix) {
     case 'grant_created':
@@ -468,8 +491,12 @@ function leaveEventDetail(event: StoredEvent, domainLabel: string): string {
       return `${domainLabel}の消化を取り消しました`
     case 'grant_warning_raised':
       return String(payload.message)
-    default:
+    default: {
+      // 生成された種別の全件を扱っていれば never になる。種別を足して詳細文を足し忘れると tsc が失敗する。
+      const unhandled: never = suffix
+      void unhandled
       return ''
+    }
   }
 }
 
@@ -493,7 +520,7 @@ export function compensatoryLeaveEventTypeLabel(eventType: string): StatusMeta {
  */
 export function compensatoryLeaveEventDetail(event: StoredEvent): string {
   const payload = event.payload
-  const suffix = event.event_type.split('.').slice(1).join('.')
+  const suffix = event.event_type.split('.').slice(1).join('.') as EventSuffix<CompensatoryLeaveHistoryEventType>
 
   switch (suffix) {
     case 'grant_synced':
@@ -526,8 +553,12 @@ export function compensatoryLeaveEventDetail(event: StoredEvent): string {
       return '代休申請が再提出されました'
     case 'request_shared':
       return '申請がワークフローに連携されました'
-    default:
-      return event.event_type
+    default: {
+      // 生成された種別の全件を扱っていれば never になる。種別を足して詳細文を足し忘れると tsc が失敗する。
+      const unhandled: never = suffix
+      void unhandled
+      return ''
+    }
   }
 }
 
@@ -616,7 +647,7 @@ export function assetStatusSummary(asset: Pick<Asset, 'management_type' | 'lendi
   return asset.installation_status ? assetInstallationStatusLabel(asset.installation_status).label : ''
 }
 
-const assetHistoryEventTypeLabels: Record<string, string> = {
+const assetHistoryEventTypeLabels: Record<AssetHistoryEventType, string> = {
   'asset.registered': '登録',
   'asset.details_updated': '詳細編集',
   'asset.deleted': '削除',
@@ -637,5 +668,5 @@ const assetHistoryEventTypeLabels: Record<string, string> = {
 }
 
 export function assetHistoryEventTypeLabel(eventType: string): string {
-  return assetHistoryEventTypeLabels[eventType] ?? eventType
+  return ownValue(assetHistoryEventTypeLabels, eventType) ?? UNKNOWN_EVENT_LABEL
 }

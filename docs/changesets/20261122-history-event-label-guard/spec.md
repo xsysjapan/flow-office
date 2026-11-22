@@ -68,7 +68,7 @@
 
 ## 仕様確定事項(まとめ)
 
-1. artisanコマンド `event-types:export-history`(名前は実装時に衝突確認)を追加し、対象の接頭辞
+1. artisanコマンド `events:export-history-types`(既存の`events:*`系に合わせた)を追加し、対象の接頭辞
    (`paid_leave_account.` `paid_leave_request.` `special_leave.` `special_leave_account.`
    `compensatory_leave.` `compensatory_leave_account.` `asset.`)の種別を画面ごとの配列として
    `frontend/src/generated/historyEventTypes.ts` に書き出す。
@@ -111,4 +111,11 @@
 
 ## 実装結果
 
-(実装後に追記)
+- backend: `App\Domain\EventSourcing\HistoryEventTypesExporter`(抽出・TypeScript生成)、
+  `events:export-history-types {--check}`、`tests/Unit/EventSourcing/HistoryEventTypesExporterTest.php`(7件)。
+- frontend: `src/generated/historyEventTypes.ts`(有給17・特別休暇12・代休14・備品17件)、`statusLabels.ts`の表を
+  `Record<生成型>`化・詳細文の`switch`に`never`の網羅チェック・未知種別は「その他」/空文字。テストに全件網羅の検査を追加。
+- CI: `frontend.yml`に`npm test`。スキル`add-domain-event`・`backend/CLAUDE.md`・`frontend/CLAUDE.md`に手順を追記。
+- 検証: 表示名の表から1キー/詳細文から1caseを消すと`tsc`が失敗することを確認(4パターン)。`--check`成功、
+  frontend `npm test` 154ファイル/1366件成功、`tsc`・`lint`・`build`成功。backend全件は2290件中1件失敗
+  (`ReadModelFingerprintCommandTest`。変更前のHEADでの再現を確認中)。
