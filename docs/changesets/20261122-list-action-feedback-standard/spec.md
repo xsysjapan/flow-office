@@ -1,6 +1,6 @@
 # 一覧からの操作と変更操作のフィードバックの標準化(バックオフィスの一括担当者変更のモーダル化を含む)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > ステータスの変更が画面からできなくなっています。また、基本的に変更作業は確認画面なりフィードバックを返してください。
@@ -198,7 +198,21 @@
   分類に提出・差戻し・公開・遷移のみを追加/変更不要の件数の分離/承認一覧の取得失敗の扱い/実装を4段階に分割。
 
 ## 実装結果
-未着手
+- 第1段階: backend`allowed_next_statuses`(詳細系のみ、`loadMorph`)、frontend`sonner`・`components/ui/sonner.tsx`・`lib/notify.ts`・`ConfirmActionDialog`の制御モード・
+  `BulkActionBar`・`BulkActionDialog`、バックオフィスの一覧(担当者の一括変更・一括完了をダイアログ化)と詳細(担当者ダイアログ、移れるステータスだけの選択肢、エラーを直近へ)。
+- 第2段階: 承認一覧(まとめて承認=確認つき一括ダイアログ、個別承認に確認)、申請一覧(まとめて取消)、有給の一括付与(`PaidLeaveScheduleBulkGrantBar`を削除して置き換え)。
+- 第3段階: 外部連携・端末・個人の連携の行内操作を「⋯」メニューへ、トークン再発行に確認、採番ルール・運用コマンドにトースト。特別休暇の種別の行内操作もメニューへ。
+- 第4段階: ワークフロー・経費・備品・勤怠・休暇・管理・カレンダーの全画面と共通部品(添付、認証キー、端末詳細、一括入力モーダル、打刻パネル等)に成功トースト。
+  インラインの成功表示(「保存しました」の文・Badge等)を置き換え、エラーを操作の直近へ。承認(ワークフロー・経費の詳細)・カレンダー年度の公開・シフト表の公開・
+  一括操作の確定適用・打刻の削除に確認を追加。経費の定期区間控除額は入力中に保存せずblur/Enterで1回だけ保存。
+- スキル: `ui-interaction-patterns`(§1-7・§1-12・§2.3・§2.12・§2.18・§2.21)、`ui-design-system`、`add-page`、`add-frontend-component`。docs: `docs/11-usecases-backoffice.md`。
+- 実装上の判断: 備品の詳細画面で取り消せる操作にも付いている確認は、多くが入力欄を持つダイアログのため現状維持。年度の公開取消は取り消せる操作のため確認なし。
+  メニューから開くダイアログは`preventDefault`に加えメニューを明示的に閉じる。
+- 検証結果(委譲元で実行): `npx vitest run --project unit` 155ファイル 1436件pass(skip 2件は既存)、`npx tsc -p tsconfig.app.json --noEmit` OK、
+  `npx tsc --noEmit -p e2e/tsconfig.json` OK、`npx oxlint src` 新規の指摘なし。backend `./vendor/bin/phpunit --filter=BackOffice` 94件pass。e2e(Playwright)とStorybookのplayは未実行。
+- 受け入れ条件: バックオフィスの一括担当者変更・一括完了のダイアログと件数通知、詳細のステータス選択肢の絞り込み・通知・エラー位置、全画面の成功トーストと確認、
+  一括操作の統一と部分失敗の扱いを各Vitestで確認。ガイドライン更新済み。
+- 残課題: `WeekAttendancePage`の残業配分の保存と`GroupTypeManagementPage`(テストファイル無し)はトーストの文言テストが無い。
 
 ## 参考
 - Carbon Design System, Data table usage: https://carbondesignsystem.com/components/data-table/usage/
