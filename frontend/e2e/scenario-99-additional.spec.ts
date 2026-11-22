@@ -371,9 +371,12 @@ test("§5-8: 締めた月の勤怠CSV出力", async ({ browser }) => {
     );
 
     await adminPage.goto("/admin/attendance-export");
+    // 年月を選ぶと即座に対象へ追加され、Badge(年月+「…を対象から外す」ボタン)が出る。
     await pickYearMonth(adminPage, "対象月", yearMonth);
-    await adminPage.getByRole("button", { name: "追加" }).click();
     await expect(adminPage.getByText(yearMonth, { exact: true })).toBeVisible();
+    await expect(
+      adminPage.getByRole("button", { name: `${yearMonth}を対象から外す` }),
+    ).toBeVisible();
 
     const [download] = await Promise.all([
       adminPage.waitForEvent("download"),
