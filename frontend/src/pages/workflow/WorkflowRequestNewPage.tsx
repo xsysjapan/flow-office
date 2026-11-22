@@ -12,6 +12,7 @@ import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { useBackTarget, useKeepBackState, useSearchParamsKeepingBackState } from '../../navigation/backState'
+import { notify } from '../../lib/notify'
 import { useRequestTypes } from '../../hooks/useRequestTypes'
 import { useCreateWorkflowRequest, useSubmitWorkflowRequest } from '../../hooks/useWorkflowRequests'
 
@@ -87,6 +88,9 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
 
     if (submitAfterCreate) {
       await submitRequest.mutateAsync({ id: created.id, approverUserId })
+      notify.success('申請を提出しました')
+    } else {
+      notify.success('申請を下書き保存しました')
     }
 
     navigate(`/requests/${created.id}`, { state: keepState })
@@ -97,8 +101,6 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
       <BackLink />
 
       <Card title="新規申請">
-        {error && <ErrorMessage error={error} />}
-
         <FormField label="申請種別" htmlFor="request-type" required>
           <NativeSelect
             id="request-type"
@@ -166,6 +168,7 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
             提出する
           </Button>
         </div>
+        {error && <ErrorMessage error={error} />}
         {(!requestTypeCode || !title) && (
           <p className="mt-2 text-xs text-muted-foreground">申請種別とタイトルを入力すると保存できます。</p>
         )}

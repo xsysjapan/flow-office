@@ -5,7 +5,13 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import type { ExpenseCategory } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { ExpenseCategoryEditPage } from './ExpenseCategoryEditPage'
+
+
+vi.mock('../../lib/notify', () => ({
+  notify: { success: vi.fn() },
+}))
 
 const transportCategory: ExpenseCategory = {
   id: 1,
@@ -80,6 +86,7 @@ describe('ExpenseCategoryEditPage', () => {
       }),
     )
     expect(await screen.findByText('経費区分一覧ページ')).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('経費区分を作成しました')
   })
 
   it('adds a field definition row and includes it in the create payload', async () => {
@@ -127,6 +134,7 @@ describe('ExpenseCategoryEditPage', () => {
         is_active: true,
       }),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('経費区分を保存しました'))
   })
 
   it('navigates back to the list without saving when cancel is clicked', async () => {

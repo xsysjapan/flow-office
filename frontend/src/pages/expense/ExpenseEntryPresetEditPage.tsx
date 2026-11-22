@@ -7,6 +7,7 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { notify } from '../../lib/notify'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -158,8 +159,10 @@ function ExpenseEntryPresetEditContent() {
 
     if (isCreate) {
       await createPreset.mutateAsync(input)
+      notify.success('経費プリセットを作成しました')
     } else if (existing) {
       await updatePreset.mutateAsync({ id: existing.id, input })
+      notify.success('経費プリセットを保存しました')
     }
 
     // 保存後は一覧へ戻る(遷移先が戻り先と同じ画面なので、絞り込み付きの戻り先とその遷移元を引き継ぐ)。
@@ -179,8 +182,6 @@ function ExpenseEntryPresetEditContent() {
         </Button>
       }
     >
-      {error && <ErrorMessage error={error} />}
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="名称" htmlFor="preset-name" required>
           <Input id="preset-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -254,6 +255,7 @@ function ExpenseEntryPresetEditContent() {
             {isCreate ? '作成する' : '保存する'}
           </Button>
         </div>
+        {error && <ErrorMessage error={error} />}
         {!canSave && (
           <p className="text-xs text-muted-foreground">
             {name.trim() === ''

@@ -16,6 +16,7 @@ import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Pagination } from "../../components/Pagination/Pagination";
+import { notify } from "../../lib/notify";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import {
@@ -278,7 +279,10 @@ export function ExpenseEntryPresetListPage() {
                               ? deletePreset.error
                               : undefined
                           }
-                          onConfirm={() => deletePreset.mutateAsync(preset.id)}
+                          onConfirm={async () => {
+                            await deletePreset.mutateAsync(preset.id);
+                            notify.success(`${preset.name}を削除しました`);
+                          }}
                         />
                       )}
                     </TableCell>

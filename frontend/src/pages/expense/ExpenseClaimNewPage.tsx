@@ -41,6 +41,7 @@ import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useApplyExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/useExpenseEntryPresets'
 import { useUploadAttachment } from '../../hooks/useAttachments'
+import { notify } from '../../lib/notify'
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import { isExpenseClaimEditable, workLocationTypeLabel } from '../../utils/statusLabels'
 import { fieldSetForCategory } from '../../utils/expenseItemFieldSet'
@@ -543,6 +544,7 @@ function ExpenseClaimNewContent() {
   const handleStartBulkClaim = async (title: string) => {
     const id = await ensureClaimId()
     await startClaimTitle.mutateAsync({ claimId: id, title })
+    notify.success('経費精算を作成しました')
   }
 
   const handleSelectCategory = (category: ExpenseCategory) => {
@@ -579,6 +581,7 @@ function ExpenseClaimNewContent() {
       const categoryName = categories?.find((category) => category.id === items[0].category_id)?.name
       void startClaimTitle.mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, items[0].usage_date) })
     }
+    notify.success(`${createdItems.length}件の明細を保存しました`)
     reset([])
     setRowFiles({})
   }
@@ -594,6 +597,7 @@ function ExpenseClaimNewContent() {
       const categoryName = categories?.find((category) => category.id === input.category_id)?.name
       void startClaimTitle.mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, input.usage_date) })
     }
+    notify.success('明細を保存しました')
   }
 
   // 保存後の遷移: 遷移先が戻り先と同じ画面なら戻り先(絞り込み付き)へ、違えば現在の遷移元を引き継ぐ。
@@ -608,6 +612,7 @@ function ExpenseClaimNewContent() {
   // 削除後は戻り先へ。ただし戻り先が削除した経費精算自身の詳細(編集画面の親・遷移元)なら存在しないので、
   // その詳細が記録していた戻り先があればそこへ、無ければ一覧へ。
   function navigateAfterDelete() {
+    notify.success(`${claim?.title ?? '無題の下書き'}を削除しました`)
     const deletedDetailPath = claimId ? `/expenses/${claimId}` : undefined
     if (backTarget && backTarget.to.split(/[?#]/)[0] !== deletedDetailPath) {
       navigate(backTarget.to, { state: backTarget.state, replace: true })
@@ -625,6 +630,7 @@ function ExpenseClaimNewContent() {
   const handleSubmit = async () => {
     if (!claimId || (approvalRequired && !approverUserId)) return
     await submitClaim.mutateAsync(approverUserId)
+    notify.success('経費精算を提出しました')
     navigateAfterSave(`/expenses/${claimId}`)
   }
 
@@ -854,7 +860,12 @@ function SavedItemsAndSubmit({
             onClick={() =>
               updateTitle.mutate(
                 { claimId: claim.id, title: titleInput || null },
-                { onSuccess: () => setTitleEditedByUser(false) },
+                {
+                  onSuccess: () => {
+                    setTitleEditedByUser(false)
+                    notify.success('申請タイトルを保存しました')
+                  },
+                },
               )
             }
           >
@@ -903,18 +914,21 @@ function SavedItemsAndSubmit({
                         <Checkbox
                           checked={deductionAmount > 0}
                           onCheckedChange={(checked) =>
-                            updateItem.mutate({
-                              claimId: claim.id,
-                              itemId: item.id,
-                              input: {
-                                category_id: item.category_id,
-                                usage_date: item.usage_date,
-                                description: item.description ?? undefined,
-                                amount: item.amount,
-                                project_id: item.project_id ?? undefined,
-                                commuting_deduction_amount: checked === true ? deductionAmount : 0,
+                            updateItem.mutate(
+                              {
+                                claimId: claim.id,
+                                itemId: item.id,
+                                input: {
+                                  category_id: item.category_id,
+                                  usage_date: item.usage_date,
+                                  description: item.description ?? undefined,
+                                  amount: item.amount,
+                                  project_id: item.project_id ?? undefined,
+                                  commuting_deduction_amount: checked === true ? deductionAmount : 0,
+                                },
                               },
-                            })
+                              { onSuccess: () => notify.success('明細を保存しました') },
+                            )
                           }
                         />
                         定期区間を含む
@@ -926,18 +940,21 @@ function SavedItemsAndSubmit({
                           aria-label={`${item.usage_date}の定期区間控除額`}
                           value={deductionAmount}
                           onChange={(e) =>
-                            updateItem.mutate({
-                              claimId: claim.id,
-                              itemId: item.id,
-                              input: {
-                                category_id: item.category_id,
-                                usage_date: item.usage_date,
-                                description: item.description ?? undefined,
-                                amount: item.amount,
-                                project_id: item.project_id ?? undefined,
-                                commuting_deduction_amount: Number(e.target.value),
+                            updateItem.mutate(
+                              {
+                                claimId: claim.id,
+                                itemId: item.id,
+                                input: {
+                                  category_id: item.category_id,
+                                  usage_date: item.usage_date,
+                                  description: item.description ?? undefined,
+                                  amount: item.amount,
+                                  project_id: item.project_id ?? undefined,
+                                  commuting_deduction_amount: Number(e.target.value),
+                                },
                               },
-                            })
+                              { onSuccess: () => notify.success('明細を保存しました') },
+                            )
                           }
                         />
                       )}
@@ -953,7 +970,10 @@ function SavedItemsAndSubmit({
                         description="削除すると元に戻せません。"
                         confirmLabel="削除する"
                         isPending={deleteItem.isPending && deleteItem.variables?.itemId === item.id}
-                        onConfirm={() => deleteItem.mutateAsync({ claimId: claim.id, itemId: item.id })}
+                        onConfirm={async () => {
+                          await deleteItem.mutateAsync({ claimId: claim.id, itemId: item.id })
+                          notify.success(`${item.category?.name ?? '経費品目'}(${item.usage_date})の明細を削除しました`)
+                        }}
                       />
                     </TableCell>
                   </TableRow>

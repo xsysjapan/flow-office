@@ -7,7 +7,12 @@ import * as requestTypesApi from '../../api/requestTypes'
 import * as usersApi from '../../api/users'
 import * as workflowRequestsApi from '../../api/workflowRequests'
 import type { RequestType, User, WorkflowRequest } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { WorkflowRequestNewPage } from './WorkflowRequestNewPage'
+
+vi.mock('../../lib/notify', () => ({
+  notify: { success: vi.fn() },
+}))
 
 const expenseType: RequestType = {
   id: 1,
@@ -126,6 +131,7 @@ describe('WorkflowRequestNewPage', () => {
       expect(workflowRequestsApi.submitWorkflowRequest).toHaveBeenCalledWith('workflow-request-42', 'approver-1'),
     )
     expect(await screen.findByText('申請詳細ページ')).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('申請を提出しました')
   })
 
   it('fills the request type, title and form fields from the URL query', async () => {

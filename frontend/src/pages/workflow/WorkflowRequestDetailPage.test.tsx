@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +8,12 @@ import * as attachmentsApi from '../../api/attachments'
 import { ApiError } from '../../api/client'
 import * as workflowRequestsApi from '../../api/workflowRequests'
 import type { Asset, Attachment, User, WorkflowRequest, WorkflowRequestHistoryEntry } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { WorkflowRequestDetailPage } from './WorkflowRequestDetailPage'
+
+vi.mock('../../lib/notify', () => ({
+  notify: { success: vi.fn() },
+}))
 
 const applicant: User = {
   id: 'applicant-1',
@@ -161,8 +166,9 @@ describe('WorkflowRequestDetailPage', () => {
     expect(screen.queryByRole('button', { name: '提出する' })).not.toBeInTheDocument()
   })
 
-  it('approves the request when the approver clicks approve', async () => {
+  it('approves the request after confirming in the dialog and shows a toast', async () => {
     currentUser = approver
+    vi.mocked(notify.success).mockClear()
     vi.spyOn(workflowRequestsApi, 'approveWorkflowRequest').mockResolvedValue({
       ...submittedRequest,
       status: 'approved',
@@ -171,9 +177,34 @@ describe('WorkflowRequestDetailPage', () => {
     renderPage(submittedRequest)
     await userEvent.click(await screen.findByRole('button', { name: '承認する' }))
 
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('この申請を承認しますか?')).toBeInTheDocument()
+    expect(
+      within(dialog).getByText('承認すると取り消せません。申請者に承認の通知が届きます。'),
+    ).toBeInTheDocument()
+    expect(workflowRequestsApi.approveWorkflowRequest).not.toHaveBeenCalled()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '承認する' }))
+
     await waitFor(() =>
       expect(workflowRequestsApi.approveWorkflowRequest).toHaveBeenCalledWith('workflow-request-1'),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('申請を承認しました'))
+  })
+
+  it('does not approve when the approval dialog is cancelled', async () => {
+    currentUser = approver
+    vi.spyOn(workflowRequestsApi, 'approveWorkflowRequest').mockResolvedValue({
+      ...submittedRequest,
+      status: 'approved',
+    })
+
+    renderPage(submittedRequest)
+    await userEvent.click(await screen.findByRole('button', { name: '承認する' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+
+    expect(workflowRequestsApi.approveWorkflowRequest).not.toHaveBeenCalled()
   })
 
   it('returns the request with a comment when the approver clicks return', async () => {
@@ -190,6 +221,7 @@ describe('WorkflowRequestDetailPage', () => {
     await waitFor(() =>
       expect(workflowRequestsApi.returnWorkflowRequest).toHaveBeenCalledWith('workflow-request-1', '不備があります'),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('申請を差し戻しました'))
   })
 
   it('disables the return button until a comment is entered', async () => {
