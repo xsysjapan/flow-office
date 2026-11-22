@@ -1,6 +1,6 @@
 # バックオフィスタスクの「担当者の割当」と「ステータス変更」を別イベントに分け、担当者を変更できるようにする
 
-ステータス: 検討中
+ステータス: レビュー中
 
 ## 変更要望(原文)
 > どういうことでしょうか？担当者の付け替えとステータスにどのような関係がありますか？単純に担当者を変更したいです。
@@ -98,15 +98,36 @@
     `assigned`→担当者=`assignedUserId`、status=`in_review`(旧Projectorの挙動の再現)。
   - 旧`assigned`1件 → 新`assigned`(`assignedUserId`・`assignedByUserId`はそのまま、`previousAssignedUserId`=直前の担当者)。
     直前のstatusが`in_review`以外なら、その直後に`status_changed`(`previousStatus`=直前のstatus、`newStatus`=`in_review`、
-    `changedByUserId`=`assignedByUserId`、`comment`=null)を1件挿入する。`created_at`は元の`assigned`と同じ。`meta_data`は元のイベントに倣う。
+    `changedByUserId`=`assignedByUserId`、`comment`=null)を1件挿入する。`created_at`は元の`assigned`と同じ。
+  - `meta_data`: 全行で`stored-event-id`を振り直した`id`に、`aggregate-root-version`を振り直した版に更新する。挿入する行は
+    `aggregate-root-uuid`=元の`assigned`と同じ集約ID、`created-at`=元の`assigned`と同じ値、それ以外のキーは元の`assigned`の`meta_data`を写す
+    (前例: `PaidLeaveStreamRekeyer.php`:116,133)。
+  - 変換できない並び(`created`より前の`assigned`など、直前のstatusが決まらないもの)は未対応として報告し、1件でもあれば何も書かずに失敗する
+    (`EventStoreRebuilder`の方針と同じ)。
   - 旧Projectorは直前が`completed`等でも`in_review`にしていたため、それも忠実に`status_changed`として再現する(最終状態を変えない)。
     試し実行では直前のstatus別の件数を出し、`completed`/`cancelled`からの変化があれば一覧で示す。
   - その他のイベントは変更しない。全体を元の発生順(元のid順、分割分は直後)に並べ、`stored_events.id`を振り直し、集約ごとに
     `aggregate_version`を1から連番にする。
   - 旧イベント列の`backoffice_tasks`のProjectionと、作り直し後をリビルドしたProjectionは完全に一致する(`assigned_user_id`・`status`・`completed_at`)。
-- 冪等性: 作り直し済み(`assigned`のpayloadに`previousAssignedUserId`キーがある)のストリームは変換しない。全件作り直し済みなら何もしない。
+- 冪等性: 判定はイベント単位。payloadに`previousAssignedUserId`キーがある`assigned`は変換済みとしてそのまま写し、キーの無い`assigned`だけ変換する。
+  直前の担当者・statusの追跡は変換済みの行も含めて行う(変換済みの`assigned`はstatusを変えず、続く`status_changed`で追跡する)。
+  変換対象が0件なら何も書かない。
+- 実行のタイミング: 新コードの配備から`--swap`・`read-models:rebuild`の確認までを1回のメンテナンス(全APIの受付停止。`docs/27-release-runbook.md`の
+  作り直しの手順と同じ)で行う。新Projectorは旧`assigned`でstatusを書かないため、作り直し前にリビルドすると状態がずれ、`--apply`後に書かれた
+  イベントは`--swap`で失われるため。
+- 事前条件(試し実行で自動確認。`EventStoreRebuildWriter::preconditionViolations`を流用・拡張): `stored_events_rebuilt`が存在しない、
+  `snapshots`が空。違反があれば`--apply`しない。
+- `stored_events.id`を参照するもの: Projection(`workflow_request_history_entries`・`expense_claim_history_entries`の`stored_event_id`、
+  `paid_leave_fiscal_year_settings.last_changed_event_id`)は作り直し後の`read-models:rebuild`で直る。リビルドで直らないもの
+  (補正ログ`stored_event_corrections.stored_event_id`、meta`history-normalization.source_event_id`)は過去の作業記録としてそのまま残し、
+  作り直し前の表(`stored_events_before_rebuild_*`)のidを指すことを手順書に記載する。
+- 他の作り直しとの関係: 休暇の作り直し(`leave:rebuild-event-store`)・有給口座の付け替え(`leave:rekey-paid-leave-streams`)と同じ`stored_events_rebuilt`を使うため、
+  同じリリースで複数行う場合は片方の`--swap`が終わってから次の`--apply`を行う(順序は休暇の作り直し→付け替え→本移行)。
+  古いバックアップから休暇の作り直しをやり直す場合は、`EventStoreRebuilder`が`backoffice_task.*`をそのまま写すため、その後に必ず本移行を
+  かける(手順書・`docs/32`に記載)。
 - 削除するもの: 旧Projectorの「statusをin_reviewにする」処理(新Projectorでは書かない)。作り直し用のコマンド・変換クラスは
-  本番実行後の別変更で削除する(他の作り直しコマンドと同様、リハーサル・本番実行に必要なため本変更では残す)。
+  本番実行後の別変更で削除する(`data-correction`の「同じ変更セットで削除」からの例外。リハーサル・本番実行に同じリリースのコードが必要で、
+  既存の休暇の作り直し・付け替えコマンドも同様に残しているため。理由は「対象外」にも記載)。
 - 未確定・要確認事項: なし(本番実行のタイミング・担当は実装後に確認する)
 
 ## 仕様確定事項(まとめ)
@@ -121,7 +142,8 @@
 - 遷移の許可判定: `ChangeBackOfficeTaskStatusHandler::assertAllowedTransition`の判定部分を、例外を投げない判定
   (`App\Domain\BackOffice\Support\BackOfficeTaskTransitionPolicy::isAllowed(BackOfficeTask $task, string $newStatus): bool`)に切り出し、
   ChangeStatus(許可されなければ従来どおり例外)とAssign(許可されなければ確認中にしない)の両方で使う。
-- `AssignBackOfficeTaskHandler`: Projectionの現在値を読み、`decide`→noopなら終了。assignなら同一トランザクション(CommandBusの既存の
+- `decide`の判定順: 1) completed/cancelled→例外(同じ担当者の指定でも422) 2) 同じ担当者→noop 3) assign。
+- `AssignBackOfficeTaskHandler`: Projectionの現在値を`with('source')`で読み(`ChangeBackOfficeTaskStatusHandler`:34と同じ)、`decide`→noopなら終了。assignなら同一トランザクション(CommandBusの既存の
   トランザクション境界に従う)で `assign(新, 操作者, 現在の担当者)` を記録し、`shouldMoveToInReview`が真なら
   `changeStatus('not_started', 'in_review', 操作者, null)`も同じ集約に記録して`persist()`。通知は論点4。
 - `docs`の表示名: バックオフィスタスクには履歴画面が無く、表示名ガード(`20261122-history-event-label-guard`)の対象外のため表示名の追加は不要。
@@ -131,8 +153,11 @@
   入力は`EventStoreRebuildWriter::readRowArrays()`の行配列、出力は作り直し後の行配列+レポート(対象件数、挿入した`status_changed`件数、
   直前status別件数、作り直し済みでスキップしたストリーム数)。論点6の変換規則を実装。
 - 運用コマンド`backoffice:rebuild-assignment-events`(`RekeyPaidLeaveStreamsCommand`を前例に): 既定は試し実行(レポート出力のみ)、
-  `--apply`(`stored_events_rebuilt`へ書く)、`--verify`(書いた表の自己整合性)、`--swap`(検査通過時のみ入れ替え。元表は
+  `--apply`(`stored_events_rebuilt`へ書く)、`--verify`、`--swap`(検査通過時のみ入れ替え。元表は
   `stored_events_before_rebuild_YYYYMMDDHHMMSS`)。
+- 専用の検証クラス`BackOfficeTaskAssignmentRebuildVerifier`(前例: `PaidLeaveStreamRekeyVerifier`): `stored_events_rebuilt`について
+  (1) `EventStoreRebuildWriter::verify`(id・版の連番)、(2) キーの無い旧形式の`assigned`が0件、(3) `backoffice_task`以外の行がidと
+  `stored-event-id`を除いて元の表と一致、(4) `EventRestorabilityChecker`が通る、を検査。`--verify`と`--swap`の前に実行する。
 - 検証手順(手順書として変更セットの実装結果に記載): 旧コードで`backoffice_tasks`の基準値(id・assigned_user_id・status・completed_at)を取得 →
   新コード配備 → 試し実行 → `--apply` → `--verify` → `--swap` → `read-models:rebuild --dry-run`で`backoffice_tasks`に差分が無いことを確認。
 
@@ -141,14 +166,17 @@
   `shouldMoveToInReview`(not_started+許可→true、not_started+不許可→false、processing→false)、`BackOfficeTaskTransitionPolicy`。
 - 単体: `BackOfficeTaskAssignmentSplitter`(created→assigned:status_changed挿入・previous=null / in_review中の再割当:status_changed無し・
   previous=前担当者 / processing中の割当:processing→in_reviewのstatus_changed挿入(旧挙動の再現)/ completed後の割当 / 他のイベントは不変 /
-  id・版の振り直し / 作り直し済みはスキップ・冪等)。
+  id・版・`meta_data`(`stored-event-id`・`aggregate-root-version`・挿入行の`aggregate-root-uuid`・`created-at`)の振り直し /
+  変換済みと旧形式が同じストリームに混在するケース(旧形式だけ変換) / 2回目の実行で対象0件 / `created`より前の`assigned`は失敗)。
+- 単体: `decide`で完了済み+同じ担当者→例外。Verifier(旧形式の残存・対象外の行の改変を検出)。
 - Feature: API`POST /assign` — 未割当+not_startedを割当→assigned(previous=null)とstatus_changed(not_started→in_review)の2イベント・status=in_review /
   processingのタスクを別担当者へ→assignedのみ・statusはprocessingのまま・previous=前担当者 / 未割当+processingに割当→statusは変わらない /
   遷移マスタで`not_started`→`in_review`が不許可の申請種別→担当者だけ設定されstatusはnot_started / 同一担当者→イベントが増えない /
   完了済み→422 / 通知(新担当者・前担当者。前担当者=操作者なら前担当者へは送らない)。状態はCommand経由で作る。
 - シナリオ(replayまで): 旧形式の`assigned`(payloadに`previousAssignedUserId`無し)を含む生の`stored_events`行を入力に、試し実行→`--apply`→
   `--verify`→`--swap`→ReadModelを空にして全Projectorをreplay→`backoffice_tasks`が移行前(旧Projectorの結果を期待値として固定)と一致、
-  かつ`status_changed`が挿入され`aggregate_version`が連番であること(前例: `PaidLeaveStreamRekeyScenarioTest.php`)。
+  かつ`status_changed`が挿入され`aggregate_version`が連番であること。他の文脈のイベント(例: 申請の履歴を持つ`workflow_request.*`)も含め、
+  replay後の`*_history_entries.stored_event_id`が衝突しないこと(前例: `PaidLeaveStreamRekeyScenarioTest.php`)。
 - 既存の`BackOfficeTaskTest`・`BackOfficeTaskStatusTransitionTest`はそのまま通ること(割当後statusがin_reviewになる期待は維持される)。
 
 ### frontend
@@ -170,13 +198,15 @@
 - 一括の担当者設定を1トランザクションで行う一括API(途中失敗で一部だけ変わる点は現状どおり)
 - 未割当のタスクのステータス変更を禁止すること
 - 本番環境での移行の実行(実装後、試し実行の結果を示してユーザーの許可を得てから行う)
-- 移行コマンド・変換クラスの削除(本番実行後の別変更)
+- 移行コマンド・変換クラスの削除(本番実行後の別変更。`data-correction`の規定からの例外で、リハーサル・本番実行に同じリリースのコードが必要なため)
 
 ## ドキュメントへの影響
 - `docs/17-events.md`: `backoffice_task.assigned`の意味(担当者の設定のみ。`previousAssignedUserId`)を明記。
 - `docs/11-usecases-backoffice.md`: UC-B002手順3・5(未着手なら確認中へ。`status_changed`として記録、遷移マスタに従う)、担当者の変更
   (完了/取消以外、ステータスは変えない、新旧担当者へ通知)を追記し、「担当者の付け替えは提供しない」を削除、一括操作の条件を更新。
 - `docs/13-usecases-notification.md`:21付近: 「タスク担当変更(前担当者へ)」を追記。
+- `docs/27-release-runbook.md`: 本移行の手順(メンテナンス中に配備→試し実行→apply→verify→swap→read-models:rebuild、他の作り直しとの順序)を追記。
+- `docs/32-stored-event-history-normalization.md`: 古いバックアップから休暇の作り直しをやり直す場合は、その後に本移行をかける旨を追記。
 - `docs/16-database-schema.md`: 変更なし。
 
 ## モック・アセット
@@ -201,6 +231,9 @@
 - 2026-11-22 ユーザーレビュー「既存の割り当てイベントの意味を変更し、ステータスと割り当ては別個のイベントに。既存イベントのマイグレーションも検討」
   を受け、前提(既存の`assigned`の意味は正しい)が覆ったため「設計前提の検証」から作り直した。`reassigned`イベント案は破棄し、`assigned`を
   担当者の設定のみに改め、確認中への変化は`status_changed`で記録、過去のイベントは`stored_events`の作り直しで移行する。
+- 2026-11-22 作り直し版の独立設計レビュー(general-purpose)の指摘を反映: 配備〜swapを1回のメンテナンスで行う/冪等判定をイベント単位に/
+  meta_data(stored-event-id・版・挿入行)の決め方/事前条件とstored_event id参照列の扱い/専用Verifier/他の作り直しとの順序・docs/27・32への追記/
+  移行コマンドを残す理由(規定からの例外)/変換できない並びは失敗/判定順(完了・取消を先に)と`with('source')`。
 
 ## 実装結果
 未着手
