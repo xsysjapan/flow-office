@@ -255,6 +255,27 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 4. 提出・承認・締め済みの月の汎用CSV/TSV・Excelに新しい値(勤務予定ベースの所定労働時間・所定労働日数)を出す場合のみ、
    「月次勤怠スナップショット再計算」(`attendance:recalculate-month-snapshots`)を実行する(freee連携は実行しなくても新しい値になる)。
 
+### 3.6 バックオフィスタスクの割当イベントの分離(変更セット `20261122-backoffice-task-reassign`)のリリース手順
+
+`backoffice_task.assigned`を「担当者の設定のみ」に改め、割当と同時の確認中への変化を`backoffice_task.status_changed`として分けて
+記録し直す(`stored_events`の作り直し。移行イベントは作らない)。新しいProjectorは旧形式の`assigned`でステータスを変えないため、
+**新しいコードの配備から入れ替え・確認までを1回のメンテナンス(全APIの受付停止)で行う**。途中で`read-models:rebuild`をしない。
+
+1. 旧コードのまま、`backoffice_tasks`の基準値(`id`・`assigned_user_id`・`status`・`completed_at`)をCSV等で控え、DB全体のバックアップを取る。
+2. メンテナンスに入る(書き込みを止める)。新しいコードを配備する(`php artisan migrate --force`。この変更でmigrationは増えない)。
+3. `php artisan backoffice:rebuild-assignment-events`(試し実行)で、対象の`assigned`件数・挿入する`status_changed`件数・直前ステータス別の
+   件数・未対応の並び(violations)を確かめる。violationsがあれば中止する。完了・取消からの変化があれば集約IDを控え、ユーザーに確認する。
+4. `--apply`(`stored_events_rebuilt`へ書く)→`--verify`→`--swap`(元の表は`stored_events_before_rebuild_YYYYMMDDHHMMSS`として残る。表名を記録)。
+5. `php artisan read-models:rebuild --dry-run`で、`backoffice_tasks`の内容が1の基準値と一致し、他のテーブルに意図しない差分が無いことを確かめてから
+   `read-models:rebuild`を実行する(`stored_events.id`を参照する`*_history_entries.stored_event_id`等はここで新しいidに揃う)。
+6. メンテナンスを解除する。
+
+- 同じリリースで休暇の作り直し(3.1)・有給口座の付け替え(3.2)も行う場合は、同じ`stored_events_rebuilt`を使うため、
+  休暇の作り直し→付け替え→本移行の順に、前の`--swap`が終わってから次の`--apply`を行う。
+- 補正ログ`stored_event_corrections.stored_event_id`と、metaの`history-normalization.source_event_id`は作り直し前の表のidを指したまま残る
+  (過去の作業記録。参照するときは手順4のバックアップ表を見る)。
+- 戻す場合はメンテナンス中に`stored_events`を手順4のバックアップ表から戻し、旧コードを配備して`read-models:rebuild`する。
+
 ## 4. frontend/ のデプロイ手順
 
 ```
