@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261122-list-search-form-standard](./20261122-list-search-form-standard/spec.md) | 一覧の検索フォームの標準化(構成・主軸タブ・反映方式・クリア文言)と全一覧への適用 | 実装中 |
+| [20261122-list-search-form-standard](./20261122-list-search-form-standard/spec.md) | 一覧の検索フォームの標準化(構成・主軸タブ・反映方式・クリア文言)と全一覧への適用 | 完了 |
 | [20261122-list-action-feedback-standard](./20261122-list-action-feedback-standard/spec.md) | 一覧からの操作と変更操作のフィードバックの標準化 | 完了 |
 | [20261122-backoffice-assignment-migration-admin](./20261122-backoffice-assignment-migration-admin/spec.md) | バックオフィス割当イベントの移行を管理画面の運用コマンドから実行できるようにする | 完了 |
 | [20261122-backoffice-task-reassign](./20261122-backoffice-task-reassign/spec.md) | バックオフィスタスクの担当者割当とステータス変更を別イベントに分け、担当者を変更できるようにする | 完了 |

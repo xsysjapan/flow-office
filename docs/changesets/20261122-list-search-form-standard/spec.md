@@ -1,6 +1,6 @@
 # list-search-form-standard
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 承認とタスク一覧の検索フォームの作りが統一されていません。UXを統一したいのでルール化してもらえますか？
@@ -346,4 +346,17 @@
   - 低: ワイヤーフレームの不整合、#11の線引き、#8の分類理由、stories・e2eの書き漏れ、ベルへの影響 → 修正・明記
 
 ## 実装結果
-未着手
+- コミット(ブランチ `claude/great-turing-6ul4k2`): 52ac364(スキル§2.20等)、45f76e4(共通部品)、d6f17a9(backend 件数メタ・draft除外)、1cae336(タスク一覧)、
+  d628359(承認一覧・通知一覧・名称変更)、d7f89ac(プリセット・付与予定)、029c525(申請一覧・グループ・月次勤怠・端末)、9edb716(社員・備品・監査ログ)、
+  069d1d6・d0b09c4(e2e追随・docs/10・docs/13)
+- 変更ファイル(主なもの): `.claude/skills/ui-interaction-patterns/SKILL.md`、`docs/18-ui-guidelines.md`・`docs/10-usecases-workflow.md`・`docs/13-usecases-notification.md`、
+  `backend/app/Http/Controllers/Api/{WorkflowRequestController,NotificationController}.php` と Feature テスト、
+  `frontend/src/components/{ListFilterBar,TextFilterInput,ListQueueTabs,FormField}/`、#1〜#12 の各ページ・テスト・stories、`api/{workflowRequests,notifications,types}.ts`、
+  `hooks/{useNotifications,useAuditLog}.ts`、`routes/{pageHierarchy,routeManifest}.ts`、`e2e/scenario-{04,09,10,14,15,99}`
+- 検証結果:
+  - backend: `phpunit --filter 'WorkflowRequest|Notification'` 79件pass、CI相当の全件 `php artisan test` 2359件pass
+  - frontend: `vitest --project unit` 全件 1504件pass(2 skip。CalendarBulkOperationsPage の1件が並列実行時に5秒タイムアウトしたが単独再実行でpass、本変更と無関係)、`tsc -p tsconfig.app.json` エラーなし、変更ファイルの oxlint 指摘なし
+  - e2e: 全69件(scenario-13含む)のうち初回67件pass、2件(scenario-15のクリアボタン重複、scenario-99の詳細条件)はspecの追随漏れ → 修正後に両ファイル再実行で 9/9・10/10 pass
+  - 実画面確認(幅1280/390): 段階A・B の全項目合格(件数付きタブ、可視ラベル、検索ボタンなし、300ms自動反映とフォーカス保持、詳細条件(n)と初期展開、`?to=`のみの除去、戻るで条件復元、幅390で横スクロールなし)
+- 受け入れ条件: すべて満たした(上記)。
+- 対象外で見つかった既存不具合: `/admin/users` の「Microsoft未連携」「外部HR管理」チェックで `external_unlinked=true` が backend の boolean 検証に弾かれ422になる(本変更前から同じ。別途対応をユーザーに確認)。
