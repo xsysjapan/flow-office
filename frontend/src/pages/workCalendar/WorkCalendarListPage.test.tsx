@@ -7,6 +7,9 @@ import * as workCalendarsApi from '../../api/workCalendars'
 import { ApiError } from '../../api/client'
 import type { Paginated, WorkCalendar } from '../../api/types'
 import { WorkCalendarListPage } from './WorkCalendarListPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const calendar: WorkCalendar = {
   id: 'calendar-1',
@@ -51,6 +54,10 @@ function renderPage(entry = '/admin/work-calendars') {
 }
 
 describe('WorkCalendarListPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -148,6 +155,7 @@ describe('WorkCalendarListPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
     await waitFor(() => expect(workCalendarsApi.deleteWorkCalendar).toHaveBeenCalledWith('calendar-1'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('「2026年度カレンダー」を削除しました'))
   })
 
   it('does not delete when the confirmation is cancelled', async () => {

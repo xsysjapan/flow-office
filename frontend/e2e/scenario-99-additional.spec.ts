@@ -77,6 +77,10 @@ test("§5-1: 承認差し戻し→再申請", async ({ browser }) => {
       .getByRole("button", { name: title })
       .click({ timeout: 30000 });
     await approverPage.getByRole("button", { name: "承認する" }).click();
+    await approverPage
+      .getByRole("dialog", { name: "この申請を承認しますか?" })
+      .getByRole("button", { name: "承認する" })
+      .click();
     await expect(
       approverPage.getByRole("status", { name: "承認済み" }),
     ).toBeVisible();

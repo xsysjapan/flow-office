@@ -18,6 +18,7 @@ import {
   useUpdateDeviceSettings,
 } from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceScopeType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
+import { notify } from '../../lib/notify'
 import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
 
 const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
@@ -156,7 +157,12 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
     if (!scopeToGrant) return
     grantScope.mutate(
       { deviceId: device.id, scope: scopeToGrant },
-      { onSuccess: () => setScopeToGrant('') },
+      {
+        onSuccess: () => {
+          notify.success(`スコープ「${DEVICE_SCOPE_LABELS[scopeToGrant]}」を付与しました`)
+          setScopeToGrant('')
+        },
+      },
     )
   }
 
@@ -168,7 +174,10 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
     // 一覧の登録フォームでは選べない役割(admin_operation等)がもし付与済みでも、
     // このチェックボックスの対象外として維持する(意図せず剥奪しない)。
     const preservedRoles = (device.roles ?? []).filter((role) => !EDITABLE_ROLE_TYPES.includes(role))
-    updateRoles.mutate({ deviceId: device.id, roleTypes: [...roleTypes, ...preservedRoles] })
+    updateRoles.mutate(
+      { deviceId: device.id, roleTypes: [...roleTypes, ...preservedRoles] },
+      { onSuccess: () => notify.success(`${device.name}の役割を保存しました`) },
+    )
   }
 
   // device propが差し替わる(親のクエリが最新化する)たびにフォームへ反映する。
@@ -186,18 +195,21 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
   }, [device.id])
 
   const handleSave = () => {
-    updateSettings.mutate({
-      deviceId: device.id,
-      input: {
-        name,
-        location_name: locationName || undefined,
-        default_work_location_type: defaultWorkLocationType || undefined,
-        timezone: timezone || undefined,
-        allow_offline: allowOffline,
-        require_location: requireLocation,
-        auto_detect_punch_type: autoDetectPunchType,
+    updateSettings.mutate(
+      {
+        deviceId: device.id,
+        input: {
+          name,
+          location_name: locationName || undefined,
+          default_work_location_type: defaultWorkLocationType || undefined,
+          timezone: timezone || undefined,
+          allow_offline: allowOffline,
+          require_location: requireLocation,
+          auto_detect_punch_type: autoDetectPunchType,
+        },
       },
-    })
+      { onSuccess: () => notify.success(`${name}の設定を保存しました`) },
+    )
   }
 
   return (
@@ -233,7 +245,6 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
         <div className="rounded-md border border-border p-3">
           <p className="mb-3 text-sm font-medium text-foreground">役割</p>
           {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
-          {updateRoles.isSuccess && <p className="mb-2 text-sm text-success">役割を保存しました。</p>}
 
           <fieldset className="mb-3">
             <div className="flex flex-wrap gap-4">
@@ -308,7 +319,9 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
               size="sm"
               variant="secondary"
               isLoading={disableDevice.isPending}
-              onClick={() => disableDevice.mutate(device.id)}
+              onClick={() =>
+                disableDevice.mutate(device.id, { onSuccess: () => notify.success(`${device.name}を停止しました`) })
+              }
             >
               停止する
             </Button>
@@ -326,7 +339,9 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
               size="sm"
               variant="secondary"
               isLoading={enableDevice.isPending}
-              onClick={() => enableDevice.mutate(device.id)}
+              onClick={() =>
+                enableDevice.mutate(device.id, { onSuccess: () => notify.success(`${device.name}を有効化しました`) })
+              }
             >
               有効化する
             </Button>
@@ -336,7 +351,6 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
         <div className="rounded-md border border-border p-3">
           <p className="mb-3 text-sm font-medium text-foreground">設定変更</p>
           {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
-          {updateSettings.isSuccess && <p className="mb-2 text-sm text-success">設定を保存しました。</p>}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField label="名称" htmlFor="device-detail-name" required>

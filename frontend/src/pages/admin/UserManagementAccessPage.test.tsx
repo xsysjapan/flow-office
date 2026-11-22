@@ -2,10 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as usersApi from '../../api/users'
 import * as userManagementApi from '../../api/userManagement'
 import { UserManagementAccessPage } from './UserManagementAccessPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 function LocationProbe() {
   const location = useLocation()
@@ -36,6 +39,10 @@ function renderPage(initialEntry = '/admin/groups') {
 }
 
 describe('UserManagementAccessPage group type filter', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('restores the filter from ?group_type_id', async () => {
     renderPage('/admin/groups?group_type_id=2')
 
@@ -64,5 +71,35 @@ describe('UserManagementAccessPage group type filter', () => {
     expect(await screen.findByText('総務部')).toBeInTheDocument()
     expect(screen.getByText('安全衛生委員会')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('location-search')).toBeEmptyDOMElement())
+  })
+})
+
+describe('UserManagementAccessPage identities section', () => {
+  it('links an external identity and notifies', async () => {
+    vi.spyOn(userManagementApi, 'fetchExternalIdentities').mockResolvedValue([])
+    vi.spyOn(userManagementApi, 'fetchFieldAuthorities').mockResolvedValue([])
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({
+      data: [{ id: 'user-1', name: '対象社員', email: 'taisho@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null }],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    })
+    const link = vi.spyOn(userManagementApi, 'linkExternalIdentity').mockResolvedValue(undefined as never)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <UserManagementAccessPage section="identities" />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await screen.findByRole('option', { name: '対象社員' })
+    await userEvent.selectOptions(screen.getByLabelText('ユーザー'), 'user-1')
+    await userEvent.type(screen.getByPlaceholderText('Provider'), 'microsoft')
+    await userEvent.type(screen.getByPlaceholderText('Subject ID'), 'subject-1')
+    await userEvent.click(screen.getByRole('button', { name: 'リンク' }))
+
+    await waitFor(() => expect(link).toHaveBeenCalled())
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('外部IDを連携しました'))
   })
 })

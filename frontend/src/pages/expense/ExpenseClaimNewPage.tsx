@@ -802,6 +802,44 @@ function ExpenseClaimNewContent() {
   )
 }
 
+/**
+ * 定期区間控除額の入力。入力中は保存せず、フォーカスが外れたとき(Enterでも外す)に、
+ * 値が変わっていれば1回だけ保存する(1文字ごとの保存とトーストを避ける)。
+ * 保存後に値が更新されたら、呼び出し側が`key`で作り直して入力値を同期する。
+ */
+function CommutingDeductionInput({
+  value,
+  ariaLabel,
+  onCommit,
+}: {
+  value: number
+  ariaLabel: string
+  onCommit: (amount: number) => void
+}) {
+  const [draft, setDraft] = useState(String(value))
+
+  return (
+    <Input
+      className="mt-1 w-24"
+      type="number"
+      aria-label={ariaLabel}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const amount = Number(draft)
+        if (draft.trim() === '' || Number.isNaN(amount)) {
+          setDraft(String(value))
+          return
+        }
+        if (amount !== value) onCommit(amount)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
+    />
+  )
+}
+
 /** UC-X010: 保存済み明細一覧と申請セクション。対象期間は明細のusage_dateから自動算出された
  *  claim.period_from/period_toをそのまま表示するだけで、編集項目としては持たない。
  *  下書き(draft)のみ「この下書きを削除する」で不要な経費精算そのものを削除できる。 */
@@ -934,12 +972,11 @@ function SavedItemsAndSubmit({
                         定期区間を含む
                       </label>
                       {deductionAmount > 0 && (
-                        <Input
-                          className="mt-1 w-24"
-                          type="number"
-                          aria-label={`${item.usage_date}の定期区間控除額`}
+                        <CommutingDeductionInput
+                          key={`${item.id}-${deductionAmount}`}
+                          ariaLabel={`${item.usage_date}の定期区間控除額`}
                           value={deductionAmount}
-                          onChange={(e) =>
+                          onCommit={(amount) =>
                             updateItem.mutate(
                               {
                                 claimId: claim.id,
@@ -950,7 +987,7 @@ function SavedItemsAndSubmit({
                                   description: item.description ?? undefined,
                                   amount: item.amount,
                                   project_id: item.project_id ?? undefined,
-                                  commuting_deduction_amount: Number(e.target.value),
+                                  commuting_deduction_amount: amount,
                                 },
                               },
                               { onSuccess: () => notify.success('明細を保存しました') },

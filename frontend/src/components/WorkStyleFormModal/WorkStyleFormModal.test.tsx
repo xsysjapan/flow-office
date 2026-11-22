@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as workCalendarsApi from '../../api/workCalendars'
 import * as workStylesApi from '../../api/workStyles'
 import type { WorkCalendar, WorkStyle } from '../../api/types'
 import { WorkStyleFormModal } from './WorkStyleFormModal'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const calendar: WorkCalendar = {
   id: 'calendar-1',
@@ -70,6 +73,10 @@ function renderModal(props: Partial<React.ComponentProps<typeof WorkStyleFormMod
 }
 
 describe('WorkStyleFormModal', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('creates a new work style with the entered values', async () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-2', code: 'discretionary' })
     renderModal()
@@ -95,6 +102,7 @@ describe('WorkStyleFormModal', () => {
         }),
       ),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('働き方「裁量労働制勤務」を作成しました'))
   }, 15000)
 
   it('shows the deemed-minutes field only for discretionary work styles', async () => {
@@ -127,6 +135,7 @@ describe('WorkStyleFormModal', () => {
         expect.objectContaining({ code: 'standard', name: '標準勤務(改)' }),
       ),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('働き方「標準勤務(改)」を保存しました'))
   }, 15000)
 
   it('calls onOpenChange(false) when cancel is clicked', async () => {

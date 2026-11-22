@@ -448,9 +448,9 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await expenseTaskRow.getByRole('link').click()
     // 担当者の割り当てはダイアログ(ボタン→ダイアログ内のUserPicker→「割り当てる」)で行う
     await accountingPage.getByRole('button', { name: '担当者を割り当てる' }).click()
-    const assignDialog = accountingPage.getByRole('dialog')
-    await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com', { root: assignDialog, exact: true })
-    await assignDialog.getByRole('button', { name: '割り当てる' }).click()
+    const expenseAssignDialog = accountingPage.getByRole('dialog')
+    await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com', { root: expenseAssignDialog, exact: true })
+    await expenseAssignDialog.getByRole('button', { name: '割り当てる' }).click()
     await expect(accountingPage.getByText('未割り当て')).toHaveCount(0)
 
     // task_type='expense_reimbursement'固定の許可遷移(未着手→確認中→支払予定→完了)により、
@@ -492,9 +492,9 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await cardTaskRow.getByRole('link', { name: cardTitle }).click()
     // 担当者の割り当てはダイアログ(ボタン→ダイアログ内のUserPicker→「割り当てる」)で行う
     await generalAffairsPage.getByRole('button', { name: '担当者を割り当てる' }).click()
-    const assignDialog = generalAffairsPage.getByRole('dialog')
-    await pickUser(generalAffairsPage, '担当者', SCENARIO_USERS.generalAffairsStaff, 'megumi.nakamura@example.com', { root: assignDialog, exact: true })
-    await assignDialog.getByRole('button', { name: '割り当てる' }).click()
+    const cardAssignDialog = generalAffairsPage.getByRole('dialog')
+    await pickUser(generalAffairsPage, '担当者', SCENARIO_USERS.generalAffairsStaff, 'megumi.nakamura@example.com', { root: cardAssignDialog, exact: true })
+    await cardAssignDialog.getByRole('button', { name: '割り当てる' }).click()
     await expect(generalAffairsPage.getByText('未割り当て')).toHaveCount(0)
 
     // request_types.allowed_status_transitions(名刺申請)により、割り当て時点で自動的に

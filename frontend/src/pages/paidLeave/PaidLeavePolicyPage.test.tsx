@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
@@ -20,6 +20,9 @@ import type {
 } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { PaidLeavePolicyPage } from './PaidLeavePolicyPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const rule: PaidLeaveGrantRule = {
   id: 1,
@@ -110,6 +113,10 @@ function renderPage(
 }
 
 describe('PaidLeavePolicyPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('links to the schedule page from the grant rules card', async () => {
     renderPage()
     expect(await screen.findByRole('link', { name: '付与予定を確認' })).toHaveAttribute('href', '/admin/paid-leave/schedule')
@@ -276,6 +283,7 @@ describe('PaidLeavePolicyPage', () => {
       }),
     )
     expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('1名に有給を付与しました')
   })
 
   describe('revoke button of the target user grants', () => {

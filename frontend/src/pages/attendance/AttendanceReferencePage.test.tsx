@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
@@ -16,6 +16,9 @@ import type {
 } from '../../api/types'
 import { datesInMonth, formatDate, mondayOf } from '../../utils/weekDates'
 import { AttendanceReferencePage } from './AttendanceReferencePage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const targetUser: User = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -95,6 +98,10 @@ async function selectTargetUser() {
 }
 
 describe('AttendanceReferencePage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('does not fetch attendance data until an employee is selected', () => {
     const fetchMonth = vi.spyOn(attendanceApi, 'fetchMonth')
 
@@ -237,6 +244,7 @@ describe('AttendanceReferencePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '締めを取り消す' }))
 
     await waitFor(() => expect(reopenMonth).toHaveBeenCalledWith('month-1', '対象社員の取り違え'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(`${new Date().getMonth() + 1}月の勤怠の締めを取り消しました`))
   })
 
   it('lets an admin with backoffice_task.execute close a not-yet-closed month', async () => {
@@ -270,6 +278,7 @@ describe('AttendanceReferencePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '締めを確定する' }))
 
     await waitFor(() => expect(closeMonth).toHaveBeenCalledWith('month-2'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(`${new Date().getMonth() + 1}月の勤怠を締めました`))
   })
 
   it('lets an admin with attendance.export download CSV/Excel for the selected employee', async () => {

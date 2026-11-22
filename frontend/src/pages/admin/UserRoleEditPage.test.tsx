@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as userWorkStyleMonthlyAssignmentsApi from "../../api/userWorkStyleMonthlyAssignments";
 import * as usersApi from "../../api/users";
 import * as userManagementApi from "../../api/userManagement";
@@ -16,6 +16,9 @@ import type {
 import { pickDate, pickDateTime } from "../../test-support/pickerInteractions";
 import { formatDate } from "../../utils/weekDates";
 import { UserRoleEditPage } from "./UserRoleEditPage";
+import { notify } from "../../lib/notify";
+
+vi.mock("../../lib/notify", () => ({ notify: { success: vi.fn() } }));
 
 const targetUser: User = {
   id: "user-1",
@@ -130,6 +133,10 @@ function renderPage(
 }
 
 describe("UserRoleEditPage", () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear();
+  });
+
   it("does not expose system access management controls", async () => {
     renderPage(targetUser);
 
@@ -409,6 +416,9 @@ describe("UserRoleEditPage", () => {
         "user-1",
         "2024-04-01",
       ),
+    );
+    await waitFor(() =>
+      expect(notify.success).toHaveBeenCalledWith("入社日を保存しました"),
     );
   });
 

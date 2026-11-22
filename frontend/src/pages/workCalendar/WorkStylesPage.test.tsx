@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { pickYearMonth } from '../../test-support/pickerInteractions'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import * as userWorkStyleMonthlyAssignmentsApi from '../../api/userWorkStyleMonthlyAssignments'
 import * as usersApi from '../../api/users'
@@ -12,6 +12,9 @@ import * as workStylesApi from '../../api/workStyles'
 import type { Paginated, User, WorkCalendar, WorkStyle } from '../../api/types'
 import { pickDate, pickTime } from '../../test-support/pickerInteractions'
 import { WorkStylesPage } from './WorkStylesPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const calendar: WorkCalendar = {
   id: 'calendar-1',
@@ -93,6 +96,10 @@ function renderPage({ workStyles = [workStyle], entry = '/admin/work-styles' }: 
 }
 
 describe('WorkStylesPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('lists existing work styles', async () => {
     renderPage()
 
@@ -142,6 +149,7 @@ describe('WorkStylesPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'この設定で始める' }))
 
     await waitFor(() => expect(workStylesApi.createDefaultWorkStyle).toHaveBeenCalledWith({}))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('一般的な勤務設定を作成しました'))
   })
 
   it('creates the default work style with edited values from the onboarding card', async () => {
@@ -185,6 +193,7 @@ describe('WorkStylesPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'デフォルトに設定' }))
 
     await waitFor(() => expect(workStylesApi.setDefaultWorkStyle).toHaveBeenCalledWith('work-style-2'))
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('「フレックス標準」をデフォルトに設定しました'))
   })
 
   it('edits an existing (including system-generated default) work style from a modal', async () => {

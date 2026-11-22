@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
 import { useGenerateAttendancePattern } from '../../hooks/useAttendance'
+import { notify } from '../../lib/notify'
 import { attendancePatternResultMessage } from '../../utils/attendancePatternResultMessage'
 import { browserOffsetString } from '../../utils/offsetDateTime'
 import type { StatusMeta } from '../../utils/statusLabels'
@@ -66,8 +67,6 @@ export interface MonthlyAttendanceBulkEntryModalProps {
   onOpenChange?: (open: boolean) => void
   /** 対象月が提出済み以降でロック中の場合など、トリガーボタンを非活性にしたい場合。 */
   disabled?: boolean
-  /** 確定完了時に呼び出し元画面へ完了メッセージを渡す(モーダル自身は結果を表示せず閉じる)。 */
-  onCompleted?: (message: string) => void
   /** 日付(YYYY-MM-DD)ごとの休みバッジ(休日・祝日名・休暇)。「日にちごとに設定」タブの該当日の行に表示する(表示のみ)。 */
   dayOffBadgesByDate?: Record<string, StatusMeta[]>
 }
@@ -84,7 +83,6 @@ export function MonthlyAttendanceBulkEntryModal({
   open: controlledOpen,
   onOpenChange,
   disabled = false,
-  onCompleted,
   dayOffBadgesByDate,
 }: MonthlyAttendanceBulkEntryModalProps) {
   const { user } = useAuth()
@@ -162,7 +160,7 @@ export function MonthlyAttendanceBulkEntryModal({
       },
       {
         onSuccess: (data) => {
-          onCompleted?.(attendancePatternResultMessage(data))
+          notify.success(attendancePatternResultMessage(data))
           handleOpenChange(false)
         },
       },

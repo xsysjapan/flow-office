@@ -1,12 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as accessControlApi from "../../api/accessControl";
 import type { AccessRole, RoleAssignment } from "../../api/accessControl";
 import type { ManagedGroup } from "../../api/userManagement";
 import * as access from "../../hooks/useAccessControl";
 import { RoleAssignmentSection } from "./RoleAssignmentSection";
+import { notify } from "../../lib/notify";
+
+vi.mock("../../lib/notify", () => ({ notify: { success: vi.fn() } }));
 
 const role: AccessRole = {
   id: 2,
@@ -89,6 +92,10 @@ function Harness({
 }
 
 describe("RoleAssignmentSection", () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear();
+  });
+
   it("shows an empty state when there are no assignments", () => {
     Harness();
     expect(
@@ -124,6 +131,9 @@ describe("RoleAssignmentSection", () => {
         }),
         expect.anything(),
       ),
+    );
+    await waitFor(() =>
+      expect(notify.success).toHaveBeenCalledWith("Roleを割り当てました"),
     );
   });
 
@@ -187,6 +197,9 @@ describe("RoleAssignmentSection", () => {
         "assignment-1",
         expect.anything(),
       ),
+    );
+    await waitFor(() =>
+      expect(notify.success).toHaveBeenCalledWith("Role割当を解除しました"),
     );
   });
 });

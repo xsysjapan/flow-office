@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { AttendanceDay, AttendanceMonthlyCalculationTotals } from '../../api/types'
 import { TodayAttendancePanel } from './TodayAttendancePanel'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
   work_minutes: 0,
@@ -52,6 +55,10 @@ function renderPanel() {
 }
 
 describe('TodayAttendancePanel', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   beforeEach(() => {
     vi.restoreAllMocks()
   })
@@ -176,6 +183,7 @@ describe('TodayAttendancePanel', () => {
     await userEvent.click(await screen.findByRole('button', { name: '出勤' }))
 
     await waitFor(() => expect(attendanceApi.clockIn).toHaveBeenCalledOnce())
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('出勤を記録しました'))
   })
 
   it('shows break and clock-out actions while working', async () => {

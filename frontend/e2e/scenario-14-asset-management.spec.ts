@@ -207,6 +207,7 @@ test.describe('備品管理', () => {
       await adminPage.goto(`/requests/${myRequest!.id}`)
       await expect(adminPage.getByRole('heading', { name: requestTitle })).toBeVisible()
       await adminPage.getByRole('button', { name: '承認する' }).click()
+      await adminPage.getByRole('dialog', { name: 'この申請を承認しますか?' }).getByRole('button', { name: '承認する' }).click()
       await expect(adminPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
       // 3. 貸与操作: 承認済み申請が1件のみなので自動選択されること。

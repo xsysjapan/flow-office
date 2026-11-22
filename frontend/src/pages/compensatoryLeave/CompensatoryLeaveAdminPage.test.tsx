@@ -2,12 +2,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as compensatoryLeaveApi from '../../api/compensatoryLeave'
 import * as usersApi from '../../api/users'
 import type { CompensatoryLeaveGrant, CompensatoryLeaveUsage, Paginated, User } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { CompensatoryLeaveAdminPage } from './CompensatoryLeaveAdminPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const targetUser: User = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -32,6 +35,10 @@ function renderPage(initialPath = '/admin/compensatory-leave') {
 }
 
 describe('CompensatoryLeaveAdminPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('grants compensatory leave for the specified work date', async () => {
     const paginatedUsers: Paginated<User> = {
       data: [targetUser],
@@ -75,6 +82,7 @@ describe('CompensatoryLeaveAdminPage', () => {
       }),
     )
     expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('1名に代休を付与しました')
   })
 
   it('shows the selected users usage records from the ?userId= URL query param', async () => {

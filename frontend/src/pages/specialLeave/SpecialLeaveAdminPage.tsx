@@ -14,6 +14,7 @@ import { ChangeGrantDaysButton } from '../../components/ChangeGrantDaysButton/Ch
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { useQueryClient } from '@tanstack/react-query'
@@ -39,6 +40,46 @@ import { isValidUuidParam } from '../../utils/searchParamValidators'
 interface StepInput {
   continuous_service_months: number
   grant_days: number
+}
+
+/** 種別の行末「⋯」メニュー。付与要否・有効/無効の切替を即実行する(確認なし。成功はトースト)。 */
+function SpecialLeaveTypeRowMenu({
+  typeName,
+  isPending,
+  requiresGrant,
+  isActive,
+  onToggleRequiresGrant,
+  onToggleActive,
+}: {
+  typeName: string
+  isPending: boolean
+  requiresGrant: boolean
+  isActive: boolean
+  onToggleRequiresGrant: () => void
+  onToggleActive: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const runAfterClose = (action: () => void) => (event: Event) => {
+    event.preventDefault()
+    setOpen(false)
+    action()
+  }
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="secondary" isLoading={isPending} aria-label={`${typeName}の操作`}>
+          ⋯
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={runAfterClose(onToggleRequiresGrant)}>
+          {requiresGrant ? '付与不要にする' : '要付与に戻す'}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={runAfterClose(onToggleActive)}>{isActive ? '無効にする' : '有効にする'}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 function SpecialLeaveTypesCard() {
@@ -87,10 +128,12 @@ function SpecialLeaveTypesCard() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  isLoading={updateType.isPending}
-                  onClick={() =>
+                <SpecialLeaveTypeRowMenu
+                  typeName={type.name}
+                  isPending={updateType.isPending && updateType.variables?.id === type.id}
+                  requiresGrant={type.requires_grant}
+                  isActive={type.is_active}
+                  onToggleRequiresGrant={() =>
                     updateType.mutate(
                       {
                         id: type.id,
@@ -102,13 +145,7 @@ function SpecialLeaveTypesCard() {
                       },
                     )
                   }
-                >
-                  {type.requires_grant ? '付与不要にする' : '要付与に戻す'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  isLoading={updateType.isPending}
-                  onClick={() =>
+                  onToggleActive={() =>
                     updateType.mutate(
                       {
                         id: type.id,
@@ -119,9 +156,7 @@ function SpecialLeaveTypesCard() {
                       },
                     )
                   }
-                >
-                  {type.is_active ? '無効にする' : '有効にする'}
-                </Button>
+                />
                 {updateType.error && updateType.variables?.id === type.id && (
                   <ErrorMessage error={updateType.error} />
                 )}

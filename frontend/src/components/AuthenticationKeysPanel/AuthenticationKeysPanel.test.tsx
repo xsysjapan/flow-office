@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as authenticationKeysApi from '../../api/authenticationKeys'
 import type { AuthenticationKey } from '../../api/types'
 import { AuthenticationKeysPanel } from './AuthenticationKeysPanel'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const keys: AuthenticationKey[] = [
   {
@@ -45,6 +48,10 @@ function renderPanel() {
 }
 
 describe('AuthenticationKeysPanel', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('lists authentication keys with type and status', async () => {
     renderPanel()
 
@@ -76,6 +83,7 @@ describe('AuthenticationKeysPanel', () => {
     expect(issueSpy).toHaveBeenCalledWith(
       expect.objectContaining({ user_id: '11111111-1111-1111-1111-111111111111', display_name: '来客用QR', raw_key_value: 'abc123' }),
     )
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('認証キー「来客用QR」を発行しました'))
   })
 
   it('disables an active key', async () => {
@@ -92,6 +100,7 @@ describe('AuthenticationKeysPanel', () => {
     await user.click(buttons[buttons.length - 1])
 
     expect(disableSpy).toHaveBeenCalledWith('auth-key-1')
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('認証キー「本社ICカード」を無効化しました'))
   })
 
   it('opens a confirmation dialog before disabling a key', async () => {

@@ -2,11 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { PaidLeaveGrantPolicies, PaidLeaveGrantRule } from '../../api/types'
 import { PaidLeaveGrantRuleEditPage } from './PaidLeaveGrantRuleEditPage'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const rule: PaidLeaveGrantRule = {
   id: 1,
@@ -46,6 +49,10 @@ function renderPage() {
 }
 
 describe('PaidLeaveGrantRuleEditPage', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('prefills the form with the existing rule values', async () => {
     renderPage()
 
@@ -77,6 +84,7 @@ describe('PaidLeaveGrantRuleEditPage', () => {
       }),
     )
     expect(await screen.findByText('一覧に戻りました')).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('更新後ルールを保存しました')
   })
 
   it('shows the statutory minimum reference for each step', async () => {

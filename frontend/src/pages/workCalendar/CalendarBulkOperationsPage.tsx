@@ -72,6 +72,7 @@ export function CalendarBulkOperationsPage() {
   const apply = useCreateCalendarBulkOperation()
   const revert = useRevertCalendarBulkOperation()
 
+  const [isApplyConfirmOpen, setIsApplyConfirmOpen] = useState(false)
   const [operationType, setOperationType] = useState<CalendarBulkOperationType>('calendar_apply')
   const [conflictPolicy, setConflictPolicy] = useState<CalendarBulkOperationConflictPolicy>('skip_existing')
   const [reason, setReason] = useState('')
@@ -121,22 +122,18 @@ export function CalendarBulkOperationsPage() {
     })
   }
 
-  const handleApply = () => {
-    apply.mutate(
-      {
+  const handleApply = () =>
+    apply
+      .mutateAsync({
         operation_type: operationType,
         target_scope: buildTargetScope(),
         conflict_policy: conflictPolicy,
         reason,
-      },
-      {
-        onSuccess: () => {
-          notify.success('一括操作を適用しました')
-          preview.reset()
-        },
-      },
-    )
-  }
+      })
+      .then(() => {
+        notify.success('一括操作を適用しました')
+        preview.reset()
+      })
 
   return (
     <div className="flex flex-col gap-6">
@@ -343,14 +340,23 @@ export function CalendarBulkOperationsPage() {
             </div>
           )}
 
-          <Button
-            isLoading={apply.isPending}
-            disabled={!preview.data.executable || !reason}
-            onClick={handleApply}
-          >
+          <Button disabled={!preview.data.executable || !reason} onClick={() => setIsApplyConfirmOpen(true)}>
             この内容で確定適用する
           </Button>
-          {apply.error && <ErrorMessage error={apply.error} />}
+          <ConfirmActionDialog
+            open={isApplyConfirmOpen}
+            onOpenChange={(open) => {
+              setIsApplyConfirmOpen(open)
+              if (open) apply.reset()
+            }}
+            title="この内容で確定適用しますか?"
+            description={`「${OPERATION_TYPE_OPTIONS.find((o) => o.value === operationType)?.label ?? operationType}」を対象${preview.data.targets.length}件に適用します。適用後は履歴から取り消せます。`}
+            confirmLabel="確定適用する"
+            confirmVariant="primary"
+            isPending={apply.isPending}
+            error={apply.error}
+            onConfirm={handleApply}
+          />
           {(!preview.data.executable || !reason) && (
             <p className="mt-1 text-xs text-muted-foreground">
               {!preview.data.executable && !reason

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -1090,6 +1091,7 @@ function ShiftScheduleBoardCard() {
 
   const [department, setDepartment] = useState('')
   const [yearMonth, setYearMonth] = useState('')
+  const [isPublishConfirmOpen, setIsPublishConfirmOpen] = useState(false)
 
   const assignPattern = useAssignShiftPatternDay()
   const publishSchedule = usePublishShiftSchedule()
@@ -1112,11 +1114,10 @@ function ShiftScheduleBoardCard() {
   }
 
   const handlePublish = () => {
-    if (!department || !yearMonth) return
-    publishSchedule.mutate(
-      { department, year_month: yearMonth },
-      { onSuccess: (data) => notify.success(`${data.published_count}件のシフトを公開しました`) },
-    )
+    if (!department || !yearMonth) return Promise.resolve()
+    return publishSchedule
+      .mutateAsync({ department, year_month: yearMonth })
+      .then((data) => notify.success(`${data.published_count}件のシフトを公開しました`))
   }
 
   return (
@@ -1229,10 +1230,23 @@ function ShiftScheduleBoardCard() {
         ) : null}
 
 
-        <Button isLoading={publishSchedule.isPending} disabled={!department || !yearMonth} onClick={handlePublish}>
+        <Button disabled={!department || !yearMonth} onClick={() => setIsPublishConfirmOpen(true)}>
           公開する
         </Button>
-        {publishSchedule.error && <ErrorMessage error={publishSchedule.error} />}
+        <ConfirmActionDialog
+          open={isPublishConfirmOpen}
+          onOpenChange={(open) => {
+            setIsPublishConfirmOpen(open)
+            if (open) publishSchedule.reset()
+          }}
+          title="シフト表を公開しますか?"
+          description={`${department}の${yearMonth}分のシフト(下書きの勤務予定)を公開します。公開すると対象の社員の勤務予定として反映されます。`}
+          confirmLabel="公開する"
+          confirmVariant="primary"
+          isPending={publishSchedule.isPending}
+          error={publishSchedule.error}
+          onConfirm={handlePublish}
+        />
         {(!department || !yearMonth) && (
           <p className="mt-1 text-xs text-muted-foreground">対象部署・対象月を入力してください。</p>
         )}

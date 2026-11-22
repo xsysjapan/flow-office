@@ -1,12 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as compensatoryLeaveApi from '../../api/compensatoryLeave'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as specialLeaveApi from '../../api/specialLeave'
 import type { CompensatoryLeaveRequest, PaidLeaveRequest, SpecialLeaveRequest } from '../../api/types'
 import { CancelApprovedLeaveDialog, type ApprovedLeaveTarget } from './CancelApprovedLeaveDialog'
+import { notify } from '../../lib/notify'
+
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const cancelledPaidLeaveRequest: PaidLeaveRequest = {
   id: 'paid-leave-request-1',
@@ -73,6 +76,10 @@ function renderDialog(target: ApprovedLeaveTarget | null, overrides: { onOpenCha
 }
 
 describe('CancelApprovedLeaveDialog', () => {
+  beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
   it('is closed when target is null', () => {
     renderDialog(null)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -91,6 +98,7 @@ describe('CancelApprovedLeaveDialog', () => {
 
     await waitFor(() => expect(paidLeaveApi.cancelPaidLeaveRequest).toHaveBeenCalledWith('paid-leave-request-1'))
     await waitFor(() => expect(onCancelled).toHaveBeenCalled())
+    expect(notify.success).toHaveBeenCalledWith('有給休暇の承認を取り消しました')
   })
 
   it('cancels a special leave request using the special-leave API', async () => {

@@ -5,6 +5,7 @@ import {
   useDisableAuthenticationKey,
   useIssueAuthenticationKey,
 } from '../../hooks/useAuthenticationKeys'
+import { notify } from '../../lib/notify'
 import { Badge } from '../Badge/Badge'
 import { Button } from '../Button/Button'
 import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
@@ -70,6 +71,7 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
       { user_id: userId, key_type: keyType, display_name: displayName, raw_key_value: rawKeyValue },
       {
         onSuccess: () => {
+          notify.success(`認証キー「${displayName}」を発行しました`)
           resetForm()
           setIsFormOpen(false)
         },
@@ -189,7 +191,12 @@ function DisableAuthenticationKeyDialog({ authKey, userId }: { authKey: Authenti
       onOpenChange={(open) => {
         if (open) disableKey.reset()
       }}
-      onConfirm={() => disableKey.mutate({ id: authKey.id, userId })}
+      onConfirm={() =>
+        disableKey.mutate(
+          { id: authKey.id, userId },
+          { onSuccess: () => notify.success(`認証キー「${authKey.display_name}」を無効化しました`) },
+        )
+      }
     />
   )
 }

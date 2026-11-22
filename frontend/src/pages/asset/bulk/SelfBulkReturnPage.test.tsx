@@ -7,6 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../../api/asset'
 import type { Asset } from '../../../api/types'
 import { SelfBulkReturnPage } from './SelfBulkReturnPage'
+import { notify } from '../../../lib/notify'
+
+vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
 const navigate = vi.fn()
 
@@ -104,6 +107,10 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
 
 describe('SelfBulkReturnPage', () => {
   beforeEach(() => {
+    vi.mocked(notify.success).mockClear()
+  })
+
+  beforeEach(() => {
     vi.restoreAllMocks()
     navigate.mockClear()
   })
@@ -159,5 +166,6 @@ describe('SelfBulkReturnPage', () => {
 
     expect(bulkSpy).toHaveBeenCalledWith({ operation: 'self_return', asset_ids: ['asset-1'] })
     expect(await screen.findByText(/成功 1件/)).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('1件を返却しました')
   })
 })

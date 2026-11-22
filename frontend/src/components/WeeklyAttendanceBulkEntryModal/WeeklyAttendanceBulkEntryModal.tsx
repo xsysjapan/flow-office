@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
 import { useGenerateAttendancePattern } from '../../hooks/useAttendance'
+import { notify } from '../../lib/notify'
 import { attendancePatternResultMessage } from '../../utils/attendancePatternResultMessage'
 import { browserOffsetString } from '../../utils/offsetDateTime'
 import type { StatusMeta } from '../../utils/statusLabels'
@@ -27,8 +28,6 @@ export interface WeeklyAttendanceBulkEntryModalProps {
   /** 一覧から個別にトリガーボタンを描画したくない場合(制御されたopen/onOpenChange)向け。省略時は自前のトリガーボタンを表示する。 */
   open?: boolean
   onOpenChange?: (open: boolean) => void
-  /** 確定完了時に呼び出し元画面へ完了メッセージを渡す(モーダル自身は結果を表示せず閉じる)。 */
-  onCompleted?: (message: string) => void
   /** 日付(YYYY-MM-DD)ごとの休みバッジ(休日・祝日名・休暇)。「曜日ごとに設定」タブの該当曜日の行に表示する(表示のみ)。 */
   dayOffBadgesByDate?: Record<string, StatusMeta[]>
 }
@@ -45,7 +44,6 @@ export function WeeklyAttendanceBulkEntryModal({
   defaultTo,
   open: controlledOpen,
   onOpenChange,
-  onCompleted,
   dayOffBadgesByDate,
 }: WeeklyAttendanceBulkEntryModalProps) {
   const { user } = useAuth()
@@ -109,7 +107,7 @@ export function WeeklyAttendanceBulkEntryModal({
       },
       {
         onSuccess: (data) => {
-          onCompleted?.(attendancePatternResultMessage(data))
+          notify.success(attendancePatternResultMessage(data))
           handleOpenChange(false)
         },
       },

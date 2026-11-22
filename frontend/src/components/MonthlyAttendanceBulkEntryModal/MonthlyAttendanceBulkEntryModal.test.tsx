@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { User } from '../../api/types'
+import { notify } from '../../lib/notify'
 import type { StatusMeta } from '../../utils/statusLabels'
 import { pickTime } from '../../test-support/pickerInteractions'
 import { MonthlyAttendanceBulkEntryModal } from './MonthlyAttendanceBulkEntryModal'
@@ -18,17 +19,18 @@ const currentUser: User = {
   last_login_at: null,
 }
 
+vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
+
 vi.mock('../../auth/useAuth', () => ({
   useAuth: () => ({ user: currentUser }),
 }))
 
-function renderModal(onCompleted?: (message: string) => void, dayOffBadgesByDate?: Record<string, StatusMeta[]>) {
+function renderModal(dayOffBadgesByDate?: Record<string, StatusMeta[]>) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
       <MonthlyAttendanceBulkEntryModal
         yearMonth="2026-08"
-        onCompleted={onCompleted}
         dayOffBadgesByDate={dayOffBadgesByDate}
       />
     </QueryClientProvider>,
@@ -38,6 +40,7 @@ function renderModal(onCompleted?: (message: string) => void, dayOffBadgesByDate
 describe('MonthlyAttendanceBulkEntryModal', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.mocked(notify.success).mockClear()
   })
 
   it('disables its trigger button when the month is locked (e.g. submitted)', async () => {
@@ -59,8 +62,7 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
       skipped_count: 0,
       rejected_count: 0,
     })
-    const onCompleted = vi.fn()
-    renderModal(onCompleted)
+    renderModal()
 
     expect(screen.queryByText('月次の一括入力')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
@@ -94,8 +96,8 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
       ),
     )
 
-    // 完了後はモーダルを閉じ、結果は呼び出し元(onCompleted)に渡すだけでモーダル内には表示しない。
-    await waitFor(() => expect(onCompleted).toHaveBeenCalledWith('20件作成・0件更新しました。'))
+    // 完了後はモーダルを閉じ、結果はトーストで通知しモーダル内には表示しない。
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('20件作成・0件更新しました。'))
     await waitFor(() => expect(screen.queryByText('月次の一括入力')).not.toBeInTheDocument())
   }, 15000)
 
@@ -134,7 +136,7 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
   }, 15000)
 
   it('shows the day-off badges only on the row of the matching date in the day-by-day tab', async () => {
-    renderModal(undefined, {
+    renderModal({
       '2026-08-11': [{ label: '山の日', tone: 'neutral' }],
       '2026-08-16': [
         { label: '法定休日', tone: 'danger' },

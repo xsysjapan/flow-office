@@ -149,6 +149,11 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await page
     .getByRole("button", { name: "この内容で確定適用する" })
     .click();
+  // 確認ダイアログ(「この内容で確定適用しますか?」)で確定する。
+  await page
+    .getByRole("dialog", { name: "この内容で確定適用しますか?" })
+    .getByRole("button", { name: "確定適用する" })
+    .click();
 
   const historyRow = page.locator("li", {
     hasText: `E2Eテスト: ${calendarName}の適用`,

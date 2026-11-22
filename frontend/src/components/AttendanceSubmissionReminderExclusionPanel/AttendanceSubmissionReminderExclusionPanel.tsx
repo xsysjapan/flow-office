@@ -3,6 +3,7 @@ import {
   useAttendanceSubmissionReminderExclusions,
   useExcludeAttendanceSubmissionReminder,
 } from '../../hooks/useAttendanceSubmissionReminderExclusions'
+import { notify } from '../../lib/notify'
 import { Button } from '../Button/Button'
 import { EmptyState } from '../EmptyState/EmptyState'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
@@ -35,6 +36,7 @@ export function AttendanceSubmissionReminderExclusionPanel({ userId }: Attendanc
       { user_id: userId, year_month: yearMonth, reason },
       {
         onSuccess: () => {
+          notify.success(`${yearMonth}の督促を対象外にしました`)
           setYearMonth(undefined)
           setReason('')
         },

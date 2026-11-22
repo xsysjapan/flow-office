@@ -176,7 +176,6 @@ export function AttendanceMonthDetailPage() {
   const { user } = useAuth()
   const { yearMonth } = useParams<{ yearMonth: string }>()
   const forwardState = useForwardState()
-  const [bulkEntryMessage, setBulkEntryMessage] = useState<string | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const { data, isLoading, error } = useAttendanceMonth(yearMonth ?? '')
@@ -330,14 +329,12 @@ export function AttendanceMonthDetailPage() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                {bulkEntryMessage && <Badge tone="success">{bulkEntryMessage}</Badge>}
                 <Button variant="secondary" onClick={() => setSelectionMode(true)}>
                   選択
                 </Button>
                 <MonthlyAttendanceBulkEntryModal
                   yearMonth={yearMonth}
                   disabled={bulkEntryLocked}
-                  onCompleted={setBulkEntryMessage}
                   dayOffBadgesByDate={dayOffBadgesByDate}
                 />
               </div>
