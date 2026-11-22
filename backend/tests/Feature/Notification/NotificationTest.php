@@ -81,4 +81,45 @@ class NotificationTest extends TestCase
 
         $this->assertNull($notification->refresh()->confirmed_at);
     }
+
+    public function test_status_counts_cover_all_unread_read_and_ignore_status_and_page(): void
+    {
+        $recipient = User::factory()->create();
+        $other = User::factory()->create();
+        SendNotificationJob::enqueue($recipient, '件名1', '概要', null);
+        SendNotificationJob::enqueue($recipient, '件名2', '概要', null);
+        SendNotificationJob::enqueue($recipient, '件名3', '概要', null);
+        SendNotificationJob::enqueue($other, '他人宛て', '概要', null);
+
+        $confirmed = Notification::query()->where('recipient_user_id', $recipient->id)->firstOrFail();
+        $this->actingAs($recipient)->postJson("/api/notifications/{$confirmed->id}/confirm")->assertOk();
+
+        $counts = ['all' => 3, 'unread' => 2, 'read' => 1];
+
+        $this->assertSame($counts, $this->actingAs($recipient)->getJson('/api/notifications/mine')->json('meta.status_counts'));
+        $this->assertSame($counts, $this->actingAs($recipient)->getJson('/api/notifications/mine?page=2')->json('meta.status_counts'));
+
+        $unread = $this->actingAs($recipient)->getJson('/api/notifications/mine?status=unread');
+        $this->assertCount(2, $unread->json('data'));
+        $this->assertSame(2, $unread->json('meta.total'));
+        $this->assertSame($counts, $unread->json('meta.status_counts'));
+
+        $read = $this->actingAs($recipient)->getJson('/api/notifications/mine?status=read');
+        $this->assertCount(1, $read->json('data'));
+        $this->assertSame($counts, $read->json('meta.status_counts'));
+    }
+
+    public function test_status_counts_do_not_include_other_users_notifications(): void
+    {
+        $recipient = User::factory()->create();
+        $other = User::factory()->create();
+        SendNotificationJob::enqueue($recipient, '自分宛て', '概要', null);
+        SendNotificationJob::enqueue($other, '他人宛て1', '概要', null);
+        SendNotificationJob::enqueue($other, '他人宛て2', '概要', null);
+
+        $this->assertSame(
+            ['all' => 1, 'unread' => 1, 'read' => 0],
+            $this->actingAs($recipient)->getJson('/api/notifications/mine')->json('meta.status_counts'),
+        );
+    }
 }

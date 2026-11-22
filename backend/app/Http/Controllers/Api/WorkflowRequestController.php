@@ -24,6 +24,7 @@ use App\Models\SpecialLeaveRequest;
 use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestHistoryEntry;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -83,11 +84,15 @@ class WorkflowRequestController extends Controller
      * `status`を省略した場合は常に`submitted`のみを返す(既存呼び出し元との後方互換)。
      * 一方、「すべて」を明示的に検索したい場合は`status=all`を渡す(絞り込みなしの意味の
      * 予約語。draft状態の他人の下書きを検索させないよう、'draft'自体は許可しない)。
+     * `status=all`は下書き(draft)を除いた全件(rejectedを含む)を返す。
+     * 応答の`meta.status_counts`(submitted/approved/returned/cancelled/all)は、自分が承認者の申請を
+     * `year_month`だけで絞った件数(`status`・ページングは件数に影響しない。allはdraftを除く)。
      */
     #[OA\Get(
         path: '/workflow-requests/to-approve',
         operationId: 'workflowRequests.toApprove',
-        summary: '承認待ち申請一覧を取得する',
+        summary: '承認対象申請一覧を取得する',
+        description: '自分が承認者の申請を返す。status省略時はsubmitted、status=allはdraftを除く全件。meta.status_counts(submitted/approved/returned/cancelled/all)は年月のみ適用した件数で、status・ページングに影響されない。',
         tags: ['汎用申請'],
         parameters: [
             new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['submitted', 'approved', 'returned', 'cancelled', 'rejected', 'all'])),
@@ -106,20 +111,57 @@ class WorkflowRequestController extends Controller
 
         $status = $data['status'] ?? 'submitted';
         $yearMonth = $data['year_month'] ?? null;
+        $userId = $request->user()->id;
 
         $requests = WorkflowRequest::query()
             ->with(['requestType', 'applicant', 'approver'])
-            ->where('approver_user_id', $request->user()->id)
+            ->where('approver_user_id', $userId)
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
-            ->when($yearMonth, function ($query, $yearMonth) {
-                [$year, $month] = explode('-', $yearMonth);
-
-                $query->whereYear('submitted_at', $year)->whereMonth('submitted_at', $month);
-            })
+            ->when($status === 'all', fn ($query) => $query->where('status', '!=', 'draft'))
+            ->when($yearMonth, fn ($query, $yearMonth) => $this->applySubmittedYearMonth($query, $yearMonth))
             ->latest()
             ->paginate($data['per_page'] ?? 20);
 
-        return WorkflowRequestResource::collection($requests);
+        return WorkflowRequestResource::collection($requests)->additional([
+            'meta' => ['status_counts' => $this->toApproveStatusCounts($userId, $yearMonth)],
+        ]);
+    }
+
+    /**
+     * 承認対象一覧の状態別件数。year_monthは適用し、statusは適用しない(タブの件数に使う)。
+     * allはdraftを除く(rejectedを含む)。
+     *
+     * @return array{submitted: int, approved: int, returned: int, cancelled: int, all: int}
+     */
+    private function toApproveStatusCounts(string $userId, ?string $yearMonth): array
+    {
+        $row = WorkflowRequest::query()
+            ->where('approver_user_id', $userId)
+            ->when($yearMonth, fn ($query, $yearMonth) => $this->applySubmittedYearMonth($query, $yearMonth))
+            ->selectRaw(
+                'SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS submitted_count, '
+                .'SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS approved_count, '
+                .'SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS returned_count, '
+                .'SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS cancelled_count, '
+                .'SUM(CASE WHEN status <> ? THEN 1 ELSE 0 END) AS all_count',
+                ['submitted', 'approved', 'returned', 'cancelled', 'draft'],
+            )
+            ->first();
+
+        return [
+            'submitted' => (int) $row->submitted_count,
+            'approved' => (int) $row->approved_count,
+            'returned' => (int) $row->returned_count,
+            'cancelled' => (int) $row->cancelled_count,
+            'all' => (int) $row->all_count,
+        ];
+    }
+
+    private function applySubmittedYearMonth(Builder $query, string $yearMonth): Builder
+    {
+        [$year, $month] = explode('-', $yearMonth);
+
+        return $query->whereYear('submitted_at', $year)->whereMonth('submitted_at', $month);
     }
 
     #[OA\Get(

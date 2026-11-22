@@ -21,6 +21,7 @@ class NotificationController extends Controller
         path: '/notifications/mine',
         operationId: 'notifications.mine',
         summary: '自分宛ての通知一覧を取得する',
+        description: 'status(unread/read)で絞り込んでページングして返す。meta.status_counts(all/unread/read)は自分宛て通知の件数で、statusに影響されない。',
         tags: ['通知'],
         parameters: [new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['unread', 'read']))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
@@ -30,15 +31,41 @@ class NotificationController extends Controller
         $data = $request->validate([
             'status' => ['nullable', 'in:unread,read'],
         ]);
+        $userId = $request->user()->id;
 
         $notifications = Notification::query()
-            ->where('recipient_user_id', $request->user()->id)
+            ->where('recipient_user_id', $userId)
             ->when(($data['status'] ?? null) === 'unread', fn ($query) => $query->whereNull('confirmed_at'))
             ->when(($data['status'] ?? null) === 'read', fn ($query) => $query->whereNotNull('confirmed_at'))
             ->latest('queued_at')
             ->paginate(20);
 
-        return NotificationResource::collection($notifications);
+        return NotificationResource::collection($notifications)->additional([
+            'meta' => ['status_counts' => $this->statusCounts($userId)],
+        ]);
+    }
+
+    /**
+     * 通知の状態別件数(all/unread/read)。statusは適用しない(タブの件数に使う)。
+     *
+     * @return array{all: int, unread: int, read: int}
+     */
+    private function statusCounts(string $userId): array
+    {
+        $row = Notification::query()
+            ->where('recipient_user_id', $userId)
+            ->selectRaw(
+                'COUNT(*) AS all_count, '
+                .'SUM(CASE WHEN confirmed_at IS NULL THEN 1 ELSE 0 END) AS unread_count, '
+                .'SUM(CASE WHEN confirmed_at IS NOT NULL THEN 1 ELSE 0 END) AS read_count',
+            )
+            ->first();
+
+        return [
+            'all' => (int) $row->all_count,
+            'unread' => (int) $row->unread_count,
+            'read' => (int) $row->read_count,
+        ];
     }
 
     #[OA\Post(

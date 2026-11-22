@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\WorkflowRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -313,6 +314,94 @@ class WorkflowRequestFlowTest extends TestCase
         $response = $this->actingAs($stranger)->getJson('/api/workflow-requests/to-approve?status=all');
 
         $response->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_index_to_approve_status_counts_per_status_and_all_excludes_drafts(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
+
+        $this->createSubmittedRequest($applicant, $approver, $requestType, '承認待ち申請');
+
+        $approvedId = $this->createSubmittedRequest($applicant, $approver, $requestType, '承認済み申請');
+        $this->actingAs($approver)->postJson("/api/workflow-requests/{$approvedId}/approve")->assertOk();
+
+        $returnedId = $this->createSubmittedRequest($applicant, $approver, $requestType, '差戻し申請');
+        $this->actingAs($approver)->postJson("/api/workflow-requests/{$returnedId}/return", ['comment' => '修正してください'])->assertOk();
+
+        $cancelledId = $this->createSubmittedRequest($applicant, $approver, $requestType, '取消申請');
+        $this->actingAs($applicant)->postJson("/api/workflow-requests/{$cancelledId}/cancel", ['reason' => '不要になった'])->assertOk();
+
+        $rejectedId = $this->createSubmittedRequest($applicant, $approver, $requestType, '却下申請');
+        $this->actingAs($approver)->postJson("/api/workflow-requests/{$rejectedId}/reject", ['reason' => '要件を満たしていません'])->assertOk();
+
+        // 承認者に指定されたままの下書き(未提出)は、件数にも status=all の一覧にも含めない。
+        $draftId = $this->actingAs($applicant)->postJson('/api/workflow-requests', [
+            'request_type_code' => $requestType->code,
+            'title' => '下書き申請',
+            'form_data' => [],
+            'approver_user_id' => $approver->id,
+        ])->json('id');
+
+        $counts = [
+            'submitted' => 1,
+            'approved' => 1,
+            'returned' => 1,
+            'cancelled' => 1,
+            'all' => 5, // rejectedを含み、draftを除く
+        ];
+
+        $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+        $this->assertSame($counts, $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve')->json('meta.status_counts'));
+
+        $all = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?status=all&per_page=100');
+        $all->assertOk()->assertJsonCount(5, 'data');
+        $this->assertNotContains($draftId, collect($all->json('data'))->pluck('id')->all());
+        $this->assertSame($counts, $all->json('meta.status_counts'));
+    }
+
+    public function test_index_to_approve_status_counts_follow_year_month_but_not_status_or_page(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
+
+        $this->travelTo(Carbon::parse('2026-06-15 10:00:00'));
+        $juneApprovedId = $this->createSubmittedRequest($applicant, $approver, $requestType, '6月の承認済み申請');
+        $this->actingAs($approver)->postJson("/api/workflow-requests/{$juneApprovedId}/approve")->assertOk();
+        $this->createSubmittedRequest($applicant, $approver, $requestType, '6月の承認待ち申請');
+
+        $this->travelTo(Carbon::parse('2026-07-15 10:00:00'));
+        $this->createSubmittedRequest($applicant, $approver, $requestType, '7月の承認待ち申請');
+        $this->travelBack();
+
+        $allMonths = ['submitted' => 2, 'approved' => 1, 'returned' => 0, 'cancelled' => 0, 'all' => 3];
+        $juneOnly = ['submitted' => 1, 'approved' => 1, 'returned' => 0, 'cancelled' => 0, 'all' => 2];
+
+        $this->assertSame($allMonths, $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve')->json('meta.status_counts'));
+        $this->assertSame($allMonths, $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?status=approved')->json('meta.status_counts'));
+        $this->assertSame($juneOnly, $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?year_month=2026-06')->json('meta.status_counts'));
+
+        // status・pageを変えても、year_monthを適用した件数は変わらない。
+        $paged = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?status=approved&year_month=2026-06&per_page=1&page=2');
+        $paged->assertOk()->assertJsonCount(0, 'data');
+        $this->assertSame($juneOnly, $paged->json('meta.status_counts'));
+    }
+
+    public function test_index_to_approve_status_counts_do_not_include_other_approvers_requests(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
+        $otherApprover = User::factory()->create();
+
+        $this->createSubmittedRequest($applicant, $otherApprover, $requestType, '他人が承認者の申請');
+
+        $this->assertSame(
+            ['submitted' => 0, 'approved' => 0, 'returned' => 0, 'cancelled' => 0, 'all' => 0],
+            $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?status=all')->json('meta.status_counts'),
+        );
+        $this->assertSame(
+            ['submitted' => 1, 'approved' => 0, 'returned' => 0, 'cancelled' => 0, 'all' => 1],
+            $this->actingAs($otherApprover)->getJson('/api/workflow-requests/to-approve')->json('meta.status_counts'),
+        );
     }
 
     public function test_admin_can_manage_request_types_but_others_cannot(): void
