@@ -62,11 +62,11 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     await page.goto('/admin/paid-leave/schedule')
 
     await page.getByLabel('状態').selectOption('eligible')
-    await expect(page).toHaveURL(/filter=eligible/)
+    await expect(page).toHaveURL(/status=eligible/)
 
     await page.getByLabel('社員名').fill(REGULAR_EMPLOYEE_NAME)
     await page.getByLabel('社員名').press('Enter')
-    await expect(page).toHaveURL(/user_name=/)
+    await expect(page).toHaveURL(/q=/)
 
     await page.reload()
     await expect(page.getByLabel('状態')).toHaveValue('eligible')
@@ -82,7 +82,7 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
 
   test('詳細パネルで内訳を確認して再判定し、判定結果を上書きできる', async ({ page }) => {
     await loginAs(page, SCENARIO_USERS.hrStaff)
-    await page.goto(`/admin/paid-leave/schedule?user_name=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`)
+    await page.goto(`/admin/paid-leave/schedule?q=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`)
 
     const row = page.getByRole('row', { name: new RegExp(`${REGULAR_EMPLOYEE_NAME}の付与予定詳細を開く`) }).first()
     await row.click()
@@ -120,7 +120,7 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
   // 直前の「判定結果を上書きできる」テストで対象社員の先頭行をEligibleにしていることに依存する(serial実行)。
   test('付与対象の行を選び、確認ダイアログを経て一括付与できる', async ({ page }) => {
     await loginAs(page, SCENARIO_USERS.hrStaff)
-    await page.goto(`/admin/paid-leave/schedule?filter=eligible&user_name=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`)
+    await page.goto(`/admin/paid-leave/schedule?status=eligible&q=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`)
 
     await page.getByRole('checkbox', { name: `${REGULAR_EMPLOYEE_NAME}を選択` }).first().check()
     await page.getByRole('button', { name: '一括付与する' }).click()
@@ -153,7 +153,7 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     const targetUserName = target.user_name
     const nextCategory = target.category === 'normal' ? 'proportional' : 'normal'
 
-    await page.goto(`/admin/paid-leave/schedule?user_name=${encodeURIComponent(targetUserName)}`)
+    await page.goto(`/admin/paid-leave/schedule?q=${encodeURIComponent(targetUserName)}`)
     const row = page
       .getByRole('row', { name: new RegExp(`${targetUserName}の付与予定詳細を開く`) })
       .filter({ hasText: target.scheduled_on })
@@ -186,7 +186,7 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     await expect(row.getByText('変更あり')).toBeVisible()
 
     await page.getByLabel('状態').selectOption('changed')
-    await expect(page).toHaveURL(/filter=changed/)
+    await expect(page).toHaveURL(/status=changed/)
     await expect(
       page
         .getByRole('row', { name: new RegExp(`${targetUserName}の付与予定詳細を開く`) })
@@ -205,7 +205,7 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     const granted = entries.data.find((entry) => entry.status === 'Granted')
     if (!granted) throw new Error('E2E setup: 付与済みの付与予定が見つからない')
 
-    await page.goto(`/admin/paid-leave/schedule?user_name=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`)
+    await page.goto(`/admin/paid-leave/schedule?q=${encodeURIComponent(REGULAR_EMPLOYEE_NAME)}`)
     await page
       .getByRole('row', { name: new RegExp(`${REGULAR_EMPLOYEE_NAME}の付与予定詳細を開く`) })
       .filter({ hasText: granted.scheduled_on })
@@ -282,7 +282,7 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     if (overdue.data.length > 0) {
       await expect(warning).toBeVisible()
       await page.getByRole('alert').getByRole('button', { name: '表示する' }).click()
-      await expect(page).toHaveURL(/filter=overdue/)
+      await expect(page).toHaveURL(/status=overdue/)
     } else {
       await expect(warning).toHaveCount(0)
     }

@@ -113,6 +113,8 @@ Command/Event自体は全申請種別で汎用的に使えるが、却下ボタ�
   レスポンス形状は共通の`WorkflowRequestResource`を使い、両APIでフロントエンドが
   同じ形として扱える。`subject_type`を持つ行には`subject_summary`として各ドメインの
   要約が付与される)。
+  承認者視点の`to-approve`は、状態別件数`meta.status_counts`(submitted/approved/returned/cancelled/all。
+  `year_month`を適用し`status`は適用しない)を返す。`status=all`は下書き(draft)を除く(承認一覧画面の件数付きタブに使う)。
 - 申請種別 (`request_types`) はマスタ化し、フォーム項目は `form_schema` (JSON) で動的に定義する。
   新しい申請種別を追加する際にコード変更を必要最小限にする
   (スキル [add-workflow-request-type](../.claude/skills/add-workflow-request-type/SKILL.md) 参照)。

@@ -368,6 +368,7 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
 
   await page.goto("/admin/audit-log");
   await page.getByLabel("イベント種別").fill("group.created");
+  await page.getByLabel("イベント種別").press("Enter");
   await expect(page.getByText("group.created").first()).toBeVisible();
 });
 

@@ -65,7 +65,9 @@ test.describe('備品管理', () => {
 
     // 検索一覧で見つかること。
     await page.goto('/assets')
+    await page.getByRole('button', { name: /^詳細条件/ }).click()
     await page.getByLabel('管理番号').fill(assetNo)
+    await page.getByLabel('管理番号').press('Enter')
     const row = page.getByRole('row', { name: new RegExp(name) })
     await expect(row).toBeVisible()
     await expect(row.getByRole('cell', { name: assetNo, exact: true })).toBeVisible()
@@ -319,7 +321,9 @@ test.describe('備品管理', () => {
       await adminPage.getByRole('button', { name: '削除' }).click()
       await adminPage.getByRole('dialog').getByRole('button', { name: '削除する' }).click()
       await adminPage.waitForURL('**/assets')
+      await adminPage.getByRole('button', { name: /^詳細条件/ }).click()
       await adminPage.getByLabel('管理番号').fill(deletableAssetNo)
+      await adminPage.getByLabel('管理番号').press('Enter')
       // 管理番号で絞り込んだ結果0件のため、検索条件向けの空状態文言が表示される
       // (未フィルタ時の「登録されている備品がまだありません。」とは別の文言)。
       await expect(adminPage.getByText('条件に一致する備品がありません。')).toBeVisible()
