@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261122-backoffice-assignment-migration-admin](./20261122-backoffice-assignment-migration-admin/spec.md) | バックオフィス割当イベントの移行を管理画面の運用コマンドから実行できるようにする | 検討中 |
 | [20261122-backoffice-task-reassign](./20261122-backoffice-task-reassign/spec.md) | バックオフィスタスクの担当者割当とステータス変更を別イベントに分け、担当者を変更できるようにする | 完了 |
 | [20261122-backoffice-others-tasks](./20261122-backoffice-others-tasks/spec.md) | バックオフィスタスク一覧を汎用検索画面にし、他の担当者のタスクも検索できるようにする | 完了 |
 | [20261122-force-testing-env](./20261122-force-testing-env/spec.md) | `php artisan test` でテストが APP_ENV=local のまま動く不具合の修正 | 完了 |
