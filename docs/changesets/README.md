@@ -14,10 +14,10 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261123-list-layout-standard](./20261123-list-layout-standard/spec.md) | 一覧画面のレイアウトの標準化(見出し・主操作・ページング・詳細条件・モバイル)と検索フォーム標準化の不具合修正 | 検討中 |
-| [20261123-form-layout-standard](./20261123-form-layout-standard/spec.md) | フォームのレイアウトの標準化(幅・列・セクション・ボタン・エラー・説明文) | 検討中 |
-| [20261123-boolean-query-param](./20261123-boolean-query-param/spec.md) | フラグ(真偽値)の扱いの標準化(クエリは1/0、社員一覧の未連携・外部HR絞り込みの422修正) | 検討中 |
-| [20261123-boolean-column-naming](./20261123-boolean-column-naming/spec.md) | 真偽値の列・イベント項目の命名の統一(イベントの作り直し)と paid_leave_usages の確定フラグの二重化の解消 | 検討中 |
+| [20261123-list-layout-standard](./20261123-list-layout-standard/spec.md) | 一覧画面のレイアウトの標準化(見出し・主操作・ページング・詳細条件・モバイル)と検索フォーム標準化の不具合修正 | レビュー中 |
+| [20261123-form-layout-standard](./20261123-form-layout-standard/spec.md) | フォームのレイアウトの標準化(幅・列・セクション・ボタン・エラー・説明文) | レビュー中 |
+| [20261123-boolean-query-param](./20261123-boolean-query-param/spec.md) | フラグ(真偽値)の扱いの標準化(クエリは1/0、社員一覧の未連携・外部HR絞り込みの422修正) | レビュー中 |
+| [20261123-boolean-column-naming](./20261123-boolean-column-naming/spec.md) | 真偽値の列・イベント項目の命名の統一(イベントの作り直し)と paid_leave_usages の確定フラグの二重化の解消 | レビュー中 |
 | [20261122-list-search-form-standard](./20261122-list-search-form-standard/spec.md) | 一覧の検索フォームの標準化(構成・主軸タブ・反映方式・クリア文言)と全一覧への適用 | 完了 |
 | [20261122-list-action-feedback-standard](./20261122-list-action-feedback-standard/spec.md) | 一覧からの操作と変更操作のフィードバックの標準化 | 完了 |
 | [20261122-backoffice-assignment-migration-admin](./20261122-backoffice-assignment-migration-admin/spec.md) | バックオフィス割当イベントの移行を管理画面の運用コマンドから実行できるようにする | 完了 |
