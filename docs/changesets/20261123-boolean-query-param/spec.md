@@ -1,6 +1,6 @@
 # boolean-query-param(フラグ(真偽値)の扱いの標準化)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 以前の変更セット...といったのは「前回お伝えした既存の不具合を別の変更セットで直すかどうか、ご判断をお待ちしています。社員一覧で「Microsoft未連携」にチェックを入れるとエラーになる件です。」のことです。
@@ -162,4 +162,15 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - 2026-11-23: ユーザーの依頼「is_confirmed/confirmed を今回調査」「イベントの作り直しも含めた対応」を受け、既存列の改名・二重化の解消を変更セット`20261123-boolean-column-naming`に切り出し、本変更セットの論点4の対象外・別途調査をそちらへの参照に変えた。
 
 ## 実装結果
-未着手(2026-11-23 ユーザー承認「対応をお願いします」。あわせて「ガイドラインはスキルとして今後のプロセスで活用できるように」の依頼により、ルールの置き場所を docs/20 からスキルに変更。続けて「boolean-flagsのような細かいスキルは作らない」により、API 仕様のスキル api-design と既存スキルに置く形に変更)
+2026-11-23 ユーザー承認「対応をお願いします」。「ガイドラインはスキルとして今後のプロセスで活用できるように」「boolean-flagsのような細かいスキルは作らない」により、ルールは API 仕様のスキル api-design(新規)と既存スキルに置いた。
+- コミット: 7b1d7b0 前後(frontend の buildUrl・client.test・e2e・スキル)、622d9b0 前後(backend 5 Controller・テスト・docs/07・14)。`git log --oneline` の「クエリの真偽値」を参照
+- backend: Device/ExpenseCategory/RequestType の `$request->boolean()` を validate `['sometimes','boolean']` に、Export の "true"/"false" 正規化を削除し validate の値で判定(`resolveExportableStatuses(array $data)`)。OpenAPI 6件を `integer enum [0,1]`。User の index に external_* の注釈を追加
+- frontend: `api/client.ts` に `serializeQueryValue`(真偽値→1/0、配列内も)
+- スキル: `.claude/skills/api-design/SKILL.md`(リクエスト・レスポンス・OpenAPI・命名)、`ui-interaction-patterns` §2.10(URLのフラグ)、`add-projection`(DBの真偽値列)、`add-api-hook`・`add-domain-event` から参照、backend/frontend の CLAUDE.md、docs/20 に参照1行
+- docs: docs/14・docs/07 の `include_submitted=true` → `=1`
+- 検証:
+  - backend 全件(CI と同じ条件)2364件 pass。委譲元の再実行(Export・Device・ExpenseMaster・UserSearch・WorkflowRequestFlow・Swagger)191件 pass
+  - frontend 単体全件 1508件 pass(2 skip)、型チェック(app・e2e)OK、oxlint 指摘なし
+  - e2e 全件70件: 初回69 pass・1 fail(scenario-10 グループ作成でリンクのクリック後に遷移しない既存の不安定。ファイル単位の再実行で7/7 pass)。追加した「Microsoft未連携」のテストは pass
+  - e2e で通らない画面(勤怠参照からの出力、端末一覧、経費区分の管理画面)は backend の Feature テストと client.test で確認
+- 受け入れ条件: すべて満たした
