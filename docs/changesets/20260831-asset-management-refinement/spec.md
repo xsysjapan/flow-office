@@ -520,3 +520,16 @@ assetNumberRules`(14件全通過)、`npx tsc --noEmit`エラーなし。
 登録ユースケースの記述を更新)、`docs/16-database-schema.md`(`asset_number_rules`
 テーブル定義を追加、`assets.asset_no`の説明を更新)、`docs/17-events.md`
 (`asset_number_rule.configured`/`asset_number.issued`イベントを追加)。
+
+## 不具合(2026-11-23 発見)
+
+変更セット`20261123-boolean-column-naming`のリハーサルで見つかった。
+
+| # | 内容 | 原因 | 修正方針 |
+|---|---|---|---|
+| A1 | 採番ルール設定(`/admin/asset-number-rules`)と備品管理(`routeManifest.ts`の`feature: "asset.manage"`)が、管理者でも開けずホームへ戻される | `asset.manage`はPermissionであり、Feature(`AccessControlCatalog::FEATURE_CHILDREN`)には存在しない。存在しないFeatureを条件にしているため常に不可 | 備品には機能単位のFeatureを設けない(本変更セット論点10・20260830-equipment-management 論点10)。`feature`の指定を外し、`permission: "asset.manage"`だけで出し分ける |
+| A2 | 一覧で桁数が空欄、次番号が「undefined」になる。デフォルトルールが「未設定」と表示される | APIは`AssetNumberRuleResource`でsnake_case(`digit_count`・`next_number`・`is_active`・`is_default`)を返すが、フロントの型`AssetNumberRule`がcamelCaseで、値を読めていない | フロントの型をAPIどおりsnake_caseにする(他のAPI型と同じ。api-designスキル)。参照箇所(一覧・備品登録画面の採番表示・story・テストのモック)を全て直す |
+| A3 | デフォルトルール(`category: null`)の行が常に編集中の表示になる | 編集中を`editingCategory === null`で判定しており、未編集とデフォルト行を区別できない | 「編集中でない」と「デフォルト行を編集中」を別の値で表す |
+| A4 | 無効のルールを編集して保存すると、有効に戻る(`20261123-boolean-column-naming`で`enabled`→`isActive`へ改名した際に顕在化) | A2と同じ。`is_active`を読めず、編集フォームが既定値の有効で初期化される | A2で解消。保存時に読み込んだ値が保たれることをテストで確かめる |
+
+テスト: 一覧・編集フォームのテストのモックを実際のAPIの形(snake_case)にし、無効ルールの編集で`is_active: false`が送られること、デフォルト行が編集中にならないこと、`asset.manage`だけを持つ利用者にメニューが出ることを確かめる。
