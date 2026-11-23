@@ -86,12 +86,9 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
   - 応答: model の casts で `boolean` にし、Resource は真偽値で返す。計算値は `(bool)` で明示する。
   - 画面の URL(useSearchParams): オンは `"1"`、オフ(既定)はキーを書かない。読み取りは `=== "1"`。
   - DB: `boolean` 型・`NOT NULL`・既定値を持たせる(三値が必要なら nullable にし、理由を docs/16 に書く)。model の casts に `boolean` を必ず書く。
-  - 新しい列・項目の命名: 状態・属性は `is_*`(`is_active`、`is_default`)、機能の有効化は `*_enabled`、要否は `requires_*`、許可は `allow_*`。有効/無効のフラグは `is_active` を使う(`enabled` は新規に使わない)。
-    API・frontend の型も同じ名前にする。frontend の API 関数の引数オブジェクトは camelCase(`includeInactive`)で受け、`api/*.ts` で snake_case のクエリ名に変換する。
-- 対象外とするもの: 既存の列の改名(`require_location`→`requires_location`、`enabled`→`is_active` など)。列名の変更は Projection・Resource・frontend の型・イベントの payload に及び、
-  イベントの作り直し(`data-correction`)が要るため、命名の揺れだけを理由に行わない。
-- 別途調査とするもの: `paid_leave_usages` の `is_confirmed` と `confirmed` の併存。同じ事実を2列で持っている(設計原則の「同じ事実を複数の場所で持たない」に反する)可能性があり、
-  意味の違いの調査が要るため、本変更セットでは扱わず、ユーザーに別の変更セットでの調査を提案する。
+  - 命名: 変更セット`20261123-boolean-column-naming`の論点3のルール(`is_*`・`has_*`・`*_enabled`・`requires_*`・`allows_*`/`prohibits_*`・三人称単数の動詞)に従う。
+    既存の列の改名・イベントの作り直し・`paid_leave_usages`の`is_confirmed`/`confirmed`の二重化の解消も、同変更セットで行う。
+    frontend の API 関数の引数オブジェクトは camelCase(`includeInactive`)で受け、`api/*.ts` で snake_case のクエリ名に変換する。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
@@ -100,7 +97,7 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
    - `UserController` の `external_unlinked`・`external_hr`(既に validate。判定はそのまま)
    - `DeviceController` の `with_trashed`、`ExpenseCategoryController`・`RequestTypeController` の `include_inactive`: validate を追加し、`$request->boolean()` を検証済みの値に置き換える
    - `ExportController` の `include_submitted`: `"true"/"false"` の正規化(645-649行)を削除し、validate `['nullable', 'boolean']` の値で判定する
-3. ルールの明文化: `docs/20-implementation-notes.md` に「真偽値(フラグ)の扱い」の節を追加し、論点1〜4の決定(クエリは`1/0`、JSONは`true/false`、画面URLは`1`かキー無し、DBの型と casts、新規の命名)を書く。
+3. ルールの明文化: `docs/20-implementation-notes.md` に「真偽値(フラグ)の扱い」の節を追加し、論点1〜4の決定(クエリは`1/0`、JSONは`true/false`、画面URLは`1`かキー無し、DBの型と casts)と、命名ルール(`20261123-boolean-column-naming`論点3)を書く。
    `.claude/skills/add-api-hook/SKILL.md` と `add-projection`(列を足すスキル)から、その節を1行で参照する。
 4. テスト:
    - frontend: `buildUrl`(または `apiFetch` 経由)で `true`→`1`、`false`→`0`、配列の真偽値、`undefined` は送らない、を確かめる単体テスト。
@@ -115,8 +112,7 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - backend の全件テスト、frontend の単体テスト全件・型チェック、関係する e2e(社員一覧・端末・経費区分・申請種別・勤怠出力を通るもの)がPASSする。
 
 ## 対象外
-- 既存のDB列の改名(論点4)
-- `paid_leave_usages` の `is_confirmed`/`confirmed` の整理(別途調査を提案)
+- 既存のDB列の改名・`paid_leave_usages`の二重化の解消(変更セット`20261123-boolean-column-naming`で行う)
 - JSON 本文・応答の変更(既に統一されている)
 - frontend の既存 API 関数の引数名の camelCase/snake_case の揃え直し(新規から適用)
 
@@ -144,6 +140,7 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - 初版(2026-11-23): 社員一覧の422の不具合修正として作成(クエリを`1/0`で送る)
 - 2026-11-23: ユーザーの依頼「フラグ変数の扱いも標準化して、見直し」「Laravelで標準的な実装が0/1ならば…ただし統一」を受け、真偽値の扱い全体の標準化に作り直した
   (クエリ6件の読み方の統一、ExportControllerの個別正規化の削除、JSON・画面URL・DB・命名のルール化)。
+- 2026-11-23: ユーザーの依頼「is_confirmed/confirmed を今回調査」「イベントの作り直しも含めた対応」を受け、既存列の改名・二重化の解消を変更セット`20261123-boolean-column-naming`に切り出し、本変更セットの論点4の対象外・別途調査をそちらへの参照に変えた。
 
 ## 実装結果
 未着手
