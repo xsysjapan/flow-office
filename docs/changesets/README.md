@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261123-rebuild-drift-fixes](./20261123-rebuild-drift-fixes/spec.md) | ReadModelの作り直しでずれる不具合2件(cascade頼みの子行・一括操作の対象行ID)と一括操作の再取消の修正 | レビュー中 |
 | [20261123-list-layout-standard](./20261123-list-layout-standard/spec.md) | 一覧画面のレイアウトの標準化(見出し・主操作・ページング・詳細条件・モバイル)と検索フォーム標準化の不具合修正 | レビュー中 |
 | [20261123-form-layout-standard](./20261123-form-layout-standard/spec.md) | フォームのレイアウトの標準化(幅・列・セクション・ボタン・エラー・説明文) | レビュー中 |
 | [20261123-boolean-query-param](./20261123-boolean-query-param/spec.md) | フラグ(真偽値)の扱いの標準化(クエリは1/0、社員一覧の未連携・外部HR絞り込みの422修正) | 完了 |
