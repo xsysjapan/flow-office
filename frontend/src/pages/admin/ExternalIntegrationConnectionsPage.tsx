@@ -269,7 +269,7 @@ function ConnectionRowMenu({
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={runAfterClose(onEdit)}>編集</DropdownMenuItem>
         <DropdownMenuItem onSelect={runAfterClose(onToggleEnabled)}>
-          {connection.enabled ? '無効にする' : '有効にする'}
+          {connection.publishing_enabled ? '無効にする' : '有効にする'}
         </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={runAfterClose(onDelete)}>
           削除する
@@ -409,10 +409,10 @@ export function ExternalIntegrationConnectionsPage() {
   const handleToggleEnabled = (connection: ExternalIntegrationConnection) => {
     setToggleError(null)
     updateConnection.mutate(
-      { id: connection.id, input: { enabled: !connection.enabled } },
+      { id: connection.id, input: { publishing_enabled: !connection.publishing_enabled } },
       {
         onSuccess: () => {
-          notify.success(`${connection.name}を${connection.enabled ? '無効' : '有効'}にしました`)
+          notify.success(`${connection.name}を${connection.publishing_enabled ? '無効' : '有効'}にしました`)
         },
         onError: (error) => setToggleError({ id: connection.id, error }),
       },
@@ -523,8 +523,8 @@ export function ExternalIntegrationConnectionsPage() {
                   <Badge tone={STATUS_TONE[connection.status]}>{STATUS_LABELS[connection.status]}</Badge>
                 </TableCell>
                 <TableCell>
-                  <Badge tone={connection.enabled ? 'success' : 'neutral'}>
-                    {connection.enabled ? '有効' : '無効'}
+                  <Badge tone={connection.publishing_enabled ? 'success' : 'neutral'}>
+                    {connection.publishing_enabled ? '有効' : '無効'}
                   </Badge>
                 </TableCell>
                 <TableCell>

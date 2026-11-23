@@ -23,7 +23,7 @@ class CreateRoleAssignmentHandler implements CommandHandler
             throw new DomainRuleException('GROUPスコープでは対象グループが必須です。');
         } if ($command->scopeType !== 'group' && $command->scopeGroupId) {
             throw new DomainRuleException('GROUP以外のスコープに対象グループは指定できません。');
-        } if ($command->scopeType !== 'group' && $command->includeDescendants) {
+        } if ($command->scopeType !== 'group' && $command->includesDescendants) {
             throw new DomainRuleException('配下を含む指定はGROUPスコープだけで利用できます。');
         } if ($command->scopeGroupId && ! DB::table('groups')->where('id', $command->scopeGroupId)->where('status', 'active')->exists()) {
             throw new DomainRuleException('有効なスコープ対象Groupを指定してください。');
@@ -41,7 +41,7 @@ class CreateRoleAssignmentHandler implements CommandHandler
         if (! $exists) {
             throw new DomainRuleException('有効な付与先を指定してください。');
         } $this->privilegePolicy->assertSelfAssignmentAllowed($command->actorUserId, $command->subjectType, $command->subjectId, $command->roleId);
-        RoleAssignmentAggregate::retrieve($command->assignmentId)->create($command->subjectType, $command->subjectId, $command->roleId, $command->scopeType, $command->scopeGroupId, $command->includeDescendants, $command->startsAt, $command->endsAt, $command->actorUserId)->persist();
+        RoleAssignmentAggregate::retrieve($command->assignmentId)->create($command->subjectType, $command->subjectId, $command->roleId, $command->scopeType, $command->scopeGroupId, $command->includesDescendants, $command->startsAt, $command->endsAt, $command->actorUserId)->persist();
 
         if ($command->subjectType === 'group') {
             $this->groupFeatureSync->syncGroup($command->subjectId, $command->actorUserId);

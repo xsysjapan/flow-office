@@ -129,10 +129,10 @@ class AccessControlController extends Controller
 
     public function storeRoleAssignment(Request $r, CommandBus $bus): JsonResponse
     {
-        $d = $r->validate(['subject_type' => ['required', Rule::in(['user', 'group'])], 'subject_id' => ['required', 'uuid'], 'role_id' => ['required', 'integer'], 'scope_type' => ['required', Rule::in(['global', 'group', 'self', 'approval_task'])], 'scope_group_id' => ['nullable', 'uuid'], 'include_descendants' => ['boolean'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date']]);
+        $d = $r->validate(['subject_type' => ['required', Rule::in(['user', 'group'])], 'subject_id' => ['required', 'uuid'], 'role_id' => ['required', 'integer'], 'scope_type' => ['required', Rule::in(['global', 'group', 'self', 'approval_task'])], 'scope_group_id' => ['nullable', 'uuid'], 'includes_descendants' => ['boolean'], 'include_descendants' => ['prohibited'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date']]);
         $this->assertAssignmentAllowed($r, $d['subject_type'], $d['subject_id'], $d['scope_type'], $d['scope_group_id'] ?? null);
         $id = (string) Str::uuid();
-        $bus->dispatch(new CreateRoleAssignment($id, $d['subject_type'], $d['subject_id'], $d['role_id'], $d['scope_type'], $d['scope_group_id'] ?? null, $d['include_descendants'] ?? false, $d['starts_at'] ?? null, $d['ends_at'] ?? null, $r->user()->id));
+        $bus->dispatch(new CreateRoleAssignment($id, $d['subject_type'], $d['subject_id'], $d['role_id'], $d['scope_type'], $d['scope_group_id'] ?? null, $d['includes_descendants'] ?? false, $d['starts_at'] ?? null, $d['ends_at'] ?? null, $r->user()->id));
 
         return response()->json(['id' => $id], 201);
     }
@@ -140,9 +140,9 @@ class AccessControlController extends Controller
     public function updateRoleAssignment(Request $r, string $assignment, CommandBus $bus): JsonResponse
     {
         $current = RoleAssignment::query()->findOrFail($assignment);
-        $d = $r->validate(['scope_type' => ['sometimes', Rule::in(['global', 'group', 'self', 'approval_task'])], 'scope_group_id' => ['nullable', 'uuid'], 'include_descendants' => ['boolean'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date']]);
+        $d = $r->validate(['scope_type' => ['sometimes', Rule::in(['global', 'group', 'self', 'approval_task'])], 'scope_group_id' => ['nullable', 'uuid'], 'includes_descendants' => ['boolean'], 'include_descendants' => ['prohibited'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date']]);
         $this->assertAssignmentAllowed($r, $current->subject_type, $current->subject_id, $d['scope_type'] ?? $current->scope_type, array_key_exists('scope_group_id', $d) ? $d['scope_group_id'] : $current->scope_group_id);
-        $bus->dispatch(new UpdateRoleAssignment($assignment, $d['scope_type'] ?? $current->scope_type, array_key_exists('scope_group_id', $d) ? $d['scope_group_id'] : $current->scope_group_id, $d['include_descendants'] ?? $current->include_descendants, array_key_exists('starts_at', $d) ? $d['starts_at'] : $current->starts_at?->toISOString(), array_key_exists('ends_at', $d) ? $d['ends_at'] : $current->ends_at?->toISOString(), $r->user()->id));
+        $bus->dispatch(new UpdateRoleAssignment($assignment, $d['scope_type'] ?? $current->scope_type, array_key_exists('scope_group_id', $d) ? $d['scope_group_id'] : $current->scope_group_id, $d['includes_descendants'] ?? $current->includes_descendants, array_key_exists('starts_at', $d) ? $d['starts_at'] : $current->starts_at?->toISOString(), array_key_exists('ends_at', $d) ? $d['ends_at'] : $current->ends_at?->toISOString(), $r->user()->id));
 
         return response()->json([]);
     }

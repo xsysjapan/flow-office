@@ -14,7 +14,7 @@ const categoryRule: AssetNumberRule = {
   prefix: 'NPC',
   digitCount: 5,
   nextNumber: 3,
-  enabled: true,
+  isActive: true,
   isDefault: false,
 }
 
@@ -23,7 +23,7 @@ const defaultRule: AssetNumberRule = {
   prefix: 'AST',
   digitCount: 5,
   nextNumber: 10,
-  enabled: true,
+  isActive: true,
   isDefault: true,
 }
 
@@ -67,13 +67,13 @@ describe('AssetNumberRuleListPage', () => {
   })
 
   it('shows "falls back to default" status for a disabled category rule when a default rule is enabled', async () => {
-    renderPage([{ ...categoryRule, enabled: false }, defaultRule])
+    renderPage([{ ...categoryRule, isActive: false }, defaultRule])
 
     expect(await screen.findByText('デフォルトにフォールバック')).toBeInTheDocument()
   })
 
   it('shows "manual input" status for a disabled category rule when no default rule exists', async () => {
-    renderPage([{ ...categoryRule, enabled: false }])
+    renderPage([{ ...categoryRule, isActive: false }])
 
     expect(await screen.findByText('無効化中(手入力)')).toBeInTheDocument()
   })
@@ -89,7 +89,7 @@ describe('AssetNumberRuleListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
-      expect(updateSpy).toHaveBeenCalledWith('ノートPC', { prefix: 'PC', digitCount: 5, enabled: true }),
+      expect(updateSpy).toHaveBeenCalledWith('ノートPC', { prefix: 'PC', digitCount: 5, isActive: true }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ノートPCの採番ルールを保存しました'))
   })
@@ -104,7 +104,7 @@ describe('AssetNumberRuleListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '追加' }))
 
     await waitFor(() =>
-      expect(updateSpy).toHaveBeenCalledWith('モニター', { prefix: 'MON', digitCount: 5, enabled: true }),
+      expect(updateSpy).toHaveBeenCalledWith('モニター', { prefix: 'MON', digitCount: 5, isActive: true }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('モニターの採番ルールを追加しました'))
   })
@@ -118,7 +118,7 @@ describe('AssetNumberRuleListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
-      expect(updateDefaultSpy).toHaveBeenCalledWith({ prefix: 'AST', digitCount: 5, enabled: true }),
+      expect(updateDefaultSpy).toHaveBeenCalledWith({ prefix: 'AST', digitCount: 5, isActive: true }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('デフォルトの採番ルールを保存しました'))
   })

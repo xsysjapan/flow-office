@@ -27,9 +27,7 @@ class CompanyCalendarProjector extends Projector
                 'fiscal_year_start_day' => $event->fiscalYearStartDay,
                 'weekday_holiday_pattern' => $event->weekdayHolidayPattern,
                 'holiday_calendar_source_id' => $event->holidayCalendarSourceId,
-                // nullは「カラムの既定値(true)を使う」を意味する(作成時点では
-                // 更新元の既存値が無いため、weekday_holiday_patternと違いここで解決する)。
-                'allow_daily_holiday_override' => $event->allowDailyHolidayOverride ?? true,
+                'allows_daily_holiday_override' => $event->allowsDailyHolidayOverride,
             ],
         );
     }
@@ -45,7 +43,7 @@ class CompanyCalendarProjector extends Projector
                 'fiscal_year_start_day' => $event->fiscalYearStartDay,
                 'holiday_calendar_source_id' => $event->holidayCalendarSourceId,
                 'weekday_holiday_pattern' => $event->weekdayHolidayPattern,
-                'allow_daily_holiday_override' => $event->allowDailyHolidayOverride,
+                'allows_daily_holiday_override' => $event->allowsDailyHolidayOverride,
             ]);
     }
 

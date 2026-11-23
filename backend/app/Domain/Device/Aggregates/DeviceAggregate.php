@@ -40,9 +40,9 @@ class DeviceAggregate extends AggregateRoot
         ?string $defaultWorkLocationType,
         ?string $timezone,
         ?array $allowedPunchTypes,
-        bool $allowOffline,
-        bool $requireLocation,
-        bool $autoDetectPunchType,
+        bool $allowsOffline,
+        bool $requiresLocation,
+        bool $punchTypeAutoDetectionEnabled,
         string $registeredByUserId,
     ): self {
         $this->recordThat(new DeviceRegistered(
@@ -56,9 +56,9 @@ class DeviceAggregate extends AggregateRoot
             defaultWorkLocationType: $defaultWorkLocationType,
             timezone: $timezone,
             allowedPunchTypes: $allowedPunchTypes,
-            allowOffline: $allowOffline,
-            requireLocation: $requireLocation,
-            autoDetectPunchType: $autoDetectPunchType,
+            allowsOffline: $allowsOffline,
+            requiresLocation: $requiresLocation,
+            punchTypeAutoDetectionEnabled: $punchTypeAutoDetectionEnabled,
             registeredByUserId: $registeredByUserId,
         ));
 
@@ -137,9 +137,9 @@ class DeviceAggregate extends AggregateRoot
         ?string $defaultWorkLocationType,
         ?string $timezone,
         ?array $allowedPunchTypes,
-        bool $allowOffline,
-        bool $requireLocation,
-        bool $autoDetectPunchType,
+        bool $allowsOffline,
+        bool $requiresLocation,
+        bool $punchTypeAutoDetectionEnabled,
         string $updatedByUserId,
     ): self {
         $this->recordThat(new DeviceSettingsUpdated(
@@ -149,9 +149,9 @@ class DeviceAggregate extends AggregateRoot
             defaultWorkLocationType: $defaultWorkLocationType,
             timezone: $timezone,
             allowedPunchTypes: $allowedPunchTypes,
-            allowOffline: $allowOffline,
-            requireLocation: $requireLocation,
-            autoDetectPunchType: $autoDetectPunchType,
+            allowsOffline: $allowsOffline,
+            requiresLocation: $requiresLocation,
+            punchTypeAutoDetectionEnabled: $punchTypeAutoDetectionEnabled,
             updatedByUserId: $updatedByUserId,
         ));
 

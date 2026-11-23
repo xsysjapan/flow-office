@@ -23,7 +23,9 @@ class AttendancePunchResource extends JsonResource
             'device_id' => $this->device_id,
             'authentication_key_id' => $this->authentication_key_id,
             'actor_user_id' => $this->actor_user_id,
-            'offline' => $this->offline,
+            'is_offline' => $this->is_offline,
+            // 端末アプリの更新後に削除する(変更セット 20261123-boolean-column-naming 論点9)。旧名`offline`も返す。
+            'offline' => $this->is_offline,
             'note' => $this->note,
             'status' => $this->status,
             'correction_reason' => $this->correction_reason,

@@ -29,7 +29,9 @@ class UpdateCompanyCalendarHandler implements CommandHandler
                 holidayCalendarSourceId: $command->holidayCalendarSourceId,
                 updatedByUserId: $command->updatedByUserId,
                 weekdayHolidayPattern: $command->weekdayHolidayPattern,
-                allowDailyHolidayOverride: $command->allowDailyHolidayOverride,
+                // 未指定(null)は現在の値を保つ。
+                allowsDailyHolidayOverride: $command->allowsDailyHolidayOverride
+                    ?? (bool) CompanyCalendar::query()->findOrFail($command->companyCalendarId)->allows_daily_holiday_override,
             )
             ->persist();
 

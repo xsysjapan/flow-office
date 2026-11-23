@@ -172,7 +172,7 @@ class GrantScheduledSpecialLeaveHandler implements CommandHandler
         }
 
         $attendedCount = $scheduledDays->filter(fn (SpecialLeaveAttendanceRateDay $day) => LeaveAttendanceRateJudgement::countsAsAttended(
-            $day->attended,
+            $day->has_attended,
             $day->full_leave_kinds ?? [],
             $day->partial_leave_kinds ?? [],
             [LeaveAttendanceRateJudgement::KIND_PAID, LeaveAttendanceRateJudgement::KIND_SPECIAL],

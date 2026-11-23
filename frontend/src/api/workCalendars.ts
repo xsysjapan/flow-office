@@ -40,7 +40,7 @@ export interface CreateWorkCalendarInput {
   weekday_holiday_pattern?: WeekdayHolidayPattern
   holiday_calendar_source_id?: string | null
   /** 省略時はbackend側の既定値(true)が使われる。 */
-  allow_daily_holiday_override?: boolean
+  allows_daily_holiday_override?: boolean
 }
 
 /**
@@ -60,7 +60,7 @@ export interface UpdateWorkCalendarInput {
   holiday_calendar_source_id?: string | null
   weekday_holiday_pattern?: WeekdayHolidayPattern
   /** 省略時は現在値が維持される。 */
-  allow_daily_holiday_override?: boolean
+  allows_daily_holiday_override?: boolean
 }
 
 /**

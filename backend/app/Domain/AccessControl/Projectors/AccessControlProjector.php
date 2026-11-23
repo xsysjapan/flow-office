@@ -78,13 +78,13 @@ class AccessControlProjector extends Projector
     {
         DB::table('role_assignments')->updateOrInsert(
             ['id' => $event->aggregateRootUuid()],
-            ['subject_type' => $event->subjectType, 'subject_id' => $event->subjectId, 'role_id' => $event->roleId, 'scope_type' => $event->scopeType, 'scope_group_id' => $event->scopeGroupId, 'include_descendants' => $event->includeDescendants, 'starts_at' => $this->databaseDate($event->startsAt), 'ends_at' => $this->databaseDate($event->endsAt), 'status' => 'active', 'assigned_by' => $event->actorUserId, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
+            ['subject_type' => $event->subjectType, 'subject_id' => $event->subjectId, 'role_id' => $event->roleId, 'scope_type' => $event->scopeType, 'scope_group_id' => $event->scopeGroupId, 'includes_descendants' => $event->includesDescendants, 'starts_at' => $this->databaseDate($event->startsAt), 'ends_at' => $this->databaseDate($event->endsAt), 'status' => 'active', 'assigned_by' => $event->actorUserId, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
         );
     }
 
     public function onRoleAssignmentUpdated(RoleAssignmentUpdated $event): void
     {
-        DB::table('role_assignments')->where('id', $event->aggregateRootUuid())->update(['scope_type' => $event->scopeType, 'scope_group_id' => $event->scopeGroupId, 'include_descendants' => $event->includeDescendants, 'starts_at' => $this->databaseDate($event->startsAt), 'ends_at' => $this->databaseDate($event->endsAt), 'updated_at' => $event->createdAt()]);
+        DB::table('role_assignments')->where('id', $event->aggregateRootUuid())->update(['scope_type' => $event->scopeType, 'scope_group_id' => $event->scopeGroupId, 'includes_descendants' => $event->includesDescendants, 'starts_at' => $this->databaseDate($event->startsAt), 'ends_at' => $this->databaseDate($event->endsAt), 'updated_at' => $event->createdAt()]);
     }
 
     public function onRoleAssignmentRemoved(RoleAssignmentRemoved $event): void

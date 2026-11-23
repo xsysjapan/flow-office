@@ -19,11 +19,11 @@ use Ramsey\Uuid\Uuid;
             throw new DomainRuleException('GroupTypeコードは既に使用されています。');
         } if ($c->membershipLimitType === 'limited' && $c->maxMembershipsPerUser === null) {
             throw new DomainRuleException('上限ありの場合は所属上限が必要です。');
-        } if ($c->primaryMembershipRequired && ($c->maxPrimaryMemberships ?? 0) < 1) {
+        } if ($c->requiresPrimaryMembership && ($c->maxPrimaryMemberships ?? 0) < 1) {
             throw new DomainRuleException('主所属必須の場合は主所属上限を1以上にしてください。');
         } $businessId = (int) (DB::table('group_types')->lockForUpdate()->max('id') ?? 0) + 1;
         $id = Uuid::uuid5(Uuid::NAMESPACE_URL, 'group-type:'.$c->code)->toString();
-        GroupTypeAggregate::retrieve($id)->create($businessId, $c->code, $c->name, $c->displayOrder, $c->membershipLimitType, $c->maxMembershipsPerUser, $c->primaryMembershipRequired, $c->maxPrimaryMemberships, $c->actorUserId, $c->isSystem)->persist();
+        GroupTypeAggregate::retrieve($id)->create($businessId, $c->code, $c->name, $c->displayOrder, $c->membershipLimitType, $c->maxMembershipsPerUser, $c->requiresPrimaryMembership, $c->maxPrimaryMemberships, $c->actorUserId, $c->isSystem)->persist();
 
         return $c->code;
     }

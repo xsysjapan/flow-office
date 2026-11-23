@@ -26,8 +26,8 @@ use Laravel\Sanctum\HasApiTokens;
  */
 #[Fillable([
     'id', 'owner_type', 'owner_user_id', 'activated_by_user_id', 'name', 'device_type', 'status', 'site_id',
-    'location_name', 'default_work_location_type', 'timezone', 'allowed_punch_types', 'allow_offline',
-    'require_location', 'auto_detect_punch_type', 'last_seen_at', 'app_version',
+    'location_name', 'default_work_location_type', 'timezone', 'allowed_punch_types', 'allows_offline',
+    'requires_location', 'punch_type_auto_detection_enabled', 'last_seen_at', 'app_version',
     'paired_at', 'disabled_at', 'revoked_at',
 ])]
 class Device extends Authenticatable
@@ -43,9 +43,9 @@ class Device extends Authenticatable
     {
         return [
             'allowed_punch_types' => 'array',
-            'allow_offline' => 'boolean',
-            'require_location' => 'boolean',
-            'auto_detect_punch_type' => 'boolean',
+            'allows_offline' => 'boolean',
+            'requires_location' => 'boolean',
+            'punch_type_auto_detection_enabled' => 'boolean',
             'last_seen_at' => 'datetime',
             'paired_at' => 'datetime',
             'disabled_at' => 'datetime',

@@ -207,7 +207,7 @@ test("§5-6+7: ロール変更が即座に反映され、監査ログに記録�
               role_id: hrRoleId,
               scope_type: "global",
               scope_group_id: null,
-              include_descendants: false,
+              includes_descendants: false,
             }),
           },
         );
@@ -460,7 +460,7 @@ test("§5-9: Entra ID初回ログイン(新入社員オンボーディング)", 
               role_id: hrRoleId,
               scope_type: "global",
               scope_group_id: null,
-              include_descendants: false,
+              includes_descendants: false,
             }),
           },
         );

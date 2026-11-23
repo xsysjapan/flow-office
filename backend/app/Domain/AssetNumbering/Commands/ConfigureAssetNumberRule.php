@@ -16,7 +16,7 @@ class ConfigureAssetNumberRule implements Command
         public readonly ?string $category,
         public readonly string $prefix,
         public readonly int $digitCount,
-        public readonly bool $enabled,
+        public readonly bool $isActive,
         public readonly string $actorUserId,
     ) {}
 }

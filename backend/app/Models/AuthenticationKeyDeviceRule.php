@@ -6,12 +6,12 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['authentication_key_id', 'device_id', 'site_id', 'allow'])]
+#[Fillable(['authentication_key_id', 'device_id', 'site_id', 'allows_use'])]
 class AuthenticationKeyDeviceRule extends Model
 {
     protected function casts(): array
     {
-        return ['allow' => 'boolean'];
+        return ['allows_use' => 'boolean'];
     }
 
     /**

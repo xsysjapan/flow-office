@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
     'user_id',
     'work_date',
     'is_working_day',
-    'attended',
+    'has_attended',
     'full_leave_kinds',
     'partial_leave_kinds',
 ])]
@@ -25,7 +25,7 @@ class LeaveAttendanceRateDay extends Model
     {
         return [
             'is_working_day' => 'boolean',
-            'attended' => 'boolean',
+            'has_attended' => 'boolean',
             'full_leave_kinds' => 'array',
             'partial_leave_kinds' => 'array',
         ];

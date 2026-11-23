@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['id', 'subject_type', 'subject_id', 'role_id', 'scope_type', 'scope_group_id', 'include_descendants', 'starts_at', 'ends_at', 'status', 'assigned_by'])]
+#[Fillable(['id', 'subject_type', 'subject_id', 'role_id', 'scope_type', 'scope_group_id', 'includes_descendants', 'starts_at', 'ends_at', 'status', 'assigned_by'])]
 class RoleAssignment extends Model
 {
     use HasUuids;
@@ -18,7 +18,7 @@ class RoleAssignment extends Model
 
     protected function casts(): array
     {
-        return ['include_descendants' => 'boolean', 'starts_at' => 'datetime', 'ends_at' => 'datetime'];
+        return ['includes_descendants' => 'boolean', 'starts_at' => 'datetime', 'ends_at' => 'datetime'];
     }
 
     public function role(): BelongsTo

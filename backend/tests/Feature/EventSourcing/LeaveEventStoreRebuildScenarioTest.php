@@ -534,6 +534,6 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
             'prescribed_holiday_work_minutes', 'late_night_legal_holiday_work_minutes',
         ];
 
-        return array_fill_keys($zero, 0) + ['day_classification' => 'working_day'];
+        return array_fill_keys($zero, 0) + ['day_classification' => 'working_day', 'has_core_time_violation' => false];
     }
 }

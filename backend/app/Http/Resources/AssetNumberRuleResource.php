@@ -21,7 +21,7 @@ class AssetNumberRuleResource extends JsonResource
             'prefix' => $this->prefix,
             'digit_count' => $this->digit_count,
             'next_number' => $this->next_number,
-            'enabled' => $this->enabled,
+            'is_active' => $this->is_active,
             'is_default' => $this->is_default,
         ];
     }

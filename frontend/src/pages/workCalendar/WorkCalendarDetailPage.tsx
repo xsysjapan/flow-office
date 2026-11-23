@@ -167,7 +167,7 @@ export function WorkCalendarDetailPage() {
     setWeekStartsOn(String(calendar.week_starts_on))
     setFiscalYearStartMonth(String(calendar.fiscal_year_start_month))
     setFiscalYearStartDay(String(calendar.fiscal_year_start_day))
-    setAllowDailyHolidayOverride(calendar.allow_daily_holiday_override)
+    setAllowDailyHolidayOverride(calendar.allows_daily_holiday_override)
     setWeekdayPattern(calendar.weekday_holiday_pattern)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendar?.id])
@@ -178,7 +178,7 @@ export function WorkCalendarDetailPage() {
         weekStartsOn !== String(calendar.week_starts_on) ||
         fiscalYearStartMonth !== String(calendar.fiscal_year_start_month) ||
         fiscalYearStartDay !== String(calendar.fiscal_year_start_day) ||
-        allowDailyHolidayOverride !== calendar.allow_daily_holiday_override ||
+        allowDailyHolidayOverride !== calendar.allows_daily_holiday_override ||
         JSON.stringify(weekdayPattern) !== JSON.stringify(calendar.weekday_holiday_pattern)),
   )
   useUnsavedChangesGuard(isSettingsDirty)
@@ -226,7 +226,7 @@ export function WorkCalendarDetailPage() {
           fiscal_year_start_day: Number(fiscalYearStartDay),
           holiday_calendar_source_id: calendar.holiday_calendar_source_id,
           weekday_holiday_pattern: weekdayPattern ? weekdayPattern : undefined,
-          allow_daily_holiday_override: allowDailyHolidayOverride,
+          allows_daily_holiday_override: allowDailyHolidayOverride,
         },
       },
       { onSuccess: () => notify.success('カレンダーの基本設定を保存しました') },

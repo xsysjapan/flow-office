@@ -18,6 +18,7 @@ use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 /**
@@ -35,7 +36,7 @@ class DevicePunchController extends Controller
         operationId: 'devicePunches.store',
         summary: '端末から打刻を記録する(UC-A020)',
         tags: ['端末打刻'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['work_date', 'punch_type', 'punched_at'], properties: [new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'punch_type', type: 'string'), new OA\Property(property: 'punched_at', type: 'string', format: 'date-time'), new OA\Property(property: 'authentication_key_value', type: 'string', nullable: true), new OA\Property(property: 'offline', type: 'boolean', nullable: true), new OA\Property(property: 'idempotency_key', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['work_date', 'punch_type', 'punched_at'], properties: [new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'punch_type', type: 'string'), new OA\Property(property: 'punched_at', type: 'string', format: 'date-time'), new OA\Property(property: 'authentication_key_value', type: 'string', nullable: true), new OA\Property(property: 'is_offline', type: 'boolean', nullable: true), new OA\Property(property: 'offline', type: 'boolean', nullable: true, deprecated: true), new OA\Property(property: 'idempotency_key', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(
@@ -52,10 +53,19 @@ class DevicePunchController extends Controller
             'punch_type' => ['required', Rule::in(PunchType::values())],
             'punched_at' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'authentication_key_value' => ['nullable', 'string'],
+            'is_offline' => ['nullable', 'boolean'],
+            // 端末アプリの更新後に削除する(変更セット 20261123-boolean-column-naming 論点9)。旧名`offline`も受け付ける。
             'offline' => ['nullable', 'boolean'],
             'idempotency_key' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
         ]);
+
+        if (array_key_exists('is_offline', $data) && array_key_exists('offline', $data)
+            && $data['is_offline'] !== null && $data['offline'] !== null
+            && (bool) $data['is_offline'] !== (bool) $data['offline']) {
+            throw ValidationException::withMessages(['is_offline' => 'is_offline と offline の値が一致しません。is_offline だけを指定してください。']);
+        }
+        $isOffline = (bool) ($data['is_offline'] ?? $data['offline'] ?? false);
 
         if ($device->owner_type === DeviceOwnerType::PERSONAL) {
             $targetUserId = $device->owner_user_id;
@@ -77,7 +87,7 @@ class DevicePunchController extends Controller
             deviceId: $device->id,
             authenticationKeyId: $authenticationKeyId,
             actorUserId: $targetUserId,
-            offline: $data['offline'] ?? false,
+            isOffline: $isOffline,
             idempotencyKey: $data['idempotency_key'] ?? null,
             requestId: $request->header('X-Request-Id'),
         ));

@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'prescribed_statutory_excess_work_minutes', 'non_prescribed_statutory_excess_work_minutes',
     'late_night_prescribed_statutory_within_work_minutes', 'late_night_non_prescribed_statutory_within_work_minutes',
     'late_night_prescribed_statutory_excess_work_minutes', 'late_night_non_prescribed_statutory_excess_work_minutes',
-    'core_time_violation',
+    'has_core_time_violation',
     'absence_minutes', 'special_leave_minutes', 'paid_leave_days', 'paid_leave_minutes', 'special_leave_days',
     'is_manually_adjusted', 'adjusted_by_user_id', 'adjusted_at',
 ])]
@@ -31,7 +31,7 @@ class AttendanceDailyCalculation extends Model
     protected function casts(): array
     {
         return [
-            'core_time_violation' => 'boolean',
+            'has_core_time_violation' => 'boolean',
             'paid_leave_days' => 'decimal:2',
             'special_leave_days' => 'decimal:2',
             'is_manually_adjusted' => 'boolean',

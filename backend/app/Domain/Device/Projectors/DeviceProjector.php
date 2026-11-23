@@ -38,9 +38,9 @@ class DeviceProjector extends Projector
                 'default_work_location_type' => $event->defaultWorkLocationType,
                 'timezone' => $event->timezone,
                 'allowed_punch_types' => $event->allowedPunchTypes,
-                'allow_offline' => $event->allowOffline,
-                'require_location' => $event->requireLocation,
-                'auto_detect_punch_type' => $event->autoDetectPunchType,
+                'allows_offline' => $event->allowsOffline,
+                'requires_location' => $event->requiresLocation,
+                'punch_type_auto_detection_enabled' => $event->punchTypeAutoDetectionEnabled,
             ],
         );
 
@@ -124,9 +124,9 @@ class DeviceProjector extends Projector
             'default_work_location_type' => $event->defaultWorkLocationType,
             'timezone' => $event->timezone,
             'allowed_punch_types' => $event->allowedPunchTypes,
-            'allow_offline' => $event->allowOffline,
-            'require_location' => $event->requireLocation,
-            'auto_detect_punch_type' => $event->autoDetectPunchType,
+            'allows_offline' => $event->allowsOffline,
+            'requires_location' => $event->requiresLocation,
+            'punch_type_auto_detection_enabled' => $event->punchTypeAutoDetectionEnabled,
         ]);
     }
 

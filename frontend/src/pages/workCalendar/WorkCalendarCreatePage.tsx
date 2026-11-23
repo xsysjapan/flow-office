@@ -131,7 +131,7 @@ export function WorkCalendarCreatePage() {
         fiscal_year_start_month: form.fiscalYearStartMonth ? Number(form.fiscalYearStartMonth) : undefined,
         fiscal_year_start_day: form.fiscalYearStartDay ? Number(form.fiscalYearStartDay) : undefined,
         weekday_holiday_pattern: form.weekdayPattern,
-        allow_daily_holiday_override: form.allowDailyHolidayOverride,
+        allows_daily_holiday_override: form.allowDailyHolidayOverride,
         holiday_calendar_source_id: form.holidaySourceId === NONE_OPTION_VALUE ? undefined : form.holidaySourceId,
       },
       {

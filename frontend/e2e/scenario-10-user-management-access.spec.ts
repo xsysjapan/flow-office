@@ -70,7 +70,7 @@ async function ensureAccessScenarioGroup(page: Page): Promise<string> {
         code: groupTypeCode,
         name: groupTypeName,
         membership_limit_type: "unlimited",
-        primary_membership_required: false,
+        requires_primary_membership: false,
       },
     });
   }

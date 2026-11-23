@@ -73,7 +73,7 @@ async function createGroupType(
       name: code,
       membership_limit_type: options?.maxMemberships ? "limited" : "unlimited",
       max_memberships_per_user: options?.maxMemberships ?? null,
-      primary_membership_required: false,
+      requires_primary_membership: false,
     },
   });
   const types = await apiFetch<Array<{ id: number; code: string }>>(
@@ -172,7 +172,7 @@ async function assignFeatures(page: Page, groupId: string, codes: string[]) {
       role_id: role.id,
       scope_type: "global",
       scope_group_id: null,
-      include_descendants: false,
+      includes_descendants: false,
     },
   });
 }
@@ -279,7 +279,7 @@ test("個別Feature停止はメニュー・直URL・APIの全境界へ即時反�
           role_id: role.id,
           scope_type: "global",
           scope_group_id: null,
-          include_descendants: false,
+          includes_descendants: false,
         },
       },
     );
@@ -378,7 +378,7 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
           role_id: source.id,
           scope_type: "group",
           scope_group_id: parentId,
-          include_descendants: true,
+          includes_descendants: true,
           starts_at: future,
           ends_at: null,
         },
@@ -401,7 +401,7 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
         body: {
           scope_type: "group",
           scope_group_id: parentId,
-          include_descendants: true,
+          includes_descendants: true,
           starts_at: new Date(Date.now() - 60_000).toISOString(),
           ends_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         },
@@ -421,7 +421,7 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
           type: "direct",
           scope_type: "group",
           scope_group_id: parentId,
-          include_descendants: true,
+          includes_descendants: true,
         }),
       ]),
     );
@@ -467,7 +467,7 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
         role_id: number;
         scope_type: string;
         scope_group_id: string | null;
-        include_descendants: boolean;
+        includes_descendants: boolean;
         starts_at: string | null;
         ends_at: string | null;
         role?: { permissions?: Permission[] };
@@ -497,7 +497,7 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
         role_id: assignment.role_id,
         scope_type: assignment.scope_type,
         scope_group_id: assignment.scope_group_id,
-        include_descendants: assignment.include_descendants,
+        includes_descendants: assignment.includes_descendants,
         starts_at: assignment.starts_at,
         ends_at: assignment.ends_at,
       });
@@ -513,7 +513,7 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
           role_id: source.id,
           scope_type: "group",
           scope_group_id: parentId,
-          include_descendants: true,
+          includes_descendants: true,
         },
       },
     );
@@ -725,7 +725,7 @@ test("複数GroupのFeature・Permissionを合成し、付与元と主要監査�
             role_id: roleId,
             scope_type: "global",
             scope_group_id: null,
-            include_descendants: false,
+            includes_descendants: false,
           },
         },
       );

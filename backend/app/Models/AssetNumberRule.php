@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
  * 作成・変更・連番払い出しは監査目的で`App\Domain\AssetNumbering`配下のCommand/Event経由で
  * `stored_events`にも記録する(ルートCLAUDE.mdの設計原則1の例外規定)。
  */
-#[Fillable(['category', 'prefix', 'digit_count', 'next_number', 'enabled', 'is_default'])]
+#[Fillable(['category', 'prefix', 'digit_count', 'next_number', 'is_active', 'is_default'])]
 class AssetNumberRule extends Model
 {
     protected function casts(): array
@@ -22,7 +22,7 @@ class AssetNumberRule extends Model
         return [
             'digit_count' => 'integer',
             'next_number' => 'integer',
-            'enabled' => 'boolean',
+            'is_active' => 'boolean',
             'is_default' => 'boolean',
         ];
     }

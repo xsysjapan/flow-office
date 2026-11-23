@@ -74,7 +74,7 @@ class SeededDataReconcilerTest extends TestCase
             [
                 $this->event(1, $aggregate, 'group_type.created', $this->groupTypeCreated()),
                 $this->event(2, 'other', 'attendance_day.created', []),
-                $this->event(3, $aggregate, 'group_type.updated', ['groupTypeId' => 1, 'name' => '部署(旧)', 'displayOrder' => 10, 'status' => 'active', 'membershipLimitType' => 'unlimited', 'maxMembershipsPerUser' => null, 'primaryMembershipRequired' => false, 'maxPrimaryMemberships' => null, 'actorUserId' => 'x'], '2026-09-02 10:00:00'),
+                $this->event(3, $aggregate, 'group_type.updated', ['groupTypeId' => 1, 'name' => '部署(旧)', 'displayOrder' => 10, 'status' => 'active', 'membershipLimitType' => 'unlimited', 'maxMembershipsPerUser' => null, 'requiresPrimaryMembership' => false, 'maxPrimaryMemberships' => null, 'actorUserId' => 'x'], '2026-09-02 10:00:00'),
             ],
             new SeededDataCurrent(groupTypes: [$this->groupType(['name' => '部署(再実行後)'])]),
         );
@@ -109,7 +109,7 @@ class SeededDataReconcilerTest extends TestCase
         $result = $this->reconcile(
             [
                 $this->event(4, 'other', 'attendance_day.created', [], '2026-08-01 09:00:00'),
-                $this->event(5, $aggregate, 'group_type.updated', ['groupTypeId' => 1, 'name' => '部署', 'displayOrder' => 10, 'status' => 'active', 'membershipLimitType' => 'unlimited', 'maxMembershipsPerUser' => null, 'primaryMembershipRequired' => false, 'maxPrimaryMemberships' => null, 'actorUserId' => null], '2026-09-02 10:00:00'),
+                $this->event(5, $aggregate, 'group_type.updated', ['groupTypeId' => 1, 'name' => '部署', 'displayOrder' => 10, 'status' => 'active', 'membershipLimitType' => 'unlimited', 'maxMembershipsPerUser' => null, 'requiresPrimaryMembership' => false, 'maxPrimaryMemberships' => null, 'actorUserId' => null], '2026-09-02 10:00:00'),
             ],
             new SeededDataCurrent(groupTypes: [$this->groupType()]),
         );
@@ -255,7 +255,7 @@ class SeededDataReconcilerTest extends TestCase
             roles: [$this->role()],
             roleAssignments: [[
                 'id' => $assignment, 'subject_type' => 'user', 'subject_id' => self::USER, 'role_id' => 7, 'scope_type' => 'company', 'scope_group_id' => null,
-                'include_descendants' => 0, 'starts_at' => null, 'ends_at' => '2027-03-31 00:00:00', 'status' => 'active', 'assigned_by' => self::USER, 'created_at' => '2026-01-09 00:00:00',
+                'includes_descendants' => 0, 'starts_at' => null, 'ends_at' => '2027-03-31 00:00:00', 'status' => 'active', 'assigned_by' => self::USER, 'created_at' => '2026-01-09 00:00:00',
             ]],
         ));
 
@@ -274,9 +274,9 @@ class SeededDataReconcilerTest extends TestCase
         $assignment = '77777777-7777-4777-8777-777777777777';
         $row = [
             'id' => $assignment, 'subject_type' => 'user', 'subject_id' => self::USER, 'role_id' => 7, 'scope_type' => 'company', 'scope_group_id' => null,
-            'include_descendants' => 0, 'starts_at' => null, 'ends_at' => null, 'status' => 'active', 'assigned_by' => null, 'created_at' => self::ROW_AT,
+            'includes_descendants' => 0, 'starts_at' => null, 'ends_at' => null, 'status' => 'active', 'assigned_by' => null, 'created_at' => self::ROW_AT,
         ];
-        $created = $this->event(1, $assignment, 'role_assignment.created', ['subjectType' => 'user', 'subjectId' => self::USER, 'roleId' => 7, 'scopeType' => 'company', 'scopeGroupId' => null, 'includeDescendants' => false, 'startsAt' => null, 'endsAt' => null, 'actorUserId' => null]);
+        $created = $this->event(1, $assignment, 'role_assignment.created', ['subjectType' => 'user', 'subjectId' => self::USER, 'roleId' => 7, 'scopeType' => 'company', 'scopeGroupId' => null, 'includesDescendants' => false, 'startsAt' => null, 'endsAt' => null, 'actorUserId' => null]);
         $base = ['users' => [$this->user()], 'roles' => [$this->role()]];
         $only = fn (ReconcileResult $r, string $prefix) => array_values(array_filter($r->events, fn (RebuiltEvent $e) => str_starts_with($e->eventClass, $prefix)));
 
@@ -1022,7 +1022,7 @@ class SeededDataReconcilerTest extends TestCase
     {
         return $over + [
             'id' => 1, 'code' => 'department', 'name' => '部署', 'display_order' => 10, 'is_system' => 0, 'status' => 'active', 'membership_limit_type' => 'unlimited',
-            'max_memberships_per_user' => null, 'primary_membership_required' => 0, 'max_primary_memberships' => null, 'created_at' => self::ROW_AT,
+            'max_memberships_per_user' => null, 'requires_primary_membership' => 0, 'max_primary_memberships' => null, 'created_at' => self::ROW_AT,
         ];
     }
 
@@ -1036,7 +1036,7 @@ class SeededDataReconcilerTest extends TestCase
     {
         return [
             'groupTypeId' => 1, 'code' => 'department', 'name' => '部署', 'displayOrder' => 10, 'membershipLimitType' => 'unlimited', 'maxMembershipsPerUser' => null,
-            'primaryMembershipRequired' => false, 'maxPrimaryMemberships' => null, 'actorUserId' => null, 'isSystem' => false,
+            'requiresPrimaryMembership' => false, 'maxPrimaryMemberships' => null, 'actorUserId' => null, 'isSystem' => false,
         ];
     }
 

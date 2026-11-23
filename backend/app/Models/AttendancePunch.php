@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'id', 'user_id', 'work_date', 'punch_type', 'punched_at', 'utc_offset_minutes', 'source', 'note',
     'status', 'correction_reason', 'corrected_by_user_id', 'corrected_at', 'superseded_by_punch_id',
-    'device_id', 'authentication_key_id', 'actor_user_id', 'integration_id', 'offline',
+    'device_id', 'authentication_key_id', 'actor_user_id', 'integration_id', 'is_offline',
     'idempotency_key', 'request_id', 'metadata_json',
 ])]
 class AttendancePunch extends Model
@@ -35,7 +35,7 @@ class AttendancePunch extends Model
             'work_date' => 'date',
             'punched_at' => 'datetime',
             'corrected_at' => 'datetime',
-            'offline' => 'boolean',
+            'is_offline' => 'boolean',
             'metadata_json' => 'array',
         ];
     }

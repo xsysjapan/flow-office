@@ -28,7 +28,7 @@ const calendar: WorkCalendar = {
     '6': 'company_holiday',
     '7': 'legal_holiday',
   },
-  allow_daily_holiday_override: true,
+  allows_daily_holiday_override: true,
 }
 
 const year: WorkCalendarYear = {
@@ -208,7 +208,7 @@ describe('WorkCalendarDaysPage', () => {
   })
 
   it('shows the classification read-only and hints at the lock when the calendar disallows daily override', async () => {
-    const lockedCalendar: WorkCalendar = { ...calendar, allow_daily_holiday_override: false }
+    const lockedCalendar: WorkCalendar = { ...calendar, allows_daily_holiday_override: false }
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([lockedCalendar])
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([year])
     vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())

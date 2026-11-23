@@ -436,7 +436,7 @@ class PaidLeaveRequestScenarioTest extends TestCase
     /** 取消されていない消化記録の件数(active)と、そのうち確定済みの件数(confirmed)。 */
     private function assertUsages(string $requestId, int $active, int $confirmed): void
     {
-        $usages = PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->where('cancelled', false);
+        $usages = PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->where('is_cancelled', false);
 
         $this->assertSame($active, (clone $usages)->count(), 'active usages');
         $this->assertSame($confirmed, (clone $usages)->where('is_confirmed', true)->count(), 'confirmed usages');

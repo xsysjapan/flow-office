@@ -84,7 +84,7 @@ class FiscalYearStartChangeScenarioTest extends TestCase
             fiscalYearStartDay: $day,
             holidayCalendarSourceId: null,
             updatedByUserId: $this->admin->id,
-            allowDailyHolidayOverride: true,
+            allowsDailyHolidayOverride: true,
         ));
     }
 

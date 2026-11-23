@@ -77,7 +77,7 @@ class AttendanceDailyCalculationProjector extends Projector
                 'prescribed_holiday_work_minutes' => $payload['prescribed_holiday_work_minutes'],
                 'late_night_legal_holiday_work_minutes' => $payload['late_night_legal_holiday_work_minutes'],
                 'late_night_prescribed_holiday_work_minutes' => $payload['late_night_prescribed_holiday_work_minutes'] ?? 0,
-                'core_time_violation' => $payload['core_time_violation'] ?? false,
+                'has_core_time_violation' => $payload['has_core_time_violation'],
                 'absence_minutes' => $payload['absence_minutes'] ?? 0,
                 'special_leave_minutes' => $payload['special_leave_minutes'] ?? 0,
                 'paid_leave_days' => $payload['paid_leave_days'] ?? 0,

@@ -58,7 +58,7 @@ class FlexSettlementSummaryCalculator
         $actualMinutes = (int) $days->sum(fn (AttendanceDay $day) => $day->calculation?->work_minutes ?? 0);
         $lateNightWorkMinutes = (int) $days->sum(fn (AttendanceDay $day) => $day->calculation?->late_night_work_minutes ?? 0);
         $legalHolidayWorkMinutes = (int) $days->sum(fn (AttendanceDay $day) => $day->calculation?->legal_holiday_work_minutes ?? 0);
-        $coreTimeViolationDays = $days->filter(fn (AttendanceDay $day) => $day->calculation?->core_time_violation === true)->count();
+        $coreTimeViolationDays = $days->filter(fn (AttendanceDay $day) => $day->calculation?->has_core_time_violation === true)->count();
 
         $remainingMinutes = max(0, $requiredMinutes - $actualMinutes);
 

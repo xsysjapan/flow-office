@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\DB;
             throw new DomainRuleException('GROUPスコープでは対象Groupが必須です。');
         } if ($c->scopeType !== 'group' && $c->scopeGroupId) {
             throw new DomainRuleException('GROUP以外に対象Groupは指定できません。');
-        } if ($c->scopeType !== 'group' && $c->includeDescendants) {
+        } if ($c->scopeType !== 'group' && $c->includesDescendants) {
             throw new DomainRuleException('配下を含む指定はGROUPスコープだけで利用できます。');
         } if ($c->scopeGroupId && ! DB::table('groups')->where('id', $c->scopeGroupId)->where('status', 'active')->exists()) {
             throw new DomainRuleException('有効なスコープ対象Groupを指定してください。');
@@ -38,7 +38,7 @@ use Illuminate\Support\Facades\DB;
             throw new DomainRuleException('開始日時は終了日時以前にしてください。');
         } $subjectType = DB::table('role_assignments')->where('id', $c->assignmentId)->value('subject_type');
         $subjectId = DB::table('role_assignments')->where('id', $c->assignmentId)->value('subject_id');
-        RoleAssignmentAggregate::retrieve($c->assignmentId)->update($c->scopeType, $c->scopeGroupId, $c->includeDescendants, $c->startsAt, $c->endsAt, $c->actorUserId)->persist();
+        RoleAssignmentAggregate::retrieve($c->assignmentId)->update($c->scopeType, $c->scopeGroupId, $c->includesDescendants, $c->startsAt, $c->endsAt, $c->actorUserId)->persist();
 
         if ($subjectType === 'group') {
             $this->groupFeatureSync->syncGroup($subjectId, $c->actorUserId);

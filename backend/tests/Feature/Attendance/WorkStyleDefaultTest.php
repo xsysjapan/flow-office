@@ -38,7 +38,7 @@ class WorkStyleDefaultTest extends TestCase
             ->assertJsonPath('default_start_time', '09:00')
             ->assertJsonPath('default_end_time', '18:00')
             ->assertJsonPath('is_default', true)
-            ->assertJsonPath('system_generated', true);
+            ->assertJsonPath('is_system_generated', true);
 
         $this->assertSame(
             $response->json('id'),
@@ -62,7 +62,7 @@ class WorkStyleDefaultTest extends TestCase
             ->assertJsonPath('default_start_time', '08:30')
             ->assertJsonPath('default_end_time', '17:30')
             ->assertJsonPath('default_break_minutes', 45)
-            ->assertJsonPath('system_generated', true);
+            ->assertJsonPath('is_system_generated', true);
     }
 
     public function test_creating_a_default_work_style_fails_when_one_already_exists(): void

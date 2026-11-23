@@ -17,11 +17,11 @@ class AttendancePunchRecorded extends ShouldBeStored
         public readonly string $punchType,
         public readonly string $punchedAt,
         public readonly string $source,
+        public readonly bool $isOffline,
         public readonly ?string $note = null,
         public readonly ?string $deviceId = null,
         public readonly ?string $authenticationKeyId = null,
         public readonly ?string $actorUserId = null,
-        public readonly bool $offline = false,
         public readonly ?string $idempotencyKey = null,
         public readonly ?string $requestId = null,
     ) {}

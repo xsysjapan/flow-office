@@ -63,7 +63,9 @@ class SystemSettingController extends Controller
             'compensatory_leave_unit' => ['string', Rule::in(['daily', 'half_day', 'hourly'])],
             'compensatory_leave_half_day_threshold_minutes' => ['nullable', 'integer', 'min:1'],
             'compensatory_leave_valid_days' => ['nullable', 'integer', 'min:1'],
-            'prohibit_self_privileged_role_assignment' => ['boolean'],
+            'prohibits_self_privileged_role_assignment' => ['boolean'],
+            // 旧名は受け付けない(変更セット 20261123-boolean-column-naming 論点10)。
+            'prohibit_self_privileged_role_assignment' => ['prohibited'],
         ]);
 
         // クライアントシークレットは画面に平文を出さないため、未入力(送信されない、または空)の場合は

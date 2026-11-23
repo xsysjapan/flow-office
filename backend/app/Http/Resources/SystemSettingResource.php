@@ -41,7 +41,7 @@ class SystemSettingResource extends JsonResource
             'compensatory_leave_unit' => $this->compensatory_leave_unit,
             'compensatory_leave_half_day_threshold_minutes' => $this->compensatory_leave_half_day_threshold_minutes,
             'compensatory_leave_valid_days' => $this->compensatory_leave_valid_days,
-            'prohibit_self_privileged_role_assignment' => $this->prohibit_self_privileged_role_assignment,
+            'prohibits_self_privileged_role_assignment' => $this->prohibits_self_privileged_role_assignment,
         ];
     }
 }

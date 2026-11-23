@@ -227,7 +227,7 @@ class LeaveAttendanceRateScenarioTest extends TestCase
     /** 両ビューの行(利用者・日付・分母・出勤・休暇の種類)と休暇の行の状態。 */
     private function viewState(): array
     {
-        $columns = ['user_id', 'work_date', 'is_working_day', 'attended', 'full_leave_kinds', 'partial_leave_kinds'];
+        $columns = ['user_id', 'work_date', 'is_working_day', 'has_attended', 'full_leave_kinds', 'partial_leave_kinds'];
 
         return [
             'paid' => LeaveAttendanceRateDay::query()->orderBy('work_date')->get($columns)->map->toArray()->all(),
@@ -276,7 +276,7 @@ class LeaveAttendanceRateScenarioTest extends TestCase
             ->first();
 
         $this->assertNotNull($row, "attendance rate row for {$date}");
-        $this->assertSame($attended, (bool) $row->attended, "attended on {$date}");
+        $this->assertSame($attended, (bool) $row->has_attended, "attended on {$date}");
         $this->assertSame($full, $row->full_leave_kinds ?? [], "full leave kinds on {$date}");
         $this->assertSame($partial, $row->partial_leave_kinds ?? [], "partial leave kinds on {$date}");
     }

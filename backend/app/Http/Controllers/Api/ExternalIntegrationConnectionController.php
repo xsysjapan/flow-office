@@ -54,7 +54,9 @@ class ExternalIntegrationConnectionController extends Controller
             'refresh_token' => ['nullable', 'string'],
             'token_expires_at' => ['nullable', 'date'],
             'external_office_id' => ['nullable', 'string'],
-            'enabled' => ['boolean'],
+            'publishing_enabled' => ['boolean'],
+            // 旧名は受け付けない(変更セット 20261123-boolean-column-naming 論点10)。
+            'enabled' => ['prohibited'],
             'custom_settings' => ['nullable', 'array'],
         ]);
 
@@ -76,7 +78,7 @@ class ExternalIntegrationConnectionController extends Controller
                 'name' => $data['name'],
                 'auth_type' => $data['auth_type'],
                 'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
-                'enabled' => $data['enabled'] ?? false,
+                'publishing_enabled' => $data['publishing_enabled'] ?? false,
                 'client_id' => $data['client_id'] ?? null,
                 'client_secret' => $data['client_secret'] ?? null,
                 'api_key' => $data['api_key'] ?? null,
@@ -106,7 +108,9 @@ class ExternalIntegrationConnectionController extends Controller
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
-            'enabled' => ['sometimes', 'boolean'],
+            'publishing_enabled' => ['sometimes', 'boolean'],
+            // 旧名は受け付けない(変更セット 20261123-boolean-column-naming 論点10)。
+            'enabled' => ['prohibited'],
             'client_id' => ['sometimes', 'nullable', 'string'],
             'client_secret' => ['sometimes', 'nullable', 'string'],
             'api_key' => ['sometimes', 'nullable', 'string'],
@@ -162,7 +166,7 @@ class ExternalIntegrationConnectionController extends Controller
      */
     private function auditPayload(ExternalIntegrationConnection $connection): array
     {
-        $payload = $connection->only(['id', 'provider', 'name', 'auth_type', 'status', 'enabled', 'external_office_id', 'custom_settings']);
+        $payload = $connection->only(['id', 'provider', 'name', 'auth_type', 'status', 'publishing_enabled', 'external_office_id', 'custom_settings']);
         foreach (self::SECRET_FIELDS as $secret) {
             $payload[$secret] = filled($connection->{$secret}) ? '[SET]' : null;
         }
@@ -178,7 +182,7 @@ class ExternalIntegrationConnectionController extends Controller
             'name' => $connection->name,
             'auth_type' => $connection->auth_type,
             'status' => $connection->status,
-            'enabled' => $connection->enabled,
+            'publishing_enabled' => $connection->publishing_enabled,
             'external_office_id' => $connection->external_office_id,
             'custom_settings' => $connection->custom_settings,
             'has_client_id' => filled($connection->client_id),

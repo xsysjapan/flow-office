@@ -31,7 +31,7 @@ function renderPage(initialEntry = '/') {
       status: 'active',
       parent_group_id: null,
       memberships_count: 0,
-      type: { id: 1, code: 'ORGANIZATION', name: '組織', display_order: 0, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, primary_membership_required: false, max_primary_memberships: null },
+      type: { id: 1, code: 'ORGANIZATION', name: '組織', display_order: 0, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, requires_primary_membership: false, max_primary_memberships: null },
       features: [],
       memberships: [],
       role_assignments: [],
@@ -44,15 +44,15 @@ function renderPage(initialEntry = '/') {
       status: 'active',
       parent_group_id: null,
       memberships_count: 0,
-      type: { id: 2, code: 'COMMITTEE', name: '委員会', display_order: 1, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, primary_membership_required: false, max_primary_memberships: null },
+      type: { id: 2, code: 'COMMITTEE', name: '委員会', display_order: 1, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, requires_primary_membership: false, max_primary_memberships: null },
       features: [],
       memberships: [],
       role_assignments: [],
     },
   ])
   vi.spyOn(userManagementApi, 'fetchGroupTypes').mockResolvedValue([
-    { id: 1, code: 'ORGANIZATION', name: '組織', display_order: 0, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, primary_membership_required: false, max_primary_memberships: null },
-    { id: 2, code: 'COMMITTEE', name: '委員会', display_order: 1, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, primary_membership_required: false, max_primary_memberships: null },
+    { id: 1, code: 'ORGANIZATION', name: '組織', display_order: 0, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, requires_primary_membership: false, max_primary_memberships: null },
+    { id: 2, code: 'COMMITTEE', name: '委員会', display_order: 1, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, requires_primary_membership: false, max_primary_memberships: null },
   ])
 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })

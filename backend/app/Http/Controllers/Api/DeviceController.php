@@ -15,6 +15,7 @@ use App\Domain\Device\Commands\UpdateDeviceRoles;
 use App\Domain\Device\Commands\UpdateDeviceSettings;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\DeviceForDeviceAppResource;
 use App\Http\Resources\DeviceResource;
 use App\Models\Device;
 use App\Models\DeviceOwnerType;
@@ -85,9 +86,9 @@ class DeviceController extends Controller
             defaultWorkLocationType: $data['default_work_location_type'] ?? null,
             timezone: $data['timezone'] ?? null,
             allowedPunchTypes: $data['allowed_punch_types'] ?? null,
-            allowOffline: $data['allow_offline'] ?? true,
-            requireLocation: $data['require_location'] ?? false,
-            autoDetectPunchType: $data['auto_detect_punch_type'] ?? false,
+            allowsOffline: $data['allows_offline'] ?? true,
+            requiresLocation: $data['requires_location'] ?? false,
+            punchTypeAutoDetectionEnabled: $data['punch_type_auto_detection_enabled'] ?? false,
             registeredByUserId: $request->user()->id,
         ));
 
@@ -113,9 +114,9 @@ class DeviceController extends Controller
             defaultWorkLocationType: null,
             timezone: null,
             allowedPunchTypes: null,
-            allowOffline: true,
-            requireLocation: false,
-            autoDetectPunchType: true,
+            allowsOffline: true,
+            requiresLocation: false,
+            punchTypeAutoDetectionEnabled: true,
             registeredByUserId: $request->user()->id,
         ));
 
@@ -179,7 +180,7 @@ class DeviceController extends Controller
         $base = rtrim("$base/".config('app.api_prefix', ''), '/');
 
         return response()->json([
-            'device' => new DeviceResource($result['device']),
+            'device' => new DeviceForDeviceAppResource($result['device']),
             'token' => $result['plainTextToken'],
             // ペアリング完了後、端末アプリが以後のAPIコール(heartbeat・打刻等)に使う
             // ベースURL。claim_urlと同じくAPP_URL・APP_API_PREFIXを踏まえて確定させる。
@@ -200,9 +201,13 @@ class DeviceController extends Controller
             'default_work_location_type' => ['nullable', Rule::in(WorkLocationType::values())],
             'timezone' => ['nullable', 'string'],
             'allowed_punch_types' => ['nullable', 'array'],
-            'allow_offline' => ['nullable', 'boolean'],
-            'require_location' => ['nullable', 'boolean'],
-            'auto_detect_punch_type' => ['nullable', 'boolean'],
+            'allows_offline' => ['nullable', 'boolean'],
+            'requires_location' => ['nullable', 'boolean'],
+            'punch_type_auto_detection_enabled' => ['nullable', 'boolean'],
+            // 旧名は受け付けない(変更セット 20261123-boolean-column-naming 論点10)。
+            'allow_offline' => ['prohibited'],
+            'require_location' => ['prohibited'],
+            'auto_detect_punch_type' => ['prohibited'],
         ]);
 
         $device = $commandBus->dispatch(new UpdateDeviceSettings(
@@ -213,9 +218,9 @@ class DeviceController extends Controller
             defaultWorkLocationType: $data['default_work_location_type'] ?? null,
             timezone: $data['timezone'] ?? null,
             allowedPunchTypes: $data['allowed_punch_types'] ?? null,
-            allowOffline: $data['allow_offline'] ?? true,
-            requireLocation: $data['require_location'] ?? false,
-            autoDetectPunchType: $data['auto_detect_punch_type'] ?? false,
+            allowsOffline: $data['allows_offline'] ?? true,
+            requiresLocation: $data['requires_location'] ?? false,
+            punchTypeAutoDetectionEnabled: $data['punch_type_auto_detection_enabled'] ?? false,
             updatedByUserId: $request->user()->id,
         ));
 
@@ -331,7 +336,7 @@ class DeviceController extends Controller
      * 運用テレメトリのため、Command/EventStoreを経由しない(docs/23-usecases-devices.md参照)。
      */
     #[OA\Post(path: '/devices/heartbeat', operationId: 'devices.heartbeat', summary: '端末の疎通確認を記録する', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
-    public function heartbeat(Request $request): DeviceResource
+    public function heartbeat(Request $request): DeviceForDeviceAppResource
     {
         $device = $request->user();
         abort_unless($device instanceof Device, 401);
@@ -344,7 +349,7 @@ class DeviceController extends Controller
         }
         $device->save();
 
-        return new DeviceResource($device);
+        return new DeviceForDeviceAppResource($device);
     }
 
     /**
@@ -362,9 +367,13 @@ class DeviceController extends Controller
             'default_work_location_type' => ['nullable', Rule::in(WorkLocationType::values())],
             'timezone' => ['nullable', 'string'],
             'allowed_punch_types' => ['nullable', 'array'],
-            'allow_offline' => ['nullable', 'boolean'],
-            'require_location' => ['nullable', 'boolean'],
-            'auto_detect_punch_type' => ['nullable', 'boolean'],
+            'allows_offline' => ['nullable', 'boolean'],
+            'requires_location' => ['nullable', 'boolean'],
+            'punch_type_auto_detection_enabled' => ['nullable', 'boolean'],
+            // 旧名は受け付けない(変更セット 20261123-boolean-column-naming 論点10)。
+            'allow_offline' => ['prohibited'],
+            'require_location' => ['prohibited'],
+            'auto_detect_punch_type' => ['prohibited'],
         ]);
     }
 

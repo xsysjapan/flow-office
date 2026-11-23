@@ -53,7 +53,7 @@ class PaidLeaveUsageCancellationRecalculationTest extends TestCase
     {
         return PaidLeaveUsage::query()
             ->where('user_id', $employee->id)
-            ->where('cancelled', false)
+            ->where('is_cancelled', false)
             ->count();
     }
 
@@ -100,7 +100,7 @@ class PaidLeaveUsageCancellationRecalculationTest extends TestCase
         $this->assertSame(1, $this->activeUsageCount($employee));
         $this->assertSame(
             $secondRequestId,
-            PaidLeaveUsage::query()->where('user_id', $employee->id)->where('cancelled', false)->value('paid_leave_request_id'),
+            PaidLeaveUsage::query()->where('user_id', $employee->id)->where('is_cancelled', false)->value('paid_leave_request_id'),
         );
     }
 }

@@ -52,7 +52,7 @@ use Illuminate\Support\Carbon;
  *   清算期間の必要労働時間との単純な過不足のみを算出する。参考情報であり給与計算上の
  *   確定値ではない)。深夜・法定休日・法定外休日の労働は実際の時刻から通常通り計算する。
  *   コアタイム設定(work_styles.core_time_enabled)がある場合、実際の勤務がコアタイムを
- *   全てカバーしているかを`core_time_violation`として判定する(労働時間の過不足とは別枠の
+ *   全てカバーしているかを`has_core_time_violation`として判定する(労働時間の過不足とは別枠の
  *   警告。指示書 7.4節)。
  * - その日の勤務予定(employee_calendar_entries)に働き方が紐づいていない場合でも
  *   勤怠は記録できる。その際の働き方は、(1) その月に割り当てられた働き方
@@ -297,7 +297,7 @@ class AttendanceCalculator
             'prescribed_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? min($workMinutes, $legalDailyLimitMinutes) : 0,
             'late_night_legal_holiday_work_minutes' => $isLegalHoliday ? $lateNightWorkMinutes : 0,
             'late_night_prescribed_holiday_work_minutes' => $lateNightPrescribedHolidayWorkMinutes,
-            'core_time_violation' => $coreTimeViolation,
+            'has_core_time_violation' => $coreTimeViolation,
             'absence_minutes' => $absenceMinutes,
             'special_leave_minutes' => $leave->specialLeaveMinutes,
             'paid_leave_days' => $leave->paidLeaveDays,

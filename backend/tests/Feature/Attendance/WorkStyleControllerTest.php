@@ -311,7 +311,7 @@ class WorkStyleControllerTest extends TestCase
     }
 
     /**
-     * 初回オンボーディングで作成された標準の勤務形態(system_generated=true)も、
+     * 初回オンボーディングで作成された標準の勤務形態(is_system_generated=true)も、
      * デフォルト指定・システム生成フラグ以外の項目は編集できる。
      */
     public function test_the_system_generated_standard_work_style_can_be_updated(): void
@@ -327,7 +327,7 @@ class WorkStyleControllerTest extends TestCase
             'default_start_time' => '09:00',
             'default_end_time' => '18:00',
             'is_default' => true,
-            'system_generated' => true,
+            'is_system_generated' => true,
         ]);
 
         $response = $this->actingAs($user)->putJson("/api/work-styles/{$standard->id}", [
@@ -345,7 +345,7 @@ class WorkStyleControllerTest extends TestCase
         $refreshed = $standard->fresh();
         $this->assertSame(420, $refreshed->prescribed_daily_minutes);
         $this->assertTrue($refreshed->is_default);
-        $this->assertTrue($refreshed->system_generated);
+        $this->assertTrue($refreshed->is_system_generated);
     }
 
     public function test_updating_a_work_style_with_another_styles_code_is_rejected(): void

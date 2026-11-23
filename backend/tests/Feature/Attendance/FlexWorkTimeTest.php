@@ -79,7 +79,7 @@ class FlexWorkTimeTest extends TestCase
         ])->assertOk();
 
         $calculation = $day->refresh()->calculation;
-        $this->assertFalse($calculation->core_time_violation);
+        $this->assertFalse($calculation->has_core_time_violation);
         $this->assertSame(0, $calculation->statutory_excess_overtime_minutes, 'フレックスは日次残業を判定しない');
         $this->assertSame(0, $calculation->statutory_within_overtime_minutes);
     }
@@ -146,7 +146,7 @@ class FlexWorkTimeTest extends TestCase
             'reason' => 'テストデータ投入(コアタイム中に早退)',
         ])->assertOk();
 
-        $this->assertTrue($day->refresh()->calculation->core_time_violation);
+        $this->assertTrue($day->refresh()->calculation->has_core_time_violation);
     }
 
     public function test_core_time_violation_is_not_evaluated_when_core_time_is_disabled(): void
@@ -163,7 +163,7 @@ class FlexWorkTimeTest extends TestCase
             'reason' => 'テストデータ投入',
         ])->assertOk();
 
-        $this->assertFalse($day->refresh()->calculation->core_time_violation);
+        $this->assertFalse($day->refresh()->calculation->has_core_time_violation);
     }
 
     public function test_the_settlement_summary_reports_required_actual_and_remaining_minutes(): void

@@ -234,7 +234,7 @@ class SeededDataRebuildScenarioTest extends TestCase
 
         $type = fn (int $id, string $code, bool $system, string $status, string $at) => [
             'id' => $id, 'code' => $code, 'name' => $code, 'display_order' => $id * 10, 'is_system' => $system, 'status' => $status,
-            'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'primary_membership_required' => false, 'max_primary_memberships' => null,
+            'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'requires_primary_membership' => false, 'max_primary_memberships' => null,
             'created_at' => $at, 'updated_at' => $at,
         ];
         DB::table('group_types')->insert([$type(1, 'department', true, 'active', '2026-01-01 00:00:00'), $type(2, 'team', false, 'inactive', '2026-01-02 00:00:00')]);
@@ -260,9 +260,9 @@ class SeededDataRebuildScenarioTest extends TestCase
         ]);
         DB::table('role_features')->insert([['role_id' => 1, 'feature_id' => $this->featureIds[0], 'created_at' => '2026-01-10 00:00:00', 'updated_at' => '2026-01-10 00:00:00']]);
         DB::table('role_assignments')->insert([
-            ['id' => self::A1, 'subject_type' => 'user', 'subject_id' => self::U1, 'role_id' => 1, 'scope_type' => 'company', 'scope_group_id' => null, 'include_descendants' => false,
+            ['id' => self::A1, 'subject_type' => 'user', 'subject_id' => self::U1, 'role_id' => 1, 'scope_type' => 'company', 'scope_group_id' => null, 'includes_descendants' => false,
                 'starts_at' => null, 'ends_at' => null, 'status' => 'active', 'assigned_by' => null, 'created_at' => '2026-01-11 00:00:00', 'updated_at' => '2026-01-11 00:00:00'],
-            ['id' => self::A2, 'subject_type' => 'user', 'subject_id' => self::U2, 'role_id' => 2, 'scope_type' => 'group', 'scope_group_id' => self::G2, 'include_descendants' => true,
+            ['id' => self::A2, 'subject_type' => 'user', 'subject_id' => self::U2, 'role_id' => 2, 'scope_type' => 'group', 'scope_group_id' => self::G2, 'includes_descendants' => true,
                 'starts_at' => '2026-04-01 00:00:00', 'ends_at' => '2027-03-31 00:00:00', 'status' => 'active', 'assigned_by' => self::U1, 'created_at' => '2026-01-12 00:00:00', 'updated_at' => '2026-01-12 00:00:00'],
         ]);
         DB::table('group_feature_assignments')->insert([
@@ -313,7 +313,7 @@ class SeededDataRebuildScenarioTest extends TestCase
     {
         $this->insertEvent(self::CALENDAR, 'company_calendar.created', [
             'name' => '本社カレンダー', 'weekStartsOn' => 1, 'fiscalYearStartMonth' => 4, 'fiscalYearStartDay' => 1, 'createdByUserId' => self::U1,
-            'weekdayHolidayPattern' => null, 'holidayCalendarSourceId' => null, 'allowDailyHolidayOverride' => null,
+            'weekdayHolidayPattern' => null, 'holidayCalendarSourceId' => null, 'allowsDailyHolidayOverride' => true,
         ]);
         // マイグレーションで年を新設する前に記録された days_updated(集約UUIDは company_calendars.id のまま)。
         $this->insertEvent(self::CALENDAR, 'company_calendar_year.days_updated', ['days' => [
@@ -426,7 +426,7 @@ class SeededDataRebuildScenarioTest extends TestCase
                         $row[$column] = substr((string) $value, 0, 10);
                     } elseif (in_array($column, ['linked_at', 'published_at', 'last_login_at', 'starts_at', 'ends_at', 'last_synced_at'], true)) {
                         $row[$column] = substr((string) $value, 0, 19);
-                    } elseif (is_bool($value) || $column === 'is_system' || str_starts_with($column, 'is_') || $column === 'include_descendants' || $column === 'primary_membership_required') {
+                    } elseif (is_bool($value) || $column === 'is_system' || str_starts_with($column, 'is_') || $column === 'includes_descendants' || $column === 'requires_primary_membership') {
                         $row[$column] = (bool) $value;
                     } else {
                         $row[$column] = (string) $value;

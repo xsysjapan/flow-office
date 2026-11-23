@@ -73,8 +73,8 @@ class PaidLeaveAccountProjectionTest extends TestCase
         ));
 
         $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->firstOrFail();
-        $this->assertFalse($usage->confirmed);
-        $this->assertFalse($usage->cancelled);
+        $this->assertFalse($usage->is_confirmed);
+        $this->assertFalse($usage->is_cancelled);
         $this->assertNull($usage->paid_leave_grant_id);
 
         $this->assertSame(0, PaidLeaveUsageAllocation::query()->where('usage_id', $usageId)->count());
@@ -109,7 +109,8 @@ class PaidLeaveAccountProjectionTest extends TestCase
         $this->assertEquals(3.0, (float) $allocation->allocated_days);
 
         $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->firstOrFail();
-        $this->assertTrue($usage->confirmed);
+        $this->assertTrue($usage->is_confirmed);
+        $this->assertFalse($usage->is_cancelled);
         $this->assertEquals($grantId, $usage->paid_leave_grant_id);
 
         $grant = PaidLeaveGrant::query()->findOrFail($grantId);
@@ -143,7 +144,9 @@ class PaidLeaveAccountProjectionTest extends TestCase
         $this->assertSame(0, PaidLeaveUsageAllocation::query()->where('usage_id', $usageId)->count());
 
         $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->firstOrFail();
-        $this->assertTrue($usage->cancelled);
+        $this->assertTrue($usage->is_cancelled);
+        // 取消は is_cancelled だけを立てる(確定の事実 is_confirmed は残る)。
+        $this->assertTrue($usage->is_confirmed);
         $this->assertNull($usage->paid_leave_grant_id);
 
         $grant = PaidLeaveGrant::query()->findOrFail($grantId);
@@ -183,8 +186,8 @@ class PaidLeaveAccountProjectionTest extends TestCase
 
         // Usage自体は取消されない(不変条件5)が、充当先を失い未充当のまま残る。
         $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->firstOrFail();
-        $this->assertTrue($usage->confirmed);
-        $this->assertFalse($usage->cancelled);
+        $this->assertTrue($usage->is_confirmed);
+        $this->assertFalse($usage->is_cancelled);
 
         $balance = PaidLeaveBalance::query()->findOrFail($user->id);
         $this->assertEquals(0.0, (float) $balance->available_days, '取消済みGrantはavailable_daysから除外される');

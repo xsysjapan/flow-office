@@ -818,7 +818,7 @@ class PaidLeaveController extends Controller
         $usages = PaidLeaveUsage::query()
             ->with('request')
             ->where('user_id', $userId)
-            ->where('cancelled', false)
+            ->where('is_cancelled', false)
             ->orderByDesc('used_on')
             ->get();
 

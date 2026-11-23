@@ -18,7 +18,7 @@ class AssetNumberRuleConfigured extends ShouldBeStored
         public readonly ?string $category,
         public readonly string $prefix,
         public readonly int $digitCount,
-        public readonly bool $enabled,
+        public readonly bool $isActive,
         public readonly bool $isDefault,
         public readonly string $actorUserId,
     ) {}

@@ -26,7 +26,7 @@ const groupType: ManagedGroup["type"] = {
   is_system: true,
   membership_limit_type: "unlimited",
   max_memberships_per_user: null,
-  primary_membership_required: false,
+  requires_primary_membership: false,
   max_primary_memberships: null,
 };
 
@@ -195,7 +195,7 @@ describe("RoleDefinitionPage", () => {
           role_id: 2,
           scope_type: "group",
           scope_group_id: "group-1",
-          include_descendants: false,
+          includes_descendants: false,
           starts_at: null,
           ends_at: null,
           status: "active",
@@ -207,7 +207,7 @@ describe("RoleDefinitionPage", () => {
           role_id: 2,
           scope_type: "self",
           scope_group_id: null,
-          include_descendants: false,
+          includes_descendants: false,
           starts_at: null,
           ends_at: null,
           status: "active",

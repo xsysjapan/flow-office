@@ -18,7 +18,7 @@ class AssetNumberRuleAuditAggregate extends AggregateRoot
         ?string $category,
         string $prefix,
         int $digitCount,
-        bool $enabled,
+        bool $isActive,
         bool $isDefault,
         string $actorUserId,
     ): self {
@@ -27,7 +27,7 @@ class AssetNumberRuleAuditAggregate extends AggregateRoot
             category: $category,
             prefix: $prefix,
             digitCount: $digitCount,
-            enabled: $enabled,
+            isActive: $isActive,
             isDefault: $isDefault,
             actorUserId: $actorUserId,
         ));

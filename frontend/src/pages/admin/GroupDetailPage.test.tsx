@@ -43,7 +43,7 @@ const groupType: GroupType = {
   is_system: true,
   membership_limit_type: "unlimited",
   max_memberships_per_user: null,
-  primary_membership_required: false,
+  requires_primary_membership: false,
   max_primary_memberships: 1,
 };
 
@@ -274,7 +274,7 @@ describe("GroupDetailPage", () => {
           role_id: 3,
           scope_type: "global",
           scope_group_id: null,
-          include_descendants: false,
+          includes_descendants: false,
           starts_at: null,
           ends_at: null,
           status: "active",

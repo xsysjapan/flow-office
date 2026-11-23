@@ -104,6 +104,6 @@ class AuthenticationKey extends Model
             return false;
         }
 
-        return ! $matching->contains(fn (AuthenticationKeyDeviceRule $rule) => ! $rule->allow);
+        return ! $matching->contains(fn (AuthenticationKeyDeviceRule $rule) => ! $rule->allows_use);
     }
 }

@@ -34,7 +34,7 @@ class AttendancePunchProjector extends Projector
                 'device_id' => $event->deviceId,
                 'authentication_key_id' => $event->authenticationKeyId,
                 'actor_user_id' => $event->actorUserId,
-                'offline' => $event->offline,
+                'is_offline' => $event->isOffline,
                 'idempotency_key' => $event->idempotencyKey,
                 'request_id' => $event->requestId,
                 'status' => PunchStatus::ACTIVE,

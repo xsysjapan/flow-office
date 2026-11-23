@@ -208,7 +208,7 @@ class UserSearchAndAccessTest extends TestCase
             'role_id' => $role->id,
             'scope_type' => 'global',
             'scope_group_id' => null,
-            'include_descendants' => false,
+            'includes_descendants' => false,
             'status' => 'active',
             'assigned_by' => $user->id,
         ]);

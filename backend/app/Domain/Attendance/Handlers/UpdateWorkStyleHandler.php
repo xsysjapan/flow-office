@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * 勤務形態(work_styles)の設定内容を変更する。初回オンボーディングで作成された
- * 標準の勤務形態(system_generated=true)であっても、コード・デフォルト指定・
+ * 標準の勤務形態(is_system_generated=true)であっても、コード・デフォルト指定・
  * システム生成フラグ以外の項目は変更できる(これらはSetDefaultWorkStyle等、
  * 専用のコマンドで扱う)。
  *
@@ -19,7 +19,7 @@ use Illuminate\Validation\ValidationException;
  */
 class UpdateWorkStyleHandler implements CommandHandler
 {
-    private const PROTECTED_KEYS = ['id', 'is_default', 'system_generated'];
+    private const PROTECTED_KEYS = ['id', 'is_default', 'is_system_generated'];
 
     public function handle(Command $command): WorkStyle
     {

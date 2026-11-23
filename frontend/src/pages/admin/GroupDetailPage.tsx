@@ -218,7 +218,7 @@ export function GroupDetailPage() {
                           role_id: Number(form.initial_role_id),
                           scope_type: "global",
                           scope_group_id: null,
-                          include_descendants: false,
+                          includes_descendants: false,
                           starts_at: null,
                           ends_at: null,
                         });

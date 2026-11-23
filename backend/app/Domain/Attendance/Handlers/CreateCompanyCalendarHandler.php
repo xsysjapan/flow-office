@@ -36,7 +36,8 @@ class CreateCompanyCalendarHandler implements CommandHandler
                 createdByUserId: $command->createdByUserId,
                 weekdayHolidayPattern: $command->weekdayHolidayPattern,
                 holidayCalendarSourceId: $command->holidayCalendarSourceId,
-                allowDailyHolidayOverride: $command->allowDailyHolidayOverride,
+                // 未指定(null)は既定値のtrue(旧Projectorの読み替えをここに移した)。
+                allowsDailyHolidayOverride: $command->allowsDailyHolidayOverride ?? true,
             );
 
         if ($isFirst) {

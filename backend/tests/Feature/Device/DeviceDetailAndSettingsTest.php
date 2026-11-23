@@ -63,12 +63,12 @@ class DeviceDetailAndSettingsTest extends TestCase
         $response = $this->actingAs($admin)->patchJson("/api/admin/devices/{$device->id}", [
             'name' => $device->name,
             'location_name' => '本社2階会議室',
-            'require_location' => true,
+            'requires_location' => true,
         ]);
 
         $response->assertSuccessful();
         $response->assertJsonPath('location_name', '本社2階会議室');
-        $response->assertJsonPath('require_location', true);
+        $response->assertJsonPath('requires_location', true);
         $this->assertSame('本社2階会議室', $device->fresh()->location_name);
     }
 

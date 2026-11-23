@@ -74,13 +74,13 @@ class UserManagementProjector extends Projector
     {
         DB::table('group_types')->updateOrInsert(
             ['id' => $event->groupTypeId],
-            ['code' => $event->code, 'name' => $event->name, 'display_order' => $event->displayOrder, 'is_system' => $event->isSystem, 'status' => 'active', 'membership_limit_type' => $event->membershipLimitType, 'max_memberships_per_user' => $event->maxMembershipsPerUser, 'primary_membership_required' => $event->primaryMembershipRequired, 'max_primary_memberships' => $event->maxPrimaryMemberships, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
+            ['code' => $event->code, 'name' => $event->name, 'display_order' => $event->displayOrder, 'is_system' => $event->isSystem, 'status' => 'active', 'membership_limit_type' => $event->membershipLimitType, 'max_memberships_per_user' => $event->maxMembershipsPerUser, 'requires_primary_membership' => $event->requiresPrimaryMembership, 'max_primary_memberships' => $event->maxPrimaryMemberships, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
         );
     }
 
     public function onGroupTypeUpdated(GroupTypeUpdated $event): void
     {
-        DB::table('group_types')->where('id', $event->groupTypeId)->update(['name' => $event->name, 'display_order' => $event->displayOrder, 'status' => $event->status, 'membership_limit_type' => $event->membershipLimitType, 'max_memberships_per_user' => $event->maxMembershipsPerUser, 'primary_membership_required' => $event->primaryMembershipRequired, 'max_primary_memberships' => $event->maxPrimaryMemberships, 'updated_at' => $event->createdAt()]);
+        DB::table('group_types')->where('id', $event->groupTypeId)->update(['name' => $event->name, 'display_order' => $event->displayOrder, 'status' => $event->status, 'membership_limit_type' => $event->membershipLimitType, 'max_memberships_per_user' => $event->maxMembershipsPerUser, 'requires_primary_membership' => $event->requiresPrimaryMembership, 'max_primary_memberships' => $event->maxPrimaryMemberships, 'updated_at' => $event->createdAt()]);
     }
 
     public function onGroupUpdated(GroupUpdated $event): void

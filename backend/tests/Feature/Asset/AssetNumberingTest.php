@@ -67,7 +67,7 @@ class AssetNumberingTest extends TestCase
     public function test_issues_sequential_number_from_matching_category_rule(): void
     {
         $user = User::factory()->create();
-        AssetNumberRule::query()->create(['category' => 'ノートPC', 'prefix' => 'NPC', 'digit_count' => 5, 'next_number' => 1, 'enabled' => true]);
+        AssetNumberRule::query()->create(['category' => 'ノートPC', 'prefix' => 'NPC', 'digit_count' => 5, 'next_number' => 1, 'is_active' => true]);
 
         $first = $this->register($user, 'ノートPC');
         $second = $this->register($user, 'ノートPC');
@@ -79,7 +79,7 @@ class AssetNumberingTest extends TestCase
     public function test_falls_back_to_default_rule_when_no_category_rule_matches(): void
     {
         $user = User::factory()->create();
-        AssetNumberRule::query()->create(['category' => null, 'is_default' => true, 'prefix' => 'AST', 'digit_count' => 5, 'next_number' => 1, 'enabled' => true]);
+        AssetNumberRule::query()->create(['category' => null, 'is_default' => true, 'prefix' => 'AST', 'digit_count' => 5, 'next_number' => 1, 'is_active' => true]);
 
         $assetNo = $this->register($user, '未登録カテゴリ');
 
@@ -89,8 +89,8 @@ class AssetNumberingTest extends TestCase
     public function test_disabled_category_rule_does_not_fall_back_to_default_and_requires_manual_input(): void
     {
         $user = User::factory()->create();
-        AssetNumberRule::query()->create(['category' => 'ノートPC', 'prefix' => 'NPC', 'digit_count' => 5, 'next_number' => 1, 'enabled' => false]);
-        AssetNumberRule::query()->create(['category' => null, 'is_default' => true, 'prefix' => 'AST', 'digit_count' => 5, 'next_number' => 1, 'enabled' => true]);
+        AssetNumberRule::query()->create(['category' => 'ノートPC', 'prefix' => 'NPC', 'digit_count' => 5, 'next_number' => 1, 'is_active' => false]);
+        AssetNumberRule::query()->create(['category' => null, 'is_default' => true, 'prefix' => 'AST', 'digit_count' => 5, 'next_number' => 1, 'is_active' => true]);
 
         $this->expectException(DomainRuleException::class);
 
@@ -100,7 +100,7 @@ class AssetNumberingTest extends TestCase
     public function test_disabled_category_rule_allows_manual_input(): void
     {
         $user = User::factory()->create();
-        AssetNumberRule::query()->create(['category' => 'ノートPC', 'prefix' => 'NPC', 'digit_count' => 5, 'next_number' => 1, 'enabled' => false]);
+        AssetNumberRule::query()->create(['category' => 'ノートPC', 'prefix' => 'NPC', 'digit_count' => 5, 'next_number' => 1, 'is_active' => false]);
 
         $assetNo = $this->register($user, 'ノートPC', 'MANUAL-9999');
 
@@ -110,7 +110,7 @@ class AssetNumberingTest extends TestCase
     public function test_concurrent_issuance_does_not_produce_duplicate_numbers(): void
     {
         $user = User::factory()->create();
-        AssetNumberRule::query()->create(['category' => 'ノートPC', 'prefix' => 'NPC', 'digit_count' => 5, 'next_number' => 1, 'enabled' => true]);
+        AssetNumberRule::query()->create(['category' => 'ノートPC', 'prefix' => 'NPC', 'digit_count' => 5, 'next_number' => 1, 'is_active' => true]);
 
         // sqliteの単一接続上では真の並行実行を再現できないため、lockForUpdateを含む
         // ハンドラを連続で複数回呼び出し、払い出された番号が重複なく連番になることを確認する
@@ -134,7 +134,7 @@ class AssetNumberingTest extends TestCase
         $response = $this->actingAs($user)->putJson('/api/asset-number-rules/ノートPC', [
             'prefix' => 'NPC',
             'digit_count' => 5,
-            'enabled' => true,
+            'is_active' => true,
         ]);
         $this->assertContains($response->getStatusCode(), [200, 201]);
         $response->assertJsonPath('category', 'ノートPC');
@@ -178,7 +178,7 @@ class AssetNumberingTest extends TestCase
             'role_id' => $role->id,
             'scope_type' => 'global',
             'scope_group_id' => null,
-            'include_descendants' => false,
+            'includes_descendants' => false,
             'status' => 'active',
             'assigned_by' => $user->id,
         ]);

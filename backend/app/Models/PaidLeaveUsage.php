@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 不要になった。行はすべて`App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`
  * が発行するイベントから作成される。
  */
-#[Fillable(['usage_id', 'user_id', 'attendance_day_id', 'paid_leave_grant_id', 'paid_leave_request_id', 'used_on', 'used_days', 'used_minutes', 'usage_type', 'is_confirmed', 'confirmed', 'cancelled'])]
+#[Fillable(['usage_id', 'user_id', 'attendance_day_id', 'paid_leave_grant_id', 'paid_leave_request_id', 'used_on', 'used_days', 'used_minutes', 'usage_type', 'is_confirmed', 'is_cancelled'])]
 class PaidLeaveUsage extends Model
 {
     protected function casts(): array
@@ -26,8 +26,7 @@ class PaidLeaveUsage extends Model
             'used_on' => 'date',
             'used_days' => 'decimal:1',
             'is_confirmed' => 'boolean',
-            'confirmed' => 'boolean',
-            'cancelled' => 'boolean',
+            'is_cancelled' => 'boolean',
         ];
     }
 

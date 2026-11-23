@@ -40,7 +40,7 @@ class ConfigureAssetNumberRuleHandler implements CommandHandler
 
         $rule->prefix = $command->prefix;
         $rule->digit_count = $command->digitCount;
-        $rule->enabled = $command->enabled;
+        $rule->is_active = $command->isActive;
         $rule->save();
 
         $aggregateId = Uuid::uuid5(Uuid::NAMESPACE_URL, 'asset-number-rule:'.($command->category ?? '__default__'))->toString();
@@ -50,7 +50,7 @@ class ConfigureAssetNumberRuleHandler implements CommandHandler
                 category: $rule->category,
                 prefix: $rule->prefix,
                 digitCount: $rule->digit_count,
-                enabled: $rule->enabled,
+                isActive: $rule->is_active,
                 isDefault: $rule->is_default,
                 actorUserId: $command->actorUserId,
             )

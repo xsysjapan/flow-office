@@ -9,7 +9,7 @@ export interface GroupType {
   is_system: boolean;
   membership_limit_type: "unlimited" | "limited";
   max_memberships_per_user: number | null;
-  primary_membership_required: boolean;
+  requires_primary_membership: boolean;
   max_primary_memberships: number | null;
 }
 export interface Membership {
@@ -40,7 +40,7 @@ export interface ManagedGroup {
   role_assignments: Array<{
     id: string;
     scope_type: string;
-    include_descendants: boolean;
+    includes_descendants: boolean;
     scope_group?: { name: string } | null;
     role?: { name: string } | null;
   }>;
@@ -128,7 +128,7 @@ export const createGroupType = (input: {
   display_order?: number;
   membership_limit_type: "unlimited" | "limited";
   max_memberships_per_user?: number | null;
-  primary_membership_required?: boolean;
+  requires_primary_membership?: boolean;
   max_primary_memberships?: number | null;
 }): Promise<void> =>
   apiFetch("/admin/user-management/group-types", {

@@ -103,9 +103,9 @@ describe('AssetRegisterPage', () => {
     expect(notify.success).toHaveBeenCalledWith('MacBook Airを登録しました')
   })
 
-  it('switches the asset-no field to read-only and sends asset_no=null when the category matches an enabled rule', async () => {
+  it('switches the asset-no field to read-only and sends asset_no=null when the category matches an isActive rule', async () => {
     vi.spyOn(assetNumberRulesApi, 'fetchAssetNumberRules').mockResolvedValue([
-      { category: 'ノートPC', prefix: 'NPC', digitCount: 5, nextNumber: 3, enabled: true, isDefault: false },
+      { category: 'ノートPC', prefix: 'NPC', digitCount: 5, nextNumber: 3, isActive: true, isDefault: false },
     ])
     const registerSpy = vi.spyOn(assetApi, 'registerAsset').mockResolvedValue(createdAsset)
     renderPage()
@@ -124,7 +124,7 @@ describe('AssetRegisterPage', () => {
 
   it('falls back to the default rule when the category has no matching rule', async () => {
     vi.spyOn(assetNumberRulesApi, 'fetchAssetNumberRules').mockResolvedValue([
-      { category: null, prefix: 'AST', digitCount: 5, nextNumber: 10, enabled: true, isDefault: true },
+      { category: null, prefix: 'AST', digitCount: 5, nextNumber: 10, isActive: true, isDefault: true },
     ])
     renderPage()
 
@@ -135,8 +135,8 @@ describe('AssetRegisterPage', () => {
 
   it('keeps manual input when the matching category rule is disabled, even with a default rule available', async () => {
     const rulesSpy = vi.spyOn(assetNumberRulesApi, 'fetchAssetNumberRules').mockResolvedValue([
-      { category: 'ノートPC', prefix: 'NPC', digitCount: 5, nextNumber: 3, enabled: false, isDefault: false },
-      { category: null, prefix: 'AST', digitCount: 5, nextNumber: 10, enabled: true, isDefault: true },
+      { category: 'ノートPC', prefix: 'NPC', digitCount: 5, nextNumber: 3, isActive: false, isDefault: false },
+      { category: null, prefix: 'AST', digitCount: 5, nextNumber: 10, isActive: true, isDefault: true },
     ])
     renderPage()
 

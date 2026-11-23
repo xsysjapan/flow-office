@@ -49,7 +49,7 @@ interface AssignmentFormState {
   targetId: string;
   scope_type: "" | RoleAssignment["scope_type"];
   scope_group_id: string;
-  include_descendants: boolean;
+  includes_descendants: boolean;
   starts_at: string;
   ends_at: string;
 }
@@ -58,7 +58,7 @@ const emptyForm: AssignmentFormState = {
   targetId: "",
   scope_type: "",
   scope_group_id: "",
-  include_descendants: false,
+  includes_descendants: false,
   starts_at: "",
   ends_at: "",
 };
@@ -143,7 +143,7 @@ export function RoleAssignmentSection({
           : String(assignment.role_id),
       scope_type: assignment.scope_type,
       scope_group_id: assignment.scope_group_id ?? "",
-      include_descendants: assignment.include_descendants,
+      includes_descendants: assignment.includes_descendants,
       starts_at: toDateTimeLocal(assignment.starts_at),
       ends_at: toDateTimeLocal(assignment.ends_at),
     });
@@ -241,9 +241,9 @@ export function RoleAssignmentSection({
           <label className="mb-4 flex items-center gap-2 text-sm">
             <Checkbox
               disabled={form.scope_type !== "group"}
-              checked={form.include_descendants}
+              checked={form.includes_descendants}
               onCheckedChange={(checked) =>
-                setForm({ ...form, include_descendants: checked === true })
+                setForm({ ...form, includes_descendants: checked === true })
               }
             />
             配下を含む
@@ -288,7 +288,7 @@ export function RoleAssignmentSection({
                   >,
                   scope_group_id:
                     form.scope_type === "group" ? form.scope_group_id : null,
-                  include_descendants: form.include_descendants,
+                  includes_descendants: form.includes_descendants,
                   starts_at: form.starts_at
                     ? new Date(form.starts_at).toISOString()
                     : null,
@@ -361,7 +361,7 @@ export function RoleAssignmentSection({
                 <TableCell>
                   {scopeLabel(assignment.scope_type)}
                   {assignment.scope_type === "group" &&
-                    assignment.include_descendants &&
+                    assignment.includes_descendants &&
                     "(配下を含む)"}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">

@@ -24,13 +24,13 @@ class UserManagementSeeder extends Seeder
     {
         $bus = app(CommandBus::class);
         $groupTypes = [
-            'ORGANIZATION' => ['name' => '組織', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'primary_membership_required' => true, 'max_primary_memberships' => 1],
-            'EMPLOYMENT' => ['name' => '雇用区分', 'membership_limit_type' => 'limited', 'max_memberships_per_user' => 1, 'primary_membership_required' => true, 'max_primary_memberships' => 1],
-            'PROJECT' => ['name' => 'プロジェクト', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'primary_membership_required' => false, 'max_primary_memberships' => null],
-            'COMMITTEE' => ['name' => '委員会', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'primary_membership_required' => false, 'max_primary_memberships' => null],
-            'LOCATION' => ['name' => '拠点', 'membership_limit_type' => 'limited', 'max_memberships_per_user' => 1, 'primary_membership_required' => false, 'max_primary_memberships' => 1],
-            'APPROVAL' => ['name' => '承認担当', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'primary_membership_required' => false, 'max_primary_memberships' => null],
-            'CUSTOM' => ['name' => '共通・独自', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'primary_membership_required' => false, 'max_primary_memberships' => null],
+            'ORGANIZATION' => ['name' => '組織', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'requires_primary_membership' => true, 'max_primary_memberships' => 1],
+            'EMPLOYMENT' => ['name' => '雇用区分', 'membership_limit_type' => 'limited', 'max_memberships_per_user' => 1, 'requires_primary_membership' => true, 'max_primary_memberships' => 1],
+            'PROJECT' => ['name' => 'プロジェクト', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'requires_primary_membership' => false, 'max_primary_memberships' => null],
+            'COMMITTEE' => ['name' => '委員会', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'requires_primary_membership' => false, 'max_primary_memberships' => null],
+            'LOCATION' => ['name' => '拠点', 'membership_limit_type' => 'limited', 'max_memberships_per_user' => 1, 'requires_primary_membership' => false, 'max_primary_memberships' => 1],
+            'APPROVAL' => ['name' => '承認担当', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'requires_primary_membership' => false, 'max_primary_memberships' => null],
+            'CUSTOM' => ['name' => '共通・独自', 'membership_limit_type' => 'unlimited', 'max_memberships_per_user' => null, 'requires_primary_membership' => false, 'max_primary_memberships' => null],
         ];
 
         $displayOrder = 0;
@@ -45,7 +45,7 @@ class UserManagementSeeder extends Seeder
                 displayOrder: $order,
                 membershipLimitType: $attributes['membership_limit_type'],
                 maxMembershipsPerUser: $attributes['max_memberships_per_user'],
-                primaryMembershipRequired: $attributes['primary_membership_required'],
+                requiresPrimaryMembership: $attributes['requires_primary_membership'],
                 maxPrimaryMemberships: $attributes['max_primary_memberships'],
                 actorUserId: null,
                 isSystem: true,

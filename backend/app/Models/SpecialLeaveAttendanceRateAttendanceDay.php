@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
     'id',
     'user_id',
     'work_date',
-    'clocked_out',
+    'has_clocked_out',
 ])]
 class SpecialLeaveAttendanceRateAttendanceDay extends Model
 {
@@ -26,7 +26,7 @@ class SpecialLeaveAttendanceRateAttendanceDay extends Model
     protected function casts(): array
     {
         return [
-            'clocked_out' => 'boolean',
+            'has_clocked_out' => 'boolean',
         ];
     }
 }

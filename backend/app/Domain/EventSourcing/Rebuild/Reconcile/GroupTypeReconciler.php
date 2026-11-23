@@ -58,7 +58,7 @@ final class GroupTypeReconciler
                 'displayOrder' => $want['display_order'],
                 'membershipLimitType' => $want['membership_limit_type'],
                 'maxMembershipsPerUser' => $want['max_memberships_per_user'],
-                'primaryMembershipRequired' => $want['primary_membership_required'],
+                'requiresPrimaryMembership' => $want['requires_primary_membership'],
                 'maxPrimaryMemberships' => $want['max_primary_memberships'],
                 'actorUserId' => null,
                 'isSystem' => (bool) $row['is_system'],
@@ -97,7 +97,7 @@ final class GroupTypeReconciler
             'status' => $want['status'],
             'membershipLimitType' => $want['membership_limit_type'],
             'maxMembershipsPerUser' => $want['max_memberships_per_user'],
-            'primaryMembershipRequired' => $want['primary_membership_required'],
+            'requiresPrimaryMembership' => $want['requires_primary_membership'],
             'maxPrimaryMemberships' => $want['max_primary_memberships'],
             'actorUserId' => null,
         ]);
@@ -115,7 +115,7 @@ final class GroupTypeReconciler
             'status' => (string) $row['status'],
             'membership_limit_type' => (string) $row['membership_limit_type'],
             'max_memberships_per_user' => Norm::int($row['max_memberships_per_user']),
-            'primary_membership_required' => (bool) $row['primary_membership_required'],
+            'requires_primary_membership' => (bool) $row['requires_primary_membership'],
             'max_primary_memberships' => Norm::int($row['max_primary_memberships']),
         ];
     }
@@ -132,7 +132,7 @@ final class GroupTypeReconciler
             'status' => 'active',
             'membership_limit_type' => (string) $payload['membershipLimitType'],
             'max_memberships_per_user' => Norm::int($payload['maxMembershipsPerUser'] ?? null),
-            'primary_membership_required' => (bool) $payload['primaryMembershipRequired'],
+            'requires_primary_membership' => (bool) $payload['requiresPrimaryMembership'],
             'max_primary_memberships' => Norm::int($payload['maxPrimaryMemberships'] ?? null),
         ];
     }
@@ -150,7 +150,7 @@ final class GroupTypeReconciler
             'status' => (string) $payload['status'],
             'membership_limit_type' => (string) $payload['membershipLimitType'],
             'max_memberships_per_user' => Norm::int($payload['maxMembershipsPerUser'] ?? null),
-            'primary_membership_required' => (bool) $payload['primaryMembershipRequired'],
+            'requires_primary_membership' => (bool) $payload['requiresPrimaryMembership'],
             'max_primary_memberships' => Norm::int($payload['maxPrimaryMemberships'] ?? null),
         ] + $state;
     }

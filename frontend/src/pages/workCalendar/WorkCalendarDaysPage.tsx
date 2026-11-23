@@ -394,7 +394,7 @@ export function WorkCalendarDaysPage() {
   }
 
   const hasHolidaySource = Boolean(calendar?.holiday_calendar_source_id)
-  const allowDailyHolidayOverride = calendar?.allow_daily_holiday_override ?? true
+  const allowDailyHolidayOverride = calendar?.allows_daily_holiday_override ?? true
   const yearActionError = unpublishYear.error ?? duplicateYear.error ?? syncYearHolidayCalendar.error
 
   const handleSave = () => {

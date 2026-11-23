@@ -20,7 +20,7 @@ const organizationType: GroupType = {
   is_system: true,
   membership_limit_type: "unlimited",
   max_memberships_per_user: null,
-  primary_membership_required: false,
+  requires_primary_membership: false,
   max_primary_memberships: null,
 };
 
@@ -33,7 +33,7 @@ const projectType: GroupType = {
   is_system: false,
   membership_limit_type: "limited",
   max_memberships_per_user: 3,
-  primary_membership_required: true,
+  requires_primary_membership: true,
   max_primary_memberships: 1,
 };
 
@@ -110,7 +110,7 @@ describe("GroupTypeManagementPage", () => {
           display_order: 0,
           membership_limit_type: "unlimited",
           max_memberships_per_user: null,
-          primary_membership_required: false,
+          requires_primary_membership: false,
           max_primary_memberships: null,
         },
         expect.anything(),
@@ -140,7 +140,7 @@ describe("GroupTypeManagementPage", () => {
         status: "active",
         membership_limit_type: "limited",
         max_memberships_per_user: 3,
-        primary_membership_required: true,
+        requires_primary_membership: true,
         max_primary_memberships: 1,
       }),
     );

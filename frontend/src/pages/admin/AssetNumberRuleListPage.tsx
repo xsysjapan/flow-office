@@ -19,11 +19,11 @@ import {
 interface RuleFormState {
   prefix: string
   digitCount: string
-  enabled: boolean
+  isActive: boolean
 }
 
 function toFormState(rule: AssetNumberRule | undefined): RuleFormState {
-  return { prefix: rule?.prefix ?? '', digitCount: String(rule?.digitCount ?? 5), enabled: rule?.enabled ?? true }
+  return { prefix: rule?.prefix ?? '', digitCount: String(rule?.digitCount ?? 5), isActive: rule?.isActive ?? true }
 }
 
 /**
@@ -34,8 +34,8 @@ function applicationStatus(
   rule: AssetNumberRule,
   defaultRule: AssetNumberRule | undefined,
 ): { label: string; variant: 'success' | 'neutral' | 'info' } {
-  if (rule.enabled) return { label: 'このルールで採番', variant: 'success' }
-  if (defaultRule?.enabled) return { label: 'デフォルトにフォールバック', variant: 'info' }
+  if (rule.isActive) return { label: 'このルールで採番', variant: 'success' }
+  if (defaultRule?.isActive) return { label: 'デフォルトにフォールバック', variant: 'info' }
   return { label: '無効化中(手入力)', variant: 'neutral' }
 }
 
@@ -49,11 +49,11 @@ export function AssetNumberRuleListPage() {
   const updateDefaultRule = useUpdateDefaultAssetNumberRule()
 
   const [newCategory, setNewCategory] = useState('')
-  const [newForm, setNewForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', enabled: true })
+  const [newForm, setNewForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', isActive: true })
   const [editingCategory, setEditingCategory] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', enabled: true })
+  const [editForm, setEditForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', isActive: true })
   const [editingDefault, setEditingDefault] = useState(false)
-  const [defaultForm, setDefaultForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', enabled: true })
+  const [defaultForm, setDefaultForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', isActive: true })
 
   if (rules.isLoading) return <LoadingState />
   if (rules.error) return <ErrorMessage error={rules.error} fallback="採番ルールの取得に失敗しました。" />
@@ -70,7 +70,7 @@ export function AssetNumberRuleListPage() {
 
   function saveCategoryEdit(category: string) {
     updateRule.mutate(
-      { category, input: { prefix: editForm.prefix, digitCount: Number(editForm.digitCount) || 1, enabled: editForm.enabled } },
+      { category, input: { prefix: editForm.prefix, digitCount: Number(editForm.digitCount) || 1, isActive: editForm.isActive } },
       {
         onSuccess: () => {
           notify.success(`${category}の採番ルールを保存しました`)
@@ -83,12 +83,12 @@ export function AssetNumberRuleListPage() {
   function saveNewCategory() {
     const category = newCategory.trim()
     updateRule.mutate(
-      { category, input: { prefix: newForm.prefix, digitCount: Number(newForm.digitCount) || 1, enabled: newForm.enabled } },
+      { category, input: { prefix: newForm.prefix, digitCount: Number(newForm.digitCount) || 1, isActive: newForm.isActive } },
       {
         onSuccess: () => {
           notify.success(`${category}の採番ルールを追加しました`)
           setNewCategory('')
-          setNewForm({ prefix: '', digitCount: '5', enabled: true })
+          setNewForm({ prefix: '', digitCount: '5', isActive: true })
         },
       },
     )
@@ -101,7 +101,7 @@ export function AssetNumberRuleListPage() {
 
   function saveDefault() {
     updateDefaultRule.mutate(
-      { prefix: defaultForm.prefix, digitCount: Number(defaultForm.digitCount) || 1, enabled: defaultForm.enabled },
+      { prefix: defaultForm.prefix, digitCount: Number(defaultForm.digitCount) || 1, isActive: defaultForm.isActive },
       {
         onSuccess: () => {
           notify.success('デフォルトの採番ルールを保存しました')
@@ -141,7 +141,7 @@ export function AssetNumberRuleListPage() {
             </span>
             <span>桁数: {defaultRule.digitCount}</span>
             <span>次番号(参考): {String(defaultRule.nextNumber).padStart(defaultRule.digitCount, '0')}</span>
-            <Badge variant={defaultRule.enabled ? 'success' : 'neutral'}>{defaultRule.enabled ? '有効' : '無効'}</Badge>
+            <Badge variant={defaultRule.isActive ? 'success' : 'neutral'}>{defaultRule.isActive ? '有効' : '無効'}</Badge>
             <Button variant="secondary" onClick={startEditDefault}>
               編集
             </Button>
@@ -168,8 +168,8 @@ export function AssetNumberRuleListPage() {
             </FormField>
             <label className="flex items-center gap-2 pb-2">
               <Checkbox
-                checked={defaultForm.enabled}
-                onCheckedChange={(checked) => setDefaultForm({ ...defaultForm, enabled: checked === true })}
+                checked={defaultForm.isActive}
+                onCheckedChange={(checked) => setDefaultForm({ ...defaultForm, isActive: checked === true })}
               />
               有効
             </label>
@@ -232,8 +232,8 @@ export function AssetNumberRuleListPage() {
                       <TableCell>
                         <Checkbox
                           aria-label={`${category}の有効/無効`}
-                          checked={editForm.enabled}
-                          onCheckedChange={(checked) => setEditForm({ ...editForm, enabled: checked === true })}
+                          checked={editForm.isActive}
+                          onCheckedChange={(checked) => setEditForm({ ...editForm, isActive: checked === true })}
                         />
                       </TableCell>
                       <TableCell>
@@ -260,7 +260,7 @@ export function AssetNumberRuleListPage() {
                       <TableCell>{rule.digitCount}</TableCell>
                       <TableCell>{String(rule.nextNumber).padStart(rule.digitCount, '0')}</TableCell>
                       <TableCell>
-                        <Badge variant={rule.enabled ? 'success' : 'neutral'}>{rule.enabled ? '有効' : '無効'}</Badge>
+                        <Badge variant={rule.isActive ? 'success' : 'neutral'}>{rule.isActive ? '有効' : '無効'}</Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant={status.variant}>{status.label}</Badge>
@@ -305,8 +305,8 @@ export function AssetNumberRuleListPage() {
               <TableCell>
                 <Checkbox
                   aria-label="新規カテゴリの有効/無効"
-                  checked={newForm.enabled}
-                  onCheckedChange={(checked) => setNewForm({ ...newForm, enabled: checked === true })}
+                  checked={newForm.isActive}
+                  onCheckedChange={(checked) => setNewForm({ ...newForm, isActive: checked === true })}
                 />
               </TableCell>
               <TableCell>-</TableCell>

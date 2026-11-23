@@ -35,7 +35,7 @@ export const Default: Story = {
 export const CategoryRuleAutoNumbering: Story = {
   render: () => (
     <Decorator
-      rules={[{ category: 'ノートPC', prefix: 'NPC', digitCount: 5, nextNumber: 3, enabled: true, isDefault: false }]}
+      rules={[{ category: 'ノートPC', prefix: 'NPC', digitCount: 5, nextNumber: 3, isActive: true, isDefault: false }]}
       categories={['ノートPC']}
     />
   ),
@@ -44,6 +44,6 @@ export const CategoryRuleAutoNumbering: Story = {
 /** カテゴリ一致ルールが無く、デフォルトルールで自動採番される状態。 */
 export const DefaultRuleAutoNumbering: Story = {
   render: () => (
-    <Decorator rules={[{ category: null, prefix: 'AST', digitCount: 5, nextNumber: 10, enabled: true, isDefault: true }]} />
+    <Decorator rules={[{ category: null, prefix: 'AST', digitCount: 5, nextNumber: 10, isActive: true, isDefault: true }]} />
   ),
 }

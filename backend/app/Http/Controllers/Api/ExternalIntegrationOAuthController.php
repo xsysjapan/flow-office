@@ -133,7 +133,7 @@ class ExternalIntegrationOAuthController extends Controller
 
     private function auditPayload(ExternalIntegrationConnection $connection): array
     {
-        $payload = $connection->only(['id', 'provider', 'name', 'auth_type', 'status', 'enabled', 'external_office_id', 'custom_settings']);
+        $payload = $connection->only(['id', 'provider', 'name', 'auth_type', 'status', 'publishing_enabled', 'external_office_id', 'custom_settings']);
         foreach (['access_token', 'refresh_token', 'api_key', 'client_id', 'client_secret'] as $secret) {
             $payload[$secret] = filled($connection->{$secret}) ? '[SET]' : null;
         }

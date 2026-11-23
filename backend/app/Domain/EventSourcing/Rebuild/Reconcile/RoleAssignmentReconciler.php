@@ -37,7 +37,7 @@ final class RoleAssignmentReconciler
             'role_id' => (int) $row['role_id'],
             'scope_type' => (string) $row['scope_type'],
             'scope_group_id' => Norm::str($row['scope_group_id'] ?? null),
-            'include_descendants' => (bool) $row['include_descendants'],
+            'includes_descendants' => (bool) $row['includes_descendants'],
             'starts_at' => Norm::rowDateTime($row['starts_at'] ?? null),
             'ends_at' => Norm::rowDateTime($row['ends_at'] ?? null),
             'status' => (string) $row['status'],
@@ -57,7 +57,7 @@ final class RoleAssignmentReconciler
             'role_id' => (int) $payload['roleId'],
             'scope_type' => (string) $payload['scopeType'],
             'scope_group_id' => Norm::str($payload['scopeGroupId'] ?? null),
-            'include_descendants' => (bool) $payload['includeDescendants'],
+            'includes_descendants' => (bool) $payload['includesDescendants'],
             'starts_at' => Norm::eventDateTime($payload['startsAt'] ?? null),
             'ends_at' => Norm::eventDateTime($payload['endsAt'] ?? null),
             'status' => 'active',
@@ -99,7 +99,7 @@ final class RoleAssignmentReconciler
                 'roleId' => $want['role_id'],
                 'scopeType' => $want['scope_type'],
                 'scopeGroupId' => $want['scope_group_id'],
-                'includeDescendants' => $want['include_descendants'],
+                'includesDescendants' => $want['includes_descendants'],
                 'startsAt' => Norm::payloadDateTime($row['starts_at'] ?? null),
                 'endsAt' => Norm::payloadDateTime($row['ends_at'] ?? null),
                 'actorUserId' => $want['assigned_by'],
@@ -115,7 +115,7 @@ final class RoleAssignmentReconciler
                 $state = [
                     'scope_type' => (string) $payload['scopeType'],
                     'scope_group_id' => Norm::str($payload['scopeGroupId'] ?? null),
-                    'include_descendants' => (bool) $payload['includeDescendants'],
+                    'includes_descendants' => (bool) $payload['includesDescendants'],
                     'starts_at' => Norm::eventDateTime($payload['startsAt'] ?? null),
                     'ends_at' => Norm::eventDateTime($payload['endsAt'] ?? null),
                 ] + ($state ?? []);
@@ -134,12 +134,12 @@ final class RoleAssignmentReconciler
             return;
         }
         // created で決まる列(付与先・ロール・割当者)と、removed を取り消す変更は、イベントで直せない。
-        $fixable = ['scope_type', 'scope_group_id', 'include_descendants', 'starts_at', 'ends_at', 'status'];
+        $fixable = ['scope_type', 'scope_group_id', 'includes_descendants', 'starts_at', 'ends_at', 'status'];
         $canDerive = array_diff($differences, $fixable) === [] && ! (in_array('status', $differences, true) && $want['status'] === 'active');
 
         // 導出するイベント(scope の列の差は updated、status の差は removed)。
         $derived = [];
-        if (array_intersect($differences, ['scope_type', 'scope_group_id', 'include_descendants', 'starts_at', 'ends_at']) !== []) {
+        if (array_intersect($differences, ['scope_type', 'scope_group_id', 'includes_descendants', 'starts_at', 'ends_at']) !== []) {
             $derived[] = 'role_assignment.updated';
         }
         if (in_array('status', $differences, true)) {
@@ -154,11 +154,11 @@ final class RoleAssignmentReconciler
         }
 
         $slot = $ctx->afterLast($id) ?? $createdSlot;
-        if (array_intersect($differences, ['scope_type', 'scope_group_id', 'include_descendants', 'starts_at', 'ends_at']) !== []) {
+        if (array_intersect($differences, ['scope_type', 'scope_group_id', 'includes_descendants', 'starts_at', 'ends_at']) !== []) {
             $slot = $ctx->emit(self::TABLE, $slot, 'role_assignment.updated', $id, [
                 'scopeType' => $want['scope_type'],
                 'scopeGroupId' => $want['scope_group_id'],
-                'includeDescendants' => $want['include_descendants'],
+                'includesDescendants' => $want['includes_descendants'],
                 'startsAt' => Norm::payloadDateTime($row['starts_at'] ?? null),
                 'endsAt' => Norm::payloadDateTime($row['ends_at'] ?? null),
                 'actorUserId' => null,

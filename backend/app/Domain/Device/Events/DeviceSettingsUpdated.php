@@ -16,9 +16,9 @@ class DeviceSettingsUpdated extends ShouldBeStored
         public readonly ?string $defaultWorkLocationType,
         public readonly ?string $timezone,
         public readonly ?array $allowedPunchTypes,
-        public readonly bool $allowOffline,
-        public readonly bool $requireLocation,
-        public readonly bool $autoDetectPunchType,
+        public readonly bool $allowsOffline,
+        public readonly bool $requiresLocation,
+        public readonly bool $punchTypeAutoDetectionEnabled,
         public readonly string $updatedByUserId,
     ) {}
 }

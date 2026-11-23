@@ -74,7 +74,7 @@ class AttendanceRateAssessor
 
         $denominatorDays = $scheduledDays->count();
         $attendanceDays = $scheduledDays->filter(fn (LeaveAttendanceRateDay $day) => LeaveAttendanceRateJudgement::countsAsAttended(
-            $day->attended,
+            $day->has_attended,
             $day->full_leave_kinds ?? [],
             $day->partial_leave_kinds ?? [],
             [LeaveAttendanceRateJudgement::KIND_PAID],

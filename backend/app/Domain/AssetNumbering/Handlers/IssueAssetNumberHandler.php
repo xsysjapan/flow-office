@@ -11,9 +11,9 @@ use Ramsey\Uuid\Uuid;
 
 /**
  * 管理番号を自動採番する。判定順序は spec 論点10:
- * ①`category`完全一致かつ`enabled=true` → ②(①が無い場合のみ)デフォルトルール
- * (`is_default=true`かつ`enabled=true`) → ③いずれも無ければ自動採番不可(null)。
- * ①の行が存在するが`enabled=false`の場合はデフォルトへフォールバックしない
+ * ①`category`完全一致かつ`is_active=true` → ②(①が無い場合のみ)デフォルトルール
+ * (`is_default=true`かつ`is_active=true`) → ③いずれも無ければ自動採番不可(null)。
+ * ①の行が存在するが`is_active=false`の場合はデフォルトへフォールバックしない
  * (=そのカテゴリは明示的に自動採番しない意思表示のため)。
  *
  * @implements CommandHandler<IssueAssetNumber>
@@ -27,12 +27,12 @@ class IssueAssetNumberHandler implements CommandHandler
         $rule = AssetNumberRule::query()->where('category', $command->category)->lockForUpdate()->first();
 
         if ($rule !== null) {
-            return $rule->enabled ? $this->issue($rule, $command->category, $command->actorUserId) : null;
+            return $rule->is_active ? $this->issue($rule, $command->category, $command->actorUserId) : null;
         }
 
         $defaultRule = AssetNumberRule::query()->where('is_default', true)->lockForUpdate()->first();
 
-        if ($defaultRule !== null && $defaultRule->enabled) {
+        if ($defaultRule !== null && $defaultRule->is_active) {
             return $this->issue($defaultRule, $command->category, $command->actorUserId);
         }
 

@@ -23,9 +23,9 @@ export interface RegisterDeviceInput {
   location_name?: string
   default_work_location_type?: WorkLocationType
   timezone?: string
-  allow_offline?: boolean
-  require_location?: boolean
-  auto_detect_punch_type?: boolean
+  allows_offline?: boolean
+  requires_location?: boolean
+  punch_type_auto_detection_enabled?: boolean
 }
 
 export function registerDevice(input: RegisterDeviceInput): Promise<Device> {
@@ -38,9 +38,9 @@ export interface UpdateDeviceSettingsInput {
   location_name?: string
   default_work_location_type?: WorkLocationType
   timezone?: string
-  allow_offline?: boolean
-  require_location?: boolean
-  auto_detect_punch_type?: boolean
+  allows_offline?: boolean
+  requires_location?: boolean
+  punch_type_auto_detection_enabled?: boolean
 }
 
 // 設置場所・自動反映する勤務形態区分などの端末設定を変更する(管理者)。役割・スコープ・

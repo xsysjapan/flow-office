@@ -254,7 +254,7 @@ export function TodayAttendancePanel() {
                     (うち月60時間超残業: <Duration minutes={day.monthly_overtime.statutory_excess_overtime_over_60h_minutes} />)
                   </p>
                 )}
-                {day.calculation.core_time_violation && (
+                {day.calculation.has_core_time_violation && (
                   <p className="text-sm text-destructive">コアタイム違反(勤務がコアタイムを全てカバーしていません)</p>
                 )}
               </>

@@ -76,7 +76,7 @@ abstract class TestCase extends BaseTestCase
                 'scope_type' => 'approval_task',
                 'scope_group_id' => null,
             ], [
-                'include_descendants' => false,
+                'includes_descendants' => false,
                 'status' => 'active',
                 'assigned_by' => $user->id,
             ]);
@@ -145,7 +145,7 @@ abstract class TestCase extends BaseTestCase
             'scope_type' => $role->code === Role::EMPLOYEE ? 'self' : 'global',
             'scope_group_id' => null,
         ], [
-            'include_descendants' => false,
+            'includes_descendants' => false,
             'status' => 'active',
             'assigned_by' => $user->id,
         ]);
@@ -182,7 +182,7 @@ abstract class TestCase extends BaseTestCase
             'scope_type' => 'self',
             'scope_group_id' => null,
         ], [
-            'include_descendants' => false,
+            'includes_descendants' => false,
             'status' => 'active',
             'assigned_by' => $user->id,
         ]);

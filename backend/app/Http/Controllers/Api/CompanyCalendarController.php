@@ -80,7 +80,7 @@ class CompanyCalendarController extends Controller
         operationId: 'companyCalendars.store',
         summary: '会社カレンダー本体と最初のカレンダー年度を作成する',
         tags: ['勤務カレンダー'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'fiscal_year', type: 'integer', description: '省略時は本体のみ作成する(最初の年度はPOST /company-calendars/{id}/yearsまたは定期バッチ/UC-C011で後から生成できる)'), new OA\Property(property: 'starts_on', type: 'string', format: 'date'), new OA\Property(property: 'ends_on', type: 'string', format: 'date'), new OA\Property(property: 'allow_daily_holiday_override', type: 'boolean', nullable: true, description: '省略時はカラムの既定値(true)。falseにすると日別の休日区分編集をロックする')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'fiscal_year', type: 'integer', description: '省略時は本体のみ作成する(最初の年度はPOST /company-calendars/{id}/yearsまたは定期バッチ/UC-C011で後から生成できる)'), new OA\Property(property: 'starts_on', type: 'string', format: 'date'), new OA\Property(property: 'ends_on', type: 'string', format: 'date'), new OA\Property(property: 'allows_daily_holiday_override', type: 'boolean', nullable: true, description: '省略時はカラムの既定値(true)。falseにすると日別の休日区分編集をロックする')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
@@ -98,7 +98,9 @@ class CompanyCalendarController extends Controller
             'ends_on' => ['nullable', 'date', 'after:starts_on', 'required_with:fiscal_year,starts_on'],
             'holiday_calendar_source_id' => ['nullable', 'uuid', 'exists:holiday_calendar_sources,id'],
             'weekday_holiday_pattern' => ['nullable', 'array', self::weekdayHolidayPatternRule()],
-            'allow_daily_holiday_override' => ['nullable', 'boolean'],
+            'allows_daily_holiday_override' => ['nullable', 'boolean'],
+            // 旧名は受け付けない(変更セット 20261123-boolean-column-naming 論点10)。
+            'allow_daily_holiday_override' => ['prohibited'],
         ]);
 
         $this->assertValidFiscalYearStart($data['fiscal_year_start_month'] ?? 4, $data['fiscal_year_start_day'] ?? 1);
@@ -111,7 +113,7 @@ class CompanyCalendarController extends Controller
             createdByUserId: $request->user()->id,
             weekdayHolidayPattern: $data['weekday_holiday_pattern'] ?? null,
             holidayCalendarSourceId: $data['holiday_calendar_source_id'] ?? null,
-            allowDailyHolidayOverride: $data['allow_daily_holiday_override'] ?? null,
+            allowsDailyHolidayOverride: $data['allows_daily_holiday_override'] ?? null,
         ));
 
         if (array_key_exists('fiscal_year', $data) && $data['fiscal_year'] !== null) {
@@ -138,7 +140,7 @@ class CompanyCalendarController extends Controller
         summary: '会社カレンダー本体を編集する',
         tags: ['勤務カレンダー'],
         parameters: [new OA\Parameter(name: 'companyCalendar', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'holiday_calendar_source_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'allow_daily_holiday_override', type: 'boolean', nullable: true, description: '省略時は現在値を維持する。falseにすると日別の休日区分編集をロックする')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'holiday_calendar_source_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'allows_daily_holiday_override', type: 'boolean', nullable: true, description: '省略時は現在値を維持する。falseにすると日別の休日区分編集をロックする')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function update(Request $request, CompanyCalendar $companyCalendar, CommandBus $commandBus): CompanyCalendarResource
@@ -150,7 +152,9 @@ class CompanyCalendarController extends Controller
             'fiscal_year_start_day' => ['integer', 'between:1,31'],
             'holiday_calendar_source_id' => ['nullable', 'uuid', 'exists:holiday_calendar_sources,id'],
             'weekday_holiday_pattern' => ['nullable', 'array', self::weekdayHolidayPatternRule()],
-            'allow_daily_holiday_override' => ['nullable', 'boolean'],
+            'allows_daily_holiday_override' => ['nullable', 'boolean'],
+            // 旧名は受け付けない(変更セット 20261123-boolean-column-naming 論点10)。
+            'allow_daily_holiday_override' => ['prohibited'],
         ]);
 
         $this->assertValidFiscalYearStart(
@@ -167,7 +171,7 @@ class CompanyCalendarController extends Controller
             holidayCalendarSourceId: $data['holiday_calendar_source_id'] ?? null,
             updatedByUserId: $request->user()->id,
             weekdayHolidayPattern: $data['weekday_holiday_pattern'] ?? $companyCalendar->weekday_holiday_pattern,
-            allowDailyHolidayOverride: $data['allow_daily_holiday_override'] ?? $companyCalendar->allow_daily_holiday_override,
+            allowsDailyHolidayOverride: $data['allows_daily_holiday_override'] ?? $companyCalendar->allows_daily_holiday_override,
         ));
 
         return new CompanyCalendarResource($calendar);
@@ -407,7 +411,7 @@ class CompanyCalendarController extends Controller
     }
 
     /**
-     * 曜日休日パターンがロック(`allow_daily_holiday_override = false`)されているカレンダーで
+     * 曜日休日パターンがロック(`allows_daily_holiday_override = false`)されているカレンダーで
      * 日別の分類を誤って登録してしまった場合の救済措置。この年度の日別設定を、カレンダー本体の
      * *現在の*曜日休日パターンから丸ごと再生成し、以前の手動編集を破棄する
      * (`CreateCompanyCalendarYearHandler`と同じ生成→同期のオーケストレーションを再利用する)。

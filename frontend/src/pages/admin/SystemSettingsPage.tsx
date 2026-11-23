@@ -60,7 +60,7 @@ export function SystemSettingsPage() {
     setShiftSwapRequiresApproval(data.shift_swap_requires_approval)
     setAttendanceRequiresApproval(data.attendance_requires_approval)
     setExpenseClaimRequiresApproval(data.expense_claim_requires_approval)
-    setProhibitSelfPrivilegedRoleAssignment(data.prohibit_self_privileged_role_assignment)
+    setProhibitSelfPrivilegedRoleAssignment(data.prohibits_self_privileged_role_assignment)
     setCompensatoryLeaveRequiresApproval(data.compensatory_leave_requires_approval)
   }, [data])
 
@@ -89,7 +89,7 @@ export function SystemSettingsPage() {
         shift_swap_requires_approval: shiftSwapRequiresApproval,
         attendance_requires_approval: attendanceRequiresApproval,
         expense_claim_requires_approval: expenseClaimRequiresApproval,
-        prohibit_self_privileged_role_assignment: prohibitSelfPrivilegedRoleAssignment,
+        prohibits_self_privileged_role_assignment: prohibitSelfPrivilegedRoleAssignment,
         compensatory_leave_requires_approval: compensatoryLeaveRequiresApproval,
       },
       {

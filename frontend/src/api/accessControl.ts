@@ -39,7 +39,7 @@ export interface RoleAssignment {
   role_id: number;
   scope_type: "global" | "group" | "self" | "approval_task";
   scope_group_id: string | null;
-  include_descendants: boolean;
+  includes_descendants: boolean;
   starts_at: string | null;
   ends_at: string | null;
   status: string;
@@ -95,7 +95,7 @@ export const updateRoleAssignment = (
       RoleAssignment,
       | "scope_type"
       | "scope_group_id"
-      | "include_descendants"
+      | "includes_descendants"
       | "starts_at"
       | "ends_at"
     >

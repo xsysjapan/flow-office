@@ -405,23 +405,23 @@ class CompanyCalendarYearControllerTest extends TestCase
             'name' => '本社カレンダー',
         ])->json('id');
 
-        $this->assertDatabaseHas('company_calendars', ['id' => $calendarId, 'allow_daily_holiday_override' => true]);
+        $this->assertDatabaseHas('company_calendars', ['id' => $calendarId, 'allows_daily_holiday_override' => true]);
 
         $response = $this->actingAs($admin)->putJson("/api/company-calendars/{$calendarId}", [
             'name' => '本社カレンダー',
-            'allow_daily_holiday_override' => false,
+            'allows_daily_holiday_override' => false,
         ]);
 
         $response->assertOk();
-        $response->assertJsonPath('allow_daily_holiday_override', false);
-        $this->assertDatabaseHas('company_calendars', ['id' => $calendarId, 'allow_daily_holiday_override' => false]);
+        $response->assertJsonPath('allows_daily_holiday_override', false);
+        $this->assertDatabaseHas('company_calendars', ['id' => $calendarId, 'allows_daily_holiday_override' => false]);
 
         // 省略時は現在値を維持する。
         $keepResponse = $this->actingAs($admin)->putJson("/api/company-calendars/{$calendarId}", [
             'name' => '本社カレンダー(改名)',
         ]);
         $keepResponse->assertOk();
-        $keepResponse->assertJsonPath('allow_daily_holiday_override', false);
+        $keepResponse->assertJsonPath('allows_daily_holiday_override', false);
     }
 
     public function test_saving_days_on_a_locked_calendar_overrides_a_contradicting_classification_with_the_pattern(): void
@@ -435,7 +435,7 @@ class CompanyCalendarYearControllerTest extends TestCase
             'name' => '本社カレンダー',
             'fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'weekday_holiday_pattern' => $pattern,
-            'allow_daily_holiday_override' => false,
+            'allows_daily_holiday_override' => false,
         ])->json('id');
         $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
 
@@ -473,7 +473,7 @@ class CompanyCalendarYearControllerTest extends TestCase
             'name' => '本社カレンダー', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
         ])->json('id');
-        $this->assertDatabaseHas('company_calendars', ['id' => $calendarId, 'allow_daily_holiday_override' => true]);
+        $this->assertDatabaseHas('company_calendars', ['id' => $calendarId, 'allows_daily_holiday_override' => true]);
         $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
 
         // 2026-05-05(火、本来は勤務日)を手動で法定休日として登録する(現行の許容挙動)。
@@ -508,7 +508,7 @@ class CompanyCalendarYearControllerTest extends TestCase
             'name' => 'Locked calendar', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'weekday_holiday_pattern' => $pattern,
-            'allow_daily_holiday_override' => false,
+            'allows_daily_holiday_override' => false,
         ])->assertCreated()->json('id');
         $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->firstOrFail();
 

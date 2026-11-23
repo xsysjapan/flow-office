@@ -35,7 +35,7 @@ class ExternalIntegrationOAuthTest extends TestCase
             'name' => 'freee本社事業所',
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
             'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
-            'enabled' => true,
+            'publishing_enabled' => true,
             'client_id' => 'client-id-1234',
             'client_secret' => 'client-secret-5678',
         ], $overrides));

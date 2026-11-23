@@ -28,7 +28,7 @@ class CompanyCalendarResource extends JsonResource
             'fiscal_year_start_day' => $this->fiscal_year_start_day,
             'holiday_calendar_source_id' => $this->holiday_calendar_source_id,
             'weekday_holiday_pattern' => $this->effectiveWeekdayHolidayPattern(),
-            'allow_daily_holiday_override' => $this->allow_daily_holiday_override,
+            'allows_daily_holiday_override' => $this->allows_daily_holiday_override,
             'is_default' => $this->is_default,
             'status' => $this->status,
         ];

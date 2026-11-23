@@ -86,7 +86,7 @@ final class MembershipConstraintValidator
                 throw new DomainRuleException('所属数の上限を超えています。');
             }
             $primaryCount = $memberships->where('is_primary', true)->count();
-            if ($type->primary_membership_required && $primaryCount < 1) {
+            if ($type->requires_primary_membership && $primaryCount < 1) {
                 throw new DomainRuleException('主所属が必要です。');
             }
             if ($type->max_primary_memberships !== null && $primaryCount > $type->max_primary_memberships) {

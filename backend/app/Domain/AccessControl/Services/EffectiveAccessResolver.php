@@ -56,7 +56,7 @@ class EffectiveAccessResolver
             'group_name' => $row->subject_type === 'group' ? $groupNames->get($row->subject_id) : null,
             'scope_type' => $row->scope_type,
             'scope_group_id' => $row->scope_group_id,
-            'include_descendants' => (bool) $row->include_descendants,
+            'includes_descendants' => (bool) $row->includes_descendants,
             'starts_at' => $row->starts_at,
             'ends_at' => $row->ends_at,
         ];
@@ -210,7 +210,7 @@ class EffectiveAccessResolver
                 if ($candidateGroupId === $assignment->scope_group_id) {
                     return true;
                 }
-                if (! $assignment->include_descendants) {
+                if (! $assignment->includes_descendants) {
                     continue;
                 }
                 $parent = DB::table('groups')->where('id', $candidateGroupId)->value('parent_group_id');
@@ -240,7 +240,7 @@ class EffectiveAccessResolver
                 continue;
             }
             $result->push($assignment->scope_group_id);
-            if (! $assignment->include_descendants) {
+            if (! $assignment->includes_descendants) {
                 continue;
             }
             $frontier = collect([$assignment->scope_group_id]);

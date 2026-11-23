@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 勤怠API連携(フェーズ2)の認可情報。docs/33-usecases-attendance-external-api.md参照。
  * トークン・APIキー系カラムはencryptedキャストで暗号化して保存する(平文で保持しない)。
  */
-#[Fillable(['id', 'provider', 'name', 'external_office_id', 'auth_type', 'status', 'enabled', 'access_token', 'refresh_token', 'api_key', 'client_id', 'client_secret', 'custom_settings', 'token_expires_at', 'connected_by_user_id', 'connected_at'])]
+#[Fillable(['id', 'provider', 'name', 'external_office_id', 'auth_type', 'status', 'publishing_enabled', 'access_token', 'refresh_token', 'api_key', 'client_id', 'client_secret', 'custom_settings', 'token_expires_at', 'connected_by_user_id', 'connected_at'])]
 class ExternalIntegrationConnection extends Model
 {
     use HasUuids;
@@ -41,7 +41,7 @@ class ExternalIntegrationConnection extends Model
             'client_id' => 'encrypted',
             'client_secret' => 'encrypted',
             'custom_settings' => 'array',
-            'enabled' => 'boolean',
+            'publishing_enabled' => 'boolean',
             'token_expires_at' => 'datetime',
             'connected_at' => 'datetime',
         ];

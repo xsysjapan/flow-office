@@ -27,7 +27,7 @@ class AttendancePunchAggregate extends AggregateRoot
         ?string $deviceId,
         ?string $authenticationKeyId,
         ?string $actorUserId,
-        bool $offline,
+        bool $isOffline,
         ?string $idempotencyKey,
         ?string $requestId,
     ): self {
@@ -41,7 +41,7 @@ class AttendancePunchAggregate extends AggregateRoot
             deviceId: $deviceId,
             authenticationKeyId: $authenticationKeyId,
             actorUserId: $actorUserId,
-            offline: $offline,
+            isOffline: $isOffline,
             idempotencyKey: $idempotencyKey,
             requestId: $requestId,
         ));

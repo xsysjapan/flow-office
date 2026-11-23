@@ -9,7 +9,7 @@ export interface AssetNumberRule {
   prefix: string
   digitCount: number
   nextNumber: number
-  enabled: boolean
+  isActive: boolean
   isDefault: boolean
 }
 
@@ -24,19 +24,19 @@ export function fetchAssetNumberRuleCategories(): Promise<string[]> {
 export interface SaveAssetNumberRuleInput {
   prefix: string
   digitCount: number
-  enabled: boolean
+  isActive: boolean
 }
 
 export function updateAssetNumberRule(category: string, input: SaveAssetNumberRuleInput): Promise<AssetNumberRule> {
   return apiFetch(`/asset-number-rules/${encodeURIComponent(category)}`, {
     method: 'PUT',
-    body: { prefix: input.prefix, digit_count: input.digitCount, enabled: input.enabled },
+    body: { prefix: input.prefix, digit_count: input.digitCount, is_active: input.isActive },
   })
 }
 
 export function updateDefaultAssetNumberRule(input: SaveAssetNumberRuleInput): Promise<AssetNumberRule> {
   return apiFetch('/asset-number-rules/default', {
     method: 'PUT',
-    body: { prefix: input.prefix, digit_count: input.digitCount, enabled: input.enabled },
+    body: { prefix: input.prefix, digit_count: input.digitCount, is_active: input.isActive },
   })
 }

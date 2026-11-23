@@ -148,8 +148,8 @@ class UserManagementController extends Controller
     public function storeGroupType(Request $r, CommandBus $bus): JsonResponse
     {
         $this->assertGlobal($r);
-        $d = $r->validate(['code' => ['required', 'string', 'max:100'], 'name' => ['required', 'string', 'max:255'], 'display_order' => ['integer', 'min:0'], 'membership_limit_type' => ['required', Rule::in(['unlimited', 'limited'])], 'max_memberships_per_user' => ['nullable', 'integer', 'min:1'], 'primary_membership_required' => ['boolean'], 'max_primary_memberships' => ['nullable', 'integer', 'min:1']]);
-        $bus->dispatch(new CreateGroupType(strtoupper($d['code']), $d['name'], $d['display_order'] ?? 0, $d['membership_limit_type'], $d['max_memberships_per_user'] ?? null, $d['primary_membership_required'] ?? false, $d['max_primary_memberships'] ?? null, $r->user()->id));
+        $d = $r->validate(['code' => ['required', 'string', 'max:100'], 'name' => ['required', 'string', 'max:255'], 'display_order' => ['integer', 'min:0'], 'membership_limit_type' => ['required', Rule::in(['unlimited', 'limited'])], 'max_memberships_per_user' => ['nullable', 'integer', 'min:1'], 'requires_primary_membership' => ['boolean'], 'primary_membership_required' => ['prohibited'], 'max_primary_memberships' => ['nullable', 'integer', 'min:1']]);
+        $bus->dispatch(new CreateGroupType(strtoupper($d['code']), $d['name'], $d['display_order'] ?? 0, $d['membership_limit_type'], $d['max_memberships_per_user'] ?? null, $d['requires_primary_membership'] ?? false, $d['max_primary_memberships'] ?? null, $r->user()->id));
 
         return response()->json([], 201);
     }
@@ -158,8 +158,8 @@ class UserManagementController extends Controller
     {
         $this->assertGlobal($r);
         $current = GroupType::query()->findOrFail($groupType);
-        $d = $r->validate(['name' => ['sometimes', 'string', 'max:255'], 'display_order' => ['integer', 'min:0'], 'status' => ['sometimes', Rule::in(['active', 'inactive'])], 'membership_limit_type' => ['sometimes', Rule::in(['unlimited', 'limited'])], 'max_memberships_per_user' => ['nullable', 'integer', 'min:1'], 'primary_membership_required' => ['boolean'], 'max_primary_memberships' => ['nullable', 'integer', 'min:1']]);
-        $bus->dispatch(new UpdateGroupType($groupType, $d['name'] ?? $current->name, $d['display_order'] ?? $current->display_order, $d['status'] ?? $current->status, $d['membership_limit_type'] ?? $current->membership_limit_type, array_key_exists('max_memberships_per_user', $d) ? $d['max_memberships_per_user'] : $current->max_memberships_per_user, $d['primary_membership_required'] ?? $current->primary_membership_required, array_key_exists('max_primary_memberships', $d) ? $d['max_primary_memberships'] : $current->max_primary_memberships, $r->user()->id));
+        $d = $r->validate(['name' => ['sometimes', 'string', 'max:255'], 'display_order' => ['integer', 'min:0'], 'status' => ['sometimes', Rule::in(['active', 'inactive'])], 'membership_limit_type' => ['sometimes', Rule::in(['unlimited', 'limited'])], 'max_memberships_per_user' => ['nullable', 'integer', 'min:1'], 'requires_primary_membership' => ['boolean'], 'primary_membership_required' => ['prohibited'], 'max_primary_memberships' => ['nullable', 'integer', 'min:1']]);
+        $bus->dispatch(new UpdateGroupType($groupType, $d['name'] ?? $current->name, $d['display_order'] ?? $current->display_order, $d['status'] ?? $current->status, $d['membership_limit_type'] ?? $current->membership_limit_type, array_key_exists('max_memberships_per_user', $d) ? $d['max_memberships_per_user'] : $current->max_memberships_per_user, $d['requires_primary_membership'] ?? $current->requires_primary_membership, array_key_exists('max_primary_memberships', $d) ? $d['max_primary_memberships'] : $current->max_primary_memberships, $r->user()->id));
 
         return response()->json([]);
     }

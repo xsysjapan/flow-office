@@ -50,9 +50,9 @@ class RegisterDeviceHandler implements CommandHandler
             defaultWorkLocationType: $command->defaultWorkLocationType,
             timezone: $command->timezone,
             allowedPunchTypes: $command->allowedPunchTypes,
-            allowOffline: $command->allowOffline,
-            requireLocation: $command->requireLocation,
-            autoDetectPunchType: $command->autoDetectPunchType,
+            allowsOffline: $command->allowsOffline,
+            requiresLocation: $command->requiresLocation,
+            punchTypeAutoDetectionEnabled: $command->punchTypeAutoDetectionEnabled,
             registeredByUserId: $command->registeredByUserId,
         );
         $aggregate->persist();

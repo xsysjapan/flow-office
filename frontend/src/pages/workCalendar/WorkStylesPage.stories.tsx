@@ -13,7 +13,7 @@ const calendar: WorkCalendar = {
   is_default: true,
   status: 'active',
   weekday_holiday_pattern: { '1': 'working', '2': 'working', '3': 'working', '4': 'working', '5': 'working', '6': 'company_holiday', '7': 'legal_holiday' },
-  allow_daily_holiday_override: true,
+  allows_daily_holiday_override: true,
 }
 
 const workStyle: WorkStyle = {
@@ -35,7 +35,7 @@ const workStyle: WorkStyle = {
   company_calendar_id: 'calendar-1',
   is_shift_based: false,
   is_default: true,
-  system_generated: true,
+  is_system_generated: true,
   legal_holiday_rule: 'weekly',
   four_week_period_start_date: null,
   max_consecutive_work_days: null,

@@ -24,7 +24,7 @@ use Illuminate\Validation\ValidationException;
  */
 class CreateDefaultWorkStyleHandler implements CommandHandler
 {
-    private const PROTECTED_KEYS = ['is_default', 'system_generated', 'code'];
+    private const PROTECTED_KEYS = ['is_default', 'is_system_generated', 'code'];
 
     public function handle(Command $command): WorkStyle
     {
@@ -40,7 +40,7 @@ class CreateDefaultWorkStyleHandler implements CommandHandler
         );
         $attributes['code'] = $this->uniqueCode('standard');
         $attributes['is_default'] = true;
-        $attributes['system_generated'] = true;
+        $attributes['is_system_generated'] = true;
 
         $id = (string) Str::uuid();
 

@@ -15,7 +15,7 @@ function LocationProbe() {
   return <div data-testid="location-search">{location.search}</div>
 }
 
-const typeBase = { display_order: 0, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, primary_membership_required: false, max_primary_memberships: null }
+const typeBase = { display_order: 0, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, requires_primary_membership: false, max_primary_memberships: null }
 const orgType = { id: 1, code: 'ORGANIZATION', name: '組織', ...typeBase }
 const committeeType = { id: 2, code: 'COMMITTEE', name: '委員会', ...typeBase }
 

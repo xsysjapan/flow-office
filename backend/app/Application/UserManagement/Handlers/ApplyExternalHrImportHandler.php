@@ -58,7 +58,7 @@ class ApplyExternalHrImportHandler implements CommandHandler
             } $existing = DB::table('memberships')->join('groups', 'memberships.group_id', '=', 'groups.id')->where('memberships.user_id', $row['user_id'])->where('groups.group_type_id', $group->group_type_id)->first();
             if ($existing && $existing->group_id === $group->id) {
                 continue;
-            } $primaryRequired = (bool) DB::table('group_types')->where('id', $group->group_type_id)->value('primary_membership_required');
+            } $primaryRequired = (bool) DB::table('group_types')->where('id', $group->group_type_id)->value('requires_primary_membership');
             $item = $existing ? ['operation' => 'replace', 'group_type_id' => $group->group_type_id, 'from_group_id' => $existing->group_id, 'to_group_id' => $group->id, 'is_primary' => (bool) $existing->is_primary] : ['operation' => 'add', 'group_type_id' => $group->group_type_id, 'target_group_id' => $group->id, 'is_primary' => $primaryRequired];
             $this->validator->validateItems($row['user_id'], [$item]);
             $changeSetId = (string) Str::uuid();

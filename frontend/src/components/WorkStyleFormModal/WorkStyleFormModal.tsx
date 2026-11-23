@@ -85,8 +85,8 @@ export interface WorkStyleFormModalProps {
 /**
  * 勤務形態の新規登録・編集モーダル(UC-C002)。作成・編集で同じ入力項目を使うため
  * フォーム状態をこのコンポーネントに集約する。編集時も初回オンボーディングで作成された
- * 標準の勤務形態(system_generated=true)も含めて編集できる(code・is_default・
- * system_generatedはUpdateWorkStyleHandlerが変更しない)。
+ * 標準の勤務形態(is_system_generated=true)も含めて編集できる(code・is_default・
+ * is_system_generatedはUpdateWorkStyleHandlerが変更しない)。
  */
 export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: WorkStyleFormModalProps) {
   const { data: workCalendars } = useWorkCalendars()

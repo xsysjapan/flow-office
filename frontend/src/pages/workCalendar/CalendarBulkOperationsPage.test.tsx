@@ -54,7 +54,7 @@ const workStyle: WorkStyle = {
   flexible_time_start: null,
   flexible_time_end: null,
   is_default: false,
-  system_generated: false,
+  is_system_generated: false,
   applied_employee_count: 3,
   active_shift_pattern_count: null,
   configuration_warnings: [],

@@ -29,7 +29,7 @@ const calendar: WorkCalendar = {
     '6': 'company_holiday',
     '7': 'legal_holiday',
   },
-  allow_daily_holiday_override: true,
+  allows_daily_holiday_override: true,
 }
 
 const source: HolidayCalendarSource = {
@@ -90,7 +90,7 @@ describe('WorkCalendarCreatePage', () => {
           '6': 'company_holiday',
           '7': 'legal_holiday',
         },
-        allow_daily_holiday_override: true,
+        allows_daily_holiday_override: true,
       }),
     )
 
@@ -123,7 +123,7 @@ describe('WorkCalendarCreatePage', () => {
           '6': 'company_holiday',
           '7': 'legal_holiday',
         },
-        allow_daily_holiday_override: true,
+        allows_daily_holiday_override: true,
       }),
     )
   })
@@ -182,7 +182,7 @@ describe('WorkCalendarCreatePage', () => {
           '6': 'company_holiday',
           '7': 'legal_holiday',
         },
-        allow_daily_holiday_override: true,
+        allows_daily_holiday_override: true,
         holiday_calendar_source_id: createdSource.id,
       }),
     )

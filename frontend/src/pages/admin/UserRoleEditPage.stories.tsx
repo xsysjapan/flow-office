@@ -42,7 +42,7 @@ const defaultWorkStyle: WorkStyle = {
   company_calendar_id: 'calendar-1',
   is_shift_based: false,
   is_default: true,
-  system_generated: true,
+  is_system_generated: true,
   legal_holiday_rule: 'weekly',
   four_week_period_start_date: null,
   max_consecutive_work_days: null,

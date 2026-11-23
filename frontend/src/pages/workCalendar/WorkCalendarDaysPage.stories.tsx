@@ -22,7 +22,7 @@ const calendar: WorkCalendar = {
     '6': 'company_holiday',
     '7': 'legal_holiday',
   },
-  allow_daily_holiday_override: true,
+  allows_daily_holiday_override: true,
 }
 
 const year: WorkCalendarYear = {

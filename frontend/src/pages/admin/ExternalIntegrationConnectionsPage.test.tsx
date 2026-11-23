@@ -17,7 +17,7 @@ const connections: ExternalIntegrationConnection[] = [
     name: 'freee本社経理',
     auth_type: 'oauth2',
     status: 'connected',
-    enabled: true,
+    publishing_enabled: true,
     external_office_id: '12345',
     custom_settings: null,
     has_client_id: true,
@@ -36,7 +36,7 @@ const connections: ExternalIntegrationConnection[] = [
     name: 'マネーフォワード大阪支店',
     auth_type: 'api_key',
     status: 'unconfigured',
-    enabled: false,
+    publishing_enabled: false,
     external_office_id: null,
     custom_settings: null,
     has_client_id: false,
@@ -154,14 +154,14 @@ describe('ExternalIntegrationConnectionsPage', () => {
     const user = userEvent.setup()
     const updateSpy = vi
       .spyOn(connectionsApi, 'updateExternalIntegrationConnection')
-      .mockResolvedValue({ ...connections[1], enabled: true })
+      .mockResolvedValue({ ...connections[1], publishing_enabled: true })
     renderPage()
 
     await screen.findByText('マネーフォワード大阪支店')
     await user.click(screen.getByRole('button', { name: 'マネーフォワード大阪支店の操作' }))
     await user.click(await screen.findByRole('menuitem', { name: '有効にする' }))
 
-    expect(updateSpy).toHaveBeenCalledWith('conn-2', { enabled: true })
+    expect(updateSpy).toHaveBeenCalledWith('conn-2', { publishing_enabled: true })
     await vi.waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('マネーフォワード大阪支店を有効にしました')
     })

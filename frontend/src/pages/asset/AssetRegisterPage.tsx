@@ -21,16 +21,16 @@ const MANAGEMENT_TYPE_OPTIONS: AssetManagementType[] = ['lending', 'installation
 const LENDING_METHOD_OPTIONS: AssetLendingMethod[] = ['self_service', 'backoffice', 'approval']
 
 /**
- * spec 論点10の判定順: ①category完全一致かつenabled=true → ②(①が無い場合のみ)
- * isDefault=trueかつenabled=true → ③いずれも無ければ手入力(null)。
+ * spec 論点10の判定順: ①category完全一致かつisActive=true → ②(①が無い場合のみ)
+ * isDefault=trueかつisActive=true → ③いずれも無ければ手入力(null)。
  */
 function resolveAutoNumberingRule(category: string, rules: AssetNumberRule[]): AssetNumberRule | null {
   const trimmed = category.trim()
   if (!trimmed) return null
   const matched = rules.find((rule) => rule.category === trimmed)
-  if (matched) return matched.enabled ? matched : null
+  if (matched) return matched.isActive ? matched : null
   const defaultRule = rules.find((rule) => rule.isDefault)
-  return defaultRule?.enabled ? defaultRule : null
+  return defaultRule?.isActive ? defaultRule : null
 }
 
 /**

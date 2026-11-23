@@ -135,7 +135,7 @@ class AttendanceExcelBuilder
                     PaidLeaveUsage::query()
                         ->select('usage_id')
                         ->where('is_confirmed', true)
-                        ->where('cancelled', false)
+                        ->where('is_cancelled', false)
                         ->whereDate('used_on', '<=', $monthEnd),
                 ),
             ], 'allocated_days')

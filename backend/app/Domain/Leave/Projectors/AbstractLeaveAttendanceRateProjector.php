@@ -259,7 +259,7 @@ abstract class AbstractLeaveAttendanceRateProjector extends Projector
 
         $this->attendanceDayQuery()->updateOrCreate(
             ['id' => $attendanceDayId],
-            ['user_id' => $userId, 'work_date' => $workDate, 'clocked_out' => $clockedOut],
+            ['user_id' => $userId, 'work_date' => $workDate, 'has_clocked_out' => $clockedOut],
         );
 
         if ($previous !== null && ($previous->user_id !== $userId || $previous->work_date !== $workDate)) {
@@ -346,7 +346,7 @@ abstract class AbstractLeaveAttendanceRateProjector extends Projector
         $attended = $this->attendanceDayQuery()
             ->where('user_id', $userId)
             ->whereDate('work_date', $workDate)
-            ->where('clocked_out', true)
+            ->where('has_clocked_out', true)
             ->exists();
 
         $coverage = J::coverage($activeLeaves);
@@ -354,7 +354,7 @@ abstract class AbstractLeaveAttendanceRateProjector extends Projector
         $this->dayQuery()->updateOrCreate(
             ['user_id' => $userId, 'work_date' => $workDate],
             [
-                'attended' => $attended,
+                'has_attended' => $attended,
                 'full_leave_kinds' => $coverage['full'],
                 'partial_leave_kinds' => $coverage['partial'],
             ],

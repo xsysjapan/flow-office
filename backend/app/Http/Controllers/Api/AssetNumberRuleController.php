@@ -55,7 +55,7 @@ class AssetNumberRuleController extends Controller
         operationId: 'assetNumberRules.updateDefault',
         summary: 'デフォルトルールを作成・更新する',
         tags: ['備品管理番号採番ルール'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['prefix'], properties: [new OA\Property(property: 'prefix', type: 'string'), new OA\Property(property: 'digit_count', type: 'integer'), new OA\Property(property: 'enabled', type: 'boolean')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['prefix'], properties: [new OA\Property(property: 'prefix', type: 'string'), new OA\Property(property: 'digit_count', type: 'integer'), new OA\Property(property: 'is_active', type: 'boolean')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function updateDefault(Request $request, CommandBus $commandBus): AssetNumberRuleResource
@@ -69,7 +69,7 @@ class AssetNumberRuleController extends Controller
         summary: 'カテゴリ別ルールを作成・更新する',
         tags: ['備品管理番号採番ルール'],
         parameters: [new OA\Parameter(name: 'category', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['prefix'], properties: [new OA\Property(property: 'prefix', type: 'string'), new OA\Property(property: 'digit_count', type: 'integer'), new OA\Property(property: 'enabled', type: 'boolean')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['prefix'], properties: [new OA\Property(property: 'prefix', type: 'string'), new OA\Property(property: 'digit_count', type: 'integer'), new OA\Property(property: 'is_active', type: 'boolean')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function update(Request $request, string $category, CommandBus $commandBus): AssetNumberRuleResource
@@ -82,14 +82,16 @@ class AssetNumberRuleController extends Controller
         $data = $request->validate([
             'prefix' => ['required', 'string', 'max:255'],
             'digit_count' => ['integer', 'min:1', 'max:20'],
-            'enabled' => ['boolean'],
+            'is_active' => ['boolean'],
+            // 旧名は受け付けない(変更セット 20261123-boolean-column-naming 論点10)。
+            'enabled' => ['prohibited'],
         ]);
 
         $rule = $commandBus->dispatch(new ConfigureAssetNumberRule(
             category: $category,
             prefix: $data['prefix'],
             digitCount: $data['digit_count'] ?? 5,
-            enabled: $data['enabled'] ?? true,
+            isActive: $data['is_active'] ?? true,
             actorUserId: $request->user()->id,
         ));
 

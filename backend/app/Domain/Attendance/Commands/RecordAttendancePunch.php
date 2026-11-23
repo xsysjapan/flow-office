@@ -21,7 +21,7 @@ class RecordAttendancePunch implements Command
         public readonly ?string $deviceId = null,
         public readonly ?string $authenticationKeyId = null,
         public readonly ?string $actorUserId = null,
-        public readonly bool $offline = false,
+        public readonly bool $isOffline = false,
         public readonly ?string $idempotencyKey = null,
         public readonly ?string $requestId = null,
     ) {}

@@ -127,9 +127,9 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
     device.default_work_location_type ?? '',
   )
   const [timezone, setTimezone] = useState(device.timezone ?? '')
-  const [allowOffline, setAllowOffline] = useState(device.allow_offline)
-  const [requireLocation, setRequireLocation] = useState(device.require_location)
-  const [autoDetectPunchType, setAutoDetectPunchType] = useState(device.auto_detect_punch_type)
+  const [allowOffline, setAllowOffline] = useState(device.allows_offline)
+  const [requireLocation, setRequireLocation] = useState(device.requires_location)
+  const [autoDetectPunchType, setAutoDetectPunchType] = useState(device.punch_type_auto_detection_enabled)
 
   const handleOpenChange = (next: boolean) => {
     if (!isControlled) setUncontrolledOpen(next)
@@ -139,9 +139,9 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
       setLocationName(device.location_name ?? '')
       setDefaultWorkLocationType(device.default_work_location_type ?? '')
       setTimezone(device.timezone ?? '')
-      setAllowOffline(device.allow_offline)
-      setRequireLocation(device.require_location)
-      setAutoDetectPunchType(device.auto_detect_punch_type)
+      setAllowOffline(device.allows_offline)
+      setRequireLocation(device.requires_location)
+      setAutoDetectPunchType(device.punch_type_auto_detection_enabled)
       setRoleTypes((device.roles ?? []).filter((role) => EDITABLE_ROLE_TYPES.includes(role)))
       updateSettings.reset()
       issuePairingClaim.reset()
@@ -187,9 +187,9 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
     setLocationName(device.location_name ?? '')
     setDefaultWorkLocationType(device.default_work_location_type ?? '')
     setTimezone(device.timezone ?? '')
-    setAllowOffline(device.allow_offline)
-    setRequireLocation(device.require_location)
-    setAutoDetectPunchType(device.auto_detect_punch_type)
+    setAllowOffline(device.allows_offline)
+    setRequireLocation(device.requires_location)
+    setAutoDetectPunchType(device.punch_type_auto_detection_enabled)
     setRoleTypes((device.roles ?? []).filter((role) => EDITABLE_ROLE_TYPES.includes(role)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device.id])
@@ -203,9 +203,9 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
           location_name: locationName || undefined,
           default_work_location_type: defaultWorkLocationType || undefined,
           timezone: timezone || undefined,
-          allow_offline: allowOffline,
-          require_location: requireLocation,
-          auto_detect_punch_type: autoDetectPunchType,
+          allows_offline: allowOffline,
+          requires_location: requireLocation,
+          punch_type_auto_detection_enabled: autoDetectPunchType,
         },
       },
       { onSuccess: () => notify.success(`${name}の設定を保存しました`) },

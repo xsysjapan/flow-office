@@ -5,6 +5,9 @@ namespace Tests\Feature\PaidLeaveAccount;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
+use App\Domain\PaidLeaveAccount\Commands\CancelPaidLeaveUsage;
+use App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage;
+use App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Models\CompanyCalendar;
@@ -139,6 +142,40 @@ class PaidLeaveWarningBatchTest extends TestCase
         $count = app(CommandBus::class)->dispatch(new WarnFiveDayObligation($today->toDateString()));
 
         $this->assertSame(0, $count);
+    }
+
+    public function test_five_day_obligation_counts_only_confirmed_and_not_cancelled_usages(): void
+    {
+        $today = Carbon::parse('2026-08-10');
+        $employee = User::factory()->create();
+        $bus = app(CommandBus::class);
+
+        $bus->dispatch(new GrantPaidLeave($employee->id, '2025-09-01', '2027-08-31', 10.0, null));
+        $usageIds = [];
+        foreach (['2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05'] as $date) {
+            $usageIds[] = $bus->dispatch(new DesignatePaidLeaveUsage(
+                userId: $employee->id,
+                workflowRequestId: 'wf-'.$date,
+                attendanceDayId: null,
+                usedOn: $date,
+                usedDays: 1.0,
+                usageType: 'full',
+            ));
+        }
+
+        // 指定しただけ(is_confirmed=false)の5件は数えない: 義務の未達として警告する。
+        $this->assertSame(1, $bus->dispatch(new WarnFiveDayObligation($today->toDateString())));
+        PaidLeaveGrant::query()->update(['five_day_obligation_warned_at' => null]);
+
+        // 5件とも確定(is_confirmed=true, is_cancelled=false)すると達成済み: 警告しない。
+        foreach ($usageIds as $usageId) {
+            $bus->dispatch(new ConfirmPaidLeaveUsage($employee->id, $usageId, $employee->id));
+        }
+        $this->assertSame(0, $bus->dispatch(new WarnFiveDayObligation($today->toDateString())));
+
+        // 1件を取り消す(is_confirmed=true のまま is_cancelled=true)と数えず、未達に戻る。
+        $bus->dispatch(new CancelPaidLeaveUsage($employee->id, $usageIds[0], $employee->id, '取消'));
+        $this->assertSame(1, $bus->dispatch(new WarnFiveDayObligation($today->toDateString())));
     }
 
     public function test_warn_five_day_obligation_skips_grants_outside_the_warning_window(): void

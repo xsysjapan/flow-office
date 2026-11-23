@@ -204,7 +204,7 @@ class PaidLeaveBundledGrantScenarioTest extends TestCase
         for ($i = 0; $i < 55; $i++, $date->addDay()) {
             LeaveAttendanceRateDay::query()->create([
                 'user_id' => $user->id, 'work_date' => $date->toDateString(), 'is_working_day' => true,
-                'attended' => $i < 10, 'full_leave_kinds' => [], 'partial_leave_kinds' => [],
+                'has_attended' => $i < 10, 'full_leave_kinds' => [], 'partial_leave_kinds' => [],
             ]);
         }
 

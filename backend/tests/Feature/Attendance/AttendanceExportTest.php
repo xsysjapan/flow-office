@@ -456,8 +456,30 @@ class AttendanceExportTest extends TestCase
         $cancelledRequestId = $this->approvePaidLeave($employee, $admin, '2026-06-23', 'full');
         $this->actingAs($admin)->postJson("/api/paid-leave/requests/{$cancelledRequestId}/admin-cancel")->assertOk();
 
-        // 前提: 取消した消化の行はcancelled = trueになっている。
-        $this->assertTrue(PaidLeaveUsage::query()->where('paid_leave_request_id', $cancelledRequestId)->firstOrFail()->cancelled);
+        // 前提: 取消した消化の行はis_cancelled = trueになっている。
+        $this->assertTrue(PaidLeaveUsage::query()->where('paid_leave_request_id', $cancelledRequestId)->firstOrFail()->is_cancelled);
+
+        $this->assertSame('9日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
+    }
+
+    public function test_excel_paid_leave_balance_counts_only_confirmed_usages(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create(['name' => '未確定消化社員']);
+
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        $this->approvePaidLeave($employee, $admin, '2026-06-22', 'full');
+        // 指定しただけで確定していない消化(is_confirmed = false)は残日数から引かない。
+        $designatedUsageId = app(CommandBus::class)->dispatch(new \App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage(
+            userId: $employee->id,
+            workflowRequestId: 'wf-unconfirmed',
+            attendanceDayId: null,
+            usedOn: '2026-06-24',
+            usedDays: 1.0,
+            usageType: 'full',
+        ));
+        $this->assertFalse(PaidLeaveUsage::query()->where('usage_id', $designatedUsageId)->firstOrFail()->is_confirmed);
 
         $this->assertSame('9日', $this->closedJuneExcelPaidLeaveBalance($employee, $admin));
     }
@@ -798,7 +820,7 @@ class AttendanceExportTest extends TestCase
         $inside = User::factory()->create(['name' => 'グループ内社員']);
         $this->addMembership($inside, $child);
         $this->createApprovedJuneMonth($inside);
-        $exporter = $this->createGroupScopedExporter($parent, includeDescendants: true);
+        $exporter = $this->createGroupScopedExporter($parent, includesDescendants: true);
 
         $response = $this->actingAs($exporter)->get('/api/exports/attendance?year_month=2026-06&user_id[]='.$inside->id);
 
@@ -906,7 +928,7 @@ class AttendanceExportTest extends TestCase
      * attendance.exportをグループスコープ(global の割当は持たせない)だけで持つ利用者を作る。
      * 権限の付与は既存のアクセス制御テストと同じく、テーブルへ直接用意する。
      */
-    private function createGroupScopedExporter(string $scopeGroupId, bool $includeDescendants = false): User
+    private function createGroupScopedExporter(string $scopeGroupId, bool $includesDescendants = false): User
     {
         $exporter = User::factory()->create();
         $role = Role::query()->firstOrCreate(
@@ -930,7 +952,7 @@ class AttendanceExportTest extends TestCase
             'role_id' => $role->id,
             'scope_type' => 'group',
             'scope_group_id' => $scopeGroupId,
-            'include_descendants' => $includeDescendants,
+            'includes_descendants' => $includesDescendants,
             'status' => 'active',
             'created_at' => now(),
             'updated_at' => now(),
@@ -966,7 +988,7 @@ class AttendanceExportTest extends TestCase
             'role_id' => $role->id,
             'scope_type' => 'global',
             'scope_group_id' => null,
-            'include_descendants' => false,
+            'includes_descendants' => false,
             'status' => 'active',
             'created_at' => now(),
             'updated_at' => now(),

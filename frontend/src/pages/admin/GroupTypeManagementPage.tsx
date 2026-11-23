@@ -21,7 +21,7 @@ export function GroupTypeManagementPage() {
     display_order: "0",
     membership_limit_type: "unlimited" as "unlimited" | "limited",
     max_memberships_per_user: "",
-    primary_membership_required: false,
+    requires_primary_membership: false,
     max_primary_memberships: "",
   });
   const [editForm, setEditForm] = useState({
@@ -31,7 +31,7 @@ export function GroupTypeManagementPage() {
     status: "active",
     membership_limit_type: "unlimited" as "unlimited" | "limited",
     max_memberships_per_user: "",
-    primary_membership_required: false,
+    requires_primary_membership: false,
     max_primary_memberships: "",
     is_system: false,
   });
@@ -123,11 +123,11 @@ export function GroupTypeManagementPage() {
           </FormField>
           <label className="flex items-center gap-2">
             <Checkbox
-              checked={createForm.primary_membership_required}
+              checked={createForm.requires_primary_membership}
               onCheckedChange={(checked) =>
                 setCreateForm({
                   ...createForm,
-                  primary_membership_required: checked === true,
+                  requires_primary_membership: checked === true,
                 })
               }
             />
@@ -163,8 +163,8 @@ export function GroupTypeManagementPage() {
                   max_memberships_per_user: createForm.max_memberships_per_user
                     ? Number(createForm.max_memberships_per_user)
                     : null,
-                  primary_membership_required:
-                    createForm.primary_membership_required,
+                  requires_primary_membership:
+                    createForm.requires_primary_membership,
                   max_primary_memberships: createForm.max_primary_memberships
                     ? Number(createForm.max_primary_memberships)
                     : null,
@@ -202,7 +202,7 @@ export function GroupTypeManagementPage() {
             >
               {type.name} ({type.code}) / 表示順 {type.display_order} / 上限{" "}
               {type.max_memberships_per_user ?? "なし"} / 主所属{" "}
-              {type.primary_membership_required ? "必須" : "任意"}
+              {type.requires_primary_membership ? "必須" : "任意"}
             </span>
           ))}
         </div>
@@ -228,7 +228,7 @@ export function GroupTypeManagementPage() {
                     type.max_memberships_per_user === null
                       ? ""
                       : String(type.max_memberships_per_user),
-                  primary_membership_required: type.primary_membership_required,
+                  requires_primary_membership: type.requires_primary_membership,
                   max_primary_memberships:
                     type.max_primary_memberships === null
                       ? ""
@@ -315,11 +315,11 @@ export function GroupTypeManagementPage() {
           <label className="flex items-center gap-2">
             <Checkbox
               disabled={editForm.is_system}
-              checked={editForm.primary_membership_required}
+              checked={editForm.requires_primary_membership}
               onCheckedChange={(checked) =>
                 setEditForm({
                   ...editForm,
-                  primary_membership_required: checked === true,
+                  requires_primary_membership: checked === true,
                 })
               }
             />
@@ -355,8 +355,8 @@ export function GroupTypeManagementPage() {
                     max_memberships_per_user: editForm.max_memberships_per_user
                       ? Number(editForm.max_memberships_per_user)
                       : null,
-                    primary_membership_required:
-                      editForm.primary_membership_required,
+                    requires_primary_membership:
+                      editForm.requires_primary_membership,
                     max_primary_memberships: editForm.max_primary_memberships
                       ? Number(editForm.max_primary_memberships)
                       : null,

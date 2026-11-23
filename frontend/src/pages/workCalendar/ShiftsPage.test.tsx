@@ -33,7 +33,7 @@ const workStyle: WorkStyle = {
   company_calendar_id: 'calendar-1',
   is_shift_based: false,
   is_default: true,
-  system_generated: true,
+  is_system_generated: true,
   legal_holiday_rule: 'weekly',
   four_week_period_start_date: null,
   max_consecutive_work_days: null,
@@ -185,7 +185,7 @@ describe('ShiftsPage', () => {
       name: '3交代制',
       is_shift_based: true,
       is_default: false,
-      system_generated: false,
+      is_system_generated: false,
     }
     const pattern = {
       id: 'shift-pattern-1',

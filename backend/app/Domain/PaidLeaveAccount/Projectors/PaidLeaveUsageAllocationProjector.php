@@ -34,9 +34,9 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  * replayする(空にせずにreplayすると充当が二重になる)。
  * 取り消した付与(`status=revoked`)の`remaining_days`は0(使える残日数の意味に揃える)。
  *
- * 旧ドメイン(`App\Domain\PaidLeave\Projectors\PaidLeaveGrantProjector`/
- * `PaidLeaveUsageProjector`)とは別のイベント名前空間(`paid_leave_account.*`)にのみ
- * 反応するため、旧ドメインの行・列(`is_confirmed`等)には触れない。
+ * `paid_leave_usages`の確定・取消の状態は`is_confirmed`・`is_cancelled`の2列だけが持つ
+ * (確定は`PaidLeaveUsageConfirmed`で`is_confirmed`、取消は`PaidLeaveUsageCancelled`で`is_cancelled`を立てる。
+ * 変更セット20261123-boolean-column-naming 論点1)。
  *
  * `paid_leave_requests`(有給の申請状態)はこのProjectorでは更新しない。休暇申請文脈の
  * `App\Domain\PaidLeaveRequest\Projectors\PaidLeaveRequestProjector`が作る(論点4)。
@@ -110,8 +110,7 @@ class PaidLeaveUsageAllocationProjector extends Projector
                 'used_minutes' => $event->hours !== null ? (int) round($event->hours * 60) : null,
                 'usage_type' => $event->usageType,
                 'is_confirmed' => false,
-                'confirmed' => false,
-                'cancelled' => false,
+                'is_cancelled' => false,
             ],
         );
     }
@@ -119,14 +118,13 @@ class PaidLeaveUsageAllocationProjector extends Projector
     public function onPaidLeaveUsageConfirmed(PaidLeaveUsageConfirmed $event): void
     {
         PaidLeaveUsage::query()->where('usage_id', $event->usageId)->update([
-            'confirmed' => true,
             'is_confirmed' => true,
         ]);
     }
 
     public function onPaidLeaveUsageCancelled(PaidLeaveUsageCancelled $event): void
     {
-        PaidLeaveUsage::query()->where('usage_id', $event->usageId)->update(['cancelled' => true]);
+        PaidLeaveUsage::query()->where('usage_id', $event->usageId)->update(['is_cancelled' => true]);
     }
 
     /**

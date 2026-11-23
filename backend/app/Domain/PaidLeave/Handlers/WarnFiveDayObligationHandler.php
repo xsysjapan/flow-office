@@ -84,8 +84,8 @@ class WarnFiveDayObligationHandler implements CommandHandler
             // used_daysの合計。どの付与から充当したかは問わない(paid_leave_grant_idは使わない)。
             $usedDays = (float) PaidLeaveUsage::query()
                 ->where('user_id', $first->user_id)
-                ->where('confirmed', true)
-                ->where('cancelled', false)
+                ->where('is_confirmed', true)
+                ->where('is_cancelled', false)
                 ->where(fn ($query) => $query->whereNull('usage_type')->orWhere('usage_type', '!=', 'hourly'))
                 ->whereDate('used_on', '>=', $baseDate->toDateString())
                 ->whereDate('used_on', '<', $obligationDeadline->toDateString())

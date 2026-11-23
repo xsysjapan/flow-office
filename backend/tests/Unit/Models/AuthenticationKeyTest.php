@@ -64,7 +64,7 @@ class AuthenticationKeyTest extends TestCase
         AuthenticationKeyDeviceRule::query()->create([
             'authentication_key_id' => $key->id,
             'device_id' => $allowedDevice->id,
-            'allow' => true,
+            'allows_use' => true,
         ]);
 
         $this->assertTrue($key->fresh()->isUsableOnDevice($allowedDevice->id));
@@ -81,7 +81,7 @@ class AuthenticationKeyTest extends TestCase
         AuthenticationKeyDeviceRule::query()->create([
             'authentication_key_id' => $key->id,
             'site_id' => 'hq',
-            'allow' => true,
+            'allows_use' => true,
         ]);
 
         $this->assertTrue($key->fresh()->isUsableOnDevice($allowedSiteDevice->id));
@@ -97,12 +97,12 @@ class AuthenticationKeyTest extends TestCase
             'authentication_key_id' => $key->id,
             'device_id' => null,
             'site_id' => null,
-            'allow' => true,
+            'allows_use' => true,
         ]);
         AuthenticationKeyDeviceRule::query()->create([
             'authentication_key_id' => $key->id,
             'device_id' => $device->id,
-            'allow' => false,
+            'allows_use' => false,
         ]);
 
         $this->assertFalse($key->fresh()->isUsableOnDevice($device->id));

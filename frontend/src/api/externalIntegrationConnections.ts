@@ -36,7 +36,7 @@ export interface UpdateExternalIntegrationConnectionInput {
   api_key?: string
   external_office_id?: string
   custom_settings?: Record<string, unknown>
-  enabled?: boolean
+  publishing_enabled?: boolean
 }
 
 export function updateExternalIntegrationConnection(

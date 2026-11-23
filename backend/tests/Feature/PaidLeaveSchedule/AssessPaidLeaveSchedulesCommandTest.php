@@ -83,7 +83,7 @@ class AssessPaidLeaveSchedulesCommandTest extends TestCase
                 'user_id' => $user->id,
                 'work_date' => $date->toDateString(),
                 'is_working_day' => true,
-                'attended' => $i < $attended,
+                'has_attended' => $i < $attended,
                 'full_leave_kinds' => [],
                 'partial_leave_kinds' => [],
             ]);

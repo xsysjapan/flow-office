@@ -65,13 +65,13 @@ class UpdateCompanyCalendarDaysHandler implements CommandHandler
     }
 
     /**
-     * `allow_daily_holiday_override = false`の会社カレンダーでは、日別の休日区分
+     * `allows_daily_holiday_override = false`の会社カレンダーでは、日別の休日区分
      * (is_working_day/is_legal_holiday/is_company_holiday/day_type/schedule_state)を
      * クライアントの入力に関わらず曜日休日パターンから再計算した値で上書きする
      * (防御的にサーバー側でもロックを強制する。フロントエンド側のUI制御とは別に必要)。
      * is_public_holiday/public_holiday_name/noteはクライアントの入力をそのまま通す。
      *
-     * `allow_daily_holiday_override`がtrue、またはカレンダー本体が見つからない場合は
+     * `allows_daily_holiday_override`がtrue、またはカレンダー本体が見つからない場合は
      * 既存の挙動のまま(クライアントの入力をそのまま通す)。
      *
      * @param  list<array<string, mixed>>  $days
@@ -81,7 +81,7 @@ class UpdateCompanyCalendarDaysHandler implements CommandHandler
     {
         $companyCalendar = $companyCalendarYear->companyCalendar;
 
-        if ($companyCalendar === null || $companyCalendar->allow_daily_holiday_override) {
+        if ($companyCalendar === null || $companyCalendar->allows_daily_holiday_override) {
             return $days;
         }
 

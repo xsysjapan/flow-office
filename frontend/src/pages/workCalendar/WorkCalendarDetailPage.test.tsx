@@ -22,7 +22,7 @@ const calendar: WorkCalendar = {
   is_default: false,
   status: 'active',
   weekday_holiday_pattern: { '1': 'working', '2': 'working', '3': 'working', '4': 'working', '5': 'working', '6': 'company_holiday', '7': 'legal_holiday' },
-  allow_daily_holiday_override: true,
+  allows_daily_holiday_override: true,
 }
 
 const source: HolidayCalendarSource = {
@@ -138,7 +138,7 @@ describe('WorkCalendarDetailPage', () => {
         fiscal_year_start_day: 1,
         holiday_calendar_source_id: null,
         weekday_holiday_pattern: calendar.weekday_holiday_pattern,
-        allow_daily_holiday_override: true,
+        allows_daily_holiday_override: true,
       }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('カレンダーの基本設定を保存しました'))
@@ -196,7 +196,7 @@ describe('WorkCalendarDetailPage', () => {
         fiscal_year_start_month: 4,
         fiscal_year_start_day: 1,
         holiday_calendar_source_id: null,
-        allow_daily_holiday_override: true,
+        allows_daily_holiday_override: true,
         weekday_holiday_pattern: {
           '1': 'company_holiday',
           '2': 'working',
@@ -215,7 +215,7 @@ describe('WorkCalendarDetailPage', () => {
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockResolvedValue({
       ...calendar,
-      allow_daily_holiday_override: false,
+      allows_daily_holiday_override: false,
     })
 
     renderPage()
@@ -232,7 +232,7 @@ describe('WorkCalendarDetailPage', () => {
         fiscal_year_start_day: 1,
         holiday_calendar_source_id: null,
         weekday_holiday_pattern: calendar.weekday_holiday_pattern,
-        allow_daily_holiday_override: false,
+        allows_daily_holiday_override: false,
       }),
     )
   })

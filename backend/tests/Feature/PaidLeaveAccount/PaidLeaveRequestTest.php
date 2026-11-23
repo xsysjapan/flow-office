@@ -308,8 +308,8 @@ class PaidLeaveRequestTest extends TestCase
         $this->assertSame('cancelled', WorkflowRequest::query()->findOrFail($workflowRequestId)->status);
         // 新ドメインでは取消済みUsageの行自体は削除せず、cancelled=trueとして残す
         // (docs/changesets/20260906-paid-leave-domain-redesign/spec.md 不変条件5)。
-        $this->assertSame(0, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->where('cancelled', false)->count());
-        $this->assertTrue(PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->firstOrFail()->cancelled);
+        $this->assertSame(0, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->where('is_cancelled', false)->count());
+        $this->assertTrue(PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->firstOrFail()->is_cancelled);
     }
 
     /**
@@ -368,7 +368,7 @@ class PaidLeaveRequestTest extends TestCase
         $response->assertJsonPath('status', 'cancelled');
 
         $this->assertEquals(10.0, (float) $grant->refresh()->remaining_days);
-        $this->assertSame(0, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->where('cancelled', false)->count());
+        $this->assertSame(0, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->where('is_cancelled', false)->count());
         $this->assertSame('cancelled', PaidLeaveRequest::query()->findOrFail($requestId)->status);
     }
 

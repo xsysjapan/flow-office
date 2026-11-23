@@ -624,7 +624,7 @@ export async function createExternalIntegrationConnection(
       refresh_token: input.refreshToken,
       token_expires_at: input.tokenExpiresAt,
       external_office_id: input.externalOfficeId,
-      enabled: input.enabled ?? true,
+      publishing_enabled: input.enabled ?? true,
     },
   })
 }

@@ -70,7 +70,7 @@ class RecordAttendancePunchHandler implements CommandHandler
             deviceId: $command->deviceId,
             authenticationKeyId: $command->authenticationKeyId,
             actorUserId: $command->actorUserId ?? $command->userId,
-            offline: $command->offline,
+            isOffline: $command->isOffline,
             idempotencyKey: $command->idempotencyKey,
             requestId: $command->requestId,
         );

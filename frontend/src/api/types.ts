@@ -68,7 +68,7 @@ export interface AccessSource {
   role_name?: string;
   scope_type?: string;
   scope_group_id?: string | null;
-  include_descendants?: boolean;
+  includes_descendants?: boolean;
   starts_at?: string | null;
   ends_at?: string | null;
 }
@@ -191,7 +191,7 @@ export interface SystemSettings {
   /** 代休の消化申請に承認者による承認を必須にするか。 */
   compensatory_leave_requires_approval: boolean;
   /** 自分自身への管理系Role付与をサーバー側で拒否する。 */
-  prohibit_self_privileged_role_assignment: boolean;
+  prohibits_self_privileged_role_assignment: boolean;
 }
 
 /** システム設定の更新入力。クライアントシークレットのみ書き込み専用で別項目を持つ。 */
@@ -526,7 +526,7 @@ export interface AttendanceDailyCalculation {
   /** 所定休日労働のうち22:00〜05:00の深夜時間帯と重なる分(late_night_work_minutesの内訳)。 */
   late_night_prescribed_holiday_work_minutes: number;
   /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
-  core_time_violation: boolean;
+  has_core_time_violation: boolean;
   /** 欠勤時間(分)。attendance_leave_segmentsの区間(遅刻・早退等)の合計時間。
    *  docs/07-usecases-attendance.md「不就労時間の処理区分」参照。 */
   absence_minutes?: number;
@@ -1278,7 +1278,7 @@ export interface WorkCalendar {
   status: WorkCalendarStatus;
   weekday_holiday_pattern: WeekdayHolidayPattern;
   /** falseの場合、日別編集画面で個別の勤務区分・祝日区分を変更できない(常に曜日ごとの休日設定から導出される)。 */
-  allow_daily_holiday_override: boolean;
+  allows_daily_holiday_override: boolean;
 }
 
 export type WorkCalendarYearStatus = "draft" | "published" | "archived";
@@ -1327,7 +1327,7 @@ export interface WorkStyle {
   /** 会社のデフォルト働き方かどうか。常に高々1件のみtrue。 */
   is_default: boolean;
   /** 初回オンボーディングで自動生成された働き方かどうか。 */
-  system_generated: boolean;
+  is_system_generated: boolean;
   legal_holiday_rule: LegalHolidayRule;
   four_week_period_start_date: string | null;
   /** UC-C004: 3交代制などの連続勤務日数の警告しきい値(未設定ならチェックしない)。 */
@@ -1542,9 +1542,9 @@ export interface Device {
   default_work_location_type: WorkLocationType | null;
   timezone: string | null;
   allowed_punch_types: string[] | null;
-  allow_offline: boolean;
-  require_location: boolean;
-  auto_detect_punch_type: boolean;
+  allows_offline: boolean;
+  requires_location: boolean;
+  punch_type_auto_detection_enabled: boolean;
   app_version: string | null;
   last_seen_at: string | null;
   paired_at: string | null;
@@ -1812,7 +1812,7 @@ export interface ExternalIntegrationConnection {
   name: string;
   auth_type: ExternalIntegrationAuthType;
   status: ExternalIntegrationConnectionStatus;
-  enabled: boolean;
+  publishing_enabled: boolean;
   external_office_id: string | null;
   custom_settings: Record<string, unknown> | null;
   has_client_id: boolean;

@@ -9,9 +9,9 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 class RoleAssignmentAggregate extends AggregateRoot
 {
-    public function create(string $subjectType, string $subjectId, int $roleId, string $scopeType, ?string $scopeGroupId, bool $includeDescendants, ?string $startsAt, ?string $endsAt, ?string $actor): self
+    public function create(string $subjectType, string $subjectId, int $roleId, string $scopeType, ?string $scopeGroupId, bool $includesDescendants, ?string $startsAt, ?string $endsAt, ?string $actor): self
     {
-        $this->recordThat(new RoleAssignmentCreated($subjectType, $subjectId, $roleId, $scopeType, $scopeGroupId, $includeDescendants, $startsAt, $endsAt, $actor));
+        $this->recordThat(new RoleAssignmentCreated($subjectType, $subjectId, $roleId, $scopeType, $scopeGroupId, $includesDescendants, $startsAt, $endsAt, $actor));
 
         return $this;
     }
@@ -23,9 +23,9 @@ class RoleAssignmentAggregate extends AggregateRoot
         return $this;
     }
 
-    public function update(string $scopeType, ?string $scopeGroupId, bool $includeDescendants, ?string $startsAt, ?string $endsAt, ?string $actor): self
+    public function update(string $scopeType, ?string $scopeGroupId, bool $includesDescendants, ?string $startsAt, ?string $endsAt, ?string $actor): self
     {
-        $this->recordThat(new RoleAssignmentUpdated($scopeType, $scopeGroupId, $includeDescendants, $startsAt, $endsAt, $actor));
+        $this->recordThat(new RoleAssignmentUpdated($scopeType, $scopeGroupId, $includesDescendants, $startsAt, $endsAt, $actor));
 
         return $this;
     }

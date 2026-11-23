@@ -36,7 +36,7 @@ class ExternalIntegrationConnectionTest extends TestCase
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
             'client_id' => 'client-id-1234',
             'client_secret' => 'client-secret-5678',
-            'enabled' => true,
+            'publishing_enabled' => true,
             'custom_settings' => ['closing_day' => 20],
         ]);
 
@@ -48,7 +48,7 @@ class ExternalIntegrationConnectionTest extends TestCase
         $connection = ExternalIntegrationConnection::query()->findOrFail($id);
         $this->assertSame('client-secret-5678', $connection->client_secret);
         $this->assertSame(['closing_day' => 20], $connection->custom_settings);
-        $this->assertTrue($connection->enabled);
+        $this->assertTrue($connection->publishing_enabled);
 
         $index = $this->actingAs($admin)->getJson('/api/admin/external-integration-connections');
         $index->assertSuccessful();
@@ -76,7 +76,7 @@ class ExternalIntegrationConnectionTest extends TestCase
             'access_token' => 'initial-access-token',
             'refresh_token' => 'initial-refresh-token',
             'token_expires_at' => '2027-01-01T00:00:00+09:00',
-            'enabled' => true,
+            'publishing_enabled' => true,
         ]);
 
         $response->assertCreated();
@@ -101,7 +101,7 @@ class ExternalIntegrationConnectionTest extends TestCase
             'name' => 'freee',
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
             'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
-            'enabled' => false,
+            'publishing_enabled' => false,
             'client_id' => 'cid',
             'client_secret' => 'csecret',
             'access_token' => 'original-access-token',
@@ -158,23 +158,23 @@ class ExternalIntegrationConnectionTest extends TestCase
             'name' => 'MF',
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_API_KEY,
             'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
-            'enabled' => false,
+            'publishing_enabled' => false,
             'api_key' => 'original-key',
         ]);
 
         $response = $this->actingAs($admin)->patchJson("/api/admin/external-integration-connections/{$connection->id}", [
             'name' => 'MF更新後',
-            'enabled' => true,
+            'publishing_enabled' => true,
             'api_key' => '',
         ]);
 
         $response->assertSuccessful();
-        $response->assertJsonPath('enabled', true);
+        $response->assertJsonPath('publishing_enabled', true);
         $response->assertJsonPath('name', 'MF更新後');
 
         $connection->refresh();
         $this->assertSame('original-key', $connection->api_key);
-        $this->assertTrue($connection->enabled);
+        $this->assertTrue($connection->publishing_enabled);
 
         $this->assertTrue(
             EloquentStoredEvent::query()
