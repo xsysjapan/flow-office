@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261123-boolean-query-param](./20261123-boolean-query-param/spec.md) | 真偽値クエリが"true"で送られ社員一覧の未連携・外部HR絞り込みが422になる不具合の修正 | 検討中 |
+| [20261123-boolean-query-param](./20261123-boolean-query-param/spec.md) | フラグ(真偽値)の扱いの標準化(クエリは1/0、社員一覧の未連携・外部HR絞り込みの422修正) | 検討中 |
 | [20261122-list-search-form-standard](./20261122-list-search-form-standard/spec.md) | 一覧の検索フォームの標準化(構成・主軸タブ・反映方式・クリア文言)と全一覧への適用 | 完了 |
 | [20261122-list-action-feedback-standard](./20261122-list-action-feedback-standard/spec.md) | 一覧からの操作と変更操作のフィードバックの標準化 | 完了 |
 | [20261122-backoffice-assignment-migration-admin](./20261122-backoffice-assignment-migration-admin/spec.md) | バックオフィス割当イベントの移行を管理画面の運用コマンドから実行できるようにする | 完了 |
