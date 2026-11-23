@@ -351,7 +351,7 @@ UC-A005の日次編集・UC-A012〜UC-A016の打刻ログ操作で管理者に�
 3. 矛盾の有無を検証せずに、必ず打刻ログとして記録する。このとき使用した端末(`device_id`)、
    認証キー(`authentication_key_id`)、操作主体(`actor_user_id`。対象社員と異なる場合が
    ある。管理者代理操作、MCP経由ならユーザー本人)、API/MCP連携経由の場合は`integration_id`、
-   端末が生成した冪等性キー(`idempotency_key`)、オフライン発生の有無(`offline`)も記録する
+   端末が生成した冪等性キー(`idempotency_key`)、オフライン発生の有無(`is_offline`)も記録する
    (docs/03-architecture.md 3.5、docs/16-database-schema.md「端末・認証キー・アプリ連携」)。
    同一の`idempotency_key`を持つ打刻ログが既に存在する場合は、新しい行を追加せず既存の結果を
    そのまま返す(二重登録防止。端末のオフラインキューからの再送を安全に吸収するため)
@@ -617,7 +617,7 @@ docs/07-usecases-attendance.md「裁量労働制・管理監督者」参照)に�
   実際の時刻から通常通り計算する。
 - **コアタイム違反**: `work_styles.core_time_enabled`が有効な日、実際の勤務
   (`actual_start_at`〜`actual_end_at`)がコアタイム(`core_time_start`〜`core_time_end`)を
-  全てカバーしていない場合、`attendance_daily_calculations.core_time_violation`をtrueにする。
+  全てカバーしていない場合、`attendance_daily_calculations.has_core_time_violation`をtrueにする。
   労働時間の不足とは別枠の警告であり(指示書 7.4節)、出退勤の実績が無い日(欠勤等)は
   対象外とする。
 - **清算期間ダッシュボード**: `App\Domain\Attendance\Services\FlexSettlementSummaryCalculator`

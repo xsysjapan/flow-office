@@ -353,7 +353,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   `system_settings.default_work_style_id`(勤怠計算のフォールバック先)と同期させる。
   未設定(=デフォルトがどの働き方にも設定されていない)状態と、デフォルトが適用されている
   状態は明確に区別し、未設定を暗黙的な固定時間勤務として扱わない)
-- system_generated (初回オンボーディングで自動生成された働き方であることの印。
+- is_system_generated (初回オンボーディングで自動生成された働き方であることの印。
   編集後も通常の働き方として利用でき、この値自体が変わることはない)
 - legal_holiday_rule (`weekly`=毎週1日 / `four_weeks_four_days`=4週4日以上の変形休日制 /
   `undetermined`=決めない方式(UC-C007参照)。`is_shift_based`の勤務形態にのみ意味を持つ。
@@ -652,7 +652,7 @@ A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中�
   本人が打刻した場合は`user_id`と同じ値になる)
 - integration_id (nullable。`application_integrations`への外部キー。個人API/MCP連携経由の
   打刻の場合に設定する。Claude等のAIアプリ自体は操作主体にならない(docs/03-architecture.md 3.5))
-- offline (boolean。既定値false。端末がオフライン時にローカルキューされ、後から送信された
+- is_offline (boolean。既定値false。端末がオフライン時にローカルキューされ、後から送信された
   打刻かどうか。docs/23-usecases-devices.md「オフライン対応」参照)
 - idempotency_key (nullable。端末・クライアントが生成する冪等性キー。同一キーでの再送を
   重複登録として扱わない。unique制約を張るが、nullは複数許容する(MySQL/SQLite共通の挙動)。
@@ -704,9 +704,9 @@ FIDO等)は`authentication_keys`で、NFCカード専用の列を`users`に持�
   へ自動反映する値。上記列挙値。未設定なら自動反映しない)
 - timezone (端末設置場所のタイムゾーン。未設定なら`system_settings.default_timezone`)
 - allowed_punch_types (json、nullable。この端末で許可する打刻種別の制限。未設定なら全種別許可)
-- allow_offline (boolean。オフライン時のローカルキュー・後日同期を許可するか)
-- require_location (boolean。打刻時に位置情報の送信を必須にするか)
-- auto_detect_punch_type (boolean。現在の勤怠状態から次の打刻種別を自動判定するか
+- allows_offline (boolean。オフライン時のローカルキュー・後日同期を許可するか)
+- requires_location (boolean。打刻時に位置情報の送信を必須にするか)
+- punch_type_auto_detection_enabled (boolean。現在の勤怠状態から次の打刻種別を自動判定するか
   (true)、複数候補を選択させるか(false)。docs/23「自動判定と手動選択」参照)
 - last_seen_at (nullable。最終通信日時)
 - app_version (nullable。端末アプリのバージョン)
@@ -789,7 +789,7 @@ UC-D006の管理者モード(社員証NFCの現地登録)専用のスコープ�
 - authentication_key_id
 - device_id (nullable。特定端末のみに制限する場合)
 - site_id (nullable。特定事業所のみに制限する場合)
-- allow (boolean。既定値true。明示的に拒否するルールも表現できるようにする)
+- allows_use (boolean。既定値true。明示的に拒否するルールも表現できるようにする)
 - created_at / updated_at
 
 行が1件も無ければ制限なし(全端末・全事業所で利用可能)として扱う。
@@ -834,6 +834,7 @@ moneyforward等の外部クラウドAPIを「呼び出す側」として使う�
   freeeでは未使用)
 - auth_type (`oauth2` / `api_key`)
 - status (`active` / `disconnected`)
+- publishing_enabled (boolean。既定false。trueかつ`status=active`の行から勤怠月次確定データの送信先を選ぶ。docs/33参照)
 - access_token (encrypted。OAuth2のみ)
 - refresh_token (encrypted。OAuth2のみ)
 - api_key (encrypted。APIキー方式のみ)
@@ -926,7 +927,7 @@ SQLだけで推測変換しないため、日次実績とイベント履歴か�
   されると、falseに戻る)
 - adjusted_by_user_id / adjusted_at (手動補正した社員・日時。`is_manually_adjusted=false`
   の場合はnull)
-- core_time_violation (フレックスタイム制(`work_time_system=flex`)でコアタイムを設定した日、
+- has_core_time_violation (フレックスタイム制(`work_time_system=flex`)でコアタイムを設定した日、
   実際の勤務がコアタイムを全てカバーしていないかどうか。労働時間の不足とは別枠の警告として
   扱う。フレックス以外の勤務形態、および出退勤の実績が無い日は常にfalse。docs/07-usecases
   -attendance.md「フレックスタイム制」参照)
@@ -1239,13 +1240,13 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 - used_days
 - used_minutes (nullable)
 - usage_type (nullable。full / am_half / pm_half / hourly)
-- confirmed (boolean, default false。承認によりUsageが確定済みかどうか)
-- cancelled (boolean, default false。取消済みかどうか)
+- is_confirmed (boolean, default false。承認によりUsageが確定済みかどうか。`PaidLeaveUsageDesignated`で false、`PaidLeaveUsageConfirmed`で true)
+- is_cancelled (boolean, default false。取消済みかどうか。`PaidLeaveUsageCancelled`で true。行は物理削除せず残す)
 - created_at / updated_at
 
 行のライフサイクル: 申請時点(承認前)で`PaidLeaveUsageDesignated`イベントにより
-`confirmed=false`の行が1件作られる(勤怠は休暇ビュー`attendance_day_leaves`から休暇を判定し、この行を読まない)。承認時、`PaidLeaveUsageConfirmed`イベントが`confirmed=true`にする。取消時は
-`PaidLeaveUsageCancelled`イベントが`cancelled=true`にする(行は物理削除しない。監査可能に
+`is_confirmed=false`の行が1件作られる(勤怠は休暇ビュー`attendance_day_leaves`から休暇を判定し、この行を読まない)。承認時、`PaidLeaveUsageConfirmed`イベントが`is_confirmed=true`にする。取消時は
+`PaidLeaveUsageCancelled`イベントが`is_cancelled=true`にする(行は物理削除しない。監査可能に
 残す)。実際にどのGrantへ何日充当されたかは`paid_leave_usage_allocations`(下記)を参照する。
 
 特別休暇・代休の消化記録は口座集約が持つ(下記「休暇まわりの新設テーブル」)。
@@ -1372,11 +1373,11 @@ Aggregateをreplayして行う)。
 - `compensatory_grant_day_view_allocations` (Projection): (usage_id, grant_id) (PK)、allocated_days、
   allocated_minutes、index(grant_id)。
 - `leave_attendance_rate_days` (Projection。有給の出勤率ビュー、利用者×日付): id、user_id、work_date、
-  is_working_day (分母)、attended (分子の出勤)、full_leave_kinds・partial_leave_kinds (json)。unique(user_id, work_date)。
+  is_working_day (分母)、has_attended (分子の出勤)、full_leave_kinds・partial_leave_kinds (json)。unique(user_id, work_date)。
 - `leave_attendance_rate_leaves` (Projection): id、leave_kind、leave_request_id、user_id、work_date、unit、
   workflow_request_id (nullable)、request_status。
   unique(leave_kind, leave_request_id)、index(user_id, work_date)。
-- `leave_attendance_rate_attendance_days` (Projection): id (勤怠日ID、PK)、user_id、work_date、clocked_out。
+- `leave_attendance_rate_attendance_days` (Projection): id (勤怠日ID、PK)、user_id、work_date、has_clocked_out。
   index(user_id, work_date)。
 - `special_leave_attendance_rate_days`・`special_leave_attendance_rate_leaves`・`special_leave_attendance_rate_attendance_days`
   (特別休暇の出勤率ビュー、有給と同じ列。`special_leave_attendance_rate_days`は`work_style_id` (nullable。自動付与の
@@ -1503,7 +1504,7 @@ docs/34-usecases-asset-management.md「管理番号の自動採番」参照。�
 - digit_count (unsigned tinyint。既定5。ゼロパディング桁数)
 - next_number (unsigned int。既定1。次に払い出す連番。行ロックしてから払い出し・
   インクリメントする)
-- enabled (boolean。既定true)
+- is_active (boolean。既定true。falseのルールは採番に使わず、デフォルトへフォールバックしない)
 - is_default (boolean。既定false)
 - created_at / updated_at
 
@@ -1649,10 +1650,10 @@ ReadModelの作り直し(`read-models:rebuild`)の実行の記録。運用の記
 | 分類 | テーブル | 特徴 |
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
-| マスタ | `request_types`, `company_calendars`, `company_calendar_years`, `company_calendar_days`, `company_calendar_day_sources`, `holiday_calendar_sources`, `holiday_calendar_events`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules`, `expense_categories` | 管理者が設定する参照データ。`system_settings`は直接更新するが監査イベントを記録する。 |
-| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_calendar_entries`, `employee_rotation_assignments`, `calendar_bulk_operations`, `calendar_bulk_operation_targets`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances`, `expense_claims`, `expense_items` | Command経由でのみ更新。 |
+| マスタ | `request_types`, `company_calendars`, `company_calendar_years`, `company_calendar_days`, `company_calendar_day_sources`, `holiday_calendar_sources`, `holiday_calendar_events`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `device_roles`, `device_scopes`, `agreement_36_rules`, `expense_categories` | 管理者が設定する参照データ。`system_settings`は直接更新するが監査イベントを記録する。 |
+| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_calendar_entries`, `employee_rotation_assignments`, `calendar_bulk_operations`, `calendar_bulk_operation_targets`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `attachments`, `authentication_keys`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances`, `expense_claims`, `expense_items` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
-| Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months`, `notifications`, `paid_leave_requests`(休暇申請文脈のProjector)、`attendance_day_leaves`・`leave_request_workflow_links`・出勤率ビュー・代休の付与ビュー(下記「休暇まわりの新設テーブル」) | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
+| Projection (再生成可能) | `devices`(owner_type を問わない)・`paid_leave_usages`・`authentication_key_device_rules`(イベントが正。表はProjectorが書くReadModel。`authentication_key_device_rules`は書き手が無く読み取りのみ), `attendance_daily_calculations`, `attendance_months`, `notifications`, `paid_leave_requests`(休暇申請文脈のProjector)、`attendance_day_leaves`・`leave_request_workflow_links`・出勤率ビュー・代休の付与ビュー(下記「休暇まわりの新設テーブル」) | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
 
 会社カレンダー・従業員予定関連(`company_calendars`/`company_calendar_years`/`company_calendar_days`/
 `employee_calendar_entries`/`calendar_bulk_operations`等)の状態変更は、既存の

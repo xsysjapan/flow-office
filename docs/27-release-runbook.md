@@ -281,6 +281,113 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 - 補正ログ`stored_event_corrections`とmetaの`history-normalization.source_event_id`は、新しいidへ付け替えられる。
 - 戻す場合はメンテナンス中に`stored_events`を手順3のバックアップ表から戻し、旧コードを配備して`read-models:rebuild`する。
 
+### 3.7 真偽値の命名統一(変更セット `20261123-boolean-column-naming`)のリリース手順
+
+列・イベント項目の真偽値の名前を命名ルール(`api-design`スキルの「命名」)に合わせ、`paid_leave_usages.confirmed` を削除するリリース。
+列の改名(migration)と、`stored_events` の旧項目名の書き換え(運用コマンド`events:rename-boolean-properties`)を1回のメンテナンス窓で行う。
+移行イベントは作らず、`stored_events`の行の`id`・集約ID・順序は変えない。書き換えの後に全ReadModelを作り直して検証する。
+本番の実行の前に、リハーサルと試し実行の結果をユーザーに示して許可を得る(`data-correction`)。
+
+止めるもの(配備から再開まで):
+
+- `php artisan down`(メンテナンスモード。APIと打刻端末も503になる)
+- cronの`schedule:run`(有給・警告・社員同期など、イベントを記録するスケジューラ)
+- キュー(空になるまで処理してから止める。旧項目名のイベントを読むジョブを残さない)
+- MCPサーバーの受付
+
+事前条件: 旧項目名のイベントを読む移行(`leave:rebuild-event-store`等)が未実行の環境では、それらを**旧コードで先に実行してから**本変更を配備する。
+
+実行の順:
+
+0. リハーサル(本番の複製DBで、この手順をすべて行う): 所要時間・`max_binlog_cache_size`・ピークメモリを測る。試し実行で「補えない行」が出ないことを確かめる。
+1. 旧コードで基準値を取る(配備の前。新しいコードは旧項目名のイベントを読めないため、旧コードで行う)。
+   - 本番のDB全体と全ReadModelのテーブルのバックアップを取る(戻し方に使う)。
+   - `php artisan read-models:rebuild --dry-run`で、変更のあるテーブルが0件であることを確かめる(既存のずれが0であること)。
+   - 下の「基準値のSQL」(旧列名)を実行し、結果を控える(基準値)。
+2. 止める: `down`、cron(`schedule:run`)、キュー、端末・API・MCPの受付。
+3. frontendとbackendを同じ窓で配備する(管理画面の旧画面が旧名で送ると、新しいbackendは422を返す。論点10)。
+   `php artisan migrate --force`を実行する。migrationは列の改名と`paid_leave_usages.confirmed`の削除を行う。削除の前に
+   `is_confirmed <> confirmed`の件数をログ(`storage/logs`)に出すので控える(0件の想定。0件でなくても、ReadModelの作り直しで新しいProjectorの値に揃う)。
+4. 試し実行(SSH): `php artisan events:rename-boolean-properties`(`--execute`を付けない。何も変更しない)。
+   event_classごとの対象件数・補う件数(旧キーが無く既定値を補う行)・旧→新の例を確かめる。「補えない行」の表示があれば止めて人が確認する。
+   件数と例をユーザーに示し、本実行の許可を得る。
+5. 本実行(SSH): `php artisan events:rename-boolean-properties --execute`。
+   待ち時間(`READ_MODEL_REBUILD_CLAIM_WAIT_SECONDS`、既定60秒)の後、トランザクションの前にバックアップ表
+   (`stored_events_backup_YYYYMMDDHHMMSS`。出力に出る表名を控える)を作り、1つのトランザクションで「書き換え → ReadModelの作り直し → 検証」を行う。
+   検証(変更のあったテーブルが0件)に失敗すれば全て戻る(バックアップ表は残る)。
+   実行中は全利用者がメンテナンス中になる。
+6. 受付を再開する: `php artisan up`、cron・キュー・端末・API・MCPの受付。
+7. 検証(次の3つが揃うこと)。
+   - 旧項目名のイベントが残っていない: `php artisan read-models:rebuild --dry-run`が「旧項目名の真偽値のイベント」で拒否されない(残っていれば拒否される)。
+   - 基準値と一致: 「基準値のSQL」を新しいコードで、列名を下の対応表で読み替えて実行し、手順1の基準値と件数が一致する。
+     `paid_leave_usages`は旧`is_confirmed`が新`is_confirmed`、旧`cancelled`が新`is_cancelled`と一致すること。
+   - 画面: 有給の指定・承認・取消、年5日取得義務の警告、勤怠Excelの有給残日数を1件ずつ確かめる(従来と同じ値になる)。
+     端末アプリが使う打刻の応答に`is_offline`と`offline`の両方が返ることを、1件のテスト打刻で確かめる。
+
+- 戻し方(検証が失敗して本実行が戻った場合は、stored_events・ReadModelは変わっていない。原因を直して手順4からやり直すか、下の手順で戻す):
+  配備の後に戻す場合は、受付を止めたまま次の順に行う。新しいコードは旧項目名の履歴を読めず、旧コードは新項目名の履歴を読めないため、表とコードは同時に戻す。
+  1. `stored_events`をバックアップ表から戻す: `RENAME TABLE stored_events TO stored_events_after_rename_YYYYMMDDHHMMSS, stored_events_backup_YYYYMMDDHHMMSS TO stored_events;`
+     戻す前に`stored_events`の件数がバックアップ表と同じであることを確かめる(メンテナンス中のため同じはず。違えばバックアップ以降に書かれた行を失うので止める)。
+  2. `php artisan migrate:rollback --step=1`(列を旧名に戻す。downで`paid_leave_usages.confirmed`を作り直し、`UPDATE paid_leave_usages SET confirmed = is_confirmed`で値を入れる)。
+  3. 旧コードを frontend と backend の両方で配備する。
+  4. 旧コードで`php artisan read-models:rebuild`を実行し、手順1の基準値(旧列名)と一致することを確かめる。
+  5. 受付を再開する(`up`、cron・キュー・受付)。
+  この戻し方はバックアップ以降に書かれたイベントを失うため、必ずメンテナンス中に行う。
+- 本番で実行する前に、リハーサルの結果と試し実行(手順4)の件数・例をユーザーに示して許可を取る(`data-correction`スキル)。
+  許可の日時と内容は、変更セット`20261123-boolean-column-naming`の「レビュー履歴」に残す。
+
+列名の対応(基準値のSQLで使う。旧列名 → 新列名):
+
+| 表 | 旧列名 | 新列名 |
+|---|---|---|
+| `paid_leave_usages` | `is_confirmed` | `is_confirmed`(変えない。`confirmed`は削除) |
+| `paid_leave_usages` | `cancelled` | `is_cancelled` |
+| `devices` | `allow_offline` | `allows_offline` |
+| `devices` | `require_location` | `requires_location` |
+| `devices` | `auto_detect_punch_type` | `punch_type_auto_detection_enabled` |
+| `attendance_punches` | `offline` | `is_offline` |
+| `company_calendars` | `allow_daily_holiday_override` | `allows_daily_holiday_override` |
+| `work_styles` | `system_generated` | `is_system_generated` |
+| `attendance_daily_calculations` | `core_time_violation` | `has_core_time_violation` |
+| `group_types` | `primary_membership_required` | `requires_primary_membership` |
+| `role_assignments` | `include_descendants` | `includes_descendants` |
+| `leave_attendance_rate_days` | `attended` | `has_attended` |
+| `special_leave_attendance_rate_days` | `attended` | `has_attended` |
+| `leave_attendance_rate_attendance_days` | `clocked_out` | `has_clocked_out` |
+| `special_leave_attendance_rate_attendance_days` | `clocked_out` | `has_clocked_out` |
+| `authentication_key_device_rules` | `allow` | `allows_use` |
+| `external_integration_connections` | `enabled` | `publishing_enabled` |
+| `asset_number_rules` | `enabled` | `is_active` |
+| `system_settings` | `prohibit_self_privileged_role_assignment` | `prohibits_self_privileged_role_assignment` |
+
+基準値のSQL(旧列名。手順1で旧コードの配備前のDBに対して実行する。結果は`列 / 値 / 件数`の行の一覧になる):
+
+```sql
+SELECT 'paid_leave_usages.is_confirmed' AS c, is_confirmed AS v, COUNT(*) AS n FROM paid_leave_usages GROUP BY is_confirmed
+UNION ALL SELECT 'paid_leave_usages.cancelled', cancelled, COUNT(*) FROM paid_leave_usages GROUP BY cancelled
+UNION ALL SELECT 'devices.allow_offline', allow_offline, COUNT(*) FROM devices GROUP BY allow_offline
+UNION ALL SELECT 'devices.require_location', require_location, COUNT(*) FROM devices GROUP BY require_location
+UNION ALL SELECT 'devices.auto_detect_punch_type', auto_detect_punch_type, COUNT(*) FROM devices GROUP BY auto_detect_punch_type
+UNION ALL SELECT 'attendance_punches.offline', offline, COUNT(*) FROM attendance_punches GROUP BY offline
+UNION ALL SELECT 'company_calendars.allow_daily_holiday_override', allow_daily_holiday_override, COUNT(*) FROM company_calendars GROUP BY allow_daily_holiday_override
+UNION ALL SELECT 'work_styles.system_generated', system_generated, COUNT(*) FROM work_styles GROUP BY system_generated
+UNION ALL SELECT 'attendance_daily_calculations.core_time_violation', core_time_violation, COUNT(*) FROM attendance_daily_calculations GROUP BY core_time_violation
+UNION ALL SELECT 'group_types.primary_membership_required', primary_membership_required, COUNT(*) FROM group_types GROUP BY primary_membership_required
+UNION ALL SELECT 'role_assignments.include_descendants', include_descendants, COUNT(*) FROM role_assignments GROUP BY include_descendants
+UNION ALL SELECT 'leave_attendance_rate_days.attended', attended, COUNT(*) FROM leave_attendance_rate_days GROUP BY attended
+UNION ALL SELECT 'special_leave_attendance_rate_days.attended', attended, COUNT(*) FROM special_leave_attendance_rate_days GROUP BY attended
+UNION ALL SELECT 'leave_attendance_rate_attendance_days.clocked_out', clocked_out, COUNT(*) FROM leave_attendance_rate_attendance_days GROUP BY clocked_out
+UNION ALL SELECT 'special_leave_attendance_rate_attendance_days.clocked_out', clocked_out, COUNT(*) FROM special_leave_attendance_rate_attendance_days GROUP BY clocked_out
+UNION ALL SELECT 'authentication_key_device_rules.allow', allow, COUNT(*) FROM authentication_key_device_rules GROUP BY allow
+UNION ALL SELECT 'external_integration_connections.enabled', enabled, COUNT(*) FROM external_integration_connections GROUP BY enabled
+UNION ALL SELECT 'asset_number_rules.enabled', enabled, COUNT(*) FROM asset_number_rules GROUP BY enabled
+UNION ALL SELECT 'system_settings.prohibit_self_privileged_role_assignment', prohibit_self_privileged_role_assignment, COUNT(*) FROM system_settings GROUP BY prohibit_self_privileged_role_assignment;
+
+SELECT COUNT(*) AS paid_leave_usages_is_confirmed_mismatch FROM paid_leave_usages WHERE is_confirmed <> confirmed;
+```
+
+検証(手順7)では、同じSQLを新しいコード・新しい列名で実行する(左の列を対応表の新列名に置き換える。`paid_leave_usages`の`confirmed`の行は無い)。
+
 ## 4. frontend/ のデプロイ手順
 
 ```

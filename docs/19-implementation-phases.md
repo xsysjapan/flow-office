@@ -103,7 +103,7 @@ Phase 4で実装済みのロジックをそのまま利用する(シフトパタ
 ## Phase 7: フレックスタイム制(実装済み)
 
 1. 勤務形態の清算期間・コアタイム・勤務可能時間帯設定(`work_styles`、UC-C002)
-2. コアタイム違反判定(`attendance_daily_calculations.core_time_violation`)
+2. コアタイム違反判定(`attendance_daily_calculations.has_core_time_violation`)
 3. 清算期間ダッシュボード(`FlexSettlementSummaryCalculator`、`GET /api/attendance/months/{yearMonth}`)
 4. ホーム画面での表示(`frontend/src/pages/attendance/TodayAttendancePage.tsx`)
 

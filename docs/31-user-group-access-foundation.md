@@ -189,7 +189,7 @@ GroupType
 - status
 - membership_limit_type
 - max_memberships_per_user
-- primary_membership_required
+- requires_primary_membership
 - max_primary_memberships
 
 Group
@@ -333,7 +333,7 @@ RoleAssignment
 - role_id
 - scope_type: GLOBAL | GROUP | SELF | APPROVAL_TASK
 - scope_group_id (nullable)
-- include_descendants
+- includes_descendants
 - starts_at (nullable)
 - ends_at (nullable)
 - status

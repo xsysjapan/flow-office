@@ -14,8 +14,8 @@
 5. 利用可能な打刻種別(`allowed_punch_types`)、利用可能なユーザー範囲を設定する
 6. この端末で打刻した場合に自動反映する勤務形態区分(`default_work_location_type`)を
    任意で設定する(docs/07-usecases-attendance.md「勤務形態区分」参照)
-7. オフライン利用可否(`allow_offline`)、位置情報必須可否(`require_location`)、
-   自動判定可否(`auto_detect_punch_type`)を設定する
+7. オフライン利用可否(`allows_offline`)、位置情報必須可否(`requires_location`)、
+   自動判定可否(`punch_type_auto_detection_enabled`)を設定する
 8. `device.registered`イベントを記録する
 9. `is_active`(内部的には`status=pending_pairing`)で保存し、UC-D002のペアリングへ進む
 
@@ -266,3 +266,21 @@ Web管理画面からIDを直接入力させるのではなく、共有Android�
 `docs/07-usecases-attendance.md`のUC-A012「打刻ログを記録する」を参照。端末認証(本ドキュメント)
 と打刻の身元解決(`docs/24-usecases-authentication-keys.md`)は別の関心事として分離している
 (docs/03-architecture.md 3.5)。
+
+## 端末向けAPIの互換期間(真偽値の改名)
+
+変更セット `20261123-boolean-column-naming` で、端末設定と打刻の真偽値の名前を命名ルールに合わせた。
+リポジトリ外の共有Androidアプリが旧名を使うため、端末が呼ぶAPIだけ互換期間を設け、旧名と新名の両方を受け付け・返す。
+
+| 項目 | 新名 | 旧名(互換期間中) | 対象 |
+|---|---|---|---|
+| 打刻 | `is_offline` | `offline` | `POST /device-punches` の入力、打刻の応答(`AttendancePunchResource`) |
+| オフライン利用可否 | `allows_offline` | `allow_offline` | `POST /devices/pairing/claim`・`POST /devices/heartbeat` の応答の端末設定 |
+| 位置情報必須可否 | `requires_location` | `require_location` | 同上 |
+| 自動判定可否 | `punch_type_auto_detection_enabled` | `auto_detect_punch_type` | 同上 |
+
+- 打刻の入力は`is_offline`を正とし、無ければ`offline`を読む。両方あって値が違えば422にする。
+- 打刻の応答は`is_offline`と`offline`の両方を返す。端末設定の応答は新名と旧名の両方を返す(旧名は`DeviceForDeviceAppResource`だけに置く)。
+- 管理画面向けの入力API(端末設定の更新など)は、旧名を送られたら422にする(互換期間は設けない)。管理画面と端末アプリの
+  配備の順序は`docs/27-release-runbook.md`の3.7(真偽値の命名統一)による。
+- 旧名の受付と返却は、端末アプリの更新が済んだ後に別の変更セットで削除する(コードに「端末アプリの更新後に削除する」と書いている)。

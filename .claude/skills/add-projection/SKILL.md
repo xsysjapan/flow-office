@@ -57,4 +57,5 @@ Projector化しない(`ApprovePaidLeaveRequestHandler`のように、承認1件�
 - [ ] Projection Tableを空にして全イベント再生しても同じ結果になる
 - [ ] Controller/UIはProjectionだけを参照している
 - [ ] 真偽値の列は `boolean` `NOT NULL`・既定値あり(三値が必要なら nullable にし、理由を `docs/16-database-schema.md` に書く)で、modelの casts に `boolean` を書いた
+- [ ] 真偽値の列名は `api-design` スキルの「命名」に従う(`is_*`・`has_*`・`*_enabled`・`requires_*`・`allows_*`/`prohibits_*` 等。`enabled`・`offline`・`allow` のような接頭辞なし・命令形の名前にしない)
 - [ ] 集計ロジックの変更は `attendance-calc-review` スキルの対象かどうか確認した

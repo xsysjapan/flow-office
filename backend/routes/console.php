@@ -15,7 +15,8 @@ Artisan::command('inspire', function () {
 // 実際のジョブ実行はここで定義するスケジュールに委ねる。
 
 // メンテナンスを要するコマンド(ReadModelの作り直し`read-models:rebuild`、バックオフィス割当イベントの移行
-// `backoffice:migrate-assignment-events`。`ReadModelRebuildRunService::MAINTENANCE_COMMANDS`)の実行中は、全スケジュールを飛ばす
+// `backoffice:migrate-assignment-events`、真偽値のイベント項目名の書き換え`events:rename-boolean-properties`。
+// `ReadModelRebuildRunService::MAINTENANCE_COMMANDS`)の実行中は、全スケジュールを飛ばす
 // (実行中の書き込みが、トランザクションのロック待ち・再生との競合で漏れたり二重になったりしないように)。
 // 新しく起動されるものだけが止まる。飛ばされた日次バッチは後から追い付かない
 // (docs/changesets/20261025-read-model-rebuild-admin-command/spec.md 論点3)。

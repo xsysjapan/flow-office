@@ -114,7 +114,7 @@
   同一イベントの`previous_default_work_style_id`に記録する。初回オンボーディングで
   「通常勤務」を作成した際にも`previous_default_work_style_id=null`で発生する)
 - `work_style.updated` (勤務形態の設定内容の変更。初回オンボーディングで作成された
-  標準の勤務形態(system_generated=true)も対象。code・is_default・system_generatedは
+  標準の勤務形態(is_system_generated=true)も対象。code・is_default・is_system_generatedは
   このイベントでは変更しない)
 - `employee_calendar_entry.assigned` (UC-C003のカレンダー基準一括生成、UC-C004のシフトパターン
   日別割当、UC-C008のローテーションからの一括生成のいずれからも発生する)
@@ -154,7 +154,7 @@
   してしまった場合等の例外的対応で、usage_start_date/hire_dateによる除外条件とは別の
   汎用的な除外リストとして持つ)
 - `attendance_punch.recorded` (payloadに`deviceId`/`authenticationKeyId`/`actorUserId`/
-  `integrationId`/`offline`/`idempotencyKey`/`requestId`を追加。docs/23〜docs/25の端末・
+  `integrationId`/`isOffline`/`idempotencyKey`/`requestId`を追加。docs/23〜docs/25の端末・
   認証キー・アプリ連携経由の打刻に対応するための追記であり、イベント種別自体は増やさない。
   これらのフィールドを持たない過去のイベントはnull相当として扱う)
 - `attendance_punch.corrected` (UC-A013 打刻ログを訂正する)
@@ -544,7 +544,7 @@ docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
 Projectionを再生成する対象ではない。
 
 - `asset_number_rule.configured` (`assetNumberRuleId`/`category`(nullable。`null`は
-  デフォルトルール)/`prefix`/`digitCount`/`enabled`/`isDefault`/`actorUserId`)
+  デフォルトルール)/`prefix`/`digitCount`/`isActive`/`isDefault`/`actorUserId`)
 - `asset_number.issued` (`assetNumberRuleId`/`category`/`issuedNumber`/`assetNo`/
   `actorUserId`。カテゴリ一致ルールまたはデフォルトルールいずれから採番したかは
   `assetNumberRuleId`から判別する)

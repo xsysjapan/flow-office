@@ -222,14 +222,14 @@ UC-L05と同じ確定パターンで、`POST /assets/bulk`を`operation=relocate
 
 - 管理番号(`asset_no`)は手入力が原則だが、カテゴリごとの採番ルールを`asset_number_rules`
   マスタに登録しておくと、登録時にサーバー側が自動で払い出す。マスタは`prefix`
-  (例: `NPC`)・`digit_count`(ゼロパディング桁数、既定5)・`enabled`・`category`
+  (例: `NPC`)・`digit_count`(ゼロパディング桁数、既定5)・`is_active`・`category`
   (`NULL`の場合はデフォルトルール、最大1件)の列を持つ。区切り文字は固定で`-`
   (例: `NPC-00001`)。
 - 判定順序(`IssueAssetNumberHandler`): ①登録する`category`と完全一致し
-  `enabled=true`のルールがあればそれを使う→②無ければ`is_default=true`かつ
-  `enabled=true`のデフォルトルールを使う→③どちらも無ければ`asset_no`は手入力必須
+  `is_active=true`のルールがあればそれを使う→②無ければ`is_default=true`かつ
+  `is_active=true`のデフォルトルールを使う→③どちらも無ければ`asset_no`は手入力必須
   (＝ルールを1件も登録しなければ機能全体が実質OFFになる。専用のON/OFF設定は持たない)。
-  ①のルールが存在するが`enabled=false`の場合はデフォルトへフォールバックせず手入力に
+  ①のルールが存在するが`is_active=false`の場合はデフォルトへフォールバックせず手入力に
   なる(そのカテゴリだけ意図的に自動採番を止めたい場合の運用)。
 - 採番は`POST /assets`(登録)の1トランザクション内で、対象ルール行を`lockForUpdate()`
   してから`next_number`を払い出し・インクリメントする。欠番は許容するが、連番の重複は

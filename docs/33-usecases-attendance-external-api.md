@@ -44,8 +44,8 @@ freee/freee-api-schemaリポジトリの公式OpenAPIスキーマ(`hr/open-api-3
 
 1. 事前に管理者が連携先(freee/moneyforward)ごとの認可情報を`external_integration_connections`
    に登録する。管理画面(`/admin/external-integration-connections`)から同一providerでも
-   複数登録でき、登録後に有効化(`enabled`)することで利用を開始する
-   (`ExternalIntegrationPublisherResolver`は`enabled=true`かつ`status=active`の行から
+   複数登録でき、登録後に送信を有効化(`publishing_enabled`)することで利用を開始する
+   (`ExternalIntegrationPublisherResolver`は`publishing_enabled=true`かつ`status=active`の行から
    最初に見つかった1件を使う。複数登録時に特定の1件を選ばせるUIは対象外)。
    **freeeはOAuth2認可コードフローの画面操作で連携できる**: 管理画面でクライアントID・
    クライアントシークレットを登録した後、一覧の「freeeと連携する」ボタンから

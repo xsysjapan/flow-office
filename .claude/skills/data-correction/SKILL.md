@@ -91,6 +91,8 @@ ReadModel(Projection)だけを書き換える補正は、どんな場合も行�
 - **冪等にする**: 再実行しても結果が変わらない。
 - **リビルドと検証までを1つの手順にする**: 再生成が必要なProjectionとその順序、確認のSELECT文を
   変更セットに書く。
+- **前例**: `events:rename-boolean-properties`(変更セット`20261123-boolean-column-naming`)。イベント項目名の改名を、idと発生順を保ったまま行ごとに書き換える。
+  補えない行・旧新両方の行がある場合は止め、旧キーが残っている間は`read-models:rebuild`・`projections:rebuild`を検出器で拒否する。
 
 ## ReadModelの作り直し(Projectorの修正の反映)
 
