@@ -4,9 +4,9 @@ import type { AssetNumberRule } from '../../api/assetNumberRules'
 import { AssetNumberRuleListPage } from './AssetNumberRuleListPage'
 
 const rules: AssetNumberRule[] = [
-  { category: 'ノートPC', prefix: 'NPC', digitCount: 5, nextNumber: 3, isActive: true, isDefault: false },
-  { category: 'モニター', prefix: 'MON', digitCount: 4, nextNumber: 12, isActive: false, isDefault: false },
-  { category: null, prefix: 'AST', digitCount: 5, nextNumber: 41, isActive: true, isDefault: true },
+  { category: 'ノートPC', prefix: 'NPC', digit_count: 5, next_number: 3, is_active: true, is_default: false },
+  { category: 'モニター', prefix: 'MON', digit_count: 4, next_number: 12, is_active: false, is_default: false },
+  { category: null, prefix: 'AST', digit_count: 5, next_number: 41, is_active: true, is_default: true },
 ]
 
 function Decorator(props: { rules: AssetNumberRule[] }) {

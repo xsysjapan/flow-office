@@ -533,3 +533,13 @@ assetNumberRules`(14件全通過)、`npx tsc --noEmit`エラーなし。
 | A4 | 無効のルールを編集して保存すると、有効に戻る(`20261123-boolean-column-naming`で`enabled`→`isActive`へ改名した際に顕在化) | A2と同じ。`is_active`を読めず、編集フォームが既定値の有効で初期化される | A2で解消。保存時に読み込んだ値が保たれることをテストで確かめる |
 
 テスト: 一覧・編集フォームのテストのモックを実際のAPIの形(snake_case)にし、無効ルールの編集で`is_active: false`が送られること、デフォルト行が編集中にならないこと、`asset.manage`だけを持つ利用者にメニューが出ることを確かめる。
+
+### 不具合の修正結果(2026-11-23)
+
+- A1:
+  - 管理メニューの採番ルール設定は`permission`だけで出し分ける。
+  - 備品管理(`routeManifest.ts`)は`show: ctx => ctx.canManageAssets`で出し分ける(`NavContext`に追加)。
+- A2: `AssetNumberRule`をAPIどおりsnake_caseにした。一覧はAPIが`withoutWrapping`のため素の配列のまま受け取る。
+- A3: 編集状態を`none`/`default`/`category`で区別する。
+- A4: 編集フォームは読み込んだ`digit_count`・`is_active`で初期化する。無効ルールの保存で`is_active: false`が送られることをテストで確かめた。
+- テスト結果(委譲元で再実行): `tsc`エラーなし、フロントエンド単体テスト 160ファイル・1516件成功(2件スキップ)・失敗0。

@@ -16,6 +16,9 @@ import {
   useUpdateDefaultAssetNumberRule,
 } from '../../hooks/useAssetNumberRules'
 
+/** 編集中の対象。「編集中でない」とデフォルト行(`category: null`)の編集中を別の値で表す。 */
+type EditingTarget = { kind: 'none' } | { kind: 'default' } | { kind: 'category'; category: string }
+
 interface RuleFormState {
   prefix: string
   digitCount: string
@@ -23,7 +26,7 @@ interface RuleFormState {
 }
 
 function toFormState(rule: AssetNumberRule | undefined): RuleFormState {
-  return { prefix: rule?.prefix ?? '', digitCount: String(rule?.digitCount ?? 5), isActive: rule?.isActive ?? true }
+  return { prefix: rule?.prefix ?? '', digitCount: String(rule?.digit_count ?? 5), isActive: rule?.is_active ?? true }
 }
 
 /**
@@ -34,8 +37,8 @@ function applicationStatus(
   rule: AssetNumberRule,
   defaultRule: AssetNumberRule | undefined,
 ): { label: string; variant: 'success' | 'neutral' | 'info' } {
-  if (rule.isActive) return { label: 'このルールで採番', variant: 'success' }
-  if (defaultRule?.isActive) return { label: 'デフォルトにフォールバック', variant: 'info' }
+  if (rule.is_active) return { label: 'このルールで採番', variant: 'success' }
+  if (defaultRule?.is_active) return { label: 'デフォルトにフォールバック', variant: 'info' }
   return { label: '無効化中(手入力)', variant: 'neutral' }
 }
 
@@ -50,31 +53,30 @@ export function AssetNumberRuleListPage() {
 
   const [newCategory, setNewCategory] = useState('')
   const [newForm, setNewForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', isActive: true })
-  const [editingCategory, setEditingCategory] = useState<string | null>(null)
+  const [editing, setEditing] = useState<EditingTarget>({ kind: 'none' })
   const [editForm, setEditForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', isActive: true })
-  const [editingDefault, setEditingDefault] = useState(false)
   const [defaultForm, setDefaultForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', isActive: true })
 
   if (rules.isLoading) return <LoadingState />
   if (rules.error) return <ErrorMessage error={rules.error} fallback="採番ルールの取得に失敗しました。" />
 
   const allRules = rules.data ?? []
-  const defaultRule = allRules.find((rule) => rule.isDefault)
-  const categoryRules = allRules.filter((rule) => !rule.isDefault)
+  const defaultRule = allRules.find((rule) => rule.is_default)
+  const categoryRules = allRules.filter((rule) => !rule.is_default)
   const mutationError = updateRule.error ?? updateDefaultRule.error ?? undefined
 
   function startEditCategory(rule: AssetNumberRule) {
-    setEditingCategory(rule.category)
+    setEditing({ kind: 'category', category: rule.category as string })
     setEditForm(toFormState(rule))
   }
 
   function saveCategoryEdit(category: string) {
     updateRule.mutate(
-      { category, input: { prefix: editForm.prefix, digitCount: Number(editForm.digitCount) || 1, isActive: editForm.isActive } },
+      { category, input: { prefix: editForm.prefix, digit_count: Number(editForm.digitCount) || 1, is_active: editForm.isActive } },
       {
         onSuccess: () => {
           notify.success(`${category}の採番ルールを保存しました`)
-          setEditingCategory(null)
+          setEditing({ kind: 'none' })
         },
       },
     )
@@ -83,7 +85,7 @@ export function AssetNumberRuleListPage() {
   function saveNewCategory() {
     const category = newCategory.trim()
     updateRule.mutate(
-      { category, input: { prefix: newForm.prefix, digitCount: Number(newForm.digitCount) || 1, isActive: newForm.isActive } },
+      { category, input: { prefix: newForm.prefix, digit_count: Number(newForm.digitCount) || 1, is_active: newForm.isActive } },
       {
         onSuccess: () => {
           notify.success(`${category}の採番ルールを追加しました`)
@@ -95,17 +97,17 @@ export function AssetNumberRuleListPage() {
   }
 
   function startEditDefault() {
-    setEditingDefault(true)
+    setEditing({ kind: 'default' })
     setDefaultForm(toFormState(defaultRule))
   }
 
   function saveDefault() {
     updateDefaultRule.mutate(
-      { prefix: defaultForm.prefix, digitCount: Number(defaultForm.digitCount) || 1, isActive: defaultForm.isActive },
+      { prefix: defaultForm.prefix, digit_count: Number(defaultForm.digitCount) || 1, is_active: defaultForm.isActive },
       {
         onSuccess: () => {
           notify.success('デフォルトの採番ルールを保存しました')
-          setEditingDefault(false)
+          setEditing({ kind: 'none' })
         },
       },
     )
@@ -124,7 +126,7 @@ export function AssetNumberRuleListPage() {
       {mutationError && <ErrorMessage error={mutationError} />}
 
       <Card title="デフォルトルール">
-        {!defaultRule && !editingDefault && (
+        {!defaultRule && editing.kind !== 'default' && (
           <div className="flex items-center gap-3">
             <p className="text-sm text-muted-foreground">
               未設定です。カテゴリ一致ルールが無い場合、常に手入力になります。
@@ -134,20 +136,20 @@ export function AssetNumberRuleListPage() {
             </Button>
           </div>
         )}
-        {defaultRule && !editingDefault && (
+        {defaultRule && editing.kind !== 'default' && (
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <span>
               プレフィックス: <span className="font-medium text-foreground">{defaultRule.prefix}</span>
             </span>
-            <span>桁数: {defaultRule.digitCount}</span>
-            <span>次番号(参考): {String(defaultRule.nextNumber).padStart(defaultRule.digitCount, '0')}</span>
-            <Badge variant={defaultRule.isActive ? 'success' : 'neutral'}>{defaultRule.isActive ? '有効' : '無効'}</Badge>
+            <span>桁数: {defaultRule.digit_count}</span>
+            <span>次番号(参考): {String(defaultRule.next_number).padStart(defaultRule.digit_count, '0')}</span>
+            <Badge variant={defaultRule.is_active ? 'success' : 'neutral'}>{defaultRule.is_active ? '有効' : '無効'}</Badge>
             <Button variant="secondary" onClick={startEditDefault}>
               編集
             </Button>
           </div>
         )}
-        {editingDefault && (
+        {editing.kind === 'default' && (
           <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-4">
             <FormField label="プレフィックス" htmlFor="default-rule-prefix" required>
               <Input
@@ -181,7 +183,7 @@ export function AssetNumberRuleListPage() {
               >
                 保存
               </Button>
-              <Button variant="secondary" onClick={() => setEditingDefault(false)}>
+              <Button variant="secondary" onClick={() => setEditing({ kind: 'none' })}>
                 キャンセル
               </Button>
             </div>
@@ -205,7 +207,7 @@ export function AssetNumberRuleListPage() {
           <TableBody>
             {categoryRules.map((rule) => {
               const category = rule.category as string
-              const isEditing = editingCategory === category
+              const isEditing = editing.kind === 'category' && editing.category === category
               const status = applicationStatus(rule, defaultRule)
               return (
                 <TableRow key={category}>
@@ -228,7 +230,7 @@ export function AssetNumberRuleListPage() {
                           onChange={(e) => setEditForm({ ...editForm, digitCount: e.target.value })}
                         />
                       </TableCell>
-                      <TableCell>{String(rule.nextNumber).padStart(rule.digitCount, '0')}</TableCell>
+                      <TableCell>{String(rule.next_number).padStart(rule.digit_count, '0')}</TableCell>
                       <TableCell>
                         <Checkbox
                           aria-label={`${category}の有効/無効`}
@@ -248,7 +250,7 @@ export function AssetNumberRuleListPage() {
                           >
                             保存
                           </Button>
-                          <Button variant="secondary" onClick={() => setEditingCategory(null)}>
+                          <Button variant="secondary" onClick={() => setEditing({ kind: 'none' })}>
                             キャンセル
                           </Button>
                         </div>
@@ -257,10 +259,10 @@ export function AssetNumberRuleListPage() {
                   ) : (
                     <>
                       <TableCell>{rule.prefix}</TableCell>
-                      <TableCell>{rule.digitCount}</TableCell>
-                      <TableCell>{String(rule.nextNumber).padStart(rule.digitCount, '0')}</TableCell>
+                      <TableCell>{rule.digit_count}</TableCell>
+                      <TableCell>{String(rule.next_number).padStart(rule.digit_count, '0')}</TableCell>
                       <TableCell>
-                        <Badge variant={rule.isActive ? 'success' : 'neutral'}>{rule.isActive ? '有効' : '無効'}</Badge>
+                        <Badge variant={rule.is_active ? 'success' : 'neutral'}>{rule.is_active ? '有効' : '無効'}</Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant={status.variant}>{status.label}</Badge>

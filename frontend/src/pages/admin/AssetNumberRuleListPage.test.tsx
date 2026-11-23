@@ -12,19 +12,19 @@ vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 const categoryRule: AssetNumberRule = {
   category: 'ノートPC',
   prefix: 'NPC',
-  digitCount: 5,
-  nextNumber: 3,
-  isActive: true,
-  isDefault: false,
+  digit_count: 5,
+  next_number: 3,
+  is_active: true,
+  is_default: false,
 }
 
 const defaultRule: AssetNumberRule = {
   category: null,
   prefix: 'AST',
-  digitCount: 5,
-  nextNumber: 10,
-  isActive: true,
-  isDefault: true,
+  digit_count: 5,
+  next_number: 10,
+  is_active: true,
+  is_default: true,
 }
 
 function renderPage(rules: AssetNumberRule[]) {
@@ -55,6 +55,10 @@ describe('AssetNumberRuleListPage', () => {
 
     expect(await screen.findByText('AST')).toBeInTheDocument()
     expect(screen.getByText('桁数: 5')).toBeInTheDocument()
+    expect(screen.getByText('次番号(参考): 00010')).toBeInTheDocument()
+    expect(screen.queryByLabelText('プレフィックス')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '編集' })).toBeInTheDocument()
     expect(screen.getByText('有効')).toBeInTheDocument()
   })
 
@@ -63,17 +67,19 @@ describe('AssetNumberRuleListPage', () => {
 
     expect(await screen.findByText('ノートPC')).toBeInTheDocument()
     expect(screen.getByText('NPC')).toBeInTheDocument()
+    expect(screen.getByText('00003')).toBeInTheDocument()
+    expect(screen.getAllByText('5').length).toBeGreaterThan(0)
     expect(screen.getByText('このルールで採番')).toBeInTheDocument()
   })
 
   it('shows "falls back to default" status for a disabled category rule when a default rule is enabled', async () => {
-    renderPage([{ ...categoryRule, isActive: false }, defaultRule])
+    renderPage([{ ...categoryRule, is_active: false }, defaultRule])
 
     expect(await screen.findByText('デフォルトにフォールバック')).toBeInTheDocument()
   })
 
   it('shows "manual input" status for a disabled category rule when no default rule exists', async () => {
-    renderPage([{ ...categoryRule, isActive: false }])
+    renderPage([{ ...categoryRule, is_active: false }])
 
     expect(await screen.findByText('無効化中(手入力)')).toBeInTheDocument()
   })
@@ -89,9 +95,39 @@ describe('AssetNumberRuleListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
-      expect(updateSpy).toHaveBeenCalledWith('ノートPC', { prefix: 'PC', digitCount: 5, isActive: true }),
+      expect(updateSpy).toHaveBeenCalledWith('ノートPC', { prefix: 'PC', digit_count: 5, is_active: true }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ノートPCの採番ルールを保存しました'))
+  })
+
+  it('keeps is_active=false when saving an edited disabled rule', async () => {
+    const disabled = { ...categoryRule, digit_count: 4, is_active: false }
+    const updateSpy = vi.spyOn(assetNumberRulesApi, 'updateAssetNumberRule').mockResolvedValue(disabled)
+    renderPage([disabled])
+
+    await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+    expect(screen.getByLabelText('ノートPCの桁数')).toHaveValue(4)
+    expect(screen.getByLabelText('ノートPCの有効/無効')).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith('ノートPC', { prefix: 'NPC', digit_count: 4, is_active: false }),
+    )
+  })
+
+  it('initialises the default rule edit form from the loaded values and keeps is_active=false', async () => {
+    const disabledDefault = { ...defaultRule, digit_count: 6, is_active: false }
+    const updateDefaultSpy = vi.spyOn(assetNumberRulesApi, 'updateDefaultAssetNumberRule').mockResolvedValue(disabledDefault)
+    renderPage([disabledDefault])
+
+    await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+    expect(screen.getByLabelText('プレフィックス')).toHaveValue('AST')
+    expect(screen.getByLabelText('桁数')).toHaveValue(6)
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() =>
+      expect(updateDefaultSpy).toHaveBeenCalledWith({ prefix: 'AST', digit_count: 6, is_active: false }),
+    )
   })
 
   it('adds a new category rule', async () => {
@@ -104,7 +140,7 @@ describe('AssetNumberRuleListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '追加' }))
 
     await waitFor(() =>
-      expect(updateSpy).toHaveBeenCalledWith('モニター', { prefix: 'MON', digitCount: 5, isActive: true }),
+      expect(updateSpy).toHaveBeenCalledWith('モニター', { prefix: 'MON', digit_count: 5, is_active: true }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('モニターの採番ルールを追加しました'))
   })
@@ -118,7 +154,7 @@ describe('AssetNumberRuleListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
-      expect(updateDefaultSpy).toHaveBeenCalledWith({ prefix: 'AST', digitCount: 5, isActive: true }),
+      expect(updateDefaultSpy).toHaveBeenCalledWith({ prefix: 'AST', digit_count: 5, is_active: true }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('デフォルトの採番ルールを保存しました'))
   })

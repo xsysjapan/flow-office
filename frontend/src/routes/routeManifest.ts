@@ -31,6 +31,8 @@ export interface NavContext {
   canSeeBackOfficeTasks: boolean;
   /** 管理メニュー配下に見えるページが1つでもあるか。 */
   canAccessAdmin: boolean;
+  /** 備品管理Permission(`asset.manage`)を持つか。 */
+  canManageAssets: boolean;
 }
 
 export interface RouteManifestEntry {
@@ -139,8 +141,9 @@ export const routeManifest: RouteManifestEntry[] = [
     // spec: docs/changesets/20260831-asset-management-refinement/spec.md 論点8
     label: "備品管理",
     to: "/assets",
-    feature: "asset.manage",
+    // `asset.manage`はPermission(Featureではない)。メニューはPermissionで出し分ける。
     group: "backoffice",
+    show: (ctx) => ctx.canManageAssets,
   },
   {
     label: "アカウント設定",

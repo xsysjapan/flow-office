@@ -97,6 +97,21 @@ describe('AppLayout', () => {
     expect(sidebar().getByRole('link', { name: 'タスク一覧' })).toHaveAttribute('href', '/backoffice-tasks')
   })
 
+  it('shows 備品管理 for a user with only the asset.manage permission and hides it without', () => {
+    const { unmount } = renderLayout(vi.fn(), { ...mockUser, effective_features: ['attendance.entry'], effective_permissions: ['asset.manage'] })
+    expect(sidebar().getByRole('link', { name: '備品管理' })).toBeInTheDocument()
+    unmount()
+
+    renderLayout(vi.fn(), { ...mockUser, effective_features: ['attendance.entry'], effective_permissions: [] })
+    expect(sidebar().queryByRole('link', { name: '備品管理' })).not.toBeInTheDocument()
+  })
+
+  it('does not redirect /assets for a user with only the asset.manage permission', () => {
+    renderLayout(vi.fn(), { ...mockUser, effective_features: ['attendance.entry'], effective_permissions: ['asset.manage'] }, [], '/assets')
+
+    expect(screen.getByText('配下の画面')).toBeInTheDocument()
+  })
+
   it('hides the 特別休暇 link when there is no active special leave type', async () => {
     renderLayout(vi.fn(), mockUser, [])
 

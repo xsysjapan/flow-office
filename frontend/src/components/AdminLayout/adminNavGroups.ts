@@ -161,7 +161,6 @@ export const adminNavGroups: AdminNavGroup[] = [
         to: "/admin/asset-number-rules",
         label: "採番ルール設定",
         description: "カテゴリ別の管理番号自動採番ルール(プレフィックス・桁数)を管理する",
-        feature: "asset.manage",
         permission: "asset.manage",
       },
     ],

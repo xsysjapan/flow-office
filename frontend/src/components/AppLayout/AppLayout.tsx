@@ -168,6 +168,9 @@ export function AppLayout() {
     hasSpecialLeaveTypes,
     canSeeBackOfficeTasks,
     canAccessAdmin,
+    canManageAssets: Boolean(
+      user?.effective_permissions?.includes("asset.manage"),
+    ),
   };
   const visibleGroups = buildNavGroups(user?.effective_features, navContext);
 

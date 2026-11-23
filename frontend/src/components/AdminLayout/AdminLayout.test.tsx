@@ -108,6 +108,18 @@ describe("AdminLayout", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows 採番ルール設定 for a user with only the asset.manage permission (no asset feature)", () => {
+    renderLayout({ ...mockUser, effective_features: ["attendance.entry"], effective_permissions: ["asset.manage"] });
+
+    expect(screen.getByRole("link", { name: "採番ルール設定" })).toBeInTheDocument();
+  });
+
+  it("hides 採番ルール設定 without the asset.manage permission", () => {
+    renderLayout({ ...mockUser, effective_features: ["attendance.entry"], effective_permissions: ["user.view"] });
+
+    expect(screen.queryByRole("link", { name: "採番ルール設定" })).not.toBeInTheDocument();
+  });
+
   it("keeps 有給休暇 active on the paid-leave schedule page while other items stay inactive", () => {
     renderLayout(mockUser, "/admin/paid-leave/schedule");
 
