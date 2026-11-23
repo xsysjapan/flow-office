@@ -202,7 +202,7 @@
    管理画面向けは旧名を `prohibited`(論点10)。端末向け(打刻・ペアリング・心拍)は互換期間として旧名も受け・返す(論点9)。
 4. frontend: `api/types.ts` ほか型・画面・テスト・stories・e2e のキーを新しい名前にする。
 5. 運用コマンド `events:rename-boolean-properties {--execute}`: 論点5の変換規則・検証(論点7)。`MAINTENANCE_COMMANDS` と管理画面の運用コマンド一覧に追加。旧キーが残っている間 `read-models:rebuild`・`projections:rebuild` を拒否する検出器を追加。
-6. ドキュメント: docs/16(列名・`paid_leave_usages` の is_confirmed/is_cancelled の説明・:1653 の分類)、docs/17(イベントの項目名)、スキル `boolean-flags`(`20261123-boolean-query-param` が作る)に命名ルール(論点3)を追記、
+6. ドキュメント: docs/16(列名・`paid_leave_usages` の is_confirmed/is_cancelled の説明・:1653 の分類)、docs/17(イベントの項目名)、スキル `api-design`(`20261123-boolean-query-param` が作る)の「命名」の節に命名ルール(論点3)を追記(列・イベント項目の命名は `add-projection`・`add-domain-event` から参照)、
    docs/33(外部連携の `enabled`→`publishing_enabled`)、docs/23(端末向け API の互換期間)、docs/07:354・docs/19・docs/22・docs/31・docs/34:225-232・docs/testing/scenario-tests.md の旧名。
    `.claude/skills/add-domain-event`・`add-projection` から命名ルールへの参照を1行。
 7. テスト:
@@ -219,7 +219,7 @@
 - 論点4の17項目が新しい名前になり、DB・イベント・API・frontend で同じ語(snake/camel)になっている。旧名ごとの grep で、残っているのが実装結果に列挙した「残してよい箇所」だけである。
 - 端末アプリ向けの API が旧名・新名の両方で動く。
 - 作り直しコマンドで旧項目名のイベントが新項目名に書き換わり、replay 後の ReadModel が書き換え前と同じ値(列名だけ新しい)になることがテストで確認できる。
-- スキル `boolean-flags` に命名ルールがあり、docs/16・17・33 が新しい名前になっている。
+- スキル `api-design` に命名ルールがあり、docs/16・17・33 が新しい名前になっている。
 - backend 全件・frontend 単体全件・型チェック・e2e 全件がPASS。
 
 ## 対象外

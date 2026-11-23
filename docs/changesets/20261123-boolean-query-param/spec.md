@@ -99,7 +99,7 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - 決定: frontend を先に配備し、その後 backend を配備する(旧 SPA が送る `with_trashed=true`・`include_inactive=true` が新 backend で 422 にならないよう、送る側を先に `1`/`0` にする。
   新 frontend の `1`/`0` は旧 backend の `$request->boolean()`・`boolean` ルールの両方で通る)。
   本変更セット(不具合修正でリスクが小さい)を、変更セット`20261123-boolean-column-naming`より先にリリースする。
-  ルールはスキル `.claude/skills/boolean-flags/SKILL.md`(新規)に書く(ユーザーの依頼「ガイドラインはスキルとして今後のプロセスで活用できるように」)。本変更セットがスキルを作り、クエリ・JSON・画面URL・DBの型を書く。命名ルールは`20261123-boolean-column-naming`が同じスキルに追記する。docs/20 には「真偽値の扱いは boolean-flags スキルに従う」と1行だけ書く。
+  ルールはスキルに書く(ユーザーの依頼「ガイドラインはスキルとして今後のプロセスで活用できるように」「boolean-flagsのような細かいスキルは作らない」)。API の入出力(クエリ・JSON・応答・OpenAPI)は新しいスキル `api-design`(API 仕様の決め方)、画面 URL のフラグは `ui-interaction-patterns` §2.10、DB の列は `add-projection` に書く。命名ルールは`20261123-boolean-column-naming`が `api-design` に追記する。docs/20 には「API の入出力は api-design スキルに従う」と1行だけ書く。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
@@ -108,8 +108,8 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
    - `UserController` の `external_unlinked`・`external_hr`(既に validate。判定はそのまま)
    - `DeviceController` の `with_trashed`、`ExpenseCategoryController`・`RequestTypeController` の `include_inactive`: validate を追加し、`$request->boolean()` を検証済みの値に置き換える
    - `ExportController` の `include_submitted`: `"true"/"false"` の正規化(645-649行)を削除し、validate `['nullable', 'boolean']` の値で判定する
-3. ルールの明文化: 新しいスキル `.claude/skills/boolean-flags/SKILL.md` を作り、論点1〜4の決定(クエリは`1/0`、JSONは`true/false`、画面URLは`1`かキー無し、DBの型と casts、backend の読み方は validate `boolean`)を、新しい API・画面・列を作るときのチェックリストとして書く。
-   `add-api-hook`・`add-projection`・`add-domain-event` スキルと docs/20 から1行で参照する。命名ルールは`20261123-boolean-column-naming`が追記する(論点5)。
+3. ルールの明文化: 新しいスキル `.claude/skills/api-design/SKILL.md`(API 仕様の決め方。リクエスト・レスポンス・OpenAPI・命名の節)に、クエリは`1/0`・backend は validate `boolean`・JSONは`true/false`・応答の casts・一覧の `meta`・OpenAPI の書き方を書く。
+   画面URLのフラグは `ui-interaction-patterns` §2.10、DB の列は `add-projection` に追記。`add-api-hook`・`add-domain-event`・docs/20・backend/frontend の CLAUDE.md から api-design を参照する。命名ルールは`20261123-boolean-column-naming`が追記する(論点5)。
    docs/14:10・docs/07:281 の `include_submitted=true` を `include_submitted=1` に直す。OpenAPI の6件を論点2のとおり直す。
    `.claude/skills/add-api-hook/SKILL.md` と `add-projection`(列を足すスキル)から、その節を1行で参照する。
 4. テスト:
@@ -122,7 +122,7 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - 社員一覧で「Microsoft未連携」「外部HR管理」にチェックを入れると、エラーにならず絞り込まれた一覧が表示される。
 - 端末一覧の「削除済みの端末も表示」、経費区分・申請種別の「無効なものも表示」(include_inactive を使う画面)、勤怠出力の「提出済みも含める」が従来どおり動く。
 - クエリの真偽値6件がすべて `1`/`0` で効き、`true` は 422 になる(Feature テストPASS)。
-- スキル `boolean-flags` に真偽値の扱いのルールがあり、関連スキルから参照されている。
+- スキル `api-design`・`ui-interaction-patterns`・`add-projection` に真偽値の扱いのルールがあり、関連スキル・CLAUDE.md から参照されている。
 - backend の全件テスト、frontend の単体テスト全件・型チェック、関係する e2e(社員一覧・端末・経費区分・申請種別・勤怠出力を通るもの)がPASSする。
 
 ## 対象外
@@ -131,8 +131,8 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - frontend の既存 API 関数の引数名の camelCase/snake_case の揃え直し(新規から適用)
 
 ## ドキュメントへの影響
-- `.claude/skills/boolean-flags/SKILL.md`(新規)、`docs/20-implementation-notes.md`(スキルへの参照1行)
-- `.claude/skills/add-api-hook`・`add-projection`・`add-domain-event` の SKILL.md: boolean-flags スキルへの参照を1行
+- `.claude/skills/api-design/SKILL.md`(新規)、`ui-interaction-patterns`(§2.10)、`add-projection`、`docs/20-implementation-notes.md`(参照1行)、backend/frontend の CLAUDE.md(スキル一覧)
+- `.claude/skills/add-api-hook`・`add-domain-event` の SKILL.md: api-design スキルへの参照を1行
 - `docs/16-database-schema.md`: 変更なし(列は変えない)
 - `docs/14-usecases-export.md:10`・`docs/07-usecases-attendance.md:281`: `include_submitted=true` → `include_submitted=1`(前の変更セットの決定を覆す。論点2)
 
@@ -162,4 +162,4 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - 2026-11-23: ユーザーの依頼「is_confirmed/confirmed を今回調査」「イベントの作り直しも含めた対応」を受け、既存列の改名・二重化の解消を変更セット`20261123-boolean-column-naming`に切り出し、本変更セットの論点4の対象外・別途調査をそちらへの参照に変えた。
 
 ## 実装結果
-未着手(2026-11-23 ユーザー承認「対応をお願いします」。あわせて「ガイドラインはスキルとして今後のプロセスで活用できるように」の依頼により、ルールの置き場所を docs/20 からスキルに変更)
+未着手(2026-11-23 ユーザー承認「対応をお願いします」。あわせて「ガイドラインはスキルとして今後のプロセスで活用できるように」の依頼により、ルールの置き場所を docs/20 からスキルに変更。続けて「boolean-flagsのような細かいスキルは作らない」により、API 仕様のスキル api-design と既存スキルに置く形に変更)
