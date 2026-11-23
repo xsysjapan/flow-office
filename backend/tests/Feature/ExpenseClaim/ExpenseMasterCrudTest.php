@@ -215,4 +215,19 @@ class ExpenseMasterCrudTest extends TestCase
 
         $this->assertNotNull($preset->refresh()->last_used_at);
     }
+
+    public function test_expense_categories_include_inactive_accepts_only_1_or_0(): void
+    {
+        $user = User::factory()->create();
+        ExpenseCategory::query()->create(['code' => 'inactive_cat', 'name' => '無効区分', 'entry_mode' => 'batch', 'is_active' => false]);
+        ExpenseCategory::query()->create(['code' => 'active_cat', 'name' => '有効区分', 'entry_mode' => 'batch', 'is_active' => true]);
+
+        $codes = fn ($response) => array_column($response->json('data') ?? $response->json(), 'code');
+
+        $this->assertContains('inactive_cat', $codes($this->actingAs($user)->getJson('/api/expense-categories?include_inactive=1')->assertOk()));
+        foreach (['?include_inactive=0', ''] as $query) {
+            $this->assertNotContains('inactive_cat', $codes($this->actingAs($user)->getJson('/api/expense-categories'.$query)->assertOk()));
+        }
+        $this->actingAs($user)->getJson('/api/expense-categories?include_inactive=true')->assertStatus(422)->assertJsonValidationErrors('include_inactive');
+    }
 }

@@ -21,14 +21,16 @@ class RequestTypeController extends Controller
         operationId: 'requestTypes.index',
         summary: '申請種別一覧を取得する',
         tags: ['申請種別'],
-        parameters: [new OA\Parameter(name: 'include_inactive', in: 'query', required: false, schema: new OA\Schema(type: 'boolean'))],
+        parameters: [new OA\Parameter(name: 'include_inactive', in: 'query', required: false, description: '無効なものも含めて取得する(1=はい、0=いいえ)', schema: new OA\Schema(type: 'integer', enum: [0, 1]))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = RequestType::query()->orderBy('name');
 
-        if (! $request->boolean('include_inactive')) {
+        $validated = $request->validate(['include_inactive' => ['sometimes', 'boolean']]);
+
+        if (! (bool) ($validated['include_inactive'] ?? false)) {
             $query->where('is_active', true);
         }
 

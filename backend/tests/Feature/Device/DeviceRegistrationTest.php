@@ -364,4 +364,21 @@ class DeviceRegistrationTest extends TestCase
         $this->assertCount(20, $response->json('data'));
         $this->assertSame(2, $response->json('meta.last_page'));
     }
+
+    public function test_with_trashed_accepts_only_1_or_0(): void
+    {
+        $admin = $this->admin();
+        $device = Device::factory()->create([
+            'owner_type' => DeviceOwnerType::ORGANIZATION_SHARED,
+            'status' => DeviceStatus::REVOKED,
+        ]);
+        $this->actingAs($admin)->deleteJson("/api/admin/devices/{$device->id}")->assertNoContent();
+
+        foreach (['?with_trashed=0', ''] as $query) {
+            $response = $this->actingAs($admin)->getJson('/api/admin/devices'.$query);
+            $response->assertSuccessful();
+            $this->assertNotContains($device->id, array_column($response->json('data'), 'id'));
+        }
+        $this->actingAs($admin)->getJson('/api/admin/devices?with_trashed=true')->assertStatus(422)->assertJsonValidationErrors('with_trashed');
+    }
 }

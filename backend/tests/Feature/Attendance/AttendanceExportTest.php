@@ -235,15 +235,34 @@ class AttendanceExportTest extends TestCase
             'snapshot_json' => null,
         ]);
 
-        // Excelと同じく "1" と "true" のどちらでも提出済みを含める。
-        foreach (['1', 'true'] as $value) {
-            $response = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06&include_submitted='.$value);
+        $response = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06&include_submitted=1');
+
+        $response->assertSuccessful();
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('提出済みCSV社員', $csv);
+        $this->assertStringNotContainsString('差戻しCSV社員', $csv);
+        $this->assertStringNotContainsString('未提出CSV社員', $csv);
+
+        // 0・未指定は提出済みを含めない。
+        foreach (['&include_submitted=0', ''] as $query) {
+            $response = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06'.$query);
 
             $response->assertSuccessful();
-            $csv = $response->streamedContent();
-            $this->assertStringContainsString('提出済みCSV社員', $csv);
-            $this->assertStringNotContainsString('差戻しCSV社員', $csv);
-            $this->assertStringNotContainsString('未提出CSV社員', $csv);
+            $this->assertStringNotContainsString('提出済みCSV社員', $response->streamedContent());
+        }
+    }
+
+    public function test_include_submitted_rejects_true_and_false_strings(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        foreach (['/api/exports/attendance', '/api/exports/attendance.xlsx'] as $path) {
+            foreach (['true', 'false'] as $value) {
+                $this->actingAs($admin)->getJson($path.'?year_month=2026-06&include_submitted='.$value)
+                    ->assertStatus(422)
+                    ->assertJsonValidationErrors('include_submitted');
+            }
         }
     }
 
@@ -534,8 +553,8 @@ class AttendanceExportTest extends TestCase
         $employee = User::factory()->create(['name' => '提出済み社員']);
         $this->createMonthWithWorkedDay($employee, AttendanceMonthStatus::SUBMITTED, $this->submittedSnapshot());
 
-        // 未指定・0・falseのいずれも承認済み・締め済みのみが対象になる(提出済みは対象外)。
-        foreach (['', '&include_submitted=0', '&include_submitted=false'] as $query) {
+        // 未指定・0のいずれも承認済み・締め済みのみが対象になる(提出済みは対象外)。
+        foreach (['', '&include_submitted=0'] as $query) {
             $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06'.$query);
 
             $response->assertSuccessful();
@@ -582,7 +601,7 @@ class AttendanceExportTest extends TestCase
             $this->createMonthWithWorkedDay($employee, AttendanceMonthStatus::SUBMITTED, $this->submittedSnapshot());
         }
 
-        $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06&include_submitted=true');
+        $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06&include_submitted=1');
 
         $response->assertSuccessful();
         $response->assertHeader('Content-Type', 'application/zip');

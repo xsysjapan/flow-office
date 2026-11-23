@@ -86,6 +86,8 @@ class UserController extends Controller
         tags: ['ユーザー'],
         parameters: [
             new OA\Parameter(name: 'q', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'external_unlinked', in: 'query', required: false, description: 'Microsoft未連携のユーザーに絞り込む(1=はい、0=いいえ)', schema: new OA\Schema(type: 'integer', enum: [0, 1])),
+            new OA\Parameter(name: 'external_hr', in: 'query', required: false, description: '外部HR管理のユーザーに絞り込む(1=はい、0=いいえ)', schema: new OA\Schema(type: 'integer', enum: [0, 1])),
             new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', minimum: 1, maximum: 100)),
         ],
         responses: [
@@ -146,6 +148,8 @@ class UserController extends Controller
         tags: ['ユーザー'],
         parameters: [
             new OA\Parameter(name: 'q', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'external_unlinked', in: 'query', required: false, description: 'Microsoft未連携のユーザーに絞り込む(1=はい、0=いいえ)', schema: new OA\Schema(type: 'integer', enum: [0, 1])),
+            new OA\Parameter(name: 'external_hr', in: 'query', required: false, description: '外部HR管理のユーザーに絞り込む(1=はい、0=いいえ)', schema: new OA\Schema(type: 'integer', enum: [0, 1])),
             new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', minimum: 1, maximum: 100)),
             new OA\Parameter(name: 'permission', in: 'query', required: false, description: '指定した場合、globalスコープで当該Permissionを保有するユーザーのみに絞り込む(承認者選択の絞り込み等)', schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'ids[]', in: 'query', required: false, description: '指定した場合、そのIDのユーザーのみに絞り込む(存在しないIDは無視する)。q・permissionと併用するとAND。per_page未指定時は指定件数(1ページで全件)', schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid'), maxItems: 100)),

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\UserManagement;
 
+use App\Models\ExternalIdentity;
 use App\Models\Role;
 use App\Models\RoleAssignment;
 use App\Models\User;
@@ -211,5 +212,36 @@ class UserSearchAndAccessTest extends TestCase
             'status' => 'active',
             'assigned_by' => $user->id,
         ]);
+    }
+
+    public function test_index_external_filters_accept_only_1_or_0(): void
+    {
+        $admin = User::factory()->create(['name' => '管理者']);
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $linked = User::factory()->create(['name' => 'Microsoft連携済み']);
+        $hr = User::factory()->create(['name' => '外部HR管理']);
+        $none = User::factory()->create(['name' => '未連携']);
+        foreach ([[$linked, 'MICROSOFT_ENTRA'], [$hr, 'EXTERNAL_HR']] as [$user, $provider]) {
+            ExternalIdentity::query()->create(['user_id' => $user->id, 'provider' => $provider, 'external_subject_id' => 'sub-'.$user->id, 'status' => 'active']);
+        }
+
+        $ids = fn ($query) => array_column($this->actingAs($admin)->getJson('/api/users'.$query)->assertOk()->json('data'), 'id');
+
+        $unlinked = $ids('?external_unlinked=1');
+        $this->assertNotContains($linked->id, $unlinked);
+        $this->assertContains($none->id, $unlinked);
+        $this->assertContains($hr->id, $unlinked);
+
+        $this->assertSame([$hr->id], $ids('?external_hr=1'));
+
+        foreach (['?external_unlinked=0', '?external_hr=0', ''] as $query) {
+            $all = $ids($query);
+            $this->assertContains($linked->id, $all);
+            $this->assertContains($none->id, $all);
+        }
+
+        foreach (['external_unlinked', 'external_hr'] as $param) {
+            $this->actingAs($admin)->getJson("/api/users?{$param}=true")->assertStatus(422)->assertJsonValidationErrors($param);
+        }
     }
 }

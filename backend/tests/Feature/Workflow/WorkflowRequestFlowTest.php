@@ -421,4 +421,19 @@ class WorkflowRequestFlowTest extends TestCase
         $this->actingAs($employee)->postJson('/api/admin/request-types', $payload)->assertForbidden();
         $this->actingAs($admin)->postJson('/api/admin/request-types', $payload)->assertCreated();
     }
+
+    public function test_request_types_include_inactive_accepts_only_1_or_0(): void
+    {
+        $user = User::factory()->create();
+        RequestType::query()->create(['code' => 'inactive_type', 'name' => '無効な申請', 'form_schema' => [], 'is_active' => false]);
+        RequestType::query()->create(['code' => 'active_type', 'name' => '有効な申請', 'form_schema' => [], 'is_active' => true]);
+
+        $codes = fn ($response) => array_column($response->json('data') ?? $response->json(), 'code');
+
+        $this->assertContains('inactive_type', $codes($this->actingAs($user)->getJson('/api/request-types?include_inactive=1')->assertOk()));
+        foreach (['?include_inactive=0', ''] as $query) {
+            $this->assertNotContains('inactive_type', $codes($this->actingAs($user)->getJson('/api/request-types'.$query)->assertOk()));
+        }
+        $this->actingAs($user)->getJson('/api/request-types?include_inactive=true')->assertStatus(422)->assertJsonValidationErrors('include_inactive');
+    }
 }

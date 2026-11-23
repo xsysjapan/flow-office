@@ -44,15 +44,17 @@ class DeviceController extends Controller
         tags: ['端末管理'],
         parameters: [
             new OA\Parameter(name: 'owner_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
-            new OA\Parameter(name: 'with_trashed', in: 'query', required: false, description: '削除済みの端末も含めて取得する', schema: new OA\Schema(type: 'boolean')),
+            new OA\Parameter(name: 'with_trashed', in: 'query', required: false, description: '削除済みの端末も含めて取得する(1=はい、0=いいえ)', schema: new OA\Schema(type: 'integer', enum: [0, 1])),
             new OA\Parameter(name: 'page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
         ],
         responses: [new OA\Response(response: 200, description: 'Successful response')],
     )]
     public function index(Request $request): AnonymousResourceCollection
     {
+        $validated = $request->validate(['with_trashed' => ['sometimes', 'boolean']]);
+
         $devices = Device::query()
-            ->when($request->boolean('with_trashed'), fn ($q) => $q->withTrashed())
+            ->when((bool) ($validated['with_trashed'] ?? false), fn ($q) => $q->withTrashed())
             ->when($request->query('owner_type'), fn ($q, $ownerType) => $q->where('owner_type', $ownerType))
             ->with(['roles', 'scopes'])
             ->orderByDesc('created_at')
