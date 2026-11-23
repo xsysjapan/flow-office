@@ -1,6 +1,6 @@
 # boolean-column-naming(真偽値の列・イベント項目の命名の統一と、paid_leave_usages の確定フラグの二重化の解消)
 
-ステータス: レビュー中
+ステータス: 実装中
 
 ## 変更要望(原文)
 > 別途調べたい点: 有給の消化記録のテーブル(paid_leave_usages)に、is_confirmed と confirmed という似た列が2つあります。…
