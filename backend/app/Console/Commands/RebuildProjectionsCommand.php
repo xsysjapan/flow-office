@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
+use App\Domain\EventSourcing\Rebuild\LegacyBooleanPropertyDetector;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
@@ -15,12 +16,20 @@ final class RebuildProjectionsCommand extends Command
 
     protected $description = 'Replay stored_events to Spatie projectors';
 
-    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector): int
+    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector): int
     {
         // 旧形式のバックオフィス割当イベントが残っている間は、再生するとステータスが失われるため拒否する。
         $legacyCount = $legacyDetector->count();
         if ($legacyCount > 0) {
             $this->error("旧形式のバックオフィス割当イベントが{$legacyCount}件あります。先に運用コマンド『バックオフィス割当イベントの移行』を実行してください。");
+
+            return self::FAILURE;
+        }
+
+        // 旧項目名の真偽値のイベントが残っている間は、再生すると読めない(または既定値に化ける)ため拒否する。
+        $booleanCount = $booleanDetector->count();
+        if ($booleanCount > 0) {
+            $this->error("旧項目名の真偽値のイベントが{$booleanCount}件あります。先に運用コマンド『真偽値のイベント項目名の書き換え』(events:rename-boolean-properties)を実行してください。");
 
             return self::FAILURE;
         }
