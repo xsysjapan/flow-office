@@ -66,9 +66,13 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
   - B. すべて `$request->boolean()` で読む(検証なし。`"true"` 等も受ける)
   - C. 現状のまま(混在)
 - 決定: A
-- 理由: 不正値を 422 で弾くのが他の入力と同じ扱いで、OpenAPI の記載(`type: boolean`)とも一致する。B は `"abc"` も false 扱いで黙って通る。
+- 理由: 不正値を 422 で弾くのが他の入力と同じ扱いになる。B は `"abc"` も false 扱いで黙って通る。
   `ExportController` の `"true"/"false"` 正規化は、A に統一すると不要になるため削除する(呼び出し元は frontend の `'1'` のみ。MCP は使っていない)。
-  これにより `"true"` を送ると 422 になる(既存テスト `AttendanceExportTest.php:238` の `'true'` を受ける検証は、`'true'` が 422 になる検証に書き換える)。
+  これにより `"true"` を送ると 422 になる。この正規化は変更セット`20261015-excel-export-submitted-month`(spec:199)が意図して入れた仕様で、docs/14:10・docs/07:281 が
+  `include_submitted=true` を API の契約として書いている。ユーザー回答「1/0だけを受ける」により、この前の決定を覆し、docs/14・docs/07 を `1`/`0` に直す。
+  既存テストは `AttendanceExportTest.php:239-240`(`'1'`/`'true'`)・`:538`(`include_submitted=false`)・`:585`(`include_submitted=true`)を `1`/`0` に、`'true'` は 422 を確かめる形に書き換える。
+- OpenAPI: クエリの真偽値6件の schema を `type: integer, enum: [0, 1]` にし、説明に「1=はい、0=いいえ」と書く(Swagger UI の試し実行が `true` を送って 422 にならないように)。
+  対象: `DeviceController.php:47`、`ExportController.php:59,109`、`RequestTypeController.php:24`、`ExpenseCategoryController.php:25`、`UserController` の index。
 - 未確定・要確認事項: なし
 
 ### 論点3: frontend での送り方
@@ -77,7 +81,7 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
   - B. 各 `api/*.ts` で個別に `x ? 1 : undefined` と書く
 - 決定: A
 - 理由: 真偽値クエリを足すたびに同じ不具合が起きないよう、変換を1か所にする。`api/exports.ts` のダウンロードURLは `buildUrl` を通らない自前の組み立てで、既に `'1'` を送っているのでそのまま(論点1と一致)。
-- 細則: `false` は `"0"` を送る。各 API 関数で「オフのときは送らない(`|| undefined`)」としている既存の書き方はそのまま残してよい(どちらも backend で false になる)。
+- 細則: `false` は `"0"` を送る。`ApiFetchOptions['query']` の配列要素の型に boolean を足す(`client.ts:41`)。各 API 関数で「オフのときは送らない(`|| undefined`)」としている既存の書き方はそのまま残してよい(どちらも backend で false になる)。
 - 未確定・要確認事項: なし
 
 ### 論点4: JSON 本文・応答・画面URL・DB の扱い(ルールの明文化)
@@ -91,18 +95,27 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
     frontend の API 関数の引数オブジェクトは camelCase(`includeInactive`)で受け、`api/*.ts` で snake_case のクエリ名に変換する。
 - 未確定・要確認事項: なし
 
+### 論点5: 配備の順序・2つの変更セットの関係
+- 決定: frontend を先に配備し、その後 backend を配備する(旧 SPA が送る `with_trashed=true`・`include_inactive=true` が新 backend で 422 にならないよう、送る側を先に `1`/`0` にする。
+  新 frontend の `1`/`0` は旧 backend の `$request->boolean()`・`boolean` ルールの両方で通る)。
+  本変更セット(不具合修正でリスクが小さい)を、変更セット`20261123-boolean-column-naming`より先にリリースする。
+  `docs/20-implementation-notes.md` の「真偽値(フラグ)の扱い」の節は本変更セットが作り、クエリ・JSON・画面URL・DBの型を書く。命名ルールは`20261123-boolean-column-naming`が同じ節に追記する(本変更セットでは「命名は別途追記」とだけ書く)。
+- 未確定・要確認事項: なし
+
 ## 仕様確定事項(まとめ)
 1. frontend `api/client.ts` `buildUrl`: 値が真偽値なら `true`→`"1"`、`false`→`"0"`(配列の要素も同じ)。`undefined` は送らない。それ以外は従来どおり `String(value)`。
 2. backend のクエリ真偽値6件を validate `['sometimes', 'boolean']` に統一し、検証済みの値で判定する:
    - `UserController` の `external_unlinked`・`external_hr`(既に validate。判定はそのまま)
    - `DeviceController` の `with_trashed`、`ExpenseCategoryController`・`RequestTypeController` の `include_inactive`: validate を追加し、`$request->boolean()` を検証済みの値に置き換える
    - `ExportController` の `include_submitted`: `"true"/"false"` の正規化(645-649行)を削除し、validate `['nullable', 'boolean']` の値で判定する
-3. ルールの明文化: `docs/20-implementation-notes.md` に「真偽値(フラグ)の扱い」の節を追加し、論点1〜4の決定(クエリは`1/0`、JSONは`true/false`、画面URLは`1`かキー無し、DBの型と casts)と、命名ルール(`20261123-boolean-column-naming`論点3)を書く。
+3. ルールの明文化: `docs/20-implementation-notes.md` に「真偽値(フラグ)の扱い」の節を追加し、論点1〜4の決定(クエリは`1/0`、JSONは`true/false`、画面URLは`1`かキー無し、DBの型と casts)を書く。命名ルールは`20261123-boolean-column-naming`が追記する(論点5)。
+   docs/14:10・docs/07:281 の `include_submitted=true` を `include_submitted=1` に直す。OpenAPI の6件を論点2のとおり直す。
    `.claude/skills/add-api-hook/SKILL.md` と `add-projection`(列を足すスキル)から、その節を1行で参照する。
 4. テスト:
    - frontend: `buildUrl`(または `apiFetch` 経由)で `true`→`1`、`false`→`0`、配列の真偽値、`undefined` は送らない、を確かめる単体テスト。
    - backend Feature: 6パラメータそれぞれで `=1` が真として効く、`=0` と未指定が偽、`=true` は 422(validate を追加した4件と、正規化を消した include_submitted)。
      `UserController` は `external_unlinked=1`・`external_hr=1` で絞り込まれる(既存テストが無ければ追加)。
+   - e2e: 社員一覧で「Microsoft未連携」にチェックを入れて一覧が表示される(エラーにならない)テストを1本追加する(再発防止。既存の e2e にチェックボックスを通るものが無い)。
 
 ## 受け入れ条件
 - 社員一覧で「Microsoft未連携」「外部HR管理」にチェックを入れると、エラーにならず絞り込まれた一覧が表示される。
@@ -120,7 +133,7 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - `docs/20-implementation-notes.md`: 「真偽値(フラグ)の扱い」の節を追加
 - `.claude/skills/add-api-hook/SKILL.md`・`.claude/skills/add-projection/SKILL.md`: 上記の節への参照を1行
 - `docs/16-database-schema.md`: 変更なし(列は変えない)
-- `docs/14-usecases-export.md`: `include_submitted` の受け付ける値を書いていれば `1/0` に合わせる(書いていなければ変更なし)
+- `docs/14-usecases-export.md:10`・`docs/07-usecases-attendance.md:281`: `include_submitted=true` → `include_submitted=1`(前の変更セットの決定を覆す。論点2)
 
 ## モック・アセット
 なし
@@ -140,6 +153,11 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - 初版(2026-11-23): 社員一覧の422の不具合修正として作成(クエリを`1/0`で送る)
 - 2026-11-23: ユーザーの依頼「フラグ変数の扱いも標準化して、見直し」「Laravelで標準的な実装が0/1ならば…ただし統一」を受け、真偽値の扱い全体の標準化に作り直した
   (クエリ6件の読み方の統一、ExportControllerの個別正規化の削除、JSON・画面URL・DB・命名のルール化)。
+- 2026-11-23 提示前の独立設計レビュー(general-purpose)の指摘を反映:
+  - 中: `include_submitted=true` は`20261015-excel-export-submitted-month`で意図した契約 → ユーザーに確認し「1/0だけを受ける」と回答。前の決定を覆す旨と docs/14・07 の修正を明記
+  - 中: 壊れる既存テストの漏れ(AttendanceExportTest:239-240・538・585)→ 列挙
+  - 低: OpenAPI が `type: boolean` で Swagger の試し実行が 422 → `integer enum [0,1]` に
+  - 低: 配備順序(frontend を先)、client.ts の配列要素の型、再発防止の e2e、docs/20 の節の担当の二重化 → 論点5を追加
 - 2026-11-23: ユーザーの依頼「is_confirmed/confirmed を今回調査」「イベントの作り直しも含めた対応」を受け、既存列の改名・二重化の解消を変更セット`20261123-boolean-column-naming`に切り出し、本変更セットの論点4の対象外・別途調査をそちらへの参照に変えた。
 
 ## 実装結果
