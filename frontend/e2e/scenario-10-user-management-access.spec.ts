@@ -546,3 +546,23 @@ test("外部HR CSVの差分確認と取込を画面から実行できる", async
     ]);
   }
 });
+
+test("社員一覧で「Microsoft未連携」を絞り込んでもエラーにならない", async ({
+  page,
+}) => {
+  await loginAs(page, SCENARIO_USERS.admin);
+  await page.goto("/admin/users");
+  await page.getByRole("button", { name: /^詳細条件/ }).click();
+
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (res) =>
+        /\/users\?/.test(res.url()) &&
+        res.url().includes("external_unlinked=1"),
+    ),
+    page.getByRole("checkbox", { name: "Microsoft未連携" }).click(),
+  ]);
+  expect(response.status()).toBe(200);
+  await expect(page.getByText(/must be true or false/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^詳細条件/ })).toBeVisible();
+});

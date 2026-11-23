@@ -38,7 +38,13 @@ export function clearToken(): void {
 
 export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
-  query?: Record<string, string | number | boolean | undefined | Array<string | number>>
+  query?: Record<string, string | number | boolean | undefined | Array<string | number | boolean>>
+}
+
+/** クエリの値を文字列にする。真偽値は backend の `boolean` ルールが受ける `1`/`0` にする。 */
+function serializeQueryValue(value: string | number | boolean): string {
+  if (typeof value === 'boolean') return value ? '1' : '0'
+  return String(value)
 }
 
 function buildUrl(path: string, query?: ApiFetchOptions['query']): string {
@@ -48,9 +54,9 @@ function buildUrl(path: string, query?: ApiFetchOptions['query']): string {
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined) continue
       if (Array.isArray(value)) {
-        for (const item of value) url.searchParams.append(`${key}[]`, String(item))
+        for (const item of value) url.searchParams.append(`${key}[]`, serializeQueryValue(item))
       } else {
-        url.searchParams.set(key, String(value))
+        url.searchParams.set(key, serializeQueryValue(value))
       }
     }
   }

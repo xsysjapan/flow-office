@@ -94,6 +94,7 @@ database/        migrations(タイムスタンプ順、素朴なLaravel構成) /
 
 - `add-domain-event` — 新しいドメインイベント(Command/Event/Projector反映)を追加する
 - `add-projection` — 新しいProjection Table + Projector + 再生成コマンドを追加する
+- `api-design` — backend APIの仕様(エンドポイント・クエリ・JSON・レスポンス・OpenAPI)の決め方
 - `add-workflow-request-type` — 新しい汎用申請種別(申請種別マスタ)を追加する
 - `add-notification` — 新しいメール通知種別をDBキュー経由で追加する
 - `attendance-calc-review` — 勤怠集計ロジック変更時のセルフレビューチェックリスト

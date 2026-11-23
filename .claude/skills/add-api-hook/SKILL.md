@@ -57,5 +57,6 @@ flow-office のフロントエンドは `frontend/src/api/` (fetchラッパー�
 
 - [ ] `api/types.ts` の型がバックエンドResourceの実際のフィールドと一致している
 - [ ] api関数はエンドポイント1つにつき1関数、ロジックを持たない
+- [ ] APIの入出力は`api-design`スキルに従っている
 - [ ] mutationの`onSuccess`で影響するqueryKeyを`invalidateQueries`している
 - [ ] hookを使うテストは`vi.spyOn`でapi関数をモックしている(実ネットワーク呼び出しなし)

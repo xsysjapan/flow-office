@@ -54,6 +54,7 @@ src/
 - `add-api-hook` — 新しいbackend APIエンドポイントに対応する型・APIクライアント関数・
   React Queryフックを追加する
 - `add-page` — 新しい画面(ルーティング込み)を追加する
+- `api-design` — backend APIの仕様(クエリ・JSON・レスポンス・OpenAPI)の決め方(真偽値の表現を含む)
 - `ui-design-system` — 見た目(デザイントークン・色・余白・タイポグラフィ・角丸・影・
   `ui/`プリミティブ・Visual Variant・禁止する装飾)
 - `ui-interaction-patterns` — 操作(CRUD・保存/キャンセル/戻る・Dialog/Sheet/Pageの使い分け・

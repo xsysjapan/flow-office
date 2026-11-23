@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiFetch, ApiError, clearToken, getToken, MAINTENANCE_EVENT, setToken } from './client'
+import { apiFetch, ApiError, type ApiFetchOptions, clearToken, getToken, MAINTENANCE_EVENT, setToken } from './client'
 
 describe('token storage', () => {
   afterEach(() => {
@@ -129,5 +129,38 @@ describe('apiFetch', () => {
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }))
 
     await expect(apiFetch('/logout', { method: 'POST' })).resolves.toBeUndefined()
+  })
+
+  describe('query serialization', () => {
+    async function requestedUrl(query: ApiFetchOptions['query']): Promise<URL> {
+      vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }))
+      await apiFetch('/users', { query })
+      return new URL(String(vi.mocked(fetch).mock.calls[0][0]))
+    }
+
+    it('sends true as 1 and false as 0', async () => {
+      const url = await requestedUrl({ external_unlinked: true, with_trashed: false })
+      expect(url.searchParams.get('external_unlinked')).toBe('1')
+      expect(url.searchParams.get('with_trashed')).toBe('0')
+      expect(url.search).not.toContain('true')
+      expect(url.search).not.toContain('false')
+    })
+
+    it('converts booleans inside arrays', async () => {
+      const url = await requestedUrl({ flags: [true, false] })
+      expect(url.searchParams.getAll('flags[]')).toEqual(['1', '0'])
+    })
+
+    it('does not send undefined values', async () => {
+      const url = await requestedUrl({ a: undefined, b: 'x' })
+      expect(url.searchParams.has('a')).toBe(false)
+      expect(url.searchParams.get('b')).toBe('x')
+    })
+
+    it('keeps strings and numbers as they are', async () => {
+      const url = await requestedUrl({ q: 'abc', page: 2 })
+      expect(url.searchParams.get('q')).toBe('abc')
+      expect(url.searchParams.get('page')).toBe('2')
+    })
   })
 })
