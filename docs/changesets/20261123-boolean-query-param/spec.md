@@ -1,6 +1,6 @@
 # boolean-query-param(フラグ(真偽値)の扱いの標準化)
 
-ステータス: レビュー中
+ステータス: 実装中
 
 ## 変更要望(原文)
 > 以前の変更セット...といったのは「前回お伝えした既存の不具合を別の変更セットで直すかどうか、ご判断をお待ちしています。社員一覧で「Microsoft未連携」にチェックを入れるとエラーになる件です。」のことです。
@@ -99,7 +99,7 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - 決定: frontend を先に配備し、その後 backend を配備する(旧 SPA が送る `with_trashed=true`・`include_inactive=true` が新 backend で 422 にならないよう、送る側を先に `1`/`0` にする。
   新 frontend の `1`/`0` は旧 backend の `$request->boolean()`・`boolean` ルールの両方で通る)。
   本変更セット(不具合修正でリスクが小さい)を、変更セット`20261123-boolean-column-naming`より先にリリースする。
-  `docs/20-implementation-notes.md` の「真偽値(フラグ)の扱い」の節は本変更セットが作り、クエリ・JSON・画面URL・DBの型を書く。命名ルールは`20261123-boolean-column-naming`が同じ節に追記する(本変更セットでは「命名は別途追記」とだけ書く)。
+  ルールはスキル `.claude/skills/boolean-flags/SKILL.md`(新規)に書く(ユーザーの依頼「ガイドラインはスキルとして今後のプロセスで活用できるように」)。本変更セットがスキルを作り、クエリ・JSON・画面URL・DBの型を書く。命名ルールは`20261123-boolean-column-naming`が同じスキルに追記する。docs/20 には「真偽値の扱いは boolean-flags スキルに従う」と1行だけ書く。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
@@ -108,7 +108,8 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
    - `UserController` の `external_unlinked`・`external_hr`(既に validate。判定はそのまま)
    - `DeviceController` の `with_trashed`、`ExpenseCategoryController`・`RequestTypeController` の `include_inactive`: validate を追加し、`$request->boolean()` を検証済みの値に置き換える
    - `ExportController` の `include_submitted`: `"true"/"false"` の正規化(645-649行)を削除し、validate `['nullable', 'boolean']` の値で判定する
-3. ルールの明文化: `docs/20-implementation-notes.md` に「真偽値(フラグ)の扱い」の節を追加し、論点1〜4の決定(クエリは`1/0`、JSONは`true/false`、画面URLは`1`かキー無し、DBの型と casts)を書く。命名ルールは`20261123-boolean-column-naming`が追記する(論点5)。
+3. ルールの明文化: 新しいスキル `.claude/skills/boolean-flags/SKILL.md` を作り、論点1〜4の決定(クエリは`1/0`、JSONは`true/false`、画面URLは`1`かキー無し、DBの型と casts、backend の読み方は validate `boolean`)を、新しい API・画面・列を作るときのチェックリストとして書く。
+   `add-api-hook`・`add-projection`・`add-domain-event` スキルと docs/20 から1行で参照する。命名ルールは`20261123-boolean-column-naming`が追記する(論点5)。
    docs/14:10・docs/07:281 の `include_submitted=true` を `include_submitted=1` に直す。OpenAPI の6件を論点2のとおり直す。
    `.claude/skills/add-api-hook/SKILL.md` と `add-projection`(列を足すスキル)から、その節を1行で参照する。
 4. テスト:
@@ -121,7 +122,7 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - 社員一覧で「Microsoft未連携」「外部HR管理」にチェックを入れると、エラーにならず絞り込まれた一覧が表示される。
 - 端末一覧の「削除済みの端末も表示」、経費区分・申請種別の「無効なものも表示」(include_inactive を使う画面)、勤怠出力の「提出済みも含める」が従来どおり動く。
 - クエリの真偽値6件がすべて `1`/`0` で効き、`true` は 422 になる(Feature テストPASS)。
-- `docs/20-implementation-notes.md` に真偽値の扱いのルールがある。
+- スキル `boolean-flags` に真偽値の扱いのルールがあり、関連スキルから参照されている。
 - backend の全件テスト、frontend の単体テスト全件・型チェック、関係する e2e(社員一覧・端末・経費区分・申請種別・勤怠出力を通るもの)がPASSする。
 
 ## 対象外
@@ -130,8 +131,8 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - frontend の既存 API 関数の引数名の camelCase/snake_case の揃え直し(新規から適用)
 
 ## ドキュメントへの影響
-- `docs/20-implementation-notes.md`: 「真偽値(フラグ)の扱い」の節を追加
-- `.claude/skills/add-api-hook/SKILL.md`・`.claude/skills/add-projection/SKILL.md`: 上記の節への参照を1行
+- `.claude/skills/boolean-flags/SKILL.md`(新規)、`docs/20-implementation-notes.md`(スキルへの参照1行)
+- `.claude/skills/add-api-hook`・`add-projection`・`add-domain-event` の SKILL.md: boolean-flags スキルへの参照を1行
 - `docs/16-database-schema.md`: 変更なし(列は変えない)
 - `docs/14-usecases-export.md:10`・`docs/07-usecases-attendance.md:281`: `include_submitted=true` → `include_submitted=1`(前の変更セットの決定を覆す。論点2)
 
@@ -161,4 +162,4 @@ Laravel v13.19.0。`boolean` 検証ルール(`ValidatesAttributes::validateBoole
 - 2026-11-23: ユーザーの依頼「is_confirmed/confirmed を今回調査」「イベントの作り直しも含めた対応」を受け、既存列の改名・二重化の解消を変更セット`20261123-boolean-column-naming`に切り出し、本変更セットの論点4の対象外・別途調査をそちらへの参照に変えた。
 
 ## 実装結果
-未着手
+未着手(2026-11-23 ユーザー承認「対応をお願いします」。あわせて「ガイドラインはスキルとして今後のプロセスで活用できるように」の依頼により、ルールの置き場所を docs/20 からスキルに変更)
