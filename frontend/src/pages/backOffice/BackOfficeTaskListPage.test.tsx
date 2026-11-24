@@ -132,6 +132,22 @@ describe('BackOfficeTaskListPage', () => {
     expect(screen.getByRole('tab', { name: 'すべて 57件' })).toBeInTheDocument()
   })
 
+  it('shows the task type as a display name for known codes and as-is for unknown ones', async () => {
+    vi.spyOn(backOfficeTasksApi, 'fetchBackOfficeTasks').mockResolvedValue(
+      searchResult([
+        makeTask({ id: 'backoffice-task-1', title: '経理処理', task_type: 'expense_reimbursement' }),
+        makeTask({ id: 'backoffice-task-2', title: '独自の依頼', task_type: '総務の依頼' }),
+      ]),
+    )
+
+    renderPage()
+
+    await screen.findByText('経理処理')
+    expect(screen.getByText('経費の精算')).toBeInTheDocument()
+    expect(screen.queryByText('expense_reimbursement')).not.toBeInTheDocument()
+    expect(screen.getByText('総務の依頼')).toBeInTheDocument()
+  })
+
   it('lists tasks with status, due date and assignee name', async () => {
     const tasks = [
       makeTask({

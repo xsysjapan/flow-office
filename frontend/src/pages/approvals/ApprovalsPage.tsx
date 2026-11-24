@@ -202,6 +202,8 @@ export function ApprovalsPage() {
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
 
   const requests = data?.data ?? []
+  // 操作できる行が1つも無いときは、空の選択列を出さない。
+  const showSelectionColumn = requests.some(isRowActionable)
   // タブ(status)は含めない。フィルターバーの条件だけで判定する
   const isFiltered = Boolean(yearMonth)
   const currentTab = STATUS_TABS.find((tab) => tab.value === status) ?? STATUS_TABS[0]
@@ -327,7 +329,7 @@ export function ApprovalsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead aria-hidden="true" />
+              {showSelectionColumn && <TableHead aria-hidden="true" />}
               <TableHead>種別</TableHead>
               <TableHead className="whitespace-normal min-w-48">タイトル</TableHead>
               <TableHead>申請者</TableHead>
@@ -347,15 +349,17 @@ export function ApprovalsPage() {
                   onRowClick={() => setSelectedId(request.id)}
                   rowLabel={`${request.title}の詳細を開く`}
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    {isRowActionable(request) && (
-                      <Checkbox
-                        checked={selected}
-                        onCheckedChange={() => toggleRow(request.id)}
-                        aria-label={`${request.title}を選択`}
-                      />
-                    )}
-                  </TableCell>
+                  {showSelectionColumn && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {isRowActionable(request) && (
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={() => toggleRow(request.id)}
+                          aria-label={`${request.title}を選択`}
+                        />
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Badge tone="neutral">{subjectTypeLabel(request.subject_type ?? null)}</Badge>
                   </TableCell>

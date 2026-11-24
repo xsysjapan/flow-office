@@ -14,10 +14,11 @@ import {
   HOME_PATH,
   navGroupMeta,
   requiredFeaturesForPath,
+  selectActiveNavItems,
   type NavContext,
   type ResolvedNavGroup,
 } from "../../routes/routeManifest";
-import { findActiveNavPath, resolvePage } from "../../routes/pageHierarchy";
+import { resolvePage } from "../../routes/pageHierarchy";
 import { Button } from "../Button/Button";
 import { NotificationBell } from "../NotificationBell/NotificationBell";
 import {
@@ -36,11 +37,14 @@ interface SidebarProps {
 /** 左サイドバー(PC)・詳細メニューSheet(モバイル)共通のナビ本体。
  *  グループ見出し+項目一覧を常時展開して表示する(AdminLayoutの構造を踏襲)。 */
 function NavSections({ groups, onNavigate }: SidebarProps) {
-  const { pathname } = useLocation();
-  const activePaths = findActiveNavPath(pathname, [
-    HOME_PATH,
-    ...groups.flatMap((group) => group.items.map((item) => item.matchPath)),
-  ], [HOME_PATH]);
+  const { pathname, search } = useLocation();
+  const homeItem = { matchPath: HOME_PATH };
+  const activeItems = selectActiveNavItems(
+    pathname,
+    search,
+    [homeItem, ...groups.flatMap((group) => group.items)],
+    [HOME_PATH],
+  );
   return (
     <nav className="flex flex-col gap-5" aria-label="メインナビゲーション">
       <Link
@@ -48,7 +52,7 @@ function NavSections({ groups, onNavigate }: SidebarProps) {
         onClick={onNavigate}
         className={cn(
           "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent",
-          activePaths.includes(HOME_PATH)
+          activeItems.includes(homeItem)
             ? "bg-accent text-foreground"
             : "text-muted-foreground hover:text-foreground",
         )}
@@ -69,11 +73,11 @@ function NavSections({ groups, onNavigate }: SidebarProps) {
                 to={item.to}
                 onClick={onNavigate}
                 aria-current={
-                  activePaths.includes(item.matchPath) ? "page" : undefined
+                  activeItems.includes(item) ? "page" : undefined
                 }
                 className={cn(
                   "rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                  activePaths.includes(item.matchPath) &&
+                  activeItems.includes(item) &&
                     "bg-accent font-medium text-foreground",
                 )}
               >

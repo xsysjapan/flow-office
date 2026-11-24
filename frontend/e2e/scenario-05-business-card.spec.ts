@@ -64,7 +64,7 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     // UC-B005手順1〜2(名刺記載内容の確認)がこの画面だけでは行えない
     // (docs/testing/scenario-tests.md シナリオ5の確認ポイント参照)。
     // そのため、ここでは元データへのリンク表示のみを確認する。
-    await expect(generalAffairsPage.getByText(/workflow_request/)).toBeVisible()
+    await expect(generalAffairsPage.getByText(/^申請 #/)).toBeVisible()
 
     // 担当者の割り当てはダイアログ(ボタン→ダイアログ内のUserPicker→「割り当てる」)で行う
     await generalAffairsPage.getByRole('button', { name: '担当者を割り当てる' }).click()

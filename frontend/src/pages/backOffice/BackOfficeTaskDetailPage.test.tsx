@@ -140,8 +140,9 @@ describe('BackOfficeTaskDetailPage', () => {
     renderPage(baseTask)
 
     expect(await screen.findByText('タクシー代の経理処理')).toBeInTheDocument()
-    expect(screen.getByText('expense_reimbursement')).toBeInTheDocument()
-    expect(screen.getByText('workflow_request #10')).toBeInTheDocument()
+    expect(screen.getByText('経費の精算')).toBeInTheDocument()
+    expect(screen.queryByText('expense_reimbursement')).not.toBeInTheDocument()
+    expect(screen.getByText('申請 #10')).toBeInTheDocument()
     expect(screen.getByText('未着手', { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '状態を変更' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'タスク一覧に戻る' })).toHaveAttribute('href', '/backoffice-tasks')

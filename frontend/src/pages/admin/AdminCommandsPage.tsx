@@ -16,6 +16,7 @@ import { NativeSelect } from '../../components/ui/native-select'
 import { useAdminCommandRuns, useAdminCommands, useRunAdminCommand } from '../../hooks/useAdminCommands'
 import type { AdminCommandParameter, AdminCommandRun } from '../../api/types'
 import { notify } from '../../lib/notify'
+import { adminCommandRunStatusLabel } from '../../utils/statusLabels'
 
 function formatDateTime(value: string | null): string {
   return value ? new Date(value).toLocaleString('ja-JP') : '—'
@@ -109,7 +110,7 @@ export function AdminCommandsPage() {
       </Card>
       <Card title="実行履歴">
         {runs.isLoading ? <LoadingState /> : runs.error ? <ErrorMessage error={runs.error} fallback="実行履歴を取得できませんでした。" /> : (runs.data?.data.length ?? 0) === 0 ? <EmptyState title="実行履歴はまだありません。" description="コマンドを実行するとここに結果が表示されます。" /> : <ul className="divide-y divide-border">
-          {runs.data?.data.map((run) => <li key={run.id} className="py-3 text-sm"><div className="flex flex-wrap justify-between gap-2"><span className="font-medium text-foreground">{run.command_name}</span><span>{run.status}</span></div><p className="text-muted-foreground">依頼: {requesterLabel(run)} / {formatDateTime(run.created_at)}</p>{(run.output || run.error_message) && <details className="mt-2"><summary className="cursor-pointer">出力</summary><pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3 text-xs">{run.error_message ?? run.output}</pre></details>}</li>)}
+          {runs.data?.data.map((run) => <li key={run.id} className="py-3 text-sm"><div className="flex flex-wrap justify-between gap-2"><span className="font-medium text-foreground">{run.command_name}</span><span>{adminCommandRunStatusLabel(run.status)}</span></div><p className="text-muted-foreground">依頼: {requesterLabel(run)} / {formatDateTime(run.created_at)}</p>{(run.output || run.error_message) && <details className="mt-2"><summary className="cursor-pointer">出力</summary><pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3 text-xs">{run.error_message ?? run.output}</pre></details>}</li>)}
         </ul>}
       </Card>
     </div>

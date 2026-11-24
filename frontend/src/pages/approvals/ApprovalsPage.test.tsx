@@ -371,6 +371,39 @@ describe('ApprovalsPage', () => {
     expect(screen.queryByLabelText('2026-06 月次勤怠(承認済み)を選択')).not.toBeInTheDocument()
   })
 
+  it('renders the selection column (header and cells) only when at least one row is actionable', async () => {
+    const approvedAttendanceRow: WorkflowRequest = {
+      ...attendanceRow,
+      id: 'workflow-request-approved',
+      title: '2026-06 月次勤怠(承認済み)',
+      subject_summary: { year_month: '2026-06', status: 'approved' },
+    }
+    const fetchSpy = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove')
+    fetchSpy.mockResolvedValue({
+      data: [approvedAttendanceRow],
+      meta: { current_page: 1, last_page: 1, total: 1, status_counts: statusCounts },
+      links: { next: null, prev: null },
+    })
+
+    const { unmount } = renderPage()
+    await screen.findByText('2026-06 月次勤怠(承認済み)')
+    const columnsWithoutSelection = document.querySelectorAll('thead th').length
+    expect(document.querySelectorAll('tbody tr:first-child td')).toHaveLength(columnsWithoutSelection)
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    unmount()
+
+    fetchSpy.mockResolvedValue({
+      data: [attendanceRow, approvedAttendanceRow],
+      meta: { current_page: 1, last_page: 1, total: 2, status_counts: statusCounts },
+      links: { next: null, prev: null },
+    })
+    renderPage()
+    await screen.findByText('2026-07 月次勤怠')
+    expect(document.querySelectorAll('thead th')).toHaveLength(columnsWithoutSelection + 1)
+    expect(document.querySelectorAll('tbody tr:first-child td')).toHaveLength(columnsWithoutSelection + 1)
+    expect(screen.getByLabelText('2026-07 月次勤怠を選択')).toBeInTheDocument()
+  })
+
   it('bulk-approves selected rows, calling the approve mutation once per selected id and clearing selection', async () => {
     const user = userEvent.setup()
     const secondGenericRequest: WorkflowRequest = {

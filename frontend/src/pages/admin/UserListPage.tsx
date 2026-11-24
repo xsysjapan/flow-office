@@ -39,6 +39,7 @@ import {
   isValidPositiveIntIdParam,
   isValidUuidParam,
 } from "../../utils/searchParamValidators";
+import { userSourceTypeLabel } from '../../utils/statusLabels'
 
 const FILTER_PARAM_KEYS = [
   "q",
@@ -478,7 +479,7 @@ export function UserListPage() {
                       user.source_type === "external_hr" ? "info" : "neutral"
                     }
                   >
-                    {user.source_type ?? "local"}
+                    {userSourceTypeLabel(user.source_type ?? "local")}
                   </Badge>
                 </TableCell>
                 <TableCell>

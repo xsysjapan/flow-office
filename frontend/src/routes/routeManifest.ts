@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { findActiveNavPath } from "./pageHierarchy";
 import {
   Boxes,
   CalendarClock,
@@ -43,6 +44,12 @@ export interface RouteManifestEntry {
    * 年月で変わる場合も、ここは常に固定のprefixにする)。
    */
   to: string;
+  /**
+   * 同じパスの項目を入口ごとに区別するための、一致させるクエリ(キー→値)。
+   * パスが一致し、全キーが一致する項目のうち、一致したキーが最も多い項目だけが点灯する。
+   * spec: docs/changesets/20261124-list-display-fixes/spec.md 論点2
+   */
+  matchQuery?: Record<string, string>;
   /** 実際のリンク先。省略時は`to`をそのまま使う(年月など動的な行き先だけ指定する)。 */
   buildTo?: (ctx: NavContext) => string;
   /** この画面の閲覧に必要なfeature。複数指定時はいずれか1つを満たせばよい。未指定は誰でも見られる。 */
@@ -113,8 +120,11 @@ export const routeManifest: RouteManifestEntry[] = [
   {
     // 検索・詳細・セルフ貸出/返却はPermission不要(認証済みなら誰でも)。
     // spec: docs/changesets/20260831-asset-management-refinement/spec.md 論点8
+    // 20261124-list-display-fixes 論点2で、利用可能な貸出品の絞り込み付きに改めた。
     label: "備品貸出",
     to: "/assets",
+    buildTo: () => "/assets?management_type=lending&lending_status=available",
+    matchQuery: { management_type: "lending", lending_status: "available" },
     group: "requests",
   },
   {
@@ -220,6 +230,8 @@ export interface ResolvedNavItem {
   label: string;
   /** サイドバー点灯判定用の正規化パス(= entry.to)。リンク先`to`は今日・今月などに変わり得る。 */
   matchPath: string;
+  /** 同じパスの項目を区別するクエリ(entry.matchQuery)。 */
+  matchQuery?: Record<string, string>;
 }
 
 export interface ResolvedNavGroup {
@@ -255,6 +267,7 @@ export function buildNavGroups(
           to: entry.buildTo ? entry.buildTo(ctx) : entry.to,
           label: entry.label,
           matchPath: entry.to,
+          matchQuery: entry.matchQuery,
         })),
     }))
     .filter((group) => group.items.length > 0);
@@ -278,4 +291,40 @@ export function requiredFeaturesForPath(pathname: string): string[] {
   }
   if (!matched?.feature) return [];
   return Array.isArray(matched.feature) ? matched.feature : [matched.feature];
+}
+
+export interface ActiveNavCandidate {
+  matchPath: string;
+  matchQuery?: Record<string, string>;
+}
+
+/**
+ * 現在のURL(パス+クエリ)で点灯するナビ項目を選ぶ純関数。
+ * 1. `matchQuery`のキーがすべて一致する項目だけを候補にする(`matchQuery`無しは常に候補)。
+ * 2. 候補のパス一致は`findActiveNavPath`と同じ(祖先まで遡り、最長一致)。
+ * 3. 同じパスの候補が複数あるときは、一致したキーの数が最も多い項目だけを返す。
+ */
+export function selectActiveNavItems<T extends ActiveNavCandidate>(
+  pathname: string,
+  search: string,
+  items: T[],
+  exactOnly: string[] = [],
+): T[] {
+  const params = new URLSearchParams(search);
+  const candidates = items.filter((item) =>
+    Object.entries(item.matchQuery ?? {}).every(
+      ([key, value]) => params.get(key) === value,
+    ),
+  );
+  const activePaths = findActiveNavPath(
+    pathname,
+    candidates.map((item) => item.matchPath),
+    exactOnly,
+  );
+  const onPath = candidates.filter((item) =>
+    activePaths.includes(item.matchPath),
+  );
+  const keyCount = (item: T) => Object.keys(item.matchQuery ?? {}).length;
+  const most = Math.max(0, ...onPath.map(keyCount));
+  return onPath.filter((item) => keyCount(item) === most);
 }

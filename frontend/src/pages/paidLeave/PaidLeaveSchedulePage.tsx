@@ -234,6 +234,8 @@ export function PaidLeaveSchedulePage() {
   }
 
   const rows = entries ?? []
+  // 選択できる(判定が`Eligible`の)行が1つも無いときは、空の選択列を出さない。
+  const showSelectionColumn = rows.some((entry) => entry.status === 'Eligible')
   const selectedEntries = rows.filter((entry) => selectedIds.has(entry.id) && entry.status === 'Eligible')
 
   function openBulkDialog() {
@@ -375,7 +377,7 @@ export function PaidLeaveSchedulePage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead aria-hidden="true" />
+                {showSelectionColumn && <TableHead aria-hidden="true" />}
                 <TableHead>社員</TableHead>
                 <TableHead>付与予定日</TableHead>
                 <TableHead>区分</TableHead>
@@ -397,15 +399,17 @@ export function PaidLeaveSchedulePage() {
                     onRowClick={() => openDetail(entry.id)}
                     rowLabel={`${entry.user_name ?? entry.user_id}の付与予定詳細を開く`}
                   >
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      {selectable && (
-                        <Checkbox
-                          checked={selected}
-                          onCheckedChange={() => toggleRow(entry.id)}
-                          aria-label={`${entry.user_name ?? entry.user_id}を選択`}
-                        />
-                      )}
-                    </TableCell>
+                    {showSelectionColumn && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {selectable && (
+                          <Checkbox
+                            checked={selected}
+                            onCheckedChange={() => toggleRow(entry.id)}
+                            aria-label={`${entry.user_name ?? entry.user_id}を選択`}
+                          />
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell className="font-medium text-foreground">{entry.user_name ?? entry.user_id}</TableCell>
                     <TableCell className="text-muted-foreground">{entry.scheduled_on}</TableCell>
                     <TableCell>

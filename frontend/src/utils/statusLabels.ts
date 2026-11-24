@@ -670,3 +670,107 @@ const assetHistoryEventTypeLabels: Record<AssetHistoryEventType, string> = {
 export function assetHistoryEventTypeLabel(eventType: string): string {
   return ownValue(assetHistoryEventTypeLabels, eventType) ?? UNKNOWN_EVENT_LABEL
 }
+
+/**
+ * APIの列挙値(内部コード)を画面に出すときの表示名。未知の値はそのまま返す
+ * (spec: docs/changesets/20261124-list-display-fixes/spec.md 論点1)。
+ */
+function labelOrRaw(labels: Record<string, string>, value: string): string {
+  return Object.prototype.hasOwnProperty.call(labels, value) ? labels[value] : value
+}
+
+const backOfficeTaskTypeLabels: Record<string, string> = {
+  attendance_month_confirmation: '月次勤怠の確定',
+  expense_reimbursement: '経費の精算',
+}
+
+/** タスクの種別。既知のコードは表示名にし、申請種別で管理者が付けた語などの未知の値はそのまま返す。 */
+export function backOfficeTaskTypeLabel(taskType: string): string {
+  return labelOrRaw(backOfficeTaskTypeLabels, taskType)
+}
+
+const backOfficeTaskSourceTypeLabels: Record<string, string> = {
+  attendance_month: '月次勤怠',
+  workflow_request: '申請',
+  expense_claim: '経費精算',
+}
+
+/** タスクの元データの種類(`backoffice_tasks.source_type`)。 */
+export function backOfficeTaskSourceTypeLabel(sourceType: string): string {
+  return labelOrRaw(backOfficeTaskSourceTypeLabels, sourceType)
+}
+
+const groupStatusLabels: Record<string, string> = {
+  active: '有効',
+  inactive: '無効',
+}
+
+/** グループの状態。 */
+export function groupStatusLabel(status: string): string {
+  return labelOrRaw(groupStatusLabels, status)
+}
+
+const membershipKindLabels: Record<string, string> = {
+  primary: '主所属',
+  member: '所属',
+}
+
+/**
+ * 所属の区分。主所属の印(`is_primary`)と重ねて表示しないよう、主所属なら区分に関わらず「主所属」の1つにまとめる。
+ */
+export function membershipKindLabel(membershipKind: string, isPrimary: boolean): string {
+  if (isPrimary) return membershipKindLabels.primary
+  return labelOrRaw(membershipKindLabels, membershipKind)
+}
+
+const adminCommandRunStatusLabels: Record<string, string> = {
+  queued: '待機中',
+  running: '実行中',
+  succeeded: '成功',
+  failed: '失敗',
+}
+
+/** 運用コマンドの実行の状態。 */
+export function adminCommandRunStatusLabel(status: string): string {
+  return labelOrRaw(adminCommandRunStatusLabels, status)
+}
+
+const shiftDayTypeLabels: Record<string, string> = {
+  weekday: '平日',
+  legal_holiday: '法定休日',
+  company_holiday: '所定休日',
+  special_working_day: '特別稼働日',
+}
+
+/** シフトの日の区分(`day_type`)。 */
+export function shiftDayTypeLabel(dayType: string): string {
+  return labelOrRaw(shiftDayTypeLabels, dayType)
+}
+
+const userSourceTypeLabels: Record<string, string> = {
+  local: 'ローカル',
+  external_hr: '外部人事',
+}
+
+/** 利用者の管理元(`source_type`)。 */
+export function userSourceTypeLabel(sourceType: string): string {
+  return labelOrRaw(userSourceTypeLabels, sourceType)
+}
+
+const userFieldKeyLabels: Record<string, string> = {
+  display_name: '氏名',
+  email: 'メールアドレス',
+  employee_number: '社員番号',
+  department: '部署',
+  job_title: '役職',
+  employment_status: '在籍状況',
+  account_status: 'アカウント状態',
+  hire_date: '入社日',
+  termination_date: '退社日',
+  usage_start_date: '利用開始日',
+}
+
+/** 項目の管理元の設定(`field_authorities.field_key`)の項目名。社員一覧・利用者編集のラベルと揃える。 */
+export function userFieldKeyLabel(fieldKey: string): string {
+  return labelOrRaw(userFieldKeyLabels, fieldKey)
+}

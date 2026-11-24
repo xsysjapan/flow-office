@@ -107,6 +107,40 @@ describe('WorkflowRequestListPage', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   })
 
+  it('renders no selection column (header and cells) when no row can be cancelled', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockResolvedValue({
+      data: [
+        { id: 'workflow-request-1', title: 'タクシー代', status: 'approved', form_data: {}, submitted_at: null, approved_at: null, returned_at: null, cancelled_at: null, created_at: null },
+      ],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    })
+
+    renderPage()
+
+    await screen.findByRole('link', { name: 'タクシー代' })
+    expect(document.querySelectorAll('thead th')).toHaveLength(3)
+    expect(document.querySelectorAll('tbody tr:first-child td')).toHaveLength(3)
+  })
+
+  it('renders the selection column (header and cells) when at least one row can be cancelled', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockResolvedValue({
+      data: [
+        { id: 'workflow-request-1', title: 'タクシー代', status: 'approved', form_data: {}, submitted_at: null, approved_at: null, returned_at: null, cancelled_at: null, created_at: null },
+        { id: 'workflow-request-2', title: '名刺の再作成', status: 'submitted', form_data: {}, submitted_at: null, approved_at: null, returned_at: null, cancelled_at: null, created_at: null },
+      ],
+      meta: { current_page: 1, last_page: 1, total: 2 },
+      links: { next: null, prev: null },
+    })
+
+    renderPage()
+
+    await screen.findByRole('link', { name: 'タクシー代' })
+    expect(document.querySelectorAll('thead th')).toHaveLength(4)
+    expect(document.querySelectorAll('tbody tr:first-child td')).toHaveLength(4)
+    expect(screen.getByRole('checkbox', { name: '名刺の再作成を選択' })).toBeInTheDocument()
+  })
+
   it('bulk-cancels selected requests with a shared reason', async () => {
     const withData: Paginated<WorkflowRequest> = {
       data: [

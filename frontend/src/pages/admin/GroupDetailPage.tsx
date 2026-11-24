@@ -42,6 +42,7 @@ import {
 } from "../../utils/membershipChangeLabels";
 import { RoleAssignmentSection } from "../../components/RoleAssignmentSection/RoleAssignmentSection";
 import * as access from "../../hooks/useAccessControl";
+import { membershipKindLabel } from '../../utils/statusLabels'
 
 export function GroupDetailPage() {
   const { id = "new" } = useParams<{ id: string }>();
@@ -418,8 +419,8 @@ function GroupMembersCard({
                   {membership.user.name}
                 </Link>
                 <p className="text-xs text-muted-foreground">
-                  {membership.user.email} / {membership.membership_kind}
-                  {membership.is_primary ? " / 主所属" : ""}
+                  {membership.user.email} /{" "}
+                  {membershipKindLabel(membership.membership_kind, membership.is_primary)}
                 </p>
               </div>
               <Button

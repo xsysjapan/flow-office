@@ -22,6 +22,14 @@ import {
   workflowRequestStatusLabel,
   workLocationTypeLabel,
   WORK_LOCATION_TYPE_OPTIONS,
+  adminCommandRunStatusLabel,
+  backOfficeTaskSourceTypeLabel,
+  backOfficeTaskTypeLabel,
+  groupStatusLabel,
+  membershipKindLabel,
+  shiftDayTypeLabel,
+  userFieldKeyLabel,
+  userSourceTypeLabel,
 } from './statusLabels'
 
 function buildEvent(eventType: string, payload: Record<string, unknown>): StoredEvent {
@@ -351,5 +359,70 @@ describe('statusLabels', () => {
       expect(assetHistoryEventTypeLabel('asset.unknown_event')).toBe('その他')
       expect(assetHistoryEventTypeLabel('constructor')).toBe('その他')
     })
+  })
+})
+
+describe('enum value labels (内部コードを画面に出さない)', () => {
+  it('maps known back office task types and shows unknown ones as-is', () => {
+    expect(backOfficeTaskTypeLabel('attendance_month_confirmation')).toBe('月次勤怠の確定')
+    expect(backOfficeTaskTypeLabel('expense_reimbursement')).toBe('経費の精算')
+    expect(backOfficeTaskTypeLabel('general_affairs')).toBe('general_affairs')
+    expect(backOfficeTaskTypeLabel('総務対応')).toBe('総務対応')
+  })
+
+  it('maps back office task source types and shows unknown ones as-is', () => {
+    expect(backOfficeTaskSourceTypeLabel('attendance_month')).toBe('月次勤怠')
+    expect(backOfficeTaskSourceTypeLabel('workflow_request')).toBe('申請')
+    expect(backOfficeTaskSourceTypeLabel('expense_claim')).toBe('経費精算')
+    expect(backOfficeTaskSourceTypeLabel('other')).toBe('other')
+  })
+
+  it('maps group statuses', () => {
+    expect(groupStatusLabel('active')).toBe('有効')
+    expect(groupStatusLabel('inactive')).toBe('無効')
+    expect(groupStatusLabel('planned_inactive')).toBe('planned_inactive')
+  })
+
+  it('merges the membership kind with the primary marker into one label', () => {
+    expect(membershipKindLabel('primary', true)).toBe('主所属')
+    expect(membershipKindLabel('member', true)).toBe('主所属')
+    expect(membershipKindLabel('member', false)).toBe('所属')
+    expect(membershipKindLabel('primary', false)).toBe('主所属')
+    expect(membershipKindLabel('guest', false)).toBe('guest')
+  })
+
+  it('maps admin command run statuses', () => {
+    expect(adminCommandRunStatusLabel('queued')).toBe('待機中')
+    expect(adminCommandRunStatusLabel('running')).toBe('実行中')
+    expect(adminCommandRunStatusLabel('succeeded')).toBe('成功')
+    expect(adminCommandRunStatusLabel('failed')).toBe('失敗')
+    expect(adminCommandRunStatusLabel('unknown')).toBe('unknown')
+  })
+
+  it('maps shift day types', () => {
+    expect(shiftDayTypeLabel('weekday')).toBe('平日')
+    expect(shiftDayTypeLabel('legal_holiday')).toBe('法定休日')
+    expect(shiftDayTypeLabel('company_holiday')).toBe('所定休日')
+    expect(shiftDayTypeLabel('special_working_day')).toBe('特別稼働日')
+    expect(shiftDayTypeLabel('x')).toBe('x')
+  })
+
+  it('maps user source types', () => {
+    expect(userSourceTypeLabel('local')).toBe('ローカル')
+    expect(userSourceTypeLabel('external_hr')).toBe('外部人事')
+    expect(userSourceTypeLabel('microsoft_entra')).toBe('microsoft_entra')
+  })
+
+  it('maps user field keys to the labels used on the user list', () => {
+    expect(userFieldKeyLabel('display_name')).toBe('氏名')
+    expect(userFieldKeyLabel('employment_status')).toBe('在籍状況')
+    expect(userFieldKeyLabel('account_status')).toBe('アカウント状態')
+    expect(userFieldKeyLabel('hire_date')).toBe('入社日')
+    expect(userFieldKeyLabel('custom_field')).toBe('custom_field')
+  })
+
+  it('does not treat Object prototype keys as known values', () => {
+    expect(backOfficeTaskTypeLabel('constructor')).toBe('constructor')
+    expect(shiftDayTypeLabel('toString')).toBe('toString')
   })
 })

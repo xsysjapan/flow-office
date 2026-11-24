@@ -564,6 +564,8 @@ Cardの`actions`は「新規作成・CSVダウンロード」等の画面の操�
   - 全件成功: 閉じて選択を解除し、成功トースト(件数)。一部失敗: 開いたまま「n件を〜しました。m件はできませんでした。」と失敗した行と理由を出し、**成功した行は選択から外し、
     失敗した行だけ選択に残す**(再実行で二重実行しない)。
 - フィルター・ページ・検索条件が変わったら選択を解除する(一覧間で揃える)。
+- **選択列は、選択できる行が1つでもあるときだけ出す**(見出しと本体の両方を、同じ条件で出し分ける)。選択できる行が無い画面(取り消せる申請が無い一般の社員、操作できる承認が無い一覧、判定が`Eligible`の行が無い付与予定)に、空の列を残さない。
+  `BackOfficeTaskListPage`・`WorkflowRequestListPage`・`ApprovalsPage`・`PaidLeaveSchedulePage`が同じ形(変更セット`20261124-list-display-fixes`)。
 - 実装例: `frontend/src/pages/backOffice/BackOfficeTaskListPage.tsx`。勤怠の選択モード(`AttendanceSelectionActionBar`)は申請画面への遷移だけの別物で、この規則の対象外。
 
 ### 2.22 Keyboard / Accessibility
@@ -734,7 +736,21 @@ Focus Indicatorの見た目・消さないルールは`ui-design-system` §2.5�
   アプリのサイドバーと並ぶと、1024pxでも本文が約446pxと狭くなるため。
 - 幅の判定は、部品の内側は画面幅の`sm:`・`md:`ではなくコンテナクエリ(`@container`・`@sm:`。§2.20)を使う。単体テスト(jsdom)では幅を確かめられないので、classNameの確認にとどめ、幅1280・768・390の撮影で確かめる。
 
+- **横スクロールの影**: `ui/table`は、横にはみ出しているときだけ、はみ出している側の端に内側の影を出す(`useOverflowEdges`が外枠に`data-overflow-start`・`data-overflow-end`を付け、
+  `data-[overflow-start]:`・`data-[overflow-end]:`で影を切り替える)。列の表示の切替・優先度は採らない。影はトークン(`--foreground`を薄めた色)の内側の影で、グラデーションは使わない。
+  CSSだけの方式(`background-attachment`)は単体テストで保証できないため使わない。判定はhookのテスト(寸法の差し替え)で、見た目はStorybook(`UI/Table`の`WideTable`)で確かめる。
+  根拠: 変更セット`20261124-list-display-fixes`。
+
 根拠: 変更セット`20261123-list-layout-standard`。
+
+### 2.28 列挙値は表示名の関数を通す
+
+画面にAPIの列挙値(状態・区分・種別・管理元・項目のキーなどの内部コード)を出すときは、`{value}`をそのまま描画せず、`utils/statusLabels.ts`の表示名の関数を通す。
+
+- 関数は既知の値を表示名にし、**未知の値はそのまま返す**(新しい値がAPIに増えても画面が壊れない。自由入力の語は管理者が付けた語としてそのまま出る)。`statusLabels.test.ts`に、既知の値と未知の値のテストを足す。
+- 同じ概念が既に別の画面にあるときは、その語に揃える(例: 項目名は社員一覧の見出し)。主所属の印のように、同じ意味の表示が隣にあるときは1つにまとめる(`membershipKindLabel`)。
+- 対象外: 意図してコードを出す列(勤務形態・ロール・申請種別・経費区分・シフトのパターンのコード、運用コマンド名)、監査ログの集約・イベントの種別、自由入力の文字列。
+- 根拠: 変更セット`20261124-list-display-fixes`(論点1)。
 
 ---
 

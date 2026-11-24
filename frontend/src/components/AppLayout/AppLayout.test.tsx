@@ -231,6 +231,37 @@ describe('AppLayout', () => {
     expect(sidebar().getByRole('link', { name: '有給' })).not.toHaveClass('bg-accent')
   })
 
+  describe('備品のナビの点灯(入口ごとの条件)', () => {
+    const assetUser: User = { ...mockUser, effective_features: ['attendance.entry'], effective_permissions: ['asset.manage'] }
+
+    it('links 備品貸出 to the available lending list', () => {
+      renderLayout(vi.fn(), assetUser)
+      expect(sidebar().getByRole('link', { name: '備品貸出' })).toHaveAttribute(
+        'href',
+        '/assets?management_type=lending&lending_status=available',
+      )
+      expect(sidebar().getByRole('link', { name: '備品管理' })).toHaveAttribute('href', '/assets')
+    })
+
+    it('lights only 備品貸出 on the lending entry URL', () => {
+      renderLayout(vi.fn(), assetUser, [], '/assets?management_type=lending&lending_status=available')
+      expect(sidebar().getByRole('link', { name: '備品貸出' })).toHaveClass('bg-accent')
+      expect(sidebar().getByRole('link', { name: '備品管理' })).not.toHaveClass('bg-accent')
+    })
+
+    it('lights only 備品管理 on /assets without the filter', () => {
+      renderLayout(vi.fn(), assetUser, [], '/assets')
+      expect(sidebar().getByRole('link', { name: '備品管理' })).toHaveClass('bg-accent')
+      expect(sidebar().getByRole('link', { name: '備品貸出' })).not.toHaveClass('bg-accent')
+    })
+
+    it('lights 備品管理 when the filter is changed', () => {
+      renderLayout(vi.fn(), assetUser, [], '/assets?management_type=lending&lending_status=lent')
+      expect(sidebar().getByRole('link', { name: '備品管理' })).toHaveClass('bg-accent')
+      expect(sidebar().getByRole('link', { name: '備品貸出' })).not.toHaveClass('bg-accent')
+    })
+  })
+
   it('sets document.title from the page hierarchy', () => {
     renderLayout(vi.fn(), mockUser, [], '/paid-leave/history')
 

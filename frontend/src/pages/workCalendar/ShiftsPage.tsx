@@ -34,6 +34,7 @@ import { useCreateShiftPattern, useShiftPatterns } from '../../hooks/useShiftPat
 import { useWorkStyles } from '../../hooks/useWorkStyles'
 import type { RotationPreviewDay } from '../../api/types'
 import type { DayShiftOverrides, WeeklyShiftPattern } from '../../api/employeeShiftAssignments'
+import { shiftDayTypeLabel } from '../../utils/statusLabels'
 
 /** "YYYY-MM" から、その月の1日と末日(YYYY-MM-DD)を返す。 */
 function monthBoundaries(yearMonth: string): { from: string; to: string } {
@@ -120,7 +121,7 @@ function ShiftGenerationCard() {
             <ul className="divide-y divide-border">
               {shiftAssignments?.map((assignment) => (
                 <li key={assignment.id ?? assignment.work_date} className="py-2 text-sm text-foreground">
-                  {assignment.work_date}({assignment.day_type}) {assignment.planned_start_at ?? '--:--'}〜
+                  {assignment.work_date}({shiftDayTypeLabel(assignment.day_type)}) {assignment.planned_start_at ?? '--:--'}〜
                   {assignment.planned_end_at ?? '--:--'}
                   {assignment.shift_pattern_id !== null && (
                     <span className="ml-2 text-xs text-muted-foreground">

@@ -210,6 +210,29 @@ describe('PaidLeaveSchedulePage', () => {
     expect(screen.queryByRole('checkbox', { name: '田中次郎を選択' })).not.toBeInTheDocument()
   })
 
+  it('renders no selection column (header and cells) when no row is selectable', async () => {
+    renderPage({ entries: [needsReviewEntry] })
+
+    await screen.findByText('田中次郎')
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    const headerCount = document.querySelectorAll('thead th').length
+    expect(document.querySelectorAll('tbody tr:first-child td')).toHaveLength(headerCount)
+    expect(document.querySelector('thead th:first-child')).toHaveTextContent('社員')
+  })
+
+  it('renders the selection column (header and cells) when at least one row is selectable', async () => {
+    const { unmount } = renderPage({ entries: [needsReviewEntry] })
+    await screen.findByText('田中次郎')
+    const withoutSelection = document.querySelectorAll('thead th').length
+    unmount()
+
+    renderPage({ entries: [eligibleEntry, needsReviewEntry] })
+    await screen.findByText('田中次郎')
+    expect(document.querySelectorAll('thead th')).toHaveLength(withoutSelection + 1)
+    expect(document.querySelectorAll('tbody tr:first-child td')).toHaveLength(withoutSelection + 1)
+    expect(screen.getByRole('checkbox', { name: '鈴木一郎を選択' })).toBeInTheDocument()
+  })
+
   it('changes the URL and the API filter when the status select changes', async () => {
     renderPage()
     await screen.findByText('鈴木一郎')

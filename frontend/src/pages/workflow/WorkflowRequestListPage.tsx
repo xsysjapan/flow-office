@@ -225,6 +225,12 @@ export function WorkflowRequestListPage() {
   if (error instanceof ApiError && error.status === 403) return <PermissionDenied />
 
   const requests = data?.data ?? []
+  const isRowCancellable = (request: WorkflowRequest) =>
+    isWorkflowRequestCancellable(request.status) &&
+    (request.subject_type !== 'attendance_month' ||
+      (user?.effective_permissions?.includes('attendance.submission_revoke') ?? false))
+  // 取り消せる行が1つも無いとき(一般の社員の承認済み一覧など)は、空の選択列を出さない。
+  const showSelectionColumn = requests.some(isRowCancellable)
   const isFiltered = status !== DEFAULT_STATUS || subjectType !== DEFAULT_SUBJECT_TYPE
 
   /** 指定したキーだけをURLクエリパラメータへ反映する(他のキーはそのまま維持)。
@@ -370,7 +376,7 @@ export function WorkflowRequestListPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead aria-hidden="true" />
+              {showSelectionColumn && <TableHead aria-hidden="true" />}
               <TableHead>種別</TableHead>
               <TableHead className="whitespace-normal min-w-48">タイトル</TableHead>
               <TableHead>状態</TableHead>
@@ -380,10 +386,7 @@ export function WorkflowRequestListPage() {
             {requests.map((request) => {
               const { label, tone } = rowStatusMeta(request)
               const subtitle = subjectSubtitle(request)
-              const cancellable =
-                isWorkflowRequestCancellable(request.status) &&
-                (request.subject_type !== 'attendance_month' ||
-                  (user?.effective_permissions?.includes('attendance.submission_revoke') ?? false))
+              const cancellable = isRowCancellable(request)
               const selected = selectedIds.has(request.id)
               return (
                 <ClickableTableRow
@@ -392,15 +395,17 @@ export function WorkflowRequestListPage() {
                   onRowClick={() => navigate(`/requests/${request.id}`, { state: forwardState })}
                   rowLabel={`${request.title}の詳細を開く`}
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    {cancellable && (
-                      <Checkbox
-                        checked={selected}
-                        onCheckedChange={() => toggleRow(request.id)}
-                        aria-label={`${request.title}を選択`}
-                      />
-                    )}
-                  </TableCell>
+                  {showSelectionColumn && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {cancellable && (
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={() => toggleRow(request.id)}
+                          aria-label={`${request.title}を選択`}
+                        />
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Badge tone="neutral">{requestTypeBadgeLabel(request)}</Badge>
                   </TableCell>

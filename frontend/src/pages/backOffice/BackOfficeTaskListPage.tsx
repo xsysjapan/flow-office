@@ -31,7 +31,7 @@ import {
 } from '../../hooks/useBackOfficeTasks'
 import { BACKOFFICE_TASK_STATUSES } from '../../utils/backOfficeTaskStatuses'
 import { isOneOf, isValidPageParam } from '../../utils/searchParamValidators'
-import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
+import { backOfficeTaskStatusLabel, backOfficeTaskTypeLabel } from '../../utils/statusLabels'
 
 interface BackOfficeTaskTableProps {
   tasks: BackOfficeTask[]
@@ -104,7 +104,7 @@ function BackOfficeTaskTable({ tasks, selectedIds, onToggleRow, onToggleAll, isR
                   {task.title}
                 </Link>
               </TableCell>
-              <TableCell className="text-muted-foreground">{task.task_type}</TableCell>
+              <TableCell className="text-muted-foreground">{backOfficeTaskTypeLabel(task.task_type)}</TableCell>
               <TableCell className="text-muted-foreground">{task.assignee?.name ?? '-'}</TableCell>
               <TableCell className="text-muted-foreground">{task.due_on ? `期限: ${task.due_on}` : '-'}</TableCell>
               <TableCell>

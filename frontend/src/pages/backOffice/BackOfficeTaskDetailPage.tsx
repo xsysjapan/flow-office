@@ -28,7 +28,7 @@ import {
 import { useAttendanceMonth, useAttendanceMonthById, useRevertMonthConfirmation } from '../../hooks/useAttendance'
 import { useWorkflowRequest } from '../../hooks/useWorkflowRequests'
 import { BACKOFFICE_TASK_STATUSES } from '../../utils/backOfficeTaskStatuses'
-import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
+import { backOfficeTaskStatusLabel, backOfficeTaskTypeLabel, backOfficeTaskSourceTypeLabel } from '../../utils/statusLabels'
 import { AttendanceMonthReferenceTabs } from '../attendance/AttendanceReferencePage'
 
 /**
@@ -180,10 +180,10 @@ export function BackOfficeTaskDetailPage() {
       <Card title={task.title} actions={<Badge tone={tone}>{label}</Badge>}>
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
           <dt className="font-medium text-muted-foreground">種別</dt>
-          <dd className="text-foreground">{task.task_type}</dd>
+          <dd className="text-foreground">{backOfficeTaskTypeLabel(task.task_type)}</dd>
           <dt className="font-medium text-muted-foreground">元データ</dt>
           <dd className="text-foreground">
-            {task.source_type} #{task.source_id}
+            {backOfficeTaskSourceTypeLabel(task.source_type)} #{task.source_id}
           </dd>
           <dt className="font-medium text-muted-foreground">担当部署</dt>
           <dd className="text-foreground">{task.assigned_department ?? '未設定'}</dd>

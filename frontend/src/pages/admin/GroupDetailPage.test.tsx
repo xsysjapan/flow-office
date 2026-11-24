@@ -310,6 +310,9 @@ describe("GroupDetailPage", () => {
       "href",
       "/admin/users/user-1",
     );
+    // 区分は表示名にし、内部コード(member)は出さない。
+    expect(screen.getByText(/yamada@example.com \/ 所属$/)).toBeInTheDocument();
+    expect(screen.queryByText(/member/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "所属を追加" }));
     await userEvent.selectOptions(

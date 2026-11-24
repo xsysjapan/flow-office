@@ -47,6 +47,7 @@ import {
   membershipChangeStatusLabel,
 } from "../../utils/membershipChangeLabels";
 import { isValidPositiveIntIdParam } from "../../utils/searchParamValidators";
+import { groupStatusLabel, userFieldKeyLabel } from '../../utils/statusLabels'
 
 export function UserManagementAccessPage({
   section = "groups",
@@ -347,7 +348,7 @@ export function UserManagementAccessPage({
                         <Badge
                           tone={g.status === "active" ? "success" : "neutral"}
                         >
-                          {g.status}
+                          {groupStatusLabel(g.status)}
                         </Badge>
                       </TableCell>
                     </ClickableTableRow>
@@ -523,7 +524,7 @@ export function UserManagementAccessPage({
                   className="flex items-center justify-between gap-2 rounded border p-2"
                   key={a.id}
                 >
-                  <span className="text-sm">{a.field_key}</span>
+                  <span className="text-sm">{userFieldKeyLabel(a.field_key)}</span>
                   <NativeSelect
                     value={a.authority_type}
                     onChange={(e) =>
@@ -1024,7 +1025,7 @@ export function UserManagementAccessPage({
                       ?.filter((a) => a.authority_type === "EXTERNAL_HR")
                       .map((a) => (
                         <TableRow key={a.field_key}>
-                          <TableCell>{a.field_key}</TableCell>
+                          <TableCell>{userFieldKeyLabel(a.field_key)}</TableCell>
                           <TableCell>任意</TableCell>
                           <TableCell>
                             「外部ID・項目管理責任」で外部HR管理に設定されている項目。
