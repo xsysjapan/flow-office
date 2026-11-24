@@ -148,4 +148,36 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
         $this->assertSame(['2026-08-12', '2026-08-10'], $usedOnDates);
         $this->assertSame(['approved', 'approved'], $response->json('*.request_status'));
     }
+
+    public function test_usages_for_user_returns_pending_usage_as_submitted_and_excludes_cancelled(): void
+    {
+        $hr = $this->hrUser();
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        foreach (['2026-08-10', '2026-08-11', '2026-08-12'] as $date) {
+            $this->createWorkingDayShift($employee, $date);
+        }
+
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+
+        $requestIds = [];
+        foreach (['2026-08-10', '2026-08-11', '2026-08-12'] as $date) {
+            $requestIds[$date] = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+                'target_date' => $date,
+                'leave_type' => 'full',
+                'approver_user_id' => $approver->id,
+            ])->assertCreated()->json('id');
+        }
+
+        // 08-10: 承認済み、08-11: 申請中のまま、08-12: 申請後に取消(行は is_cancelled=true で残る)。
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestIds['2026-08-10']}/approve")->assertOk();
+        $this->actingAs($employee)->postJson("/api/paid-leave/requests/{$requestIds['2026-08-12']}/cancel")->assertOk();
+
+        $response = $this->actingAs($hr)->getJson("/api/paid-leave/usages/user/{$employee->id}");
+        $response->assertOk();
+
+        $this->assertSame(['2026-08-11', '2026-08-10'], $response->json('*.used_on'));
+        $this->assertSame(['submitted', 'approved'], $response->json('*.request_status'));
+        $this->assertSame([false, true], $response->json('*.is_confirmed'));
+    }
 }

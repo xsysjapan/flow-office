@@ -196,17 +196,20 @@ Claude・ユーザーから見た入出力は一括更新の形に揃え、日�
 }
 ```
 
-レスポンスは日別の成功・警告・失敗を返す(`PARTIALLY_ACCEPTED`等)。
+レスポンスは日別の成功・警告・失敗を返す(`PARTIALLY_ACCEPTED`等)。下の例の`LEAVE_CONFLICT`は警告(`warning`)であり、
+取り込みは拒否されない。出勤時刻のある日に有効な有給・特別休暇の消化がある場合に出し、取り消した有給は含めない。
+確定済みは「有給休暇の取得日と勤務時間が重なっています。」、申請中は「申請中の有給休暇と勤務時間が重なっています。」
+(特別休暇は「特別休暇」に置き換える)。
 
 ```json
 {
-  "status": "PARTIALLY_ACCEPTED",
+  "status": "ACCEPTED",
   "results": [
     { "date": "2026-07-01", "status": "ACCEPTED", "warnings": [] },
     {
       "date": "2026-07-14",
-      "status": "REJECTED",
-      "errors": [{ "code": "LEAVE_CONFLICT", "message": "有給申請と勤務時間が重複しています。" }]
+      "status": "ACCEPTED",
+      "warnings": [{ "code": "LEAVE_CONFLICT", "severity": "warning", "message": "有給休暇の取得日と勤務時間が重なっています。" }]
     }
   ]
 }

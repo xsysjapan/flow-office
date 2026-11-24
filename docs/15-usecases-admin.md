@@ -20,12 +20,24 @@
 [docs/31](./31-user-group-access-foundation.md)を正本とする。
 
 人事向けユーザー詳細画面(`UserRoleEditPage.tsx`)で、指示書13章の「働き方: ●会社のデフォルトを使用/
-○別の働き方を指定」の選択も行う。本システムには社員を手動で新規作成するフローが無く
-(MS365同期・SSO初回ログイン経由のみ)、既存社員の設定を編集するこの画面が「社員登録時の
+○別の働き方を指定」の選択も行う。社員の作成経路は、MS365同期・SSO初回ログインに加えて、
+社員一覧からの手動作成(下記)がある。既存社員の設定を編集するこの画面が「社員登録時の
 体験」に相当する。今月について、`user_work_style_monthly_assignments`に行が無ければ
 「会社のデフォルトを使用」、行があれば「別の働き方を指定」として表示し、切り替えは
 `AssignUserWorkStyleForMonth`/`RemoveUserWorkStyleMonthlyAssignment`で行う
 (docs/16-database-schema.md参照)。
+
+社員の手動作成(`POST /users`、`user.created_manually`イベント)は、外部連携(MS365同期・SSO)を
+使わない利用者(協力会社社員など)のための正式な作成経路として残す。
+- 権限: `user.create`。全社スコープの権限を持つ利用者は任意の所属で作成できる。グループスコープの権限のみの
+  利用者は、権限の対象グループを`group_id`に指定した場合に限り作成できる(指定が無い、または対象外は403)
+- 入力項目: `name`・`email`(必須。重複不可)、`employee_number`(重複不可)・`department`・`job_title`・
+  `employment_status`(既定`active`)・`account_status`(既定`active`)・`group_id`(任意)。外部連携が正の項目は
+  ローカル編集できる項目に限る(`FieldAuthorityService`)
+- 所属: 作成と同時に標準グループ`ALL_USERS`(有効な場合)へメンバーとして追加する。`group_id`を指定した場合は
+  そのグループにも追加する
+- タイムゾーン: 作成時点の`system_settings.default_timezone`を記録時の既定値として`user.created_manually`に
+  保存する(以降、システム設定を変えても既存ユーザーは変わらない)
 
 人事向けユーザー詳細にはFeature・Role・Permission・付与元・個別停止・外部ID・認証キーを
 表示しない。これらはシステム向けの独立画面に配置し、人事担当者には対応Permissionを付与せず、

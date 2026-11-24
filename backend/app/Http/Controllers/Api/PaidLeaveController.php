@@ -808,7 +808,8 @@ class PaidLeaveController extends Controller
     #[OA\Get(
         path: '/paid-leave/usages/user/{userId}',
         operationId: 'paidLeave.usages.forUser',
-        summary: '社員の有給消化明細を取得する',
+        summary: '社員の有給消化明細を取得する(申請中を含む・取消済みを除く)',
+        description: 'used_onの新しい順。申請中(未承認)の明細も含め、関連する申請の現在の状態を request_status(例: submitted・approved)で返す。取り消した明細(is_cancelled=true)は返さない。',
         tags: ['有給休暇'],
         parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],

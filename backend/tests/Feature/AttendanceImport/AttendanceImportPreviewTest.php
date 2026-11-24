@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AttendanceImport;
 
+use App\Models\PaidLeaveUsage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -80,5 +81,31 @@ class AttendanceImportPreviewTest extends TestCase
 
         $response->assertOk();
         $this->assertSame(['2026-07-02'], $response->json('missing_dates'));
+    }
+
+    public function test_it_does_not_flag_leave_conflict_for_a_cancelled_paid_leave_day(): void
+    {
+        $employee = User::factory()->create();
+        PaidLeaveUsage::query()->create([
+            'user_id' => $employee->id,
+            'used_on' => '2026-07-14',
+            'used_days' => 1.0,
+            'usage_type' => 'full',
+            'is_confirmed' => true,
+            'is_cancelled' => true,
+        ]);
+
+        $response = $this->actingAs($employee)->postJson('/api/attendance/import-preview', [
+            'target_month' => '2026-07',
+            'days' => [
+                ['date' => '2026-07-14', 'startTime' => '09:00', 'endTime' => '18:00', 'breaks' => []],
+            ],
+        ]);
+
+        $response->assertOk();
+        $this->assertNotContains(
+            'LEAVE_CONFLICT',
+            collect($response->json('items.0.differences'))->pluck('code')->all(),
+        );
     }
 }

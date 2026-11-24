@@ -77,10 +77,23 @@ class AttendanceDifferenceDetector
             }
         }
 
-        $hasPaidLeave = PaidLeaveUsage::query()->where('user_id', $userId)->whereDate('used_on', $workDate)->exists();
-        $hasSpecialLeave = SpecialLeaveUsage::query()->where('user_id', $userId)->whereDate('used_on', $workDate)->exists();
-        if (($hasPaidLeave || $hasSpecialLeave) && ($proposed['startTime'] ?? null) !== null) {
-            $differences[] = $this->warning('LEAVE_CONFLICT', '有給休暇または特別休暇の消化と勤務時間が重複しています。');
+        if (($proposed['startTime'] ?? null) !== null) {
+            // 取消済みの有給は行が残る(is_cancelled=true)ため衝突として扱わない。特別休暇は取消時に行が削除される。
+            // 確定済みと申請中(is_confirmed=false)は、どちらも警告するが文を書き分ける。
+            $paidLeave = PaidLeaveUsage::query()->where('user_id', $userId)->whereDate('used_on', $workDate)->where('is_cancelled', false)->get();
+            $specialLeave = SpecialLeaveUsage::query()->where('user_id', $userId)->whereDate('used_on', $workDate)->get();
+
+            foreach ([['有給休暇', $paidLeave], ['特別休暇', $specialLeave]] as [$label, $usages]) {
+                if ($usages->isEmpty()) {
+                    continue;
+                }
+                $differences[] = $this->warning(
+                    'LEAVE_CONFLICT',
+                    $usages->contains(fn ($usage) => $usage->is_confirmed)
+                        ? "{$label}の取得日と勤務時間が重なっています。"
+                        : "申請中の{$label}と勤務時間が重なっています。",
+                );
+            }
         }
 
         $calendarEntry = $this->effectiveScheduleResolver->resolve($userId, Carbon::parse($workDate));

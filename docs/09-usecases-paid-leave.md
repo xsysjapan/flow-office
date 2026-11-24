@@ -571,8 +571,10 @@ Grantのみ」「取消時に全Allocationを解除して残高を復元」で�
 1. 人事担当者・管理者(`leave.manage` Permission)が対象社員の有給消化明細
    (`paid_leave_usage_allocations`/`paid_leave_usages`)を一覧で確認する
    (`GET /paid-leave/usages/user/{userId}`。`used_on`の新しい順。関連する申請の現在の
-   `status`(`request_status`)も併せて返し、`approved`以外(既に取消・返却済み)の明細は
-   取消不可であることを画面側で判別できるようにする)
+   `status`(`request_status`)も併せて返し、`approved`以外(申請中の`submitted`など)の明細は
+   取消不可であることを画面側で判別できるようにする。**返却の範囲**: 申請中(未承認。
+   `is_confirmed=false`、`request_status=submitted`)の明細も含める。取り消した明細
+   (`is_cancelled=true`)は返さない)
 2. 承認済みの申請を選び、取消理由等を確認したうえで管理者が直接取り消す
    (`POST /paid-leave/requests/{id}/admin-cancel`)
 

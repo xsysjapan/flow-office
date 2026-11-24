@@ -153,8 +153,9 @@ Permissionで制御し、更新には`GLOBAL`スコープを要求する。
 新規ユーザーがどのタイムゾーンで作成されるかは以下の通り(docs/03-architecture.md 3.4):
 
 - SSO初回ログイン([UC-001](#uc-001-microsoft-ssoでログインする))・MS365同期による新規作成
-  ([UC-002](#uc-002-ms365ユーザーを同期する))のいずれも、作成時点の `system_settings.default_timezone`
-  を初期値として使う
+  ([UC-002](#uc-002-ms365ユーザーを同期する))・社員一覧からの手動作成(`POST /users`、権限`user.create`。
+  docs/15 UC-M001)のいずれも、作成時点の `system_settings.default_timezone` を初期値として使う
+  (手動作成では`user.created_manually`イベントに記録する)
 - 既存ユーザーの `timezone` はSSOログインやMS365同期で上書きされない
 
 ## UC-004: ローカルパスワードユーザーがMicrosoft 365アカウントと連携する
