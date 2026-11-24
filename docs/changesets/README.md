@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261124-list-display-fixes](./20261124-list-display-fixes/spec.md) | 一覧の表示の小さな不具合(内部コード・備品のナビ・空の選択列・横スクロールの影) | レビュー中 |
 | [20261124-leave-conflict-and-docs](./20261124-leave-conflict-and-docs/spec.md) | 差異チェックの取消済み有給の誤警告の修正、消化一覧・社員の手動作成の仕様書の明記 | 完了 |
 | [20261124-remove-finished-migration-commands](./20261124-remove-finished-migration-commands/spec.md) | 本番で実行済みの移行用コマンド(7件)と専用部品の削除 | 完了 |
 | [20261124-user-projection-settings-at-replay](./20261124-user-projection-settings-at-replay/spec.md) | 利用者の表示用データが作り直した時点の設定値(既定のタイムゾーン・テナントID)で作られる不具合の修正 | 完了 |
