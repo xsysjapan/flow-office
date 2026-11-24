@@ -52,7 +52,7 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/external-integration-connections']}>
           <ExternalIntegrationConnectionsPage />
         </MemoryRouter>
       </QueryClientProvider>
@@ -78,7 +78,7 @@ export const Empty: Story = {
     queryClient.setQueryData(['external-integration-connections'], { data: [] })
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/external-integration-connections']}>
           <ExternalIntegrationConnectionsPage />
         </MemoryRouter>
       </QueryClientProvider>

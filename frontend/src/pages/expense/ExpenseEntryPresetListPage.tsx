@@ -183,9 +183,9 @@ export function ExpenseEntryPresetListPage() {
         isFiltered ? (
           <EmptyState
             title="条件に一致するプリセットはありません。"
-            description="検索語や経費区分の条件を変えると表示される場合があります。"
+            description="検索条件を変えると表示される場合があります。"
             action={
-              <Button variant="secondary" size="sm" onClick={clearFilters}>
+              <Button variant="secondary" onClick={clearFilters}>
                 検索条件をクリア
               </Button>
             }
@@ -193,7 +193,12 @@ export function ExpenseEntryPresetListPage() {
         ) : (
           <EmptyState
             title="入力プリセットはまだありません。"
-            description="よく使う経費の内容をプリセットとして登録すると、入力画面で選ぶだけで初期値を埋められます。"
+            description="「新規作成」から入力プリセットを作成できます。"
+            action={
+              <Button asChild>
+                <Link to="/expenses/presets/new" state={forwardState}>新規作成</Link>
+              </Button>
+            }
           />
         )
       ) : (

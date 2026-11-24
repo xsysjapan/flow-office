@@ -4,7 +4,10 @@ import {
   adminNavGroups,
   canAccessAdminItem,
 } from "../../components/AdminLayout/adminNavGroups";
+import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { PermissionDenied } from "../../components/PermissionDenied/PermissionDenied";
+
+const DESCRIPTION = "権限のある管理画面を、分野別に一覧から開けます。";
 
 /** 管理メニューのトップ画面。管理系の各機能をカード形式でまとめて一覧表示する。 */
 export function AdminDashboardPage() {
@@ -19,7 +22,7 @@ export function AdminDashboardPage() {
   if (visibleGroups.length === 0) {
     return (
       <div className="flex flex-col gap-8">
-        <h1 className="text-lg font-semibold text-foreground">管理メニュー</h1>
+        <PageHeader description={DESCRIPTION} />
         <PermissionDenied message="管理メニューにアクセスできる権限がありません。必要な場合は管理者に付与を依頼してください。" />
       </div>
     );
@@ -27,7 +30,7 @@ export function AdminDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-lg font-semibold text-foreground">管理メニュー</h1>
+      <PageHeader description={DESCRIPTION} />
       {visibleGroups.map((group) => (
         <section key={group.label} className="flex flex-col gap-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">

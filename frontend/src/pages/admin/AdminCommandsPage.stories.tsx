@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import { AdminCommandsPage } from './AdminCommandsPage'
 
 const client = new QueryClient()
@@ -10,7 +11,7 @@ client.setQueryData(['admin-commands'], { data: [{
 }] })
 client.setQueryData(['admin-command-runs'], { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
 
-const meta = { component: AdminCommandsPage, decorators: [(Story) => <QueryClientProvider client={client}><Story /></QueryClientProvider>] } satisfies Meta<typeof AdminCommandsPage>
+const meta = { component: AdminCommandsPage, decorators: [(Story) => <QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/commands']}><Story /></MemoryRouter></QueryClientProvider>] } satisfies Meta<typeof AdminCommandsPage>
 export default meta
 export const Default: StoryObj<typeof meta> = {}
 
@@ -24,5 +25,5 @@ systemRunClient.setQueryData(['admin-command-runs'], { data: [{
 }], meta: { current_page: 1, last_page: 1, total: 1 }, links: { next: null, prev: null } })
 
 export const SystemRun: StoryObj<typeof meta> = {
-  decorators: [(Story) => <QueryClientProvider client={systemRunClient}><Story /></QueryClientProvider>],
+  decorators: [(Story) => <QueryClientProvider client={systemRunClient}><MemoryRouter initialEntries={['/admin/commands']}><Story /></MemoryRouter></QueryClientProvider>],
 }

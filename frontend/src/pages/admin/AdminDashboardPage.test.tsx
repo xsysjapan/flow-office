@@ -30,7 +30,7 @@ function renderPage(user: User = mockUser) {
 
   return render(
     <AuthContext.Provider value={authValue}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/admin"]}>
         <AdminDashboardPage />
       </MemoryRouter>
     </AuthContext.Provider>,

@@ -86,7 +86,7 @@ function withSeeded(seedRules: PaidLeaveGrantRule[], overdue: PaidLeaveScheduleE
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/paid-leave']}>
           <PaidLeavePolicyPage />
         </MemoryRouter>
       </QueryClientProvider>

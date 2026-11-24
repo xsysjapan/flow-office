@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { SystemSettings } from '../../api/types'
 import { SystemSettingsPage } from './SystemSettingsPage'
@@ -31,7 +32,9 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/admin/system-settings']}>
         <SystemSettingsPage />
+      </MemoryRouter>
       </QueryClientProvider>
     )
   }

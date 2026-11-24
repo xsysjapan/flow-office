@@ -5,6 +5,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
@@ -78,8 +79,26 @@ export function RequestTypeEditPage() {
     return items.length > 0 ? items : undefined
   }
 
-  if (!isCreate && isLoading) return <LoadingState />
-  if (!isCreate && listError) return <ErrorMessage error={listError} fallback="申請種別の取得に失敗しました。" />
+  const top = (
+    <>
+      <BackLink className="mb-0" />
+      <PageHeader description="申請種別のフォーム項目や承認・バックオフィス処理の設定を入力し、保存します。" />
+    </>
+  )
+  if (!isCreate && isLoading)
+    return (
+      <div className="flex flex-col gap-6">
+        {top}
+        <LoadingState />
+      </div>
+    )
+  if (!isCreate && listError)
+    return (
+      <div className="flex flex-col gap-6">
+        {top}
+        <ErrorMessage error={listError} fallback="申請種別の取得に失敗しました。" />
+      </div>
+    )
 
   const isBusy = createType.isPending || updateType.isPending
   const error = createType.error ?? updateType.error
@@ -137,9 +156,9 @@ export function RequestTypeEditPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <BackLink className="mb-0" />
+      {top}
 
-      <Card title={isCreate ? '申請種別の新規作成' : '申請種別の編集'}>
+      <Card>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="コード" htmlFor="code" required>
             <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />

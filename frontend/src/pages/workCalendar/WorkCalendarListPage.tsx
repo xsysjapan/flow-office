@@ -9,6 +9,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { useDeleteWorkCalendar, useWorkCalendarsPage } from '../../hooks/useWorkCalendars'
 import { isValidPageParam } from '../../utils/searchParamValidators'
@@ -59,8 +60,8 @@ export function WorkCalendarListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card
-        title="会社カレンダー一覧"
+      <PageHeader
+        description="会社の休日・稼働日カレンダーを一覧で確認し、新規作成や詳細の編集に進めます。"
         actions={
           <Button asChild>
             <Link to="/admin/work-calendars/new" state={forwardState}>
@@ -68,19 +69,20 @@ export function WorkCalendarListPage() {
             </Link>
           </Button>
         }
-      >
+      />
+      <Card>
         {isLoading ? (
           <LoadingState />
         ) : error ? (
           <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
         ) : calendars.length === 0 ? (
           <EmptyState
-            title="カレンダーはまだありません。"
-            description="会社カレンダーを作成すると、社員の勤務予定や休日をカレンダー単位で管理できます。"
+            title="会社カレンダーはまだありません。"
+            description="「新規作成」から会社カレンダーを作成できます。"
             action={
               <Button asChild>
                 <Link to="/admin/work-calendars/new" state={forwardState}>
-                  会社カレンダーを作成
+                  新規作成
                 </Link>
               </Button>
             }

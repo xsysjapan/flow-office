@@ -140,7 +140,7 @@ describe("UserRoleEditPage", () => {
   it("does not expose system access management controls", async () => {
     renderPage(targetUser);
 
-    await screen.findByText("山田太郎のユーザー管理");
+    await screen.findByRole("heading", { name: "山田太郎" });
     expect(screen.queryByText("実効アクセスと付与元")).not.toBeInTheDocument();
     expect(screen.queryByText("直接ロール")).not.toBeInTheDocument();
     expect(screen.queryByText("外部ID・管理元")).not.toBeInTheDocument();
@@ -306,7 +306,7 @@ describe("UserRoleEditPage", () => {
     });
     renderPage(targetUser);
     const user = userEvent.setup();
-    await screen.findByText("山田太郎のユーザー管理");
+    await screen.findByRole("heading", { name: "山田太郎" });
 
     await user.click(screen.getByRole("button", { name: "所属を追加" }));
     await user.selectOptions(

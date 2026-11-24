@@ -17,7 +17,7 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/compensatory-leave']}>
           <CompensatoryLeaveAdminPage />
         </MemoryRouter>
       </QueryClientProvider>

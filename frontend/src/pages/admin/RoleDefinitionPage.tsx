@@ -7,6 +7,7 @@ import { ClickableTableRow } from "../../components/ClickableTableRow/ClickableT
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
+import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { notify } from "../../lib/notify";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -97,21 +98,28 @@ export function RoleDefinitionPage() {
   };
 
   const queries = [roles, permissions, features, assignments, groups];
-  if (queries.some((query) => query.isLoading)) return <LoadingState />;
+  const header = (
+    <PageHeader description="ロールを選択して、名称・状態・Permission・Feature構成・割当グループを編集します。" />
+  );
+  if (queries.some((query) => query.isLoading))
+    return (
+      <div className="space-y-6">
+        {header}
+        <LoadingState />
+      </div>
+    );
   const loadError = queries.find((query) => query.error)?.error;
   if (loadError)
     return (
-      <ErrorMessage error={loadError} fallback="ロール定義の取得に失敗しました。" />
+      <div className="space-y-6">
+        {header}
+        <ErrorMessage error={loadError} fallback="ロール定義の取得に失敗しました。" />
+      </div>
     );
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold">ロール管理</h1>
-        <p className="text-sm text-muted-foreground">
-          ロールを選択して、名称・状態・Permission・Feature構成・割当グループを編集します。
-        </p>
-      </div>
+      {header}
 
       <Card
         title="ロール一覧"
@@ -119,7 +127,7 @@ export function RoleDefinitionPage() {
       >
         {(roles.data ?? []).length === 0 ? (
           <EmptyState
-            title="まだロールがありません。"
+            title="ロールはまだありません。"
             description="「新規作成」からロールを作成できます。"
             action={<Button onClick={openCreateDialog}>新規作成</Button>}
           />

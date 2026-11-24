@@ -24,7 +24,7 @@ export const FilteredEmpty: Story = {
     title: '条件に一致するグループがありません。',
     description: '検索条件を変更するか、条件をクリアしてください。',
     action: (
-      <Button variant="secondary" size="sm">
+      <Button variant="secondary">
         検索条件をクリア
       </Button>
     ),

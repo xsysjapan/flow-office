@@ -14,7 +14,7 @@ import { pickDate, pickUser } from './support/ui'
 test('有給残数画面が表示できる', async ({ page }) => {
   await loginAs(page, SCENARIO_USERS.punchEmployee)
   await page.goto('/paid-leave')
-  await expect(page.getByRole('heading', { name: '自分の有給', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '有給', exact: true })).toBeVisible()
 })
 
 /**

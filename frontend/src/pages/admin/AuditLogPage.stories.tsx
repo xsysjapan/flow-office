@@ -50,7 +50,7 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/audit-log']}>
           <AuditLogPage />
         </MemoryRouter>
       </QueryClientProvider>

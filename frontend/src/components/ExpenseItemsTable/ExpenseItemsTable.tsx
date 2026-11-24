@@ -185,7 +185,7 @@ export function ExpenseItemsTable({
             <TableHead>日付</TableHead>
             <TableHead>経費区分</TableHead>
             <TableHead>金額</TableHead>
-            <TableHead>内容</TableHead>
+            <TableHead className="whitespace-normal min-w-48">内容</TableHead>
             <TableHead>領収書</TableHead>
             <TableHead>操作</TableHead>
           </TableRow>
@@ -228,7 +228,7 @@ export function ExpenseItemsTable({
                   onChange={(e) => onUpdateRow(row.rowId, { amount: Number(e.target.value) })}
                 />
               </TableCell>
-              <TableCell>
+              <TableCell className="whitespace-normal min-w-48">
                 {isBatchCategory(categories, row.category_id) && (
                   <div className="mb-1 flex items-center gap-1">
                     <Input

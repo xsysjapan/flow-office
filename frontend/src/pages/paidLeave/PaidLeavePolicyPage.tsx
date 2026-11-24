@@ -11,6 +11,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
 import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PaidLeaveGrantPolicyMatrix } from '../../components/PaidLeaveGrantPolicyMatrix/PaidLeaveGrantPolicyMatrix'
 import { PaidLeaveGrantCycleTypeField } from '../../components/PaidLeaveGrantCycleTypeField/PaidLeaveGrantCycleTypeField'
@@ -483,7 +484,7 @@ function PaidLeaveGrantRulesCard() {
   const createFieldErrors = createRule.error instanceof ApiError ? createRule.error.errors : undefined
 
   return (
-    <Card title="付与ルール" actions={<PaidLeaveScheduleLink />}>
+    <Card title="付与ルール">
       {error && <ErrorMessage error={error} fallback="付与ルールの取得に失敗しました。" />}
       {createRule.error && <ErrorMessage error={createRule.error} />}
 
@@ -922,7 +923,7 @@ function PaidLeaveScheduleLink() {
   const overdueCount = overdueEntries?.length ?? 0
 
   return (
-    <Button asChild variant="secondary" size="sm">
+    <Button asChild variant="secondary">
       <Link
         to="/admin/paid-leave/schedule"
         state={forwardState}
@@ -938,12 +939,16 @@ function PaidLeaveScheduleLink() {
 /**
  * UC-P002 / UC-P007: 有給付与ルールの設定・手動付与・対象社員の使用状況確認・
  * 付与取消/申請取消を1画面にまとめて管理者・人事向けに提供する有給休暇画面。
- * 付与予定(UC-P013〜P015)は独立ナビ項目を持たず、付与ルールカードの「付与予定を確認」
+ * 付与予定(UC-P013〜P015)は独立ナビ項目を持たず、画面見出しの「付与予定を確認」
  * ボタンから付与予定画面へ遷移する。
  */
 export function PaidLeavePolicyPage() {
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader
+        description="有給の付与ルールを設定し、手動付与や使用状況の確認ができます。"
+        actions={<PaidLeaveScheduleLink />}
+      />
       <PaidLeaveGrantRulesCard />
       <ManualGrantCard />
       <PaidLeaveUsageCard />

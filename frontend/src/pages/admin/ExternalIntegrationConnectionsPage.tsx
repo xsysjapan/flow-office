@@ -6,6 +6,7 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import {
   Dialog,
@@ -332,8 +333,9 @@ export function ExternalIntegrationConnectionsPage() {
     })
   }
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="外部連携設定の取得に失敗しました。" />
+  const pageDescription = '外部会計サービスの接続情報を登録・管理します。送信の実行は別画面で行います。'
+  if (isLoading) return <div className="space-y-6"><PageHeader description={pageDescription} /><LoadingState /></div>
+  if (error) return <div className="space-y-6"><PageHeader description={pageDescription} /><ErrorMessage error={error} fallback="外部連携設定の取得に失敗しました。" /></div>
 
   const list = data?.data ?? []
   const createValidationError = isFormOpen ? validateForm(createValue, true) : null
@@ -431,14 +433,27 @@ export function ExternalIntegrationConnectionsPage() {
   }
 
   return (
-    <Card
-      title="外部連携設定"
+    <div className="space-y-6">
+    <PageHeader
+      description={pageDescription}
       actions={
         <Button onClick={openCreateForm} variant={isFormOpen ? 'secondary' : 'primary'}>
           {isFormOpen ? '閉じる' : '新規登録'}
         </Button>
       }
-    >
+    />
+    <Card>
+      {isFormOpen && (
+        <div className="mb-6 rounded-md border border-border p-4">
+          <ConnectionFormFields idPrefix="connection-create" value={createValue} onChange={setCreateValue} isCreate />
+          <Button isLoading={createConnection.isPending} disabled={Boolean(createValidationError)} onClick={handleCreate}>
+            作成
+          </Button>
+          {createValidationError && <p className="mt-1.5 text-xs text-muted-foreground">{createValidationError}</p>}
+          {createConnection.error && <ErrorMessage error={createConnection.error} />}
+        </div>
+      )}
+
       <p className="mb-4 text-sm text-muted-foreground">
         freee・マネーフォワード等の外部会計サービスとの接続情報を管理する。同一のプロバイダで
         複数件登録できる(拠点・事業所ごとの接続を想定)。ここでの登録は認証情報の保存のみで、
@@ -479,21 +494,12 @@ export function ExternalIntegrationConnectionsPage() {
 
       {oauthRedirectUrl.error && <ErrorMessage error={oauthRedirectUrl.error} />}
 
-      {isFormOpen && (
-        <div className="mb-6 rounded-md border border-border p-4">
-          <ConnectionFormFields idPrefix="connection-create" value={createValue} onChange={setCreateValue} isCreate />
-          <Button isLoading={createConnection.isPending} disabled={Boolean(createValidationError)} onClick={handleCreate}>
-            作成
-          </Button>
-          {createValidationError && <p className="mt-1.5 text-xs text-muted-foreground">{createValidationError}</p>}
-          {createConnection.error && <ErrorMessage error={createConnection.error} />}
-        </div>
-      )}
 
       {list.length === 0 ? (
         <EmptyState
-          title="登録済みの外部連携はまだありません。"
-          description="右上の「新規登録」からfreee・マネーフォワード等の接続を登録できます。"
+          title="外部連携はまだありません。"
+          description="「新規登録」からfreee・マネーフォワード等の接続を登録できます。"
+          action={isFormOpen ? undefined : <Button onClick={openCreateForm}>新規登録</Button>}
         />
       ) : (
         <Table>
@@ -624,5 +630,6 @@ export function ExternalIntegrationConnectionsPage() {
         </DialogContent>
       </Dialog>
     </Card>
+    </div>
   )
 }

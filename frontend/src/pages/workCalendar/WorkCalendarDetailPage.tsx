@@ -10,6 +10,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
@@ -209,10 +210,41 @@ export function WorkCalendarDetailPage() {
   const [yearStartsOn, setYearStartsOn] = useState('')
   const [yearEndsOn, setYearEndsOn] = useState('')
 
-  if (!companyCalendarId) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
-  if (!calendar) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
+  const pageDescription = '会社カレンダーの基本設定、年度、休日ソースを確認・編集できます。'
+  const plainHeader = (
+    <>
+      <BackLink className="mb-0" />
+      <PageHeader description={pageDescription} />
+    </>
+  )
+  if (!companyCalendarId)
+    return (
+      <div className="flex flex-col gap-6">
+        {plainHeader}
+        <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
+      </div>
+    )
+  if (isLoading)
+    return (
+      <div className="flex flex-col gap-6">
+        {plainHeader}
+        <LoadingState />
+      </div>
+    )
+  if (error)
+    return (
+      <div className="flex flex-col gap-6">
+        {plainHeader}
+        <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
+      </div>
+    )
+  if (!calendar)
+    return (
+      <div className="flex flex-col gap-6">
+        {plainHeader}
+        <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
+      </div>
+    )
 
   const handleSaveSettings = () => {
     setCalendarUpdateTarget('settings')
@@ -354,13 +386,15 @@ export function WorkCalendarDetailPage() {
     <div className="flex flex-col gap-6">
       <BackLink className="mb-0" />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold text-foreground">{calendar.name}</h1>
-        <div className="flex items-center gap-3">
+      <PageHeader
+        description={pageDescription}
+        meta={
           <Badge tone={calendar.is_default ? 'success' : 'neutral'}>
             {calendar.is_default ? 'デフォルト' : '非デフォルト'}
           </Badge>
-          {!calendar.is_default && (
+        }
+        actions={
+          !calendar.is_default ? (
             <Button
               variant="secondary"
               isLoading={setDefaultCalendar.isPending}
@@ -372,12 +406,12 @@ export function WorkCalendarDetailPage() {
             >
               デフォルトに設定する
             </Button>
-          )}
-        </div>
-        {setDefaultCalendar.error && <ErrorMessage error={setDefaultCalendar.error} />}
-      </div>
+          ) : undefined
+        }
+      />
+      {setDefaultCalendar.error && <ErrorMessage error={setDefaultCalendar.error} />}
 
-      <Card title="基本設定">
+      <Card title={calendar.name}>
         <div className="flex flex-col gap-4">
           <FormField label="カレンダー名" htmlFor="company-calendar-name" required>
             <Input id="company-calendar-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -538,12 +572,8 @@ export function WorkCalendarDetailPage() {
             {yearList.length === 0 ? (
               <EmptyState
                 title="年度はまだありません。"
-                description="カレンダー年度を作成すると、日別の勤務区分・休日を設定できます。"
-                action={
-                  <Button variant="secondary" size="sm" onClick={() => handleYearModalOpenChange(true)}>
-                    カレンダー年度を作成
-                  </Button>
-                }
+                description="「新規作成」から年度を作成できます。"
+                action={<Button onClick={() => handleYearModalOpenChange(true)}>新規作成</Button>}
               />
             ) : (
               <ul className="divide-y divide-border">

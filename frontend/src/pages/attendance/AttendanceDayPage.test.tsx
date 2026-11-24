@@ -176,7 +176,7 @@ describe('AttendanceDayPage', () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     renderPage([recordedDay])
 
-    expect(await screen.findByText('日次勤怠')).toBeInTheDocument()
+    expect(await screen.findByText('7月6日の勤怠')).toBeInTheDocument()
     expect(screen.getByText(`${date}(月)`)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '日別の内訳' })).toBeInTheDocument()
     expect(screen.getByText('退勤済み')).toBeInTheDocument()
@@ -188,7 +188,7 @@ describe('AttendanceDayPage', () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     renderPage([recordedDay])
 
-    await screen.findByText('日次勤怠')
+    await screen.findByText('7月6日の勤怠')
 
     expect(screen.getByRole('link', { name: '前日' })).toHaveAttribute('href', '/attendance/days/2026-07-05')
     expect(screen.getByRole('link', { name: '翌日' })).toHaveAttribute('href', '/attendance/days/2026-07-07')
@@ -200,7 +200,8 @@ describe('AttendanceDayPage', () => {
     const today = formatDate(new Date())
     renderPage([], today)
 
-    await screen.findByText('日次勤怠')
+    const [, month, day] = today.split('-').map(Number)
+    await screen.findByText(`${month}月${day}日の勤怠`)
     expect(screen.getByRole('button', { name: '今日' })).toBeDisabled()
   })
 
@@ -234,7 +235,7 @@ describe('AttendanceDayPage', () => {
   it('shows no back link when opened from the menu (no origin)', async () => {
     renderPage([recordedDay])
 
-    await screen.findByText('日次勤怠')
+    await screen.findByText('7月6日の勤怠')
     expect(screen.queryByRole('link', { name: /に戻る$/ })).not.toBeInTheDocument()
   })
 
@@ -621,7 +622,7 @@ describe('AttendanceDayPage', () => {
     })
     renderPage([recordedDay])
 
-    expect(await screen.findByText('日次勤怠')).toBeInTheDocument()
+    expect(await screen.findByText('7月6日の勤怠')).toBeInTheDocument()
     expect(await screen.findAllByText(/提出済みのため、この日は編集できません/)).not.toHaveLength(0)
     expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument()
@@ -639,7 +640,7 @@ describe('AttendanceDayPage', () => {
     })
     renderPage([])
 
-    expect(await screen.findByText('日次勤怠')).toBeInTheDocument()
+    expect(await screen.findByText('7月6日の勤怠')).toBeInTheDocument()
     expect(screen.queryByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')).not.toBeInTheDocument()
     expect(await screen.findAllByText(/提出済みのため、この日は編集できません/)).not.toHaveLength(0)
   })
@@ -648,7 +649,7 @@ describe('AttendanceDayPage', () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     renderPage([{ ...recordedDay, is_locked: true }])
 
-    expect(await screen.findByText('日次勤怠')).toBeInTheDocument()
+    expect(await screen.findByText('7月6日の勤怠')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument()
   })
 
@@ -704,7 +705,7 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       renderPage([recordedDay])
 
-      await screen.findByText('日次勤怠')
+      await screen.findByText('7月6日の勤怠')
       await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
       expect(screen.queryByRole('menuitem', { name: '振替休日を申請する' })).not.toBeInTheDocument()
       expect(await screen.findByRole('menuitem', { name: 'この日を振替休日にする' })).toBeInTheDocument()
@@ -714,7 +715,7 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       renderPage([recordedDay])
 
-      await screen.findByText('日次勤怠')
+      await screen.findByText('7月6日の勤怠')
       await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
 
       expect(await screen.findByRole('menuitem', { name: '有給休暇を申請する' })).toHaveAttribute(
@@ -735,7 +736,7 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       renderPage([holidayDay])
 
-      await screen.findByText('日次勤怠')
+      await screen.findByText('7月6日の勤怠')
       await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
       expect(await screen.findByRole('menuitem', { name: '振替休日を申請する' })).toBeInTheDocument()
     })
@@ -746,7 +747,7 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockResolvedValue(createdRequest)
       renderPage([holidayDay])
 
-      await screen.findByText('日次勤怠')
+      await screen.findByText('7月6日の勤怠')
       await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
       await userEvent.click(await screen.findByRole('menuitem', { name: '振替休日を申請する' }))
       await pickDate(userEvent.setup(), '振替先日(休みになる日)', '2026-07-13')
@@ -771,7 +772,7 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockResolvedValue(createdRequest)
       renderPage([holidayDay], date, false)
 
-      await screen.findByText('日次勤怠')
+      await screen.findByText('7月6日の勤怠')
       await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
       await userEvent.click(await screen.findByRole('menuitem', { name: '振替休日を申請する' }))
       expect(screen.queryByText('承認者')).not.toBeInTheDocument()
@@ -850,7 +851,7 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([]))
       renderPage([recordedDay])
 
-      await screen.findByText('日次勤怠')
+      await screen.findByText('7月6日の勤怠')
       await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
 
       expect(screen.queryByRole('menuitem', { name: '有給休暇の承認を取り消す' })).not.toBeInTheDocument()
@@ -865,7 +866,7 @@ describe('AttendanceDayPage', () => {
       const compensatorySpy = vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([]))
       renderPage([recordedDay])
 
-      await screen.findByText('日次勤怠')
+      await screen.findByText('7月6日の勤怠')
 
       expect(paidSpy).toHaveBeenCalledWith({ targetDate: date })
       expect(specialSpy).toHaveBeenCalledWith({ targetDate: date })
@@ -880,7 +881,7 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(paidLeaveApi, 'cancelPaidLeaveRequest').mockResolvedValue({ ...approvedPaidLeaveRequest, status: 'cancelled' })
       renderPage([recordedDay])
 
-      await screen.findByText('日次勤怠')
+      await screen.findByText('7月6日の勤怠')
       await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
       await userEvent.click(await screen.findByRole('menuitem', { name: '有給休暇の承認を取り消す' }))
 
@@ -898,7 +899,7 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(leavePage([approvedCompensatoryLeaveRequest]))
       renderPage([recordedDay])
 
-      await screen.findByText('日次勤怠')
+      await screen.findByText('7月6日の勤怠')
       await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
 
       expect(await screen.findByRole('menuitem', { name: '特別休暇の承認を取り消す' })).toBeInTheDocument()

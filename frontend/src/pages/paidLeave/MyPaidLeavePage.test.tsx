@@ -436,7 +436,7 @@ describe('MyPaidLeavePage', () => {
 
     renderPage()
 
-    await screen.findByText('自分の有給')
+    await screen.findByText('有給')
     expect(screen.queryByRole('link', { name: /に戻る$/ })).not.toBeInTheDocument()
   })
 

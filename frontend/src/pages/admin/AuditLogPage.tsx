@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { DateRangePicker } from '../../components/DateRangePicker/DateRangePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -130,14 +131,16 @@ export function AuditLogPage() {
   const { data, isLoading, error } = useAuditLog({ ...filters, page })
 
   return (
-    <Card
-      title="監査ログ"
+    <div className="space-y-6">
+    <PageHeader
+      description="重要な操作の履歴を条件で検索して確認し、CSVでダウンロードできます。"
       actions={
         <Button variant="secondary" onClick={() => void downloadAuditLogCsv(filters)}>
           CSVダウンロード
         </Button>
       }
-    >
+    />
+    <Card>
       <ListFilterBar
         className="mb-4"
         isFiltered={isFiltered}
@@ -195,12 +198,12 @@ export function AuditLogPage() {
               title={isFiltered ? '条件に一致するログはありません。' : '監査ログはまだありません。'}
               description={
                 isFiltered
-                  ? '検索条件を変更するか、「検索条件をクリア」から条件を解除してください。'
+                  ? '検索条件を変えると表示される場合があります。'
                   : '操作(作成・更新・削除など)が行われると、ここに記録されます。'
               }
               action={
                 isFiltered ? (
-                  <Button variant="secondary" size="sm" onClick={clearFilters}>
+                  <Button variant="secondary" onClick={clearFilters}>
                     検索条件をクリア
                   </Button>
                 ) : undefined
@@ -239,5 +242,6 @@ export function AuditLogPage() {
         </>
       )}
     </Card>
+    </div>
   )
 }

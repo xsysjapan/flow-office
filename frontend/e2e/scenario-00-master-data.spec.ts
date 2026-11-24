@@ -50,18 +50,22 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   // WorkCalendarCreatePageは作成後に作成したカレンダー自身の詳細画面へ遷移する
   // (SKILL.md §2.5)ため、一覧画面へ戻って行を探し直す必要はない。
   await page.goto("/admin/work-calendars");
-  await page.getByRole("link", { name: "新規作成" }).click();
+  // 一覧が空だと空状態にも同名のリンクが出るため、画面見出し(PageHeader)の範囲で押す
+  await page
+    .getByRole("region", { name: "会社カレンダー", exact: true })
+    .getByRole("link", { name: "新規作成" })
+    .click();
   await page.getByLabel("カレンダー名").fill(calendarName);
   await page.getByRole("button", { name: "作成する" }).click();
 
   await expect(
-    page.getByRole("heading", { name: calendarName, level: 1 }),
+    page.getByRole("heading", { name: calendarName, level: 2 }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "カレンダー年度" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "新規作成" }).click();
+  await page.getByRole("button", { name: "新規作成" }).first().click(); // 一覧が空だと空状態にも同名のボタンが出る。Card の actions(先頭)を押す
   await page.getByLabel("年度", { exact: true }).fill(String(fiscalYear));
   await pickDate(page, "開始日", `${fiscalYear}-04-01`, { exact: true });
   await pickDate(page, "終了日", `${fiscalYear + 1}-03-31`, { exact: true });
@@ -97,7 +101,7 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
 
   // --- UC-C002: 勤務形態作成(一覧のモーダル経由) ---
   await page.goto("/admin/work-styles");
-  await page.getByRole("button", { name: "新規作成" }).click();
+  await page.getByRole("button", { name: "新規作成" }).first().click(); // 一覧が空だと空状態にも同名のボタンが出る。Card の actions(先頭)を押す
   await page.getByLabel("コード").fill(workStyleCode);
   await page.getByLabel("名称").fill("E2Eテスト用勤務形態");
   await page.getByLabel("労働時間制").selectOption({ value: "fixed" });

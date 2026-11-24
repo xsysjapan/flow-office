@@ -158,7 +158,7 @@ describe("GroupDetailPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("グループを新規作成")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "基本情報" })).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText("グループ種別"), "1");
     await userEvent.type(screen.getByLabelText("名称"), "新規グループ");
     // 作成後にグループ一覧が再取得された際、新規グループ自身が含まれるようにする
@@ -167,7 +167,7 @@ describe("GroupDetailPage", () => {
 
     // 作成後は一覧ではなく作成されたグループ自身の詳細画面(このページ)へ遷移する
     // (更新時に同ページへ留まる挙動と揃える。SKILL.md §2.6)。
-    expect(await screen.findByText("新規グループの詳細")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "新規グループ" })).toBeInTheDocument();
   });
 
   it("assigns the selected initial role to the newly created group", async () => {
@@ -204,7 +204,7 @@ describe("GroupDetailPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("グループを新規作成")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "基本情報" })).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText("グループ種別"), "1");
     await userEvent.type(screen.getByLabelText("名称"), "新規グループ");
     await userEvent.selectOptions(
@@ -235,7 +235,7 @@ describe("GroupDetailPage", () => {
     vi.spyOn(userManagementApi, "updateGroup").mockResolvedValue(undefined);
     renderPage();
 
-    expect(await screen.findByText("総務部の詳細")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "総務部" })).toBeInTheDocument();
     expect(screen.queryByLabelText("コード")).not.toBeInTheDocument();
     expect(
       await screen.findByRole("link", { name: "グループに戻る" }),

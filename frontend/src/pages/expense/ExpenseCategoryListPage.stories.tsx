@@ -38,7 +38,7 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/expense-categories']}>
           <ExpenseCategoryListPage />
         </MemoryRouter>
       </QueryClientProvider>

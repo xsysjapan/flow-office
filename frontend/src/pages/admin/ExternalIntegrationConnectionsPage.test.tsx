@@ -57,7 +57,7 @@ function renderPage(data: ExternalIntegrationConnection[] = connections) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/admin/external-integration-connections']}>
         <ExternalIntegrationConnectionsPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -83,7 +83,9 @@ describe('ExternalIntegrationConnectionsPage', () => {
   it('shows an empty state when there are no connections registered', async () => {
     renderPage([])
 
-    expect(await screen.findByText('登録済みの外部連携はまだありません。')).toBeInTheDocument()
+    expect(await screen.findByText('外部連携はまだありません。')).toBeInTheDocument()
+    expect(screen.getByText('「新規登録」からfreee・マネーフォワード等の接続を登録できます。')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '新規登録' })).toHaveLength(2)
   })
 
   it('disables the create button until required fields for oauth2 are filled', async () => {

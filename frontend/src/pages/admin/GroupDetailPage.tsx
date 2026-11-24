@@ -9,6 +9,7 @@ import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { notify } from "../../lib/notify";
+import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
@@ -76,26 +77,43 @@ export function GroupDetailPage() {
     setInitializedId(group.id);
   }, [group, initializedId, isNew]);
 
+  const top = (
+    <>
+      <BackLink className="mb-0" />
+      <PageHeader description="グループの基本情報、割り当てるロール、所属メンバーを確認・編集できます。" />
+    </>
+  );
   if (
     groups.isLoading ||
     types.isLoading ||
     roles.isLoading ||
     (!isNew && assignments.isLoading)
   )
-    return <LoadingState />;
+    return (
+      <div className="space-y-4">
+        {top}
+        <LoadingState />
+      </div>
+    );
   if (groups.error || types.error || roles.error || assignments.error) {
     return (
-      <ErrorMessage
-        error={groups.error ?? types.error ?? roles.error ?? assignments.error}
-        fallback="グループ詳細の取得に失敗しました。"
-      />
+      <div className="space-y-4">
+        {top}
+        <ErrorMessage
+          error={groups.error ?? types.error ?? roles.error ?? assignments.error}
+          fallback="グループ詳細の取得に失敗しました。"
+        />
+      </div>
     );
   }
   if (!isNew && !group) {
     return (
-      <p className="text-sm text-muted-foreground">
-        グループが見つかりません。
-      </p>
+      <div className="space-y-4">
+        {top}
+        <p className="text-sm text-muted-foreground">
+          グループが見つかりません。
+        </p>
+      </div>
     );
   }
 
@@ -109,8 +127,8 @@ export function GroupDetailPage() {
 
   return (
     <div className="space-y-4">
-      <BackLink className="mb-0" />
-      <Card title={isNew ? "グループを新規作成" : `${group!.name}の詳細`}>
+      {top}
+      <Card title={isNew ? "基本情報" : group!.name}>
         <div className="grid gap-3 md:grid-cols-2">
           <FormField label="グループ種別" htmlFor="group-detail-type">
             <NativeSelect

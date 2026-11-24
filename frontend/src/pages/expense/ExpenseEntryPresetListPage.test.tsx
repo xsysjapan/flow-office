@@ -182,7 +182,11 @@ describe('ExpenseEntryPresetListPage', () => {
     renderPage([])
 
     await screen.findByText('入力プリセットはまだありません。')
-    expect(screen.getByRole('link', { name: '新規作成' })).toHaveAttribute('href', '/expenses/presets/new')
+    expect(screen.getByText('「新規作成」から入力プリセットを作成できます。')).toBeInTheDocument()
+    // 空状態の作成ボタンと Card の主操作が同じ名前で2つ出る
+    const links = screen.getAllByRole('link', { name: '新規作成' })
+    expect(links).toHaveLength(2)
+    for (const link of links) expect(link).toHaveAttribute('href', '/expenses/presets/new')
   })
 
   it('shows which 経費区分 each preset belongs to', async () => {

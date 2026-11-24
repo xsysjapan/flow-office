@@ -6,6 +6,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
@@ -23,6 +24,8 @@ function requesterLabel(run: AdminCommandRun): string {
   if (run.requested_by_user_id === null) return 'システム'
   return run.requested_by_user?.name ?? run.requested_by_user_id
 }
+
+const PAGE_DESCRIPTION = '保守用のコマンドを選んで実行を依頼し、実行履歴を確認できます。実行は約1分以内に始まります。'
 
 export function AdminCommandsPage() {
   const commands = useAdminCommands()
@@ -73,12 +76,13 @@ export function AdminCommandsPage() {
     return <Input id={`command-${parameter.name}`} value={typeof value === 'string' ? value : ''} onChange={(event) => setParameters((current) => ({ ...current, [parameter.name]: event.target.value }))} />
   }
 
-  if (commands.isLoading) return <LoadingState />
-  if (commands.error) return <ErrorMessage error={commands.error} fallback="運用コマンドを取得できませんでした。" />
+  if (commands.isLoading) return <div className="space-y-6"><PageHeader description={PAGE_DESCRIPTION} /><LoadingState /></div>
+  if (commands.error) return <div className="space-y-6"><PageHeader description={PAGE_DESCRIPTION} /><ErrorMessage error={commands.error} fallback="運用コマンドを取得できませんでした。" /></div>
 
   return (
     <div className="space-y-6">
-      <Card title="運用コマンド">
+      <PageHeader description={PAGE_DESCRIPTION} />
+      <Card title="コマンドの実行">
         {(commands.data?.data.length ?? 0) === 0 ? <EmptyState title="実行可能なコマンドはありません。" description="AdminExecutableが設定されたコマンドがここに表示されます。" /> : <>
           <FormField label="コマンド" htmlFor="admin-command-select">
             <NativeSelect id="admin-command-select" value={commandName} onChange={(event) => setCommandName(event.target.value)}>

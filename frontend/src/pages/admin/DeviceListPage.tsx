@@ -7,6 +7,7 @@ import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableT
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
@@ -199,29 +200,31 @@ export function DeviceListPage() {
     )
   }
 
-  if (isLoading) return <LoadingState />
+  const header = (
+    <PageHeader
+      description="打刻レコーダー等の共有端末を登録し、詳細確認・失効・削除ができます。"
+      actions={
+        <Button onClick={() => setIsFormOpen((v) => !v)} variant={isFormOpen ? 'secondary' : 'primary'}>
+          {isFormOpen ? '閉じる' : '新規作成'}
+        </Button>
+      }
+    />
+  )
+  if (isLoading)
+    return (
+      <div className="space-y-6">
+        <PageHeader description="打刻レコーダー等の共有端末を登録し、詳細確認・失効・削除ができます。" />
+        <LoadingState />
+      </div>
+    )
 
   const list = devices?.data ?? []
   const selectedDevice = selectedInList ?? (selectedDeviceId !== null && fetchedDevice?.id === selectedDeviceId ? fetchedDevice : null)
 
   return (
-    <Card
-      title="端末管理"
-      actions={
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setIsFormOpen((v) => !v)} variant={isFormOpen ? 'secondary' : 'primary'}>
-            {isFormOpen ? '閉じる' : '新規登録'}
-          </Button>
-        </div>
-      }
-    >
-      <ListFilterBar className="mb-4" isFiltered={showDeleted} onClear={clearConditions}>
-        <label className="flex h-9 items-center gap-2 text-sm text-foreground">
-          <Checkbox checked={showDeleted} onCheckedChange={(checked) => changeShowDeleted(checked === true)} />
-          削除済みの端末も表示
-        </label>
-      </ListFilterBar>
-
+    <div className="space-y-6">
+    {header}
+    <Card>
       {isFormOpen && (
         <div className="mb-6 rounded-md border border-border p-4">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -292,20 +295,29 @@ export function DeviceListPage() {
               {!name ? '名称を入力してください。' : '役割を1つ以上選択してください。'}
             </p>
           )}
+
           {registerDevice.error && <ErrorMessage error={registerDevice.error} />}
         </div>
       )}
+
+      <ListFilterBar className="mb-4" isFiltered={showDeleted} onClear={clearConditions}>
+        <label className="flex h-9 items-center gap-2 text-sm text-foreground">
+          <Checkbox checked={showDeleted} onCheckedChange={(checked) => changeShowDeleted(checked === true)} />
+          削除済みの端末も表示
+        </label>
+      </ListFilterBar>
 
       {error ? (
         <ErrorMessage error={error} fallback="端末一覧の取得に失敗しました。" />
       ) : list.length === 0 ? (
         <EmptyState
-          title={showDeleted ? '削除済みの共有端末はありません。' : '登録済みの共有端末はまだありません。'}
+          title={showDeleted ? '削除済みの共有端末はありません。' : '共有端末はまだありません。'}
           description={
             showDeleted
               ? '「削除済みの端末も表示」をオフにすると稼働中の端末が表示されます。'
-              : '右上の「新規登録」から打刻リーダー等の共有端末を登録できます。'
+              : '「新規作成」から共有端末を作成できます。'
           }
+          action={showDeleted || isFormOpen ? undefined : <Button onClick={() => setIsFormOpen(true)}>新規作成</Button>}
         />
       ) : (
         <>
@@ -314,7 +326,7 @@ export function DeviceListPage() {
               <TableRow>
                 <TableHead className="whitespace-normal min-w-48">名称</TableHead>
                 <TableHead>種別</TableHead>
-                <TableHead>設置場所</TableHead>
+                <TableHead className="whitespace-normal min-w-48">設置場所</TableHead>
                 <TableHead>役割</TableHead>
                 <TableHead>状態</TableHead>
                 <TableHead>最終通信</TableHead>
@@ -333,7 +345,7 @@ export function DeviceListPage() {
                   >
                     <TableCell className="whitespace-normal min-w-48 font-medium text-foreground">{device.name}</TableCell>
                     <TableCell className="text-muted-foreground">{DEVICE_TYPE_LABELS[device.device_type]}</TableCell>
-                    <TableCell className="text-muted-foreground">{device.location_name ?? '-'}</TableCell>
+                    <TableCell className="whitespace-normal min-w-48 text-muted-foreground">{device.location_name ?? '-'}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {(device.roles ?? []).map((role) => DEVICE_ROLE_LABELS[role]).join(' / ') || '-'}
                     </TableCell>
@@ -390,6 +402,7 @@ export function DeviceListPage() {
         />
       )}
     </Card>
+    </div>
   )
 }
 

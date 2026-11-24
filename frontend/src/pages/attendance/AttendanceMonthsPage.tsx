@@ -110,7 +110,7 @@ export function AttendanceMonthsPage() {
   }
 
   return (
-    <Card title="自分の月次勤怠">
+    <Card title="月次勤怠">
       {years.length > 0 && (
         <ListFilterBar className="mb-4" isFiltered={selectedYear !== ''} onClear={clearConditions}>
           <FormField label="年" htmlFor="months-year-filter" className={filterWidth.select}>

@@ -7,6 +7,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { Input } from '../../components/ui/input'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import type { AssetNumberRule } from '../../api/assetNumberRules'
 import { notify } from '../../lib/notify'
@@ -57,8 +58,11 @@ export function AssetNumberRuleListPage() {
   const [editForm, setEditForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', isActive: true })
   const [defaultForm, setDefaultForm] = useState<RuleFormState>({ prefix: '', digitCount: '5', isActive: true })
 
-  if (rules.isLoading) return <LoadingState />
-  if (rules.error) return <ErrorMessage error={rules.error} fallback="採番ルールの取得に失敗しました。" />
+  const header = (
+    <PageHeader description="備品のカテゴリ別に管理番号の自動採番ルール(プレフィックス・桁数)を設定します。有効なルールが無いカテゴリは手入力になります。" />
+  )
+  if (rules.isLoading) return <div className="space-y-6">{header}<LoadingState /></div>
+  if (rules.error) return <div className="space-y-6">{header}<ErrorMessage error={rules.error} fallback="採番ルールの取得に失敗しました。" /></div>
 
   const allRules = rules.data ?? []
   const defaultRule = allRules.find((rule) => rule.is_default)
@@ -115,13 +119,7 @@ export function AssetNumberRuleListPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold">採番ルール設定</h1>
-        <p className="text-sm text-muted-foreground">
-          備品のカテゴリ別に管理番号の自動採番ルール(プレフィックス・桁数)を設定します。
-          有効なルールが無いカテゴリは手入力になります。
-        </p>
-      </div>
+      {header}
 
       {mutationError && <ErrorMessage error={mutationError} />}
 

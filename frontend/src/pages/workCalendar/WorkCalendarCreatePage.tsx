@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BackLink } from '../../components/BackLink/BackLink'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -148,7 +149,9 @@ export function WorkCalendarCreatePage() {
     <div className="flex flex-col gap-6">
       <BackLink className="mb-0" />
 
-      <Card title="会社カレンダーを作成">
+      <PageHeader description="会社カレンダーの名称などを入力して作成し、必要なら休日ソースも登録します。" />
+
+      <Card>
         {createCalendar.error && <ErrorMessage error={createCalendar.error} />}
 
         <FormField label="カレンダー名" htmlFor="create-calendar-name" required>

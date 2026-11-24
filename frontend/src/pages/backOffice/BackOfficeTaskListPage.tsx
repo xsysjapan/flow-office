@@ -331,7 +331,7 @@ export function BackOfficeTaskListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
+      <Card title="タスク一覧">
         <div className="flex flex-col gap-4">
           <ListQueueTabs
             aria-label="タスクの担当者区分"
@@ -398,7 +398,7 @@ export function BackOfficeTaskListPage() {
                 title="条件に一致するタスクがありません。"
                 description="検索条件を変えると表示される場合があります。"
                 action={
-                  <Button variant="secondary" size="sm" onClick={clearConditions}>
+                  <Button variant="secondary" onClick={clearConditions}>
                     検索条件をクリア
                   </Button>
                 }

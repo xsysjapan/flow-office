@@ -10,6 +10,7 @@ import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
+import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { AttendanceSubmissionReminderExclusionPanel } from "../../components/AttendanceSubmissionReminderExclusionPanel/AttendanceSubmissionReminderExclusionPanel";
 import { NativeSelect } from "../../components/ui/native-select";
@@ -157,15 +158,30 @@ export function UserRoleEditPage() {
     }
   }, [currentAssignment]);
 
-  if (isLoadingUser) return <LoadingState />;
+  const top = (
+    <>
+      <BackLink className="mb-0" />
+      <PageHeader description="利用者の基本情報・所属・休暇の自動付与・今月の働き方を確認し、更新できます。" />
+    </>
+  );
+  if (isLoadingUser)
+    return (
+      <div className="space-y-4">
+        {top}
+        <LoadingState />
+      </div>
+    );
   if (userError)
     return (
-      <ErrorMessage
-        error={userError}
-        fallback="ユーザーの取得に失敗しました。"
-      />
+      <div className="space-y-4">
+        {top}
+        <ErrorMessage
+          error={userError}
+          fallback="ユーザーの取得に失敗しました。"
+        />
+      </div>
     );
-  if (!user) return null;
+  if (!user) return <div className="space-y-4">{top}</div>;
 
   const handleSaveWorkStyle = () => {
     if (workStyleMode === "default") {
@@ -311,9 +327,9 @@ export function UserRoleEditPage() {
   };
 
   return (
-    <>
-      <BackLink />
-      <Card title={`${user.name}のユーザー管理`}>
+    <div className="space-y-4">
+      {top}
+      <Card title={user.name}>
         <div className="mb-6 rounded border p-3">
           <h2 className="mb-3 font-medium">基本情報</h2>
           <div className="grid gap-3 md:grid-cols-2">
@@ -1001,6 +1017,6 @@ export function UserRoleEditPage() {
           <AttendanceSubmissionReminderExclusionPanel userId={userId} />
         </div>
       </Card>
-    </>
+    </div>
   );
 }

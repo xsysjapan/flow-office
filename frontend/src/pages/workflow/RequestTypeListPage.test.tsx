@@ -49,7 +49,7 @@ function renderPage() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/admin/request-types']}>
         <RequestTypeListPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -81,13 +81,14 @@ describe('RequestTypeListPage', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/request-types']}>
           <RequestTypeListPage />
         </MemoryRouter>
       </QueryClientProvider>,
     )
 
     expect(await screen.findByText('申請種別はまだありません。')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '申請種別を作成' })).toHaveAttribute('href', '/admin/request-types/new')
+    expect(screen.getAllByRole('link', { name: '新規作成' })).toHaveLength(2)
+    for (const link of screen.getAllByRole('link', { name: '新規作成' })) expect(link).toHaveAttribute('href', '/admin/request-types/new')
   })
 })

@@ -119,8 +119,8 @@ describe('WorkCalendarDaysPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('2026年度')).toBeInTheDocument()
-    expect(screen.getByText('2026-04-01〜2026-04-30')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: '2026年度の日別設定' })).toBeInTheDocument()
+    expect(await screen.findByText('2026-04-01〜2026-04-30')).toBeInTheDocument()
 
     const workCell = await screen.findByRole('button', { name: '2026-04-01 勤務日' })
     expect(workCell).toBeInTheDocument()

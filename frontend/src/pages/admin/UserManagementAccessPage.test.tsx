@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -41,6 +41,36 @@ function renderPage(initialEntry = '/admin/groups') {
 describe('UserManagementAccessPage group type filter', () => {
   beforeEach(() => {
     vi.mocked(notify.success).mockClear()
+  })
+
+  it('shows the page header with a 新規作成 link to the group creation page', async () => {
+    renderPage()
+    await screen.findByText('総務部')
+
+    const header = within(screen.getByRole('region', { name: 'グループ' }))
+    expect(header.getByText('グループの一覧を確認し、基本情報と所属メンバーを管理します。')).toBeInTheDocument()
+    expect(header.getByRole('link', { name: '新規作成' })).toHaveAttribute('href', '/admin/groups/new')
+    expect(screen.queryByRole('link', { name: '新規グループ' })).not.toBeInTheDocument()
+  })
+
+  it('shows the 新規作成 button on the membership changes page header and an empty state', async () => {
+    vi.spyOn(userManagementApi, 'fetchManagedGroups').mockResolvedValue([] as never)
+    vi.spyOn(userManagementApi, 'fetchMembershipChangeSets').mockResolvedValue([] as never)
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/admin/membership-changes']}>
+          <UserManagementAccessPage section="membershipChanges" />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('所属変更はまだありません。')).toBeInTheDocument()
+    expect(screen.getByText('「新規作成」から所属変更を即時または日時指定で予約できます。')).toBeInTheDocument()
+    const header = within(screen.getByRole('region', { name: '所属変更' }))
+    expect(header.getByRole('button', { name: '新規作成' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '変更予約作成' })).not.toBeInTheDocument()
   })
 
   it('restores the filter from ?group_type_id', async () => {
@@ -101,7 +131,7 @@ describe('UserManagementAccessPage identities section', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={["/admin/identity-settings"]}>
           <UserManagementAccessPage section="identities" />
         </MemoryRouter>
       </QueryClientProvider>,

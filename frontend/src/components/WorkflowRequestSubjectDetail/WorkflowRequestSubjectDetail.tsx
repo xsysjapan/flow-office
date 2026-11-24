@@ -98,7 +98,7 @@ export function ExpenseClaimSubjectView({ subject }: { subject: WorkflowRequestE
               <TableRow>
                 <TableHead>日付</TableHead>
                 <TableHead>経費区分</TableHead>
-                <TableHead>内容</TableHead>
+                <TableHead className="whitespace-normal min-w-48">内容</TableHead>
                 <TableHead>金額</TableHead>
                 <TableHead>負担</TableHead>
               </TableRow>
@@ -108,7 +108,7 @@ export function ExpenseClaimSubjectView({ subject }: { subject: WorkflowRequestE
                 <TableRow key={item.id}>
                   <TableCell className="text-muted-foreground">{item.usage_date}</TableCell>
                   <TableCell className="text-muted-foreground">{item.category_name}</TableCell>
-                  <TableCell className="text-muted-foreground">{item.description}</TableCell>
+                  <TableCell className="whitespace-normal min-w-48 text-muted-foreground">{item.description}</TableCell>
                   <TableCell className="text-muted-foreground">{item.amount.toLocaleString()}円</TableCell>
                   <TableCell className="text-muted-foreground">
                     {item.payment_bearer ? paymentBearerLabel(item.payment_bearer) : '-'}

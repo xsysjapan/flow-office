@@ -41,12 +41,16 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   // WorkCalendarCreatePageは作成後に作成したカレンダー自身の詳細画面へ遷移する
   // (SKILL.md §2.5)ため、一覧画面へ戻って行を探し直す必要はない。
   await page.goto("/admin/work-calendars");
-  await page.getByRole("link", { name: "新規作成" }).click();
+  // 一覧が空だと空状態にも同名のリンクが出るため、画面見出し(PageHeader)の範囲で押す
+  await page
+    .getByRole("region", { name: "会社カレンダー", exact: true })
+    .getByRole("link", { name: "新規作成" })
+    .click();
   await page.getByLabel("カレンダー名").fill(calendarName);
   await page.getByRole("button", { name: "作成する" }).click();
 
   await expect(
-    page.getByRole("heading", { name: calendarName, level: 1 }),
+    page.getByRole("heading", { name: calendarName, level: 2 }),
   ).toBeVisible();
 
   // --- デフォルトに設定する(詳細画面自身のアクション) ---
@@ -61,7 +65,7 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
     page.getByRole("heading", { name: "カレンダー年度" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "新規作成" }).click();
+  await page.getByRole("button", { name: "新規作成" }).first().click(); // 一覧が空だと空状態にも同名のボタンが出る。Card の actions(先頭)を押す
   await page.getByLabel("年度", { exact: true }).fill(String(fiscalYear));
   await pickDate(page, "開始日", `${fiscalYear}-04-01`, { exact: true });
   await pickDate(page, "終了日", `${fiscalYear + 1}-03-31`, { exact: true });
@@ -107,7 +111,7 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
 
   // --- UC-C002: このカレンダーを使う勤務形態を作成する(一括操作の前提) ---
   await page.goto("/admin/work-styles");
-  await page.getByRole("button", { name: "新規作成" }).click();
+  await page.getByRole("button", { name: "新規作成" }).first().click(); // 一覧が空だと空状態にも同名のボタンが出る。Card の actions(先頭)を押す
   await page.getByLabel("コード").fill(workStyleCode);
   await page.getByLabel("名称").fill("E2Eテスト用勤務形態(ライフサイクル)");
   await page.getByLabel("労働時間制").selectOption({ value: "fixed" });
@@ -173,7 +177,7 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await page.goto("/admin/work-calendars");
   await calendarRow.getByRole("link", { name: calendarName }).click();
   await expect(
-    page.getByRole("heading", { name: calendarName, level: 1 }),
+    page.getByRole("heading", { name: calendarName, level: 2 }),
   ).toBeVisible();
   await yearRow.getByRole("link", { name: `${fiscalYear}年度` }).click();
   await expect(

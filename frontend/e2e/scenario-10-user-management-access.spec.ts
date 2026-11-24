@@ -10,6 +10,11 @@ const groupName = "E2EチームAlpha";
 const roleCode = "e2e_system_settings_reader";
 const roleName = "E2Eシステム設定閲覧";
 
+/** 管理画面の見出し(PageHeader)の範囲。画面名は h1 で、region の名前になる。 */
+function pageHeader(page: Page, title: string) {
+  return page.getByRole("region", { name: title, exact: true });
+}
+
 function card(page: Page, title: string) {
   return page
     .getByRole("heading", { name: title, exact: true })
@@ -194,10 +199,11 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
   await loginAs(page, SCENARIO_USERS.admin);
   await page.goto("/admin/group-types");
   await expect(
-    page.getByRole("heading", { name: "グループ種別管理" }).first(),
+    page.getByRole("heading", { name: "グループ種別", level: 1 }),
   ).toBeVisible();
 
-  const groupTypeCard = card(page, "グループ種別管理");
+  // グループ種別の Card は title を持たない(画面名は PageHeader)。画面内で一意な要素で絞る。
+  const groupTypeCard = page;
   await groupTypeCard
     .getByPlaceholder("新規グループ種別コード")
     .fill(groupTypeCode);
@@ -213,9 +219,11 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
 
   await page.goto("/admin/groups");
   await expect(
-    page.getByRole("heading", { name: "グループ管理" }).first(),
+    page.getByRole("heading", { name: "グループ", level: 1, exact: true }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "新規グループ" }).click();
+  await pageHeader(page, "グループ")
+    .getByRole("link", { name: "新規作成" })
+    .click();
   await page
     .getByLabel("グループ種別", { exact: true })
     .selectOption({ label: groupTypeName });
@@ -224,15 +232,15 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
   // 作成後は一覧ではなく作成されたグループ自身の詳細画面へ遷移する(更新時に同ページへ
   // 留まる挙動と揃える)。
   await expect(
-    page.getByRole("heading", { name: `${groupName}の詳細` }),
+    page.getByRole("heading", { name: groupName, exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "所属メンバー" }),
   ).toBeVisible();
 
   await page.goto("/admin/groups");
-  const groupCard = card(page, "グループ一覧");
-  const groupRow = groupCard.getByRole("row").filter({ hasText: groupName });
+  // グループ一覧の Card は title を持たない。画面内の表の行で絞る。
+  const groupRow = page.getByRole("row").filter({ hasText: groupName });
   await expect(groupRow).not.toContainText(groupCode);
   await expect(groupRow.getByText("0人", { exact: true })).toBeVisible();
   await expect(groupRow.getByRole("link", { name: /所属を管理/ })).toHaveCount(
@@ -244,7 +252,7 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
 
   await groupRow.getByRole("link", { name: groupName }).click();
   await expect(
-    page.getByRole("heading", { name: `${groupName}の詳細` }),
+    page.getByRole("heading", { name: groupName, exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "所属を追加" }).click();
   await page
@@ -322,8 +330,11 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
   ).toBeVisible();
 
   await page.goto("/admin/membership-changes");
-  const changeCard = card(page, "所属変更一覧");
-  await changeCard.getByRole("button", { name: "変更予約作成" }).click();
+  // 所属変更の Card は title を持たない。「新規作成」は PageHeader の範囲で押し、表は画面全体で探す。
+  const changeCard = page;
+  await pageHeader(page, "所属変更")
+    .getByRole("button", { name: "新規作成" })
+    .click();
   const changeDialog = page.getByRole("dialog", { name: "変更予約作成" });
   await expect(changeDialog).toBeVisible();
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);

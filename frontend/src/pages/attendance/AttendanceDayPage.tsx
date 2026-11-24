@@ -1307,7 +1307,7 @@ export function AttendanceDayPage() {
     <div className="flex flex-col gap-6">
       <BackLink />
       <Card
-        title="日次勤怠"
+        title={`${Number(date?.split('-')[1])}月${Number(date?.split('-')[2])}日の勤怠`}
         actions={
           <span className="flex items-center gap-1.5">
             {!!day?.calculation?.absence_minutes && <Badge tone="warning">欠勤あり</Badge>}

@@ -12,6 +12,7 @@ import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { notify } from "../../lib/notify";
 import { FormField } from "../../components/FormField/FormField";
+import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { ListFilterBar } from "../../components/ListFilterBar/ListFilterBar";
 import { filterWidth } from "../../components/ListFilterBar/filterWidth";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
@@ -197,52 +198,52 @@ export function UserManagementAccessPage({
     });
     setChangeDialogOpen(true);
   };
-  if (queries.some((x) => x.isLoading)) return <LoadingState />;
+  const pageDescription =
+    section === "groups"
+      ? "グループの一覧を確認し、基本情報と所属メンバーを管理します。"
+      : section === "membershipChanges"
+        ? "所属変更の予約、下書き、適用状況を一覧で管理します。"
+        : section === "identities"
+          ? "外部IDとの連携と、ユーザー項目の管理元を設定します。"
+          : "外部HRのCSVを取り込み、差分を確認してから適用します。";
+  if (queries.some((x) => x.isLoading))
+    return (
+      <div className="space-y-6">
+        <PageHeader description={pageDescription} />
+        <LoadingState />
+      </div>
+    );
   const error = queries.find((x) => x.error)?.error;
   if (error)
     return (
-      <ErrorMessage
-        error={error}
-        fallback="グループ管理設定の取得に失敗しました。"
-      />
+      <div className="space-y-6">
+        <PageHeader description={pageDescription} />
+        <ErrorMessage
+          error={error}
+          fallback="グループ管理設定の取得に失敗しました。"
+        />
+      </div>
     );
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold">
-          {section === "groups"
-            ? "グループ管理"
-            : section === "membershipChanges"
-              ? "所属変更"
-              : section === "identities"
-                ? "ID・管理元設定"
-                : "人事データ連携"}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {section === "groups"
-            ? "グループの基本情報と所属メンバーを管理します。"
-            : section === "membershipChanges"
-              ? "所属変更の予約、下書き、適用状況を一覧で管理します。"
-              : section === "identities"
-                ? "外部IDとの連携と、ユーザー項目の管理元を設定します。"
-                : "外部HR CSVの差分確認と取込を管理します。"}
-        </p>
-      </div>
+      <PageHeader
+        description={pageDescription}
+        actions={
+          section === "groups" ? (
+            <Button asChild>
+              <Link to="/admin/groups/new" state={forwardState}>
+                新規作成
+              </Link>
+            </Button>
+          ) : section === "membershipChanges" ? (
+            <Button onClick={openCreateChangeDialog}>新規作成</Button>
+          ) : undefined
+        }
+      />
       {section === "groups" && (
         <>
-          <Card
-            title="グループ一覧"
-            actions={
-              <Link
-                className="text-sm font-medium text-primary hover:underline"
-                to="/admin/groups/new"
-                state={forwardState}
-              >
-                新規グループ
-              </Link>
-            }
-          >
+          <Card>
             <ListFilterBar
               className="mb-3"
               isFiltered={groupTypeFilter !== ""}
@@ -271,20 +272,26 @@ export function UserManagementAccessPage({
               <EmptyState
                 title={
                   groupTypeFilter
-                    ? "条件に一致するグループがありません。"
-                    : "グループがまだありません。"
+                    ? "条件に一致するグループはありません。"
+                    : "グループはまだありません。"
                 }
                 description={
                   groupTypeFilter
-                    ? "グループ種別の絞り込みを変更してください。"
-                    : "「新規グループ」からグループを作成すると、社員を組織単位で管理できます。"
+                    ? "検索条件を変えると表示される場合があります。"
+                    : "「新規作成」からグループを作成できます。"
                 }
                 action={
                   groupTypeFilter ? (
                     <Button variant="secondary" onClick={() => setGroupTypeFilter("")}>
                       検索条件をクリア
                     </Button>
-                  ) : undefined
+                  ) : (
+                    <Button asChild>
+                      <Link to="/admin/groups/new" state={forwardState}>
+                        新規作成
+                      </Link>
+                    </Button>
+                  )
                 }
               />
             ) : (
@@ -518,12 +525,7 @@ export function UserManagementAccessPage({
 
       {section === "membershipChanges" && (
         <>
-          <Card
-            title="所属変更一覧"
-            actions={
-              <Button onClick={openCreateChangeDialog}>変更予約作成</Button>
-            }
-          >
+          <Card>
             <Dialog
               open={changeDialogOpen}
               onOpenChange={(open) => {
@@ -786,8 +788,9 @@ export function UserManagementAccessPage({
             )}
             {changeSets.data?.length === 0 ? (
               <EmptyState
-                title="所属変更の予約はまだありません。"
-                description="「変更予約作成」から所属変更を即時または日時指定で予約できます。"
+                title="所属変更はまだありません。"
+                description="「新規作成」から所属変更を即時または日時指定で予約できます。"
+                action={<Button onClick={openCreateChangeDialog}>新規作成</Button>}
               />
             ) : (
             <Table>

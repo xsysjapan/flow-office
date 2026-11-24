@@ -32,7 +32,7 @@ function withSeededList(data: Paginated<User>) {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/users']}>
           <UserListPage />
         </MemoryRouter>
       </QueryClientProvider>

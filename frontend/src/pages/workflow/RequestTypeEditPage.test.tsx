@@ -75,7 +75,7 @@ describe('RequestTypeEditPage', () => {
       'href',
       '/admin/request-types?x=1',
     )
-    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
 
     expect(await screen.findByText('申請種別一覧ページ')).toBeInTheDocument()
   })

@@ -325,7 +325,7 @@ test.describe('備品管理', () => {
       await adminPage.getByLabel('管理番号').fill(deletableAssetNo)
       await adminPage.getByLabel('管理番号').press('Enter')
       // 管理番号で絞り込んだ結果0件のため、検索条件向けの空状態文言が表示される
-      // (未フィルタ時の「登録されている備品がまだありません。」とは別の文言)。
+      // (未フィルタ時の「備品はまだありません。」とは別の文言)。
       await expect(adminPage.getByText('条件に一致する備品がありません。')).toBeVisible()
     } finally {
       await adminContext.close()
@@ -354,15 +354,18 @@ test.describe('備品管理', () => {
 
       await loginAs(employeePage, SCENARIO_USERS.punchEmployee)
 
-      // 一覧画面: 新規登録・バックオフィス系一括操作リンクが表示されない。
+      // 一覧画面: 新規作成・バックオフィス系一括操作(「一括操作」メニュー内)が表示されない。
       await employeePage.goto('/assets')
-      await expect(employeePage.getByRole('button', { name: '新規登録' })).toHaveCount(0)
+      await expect(employeePage.getByRole('button', { name: '一括操作' })).toBeVisible()
+      await expect(employeePage.getByRole('button', { name: '新規作成' })).toHaveCount(0)
+      await employeePage.getByRole('button', { name: '一括操作' }).click()
       // getByRole の name はデフォルトで部分一致するため、「一括返却」だけで指定すると
-      // 「セルフ一括返却」ともマッチしてしまう。exact指定でバックオフィス専用リンクだけを見る。
-      await expect(employeePage.getByRole('link', { name: 'セルフ一括貸出', exact: true })).toBeVisible()
-      await expect(employeePage.getByRole('link', { name: '一括貸与', exact: true })).toHaveCount(0)
-      await expect(employeePage.getByRole('link', { name: '一括返却', exact: true })).toHaveCount(0)
-      await expect(employeePage.getByRole('link', { name: '一括移設', exact: true })).toHaveCount(0)
+      // 「セルフ一括返却」ともマッチしてしまう。exact指定でバックオフィス専用項目だけを見る。
+      await expect(employeePage.getByRole('menuitem', { name: 'セルフ一括貸出', exact: true })).toBeVisible()
+      await expect(employeePage.getByRole('menuitem', { name: '一括貸与', exact: true })).toHaveCount(0)
+      await expect(employeePage.getByRole('menuitem', { name: '一括返却', exact: true })).toHaveCount(0)
+      await expect(employeePage.getByRole('menuitem', { name: '一括移設', exact: true })).toHaveCount(0)
+      await employeePage.keyboard.press('Escape')
 
       // 詳細画面: 編集リンク・貸与/削除等の管理操作ボタンが表示されない
       // (backoffice方式・available状態のため一般ユーザーが実行できる操作は無い)。

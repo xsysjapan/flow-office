@@ -8,6 +8,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Textarea } from '../../components/ui/textarea'
@@ -137,6 +138,7 @@ export function CalendarBulkOperationsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader description="複数従業員の勤務予定を一括で適用・取消します。プレビューで確認してから確定します。" />
       <Card title="一括操作を作成">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="操作種別" htmlFor="bulk-op-type" required>

@@ -106,7 +106,7 @@ describe('WorkCalendarDetailPage', () => {
 
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: '本社カレンダー', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '本社カレンダー', level: 2 })).toBeInTheDocument()
     expect(screen.getByText('非デフォルト')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'デフォルトに設定する' })).toBeInTheDocument()
   })
@@ -470,7 +470,7 @@ describe('WorkCalendarDetailPage', () => {
 
       renderPage()
 
-      await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
+      await userEvent.click((await screen.findAllByRole('button', { name: '新規作成' }))[0])
       await userEvent.type(await screen.findByLabelText('年度'), '2026')
       await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))
 
@@ -490,7 +490,7 @@ describe('WorkCalendarDetailPage', () => {
 
       renderPage()
 
-      await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
+      await userEvent.click((await screen.findAllByRole('button', { name: '新規作成' }))[0])
       await userEvent.type(await screen.findByLabelText('年度'), '2026')
       await pickDate(userEvent.setup(), '開始日', '2026-04-05')
       await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))

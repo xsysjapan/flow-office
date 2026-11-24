@@ -214,8 +214,8 @@ export function MyIntegrationsPage() {
 
       {list.length === 0 ? (
         <EmptyState
-          title="登録済みの連携はまだありません。"
-          description="API・MCP連携を登録すると、ClaudeなどのAIアプリから許可した操作だけを行えるようになります。"
+          title="連携はまだありません。"
+          description="「新規登録」から連携を登録できます。"
           action={
             !isFormOpen ? (
               <Button onClick={() => setIsFormOpen(true)}>新規登録</Button>

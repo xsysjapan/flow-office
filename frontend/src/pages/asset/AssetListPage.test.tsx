@@ -110,25 +110,48 @@ describe('AssetListPage', () => {
     currentUser = { id: 'user-1', effective_permissions: ['asset.manage'] }
   })
 
-  it('shows a register button for asset.manage holders and navigates to the create page', async () => {
+  it('shows a create button for asset.manage holders (also in the empty state) and navigates to the create page', async () => {
     vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([]))
 
     renderPage()
 
-    const button = await screen.findByRole('button', { name: '新規登録' })
-    await userEvent.click(button)
+    await screen.findByText('備品はまだありません。')
+    expect(screen.getByText('「新規作成」から備品を作成できます。')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '新規作成' })).toHaveLength(2)
+    const actions = screen.getByRole('button', { name: '一括操作' }).parentElement as HTMLElement
+    await userEvent.click(within(actions).getByRole('button', { name: '新規作成' }))
 
     expect(navigate).toHaveBeenCalledWith('/assets/new', { state: { backTo: expect.objectContaining({ pathname: '/' }) } })
   })
 
-  it('hides the register button for users without asset.manage', async () => {
+  it('lists all bulk operations in the 一括操作 menu for asset.manage holders', async () => {
+    vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([lendingAsset]))
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: '一括操作' }))
+    expect(screen.getByRole('menuitem', { name: 'セルフ一括貸出' })).toHaveAttribute('href', '/assets/bulk/self-loan')
+    expect(screen.getByRole('menuitem', { name: 'セルフ一括返却' })).toHaveAttribute('href', '/assets/bulk/self-return')
+    expect(screen.getByRole('menuitem', { name: '一括貸与' })).toHaveAttribute('href', '/assets/bulk/lend')
+    expect(screen.getByRole('menuitem', { name: '一括返却' })).toHaveAttribute('href', '/assets/bulk/return')
+    expect(screen.getByRole('menuitem', { name: '一括移設' })).toHaveAttribute('href', '/assets/bulk/relocate')
+  })
+
+  it('hides the create button and the manager-only bulk operations for users without asset.manage', async () => {
     currentUser = { id: 'user-2', effective_permissions: [] }
     vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([]))
 
     renderPage()
 
-    await screen.findByText('登録されている備品がまだありません。')
-    expect(screen.queryByRole('button', { name: '新規登録' })).not.toBeInTheDocument()
+    await screen.findByText('備品はまだありません。')
+    expect(screen.queryByRole('button', { name: '新規作成' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/から備品を作成できます/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '一括操作' }))
+    expect(screen.getByRole('menuitem', { name: 'セルフ一括貸出' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'セルフ一括返却' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '一括貸与' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '一括返却' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '一括移設' })).not.toBeInTheDocument()
   })
 
   it('shows an empty state when there are no assets', async () => {
@@ -136,7 +159,7 @@ describe('AssetListPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('登録されている備品がまだありません。')).toBeInTheDocument()
+    expect(await screen.findByText('備品はまだありません。')).toBeInTheDocument()
   })
 
   it('lists assets with management type and current status summary', async () => {
@@ -170,7 +193,7 @@ describe('AssetListPage', () => {
 
     renderPage('/?page=2')
 
-    await screen.findByText('登録されている備品がまだありません。')
+    await screen.findByText('備品はまだありません。')
     await userEvent.type(screen.getByLabelText('キーワード'), 'EQ-001')
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?q=EQ-001$/))
@@ -182,7 +205,7 @@ describe('AssetListPage', () => {
 
     renderPage()
 
-    await screen.findByText('登録されている備品がまだありません。')
+    await screen.findByText('備品はまだありません。')
     expect(screen.queryByLabelText('管理番号')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: '詳細条件' }))
     await userEvent.type(screen.getByLabelText('管理番号'), 'EQ-001')

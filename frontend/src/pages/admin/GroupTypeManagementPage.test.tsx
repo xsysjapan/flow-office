@@ -43,7 +43,7 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/admin/group-types"]}>
         <GroupTypeManagementPage />
       </MemoryRouter>
     </QueryClientProvider>,

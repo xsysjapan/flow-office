@@ -4,6 +4,7 @@ import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
@@ -1263,6 +1264,7 @@ function ShiftScheduleBoardCard() {
 export function ShiftsPage() {
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader description="シフトパターンやローテーションを作り、社員のシフトを生成・確認できます。" />
       <ShiftGenerationCard />
       <WeeklyPatternShiftAssignmentCard />
       <MonthlyPatternShiftAssignmentCard />

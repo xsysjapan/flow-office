@@ -7,6 +7,7 @@ import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
+import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { NativeSelect } from "../../components/ui/native-select";
 import { notify } from "../../lib/notify";
 import * as userManagement from "../../hooks/useUserManagement";
@@ -36,24 +37,31 @@ export function GroupTypeManagementPage() {
     is_system: false,
   });
 
-  if (types.isLoading) return <LoadingState />;
+  const header = (
+    <PageHeader description="グループの分類と所属数・主所属の制約を管理します。" />
+  );
+  if (types.isLoading)
+    return (
+      <div className="space-y-6">
+        {header}
+        <LoadingState />
+      </div>
+    );
   if (types.error)
     return (
-      <ErrorMessage
-        error={types.error}
-        fallback="グループ種別設定の取得に失敗しました。"
-      />
+      <div className="space-y-6">
+        {header}
+        <ErrorMessage
+          error={types.error}
+          fallback="グループ種別設定の取得に失敗しました。"
+        />
+      </div>
     );
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold">グループ種別管理</h1>
-        <p className="text-sm text-muted-foreground">
-          グループの分類と所属数・主所属の制約を管理します。
-        </p>
-      </div>
-      <Card title="グループ種別管理">
+      {header}
+      <Card>
         <h2 className="mb-3 text-base font-semibold">新規作成</h2>
         <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <FormField label="コード" htmlFor="group-type-create-code">

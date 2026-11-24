@@ -39,7 +39,7 @@ const meta = {
   decorators: [
     (Story) => (
       <AuthContext.Provider value={mockAuthValue}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin']}>
           <Story />
         </MemoryRouter>
       </AuthContext.Provider>

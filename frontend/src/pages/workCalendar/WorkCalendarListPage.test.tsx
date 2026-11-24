@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -128,7 +128,9 @@ describe('WorkCalendarListPage', () => {
 
     renderPage()
 
-    await userEvent.click(await screen.findByRole('link', { name: '会社カレンダーを作成' }))
+    expect(await screen.findByText('「新規作成」から会社カレンダーを作成できます。')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: '新規作成' })).toHaveLength(2)
+    await userEvent.click(within(screen.getByRole('region', { name: '会社カレンダー' })).getByRole('link', { name: '新規作成' }))
 
     expect(await screen.findByText('カレンダー作成ページ')).toBeInTheDocument()
   })

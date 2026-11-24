@@ -21,7 +21,7 @@ function LocationStateProbe() {
   return <div data-testid="location-state">{`${location.pathname}|${location.state ? 'with-state' : 'no-state'}`}</div>
 }
 
-function renderPage(initialEntry = '/') {
+function renderPage(initialEntry = '/admin/users') {
   vi.spyOn(userManagementApi, 'fetchManagedGroups').mockResolvedValue([
     {
       id: 'group-1',
@@ -78,7 +78,8 @@ describe('UserListPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('該当するユーザーはいません。')).toBeInTheDocument()
+    expect(await screen.findByText('ユーザーはまだありません。')).toBeInTheDocument()
+    expect(screen.getByText('「新規作成」からユーザーを作成できます。')).toBeInTheDocument()
   })
 
   it('opens the HR import page from the header link without passing the back state', async () => {
@@ -162,7 +163,9 @@ describe('UserListPage', () => {
       .mockResolvedValue({ id: 'user-9', name: '新入社員', email: 'new@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null })
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'ユーザーを作成' }))
+    const header = within(await screen.findByRole('region', { name: 'ユーザー' }))
+    await userEvent.click(await header.findByRole('button', { name: '新規作成' }))
+    expect(header.getByRole('button', { name: '閉じる' })).toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('氏名'), '新入社員')
     await userEvent.type(screen.getByLabelText('メールアドレス'), 'new@example.com')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
@@ -175,8 +178,8 @@ describe('UserListPage', () => {
     const empty: Paginated<User> = { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(empty)
 
-    renderPage('/?page=2')
-    await screen.findByText('該当するユーザーはいません。')
+    renderPage('/admin/users?page=2')
+    await screen.findByText('ユーザーはまだありません。')
 
     await userEvent.type(screen.getByLabelText('キーワード'), '山田')
     expect(screen.getByLabelText('キーワード')).toHaveAttribute('placeholder', '氏名・メールアドレス・社員番号')
@@ -199,7 +202,7 @@ describe('UserListPage', () => {
   it('opens the advanced conditions initially when a checkbox filter is on and shows the count', async () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
 
-    renderPage('/?external_unlinked=1&external_hr=1')
+    renderPage('/admin/users?external_unlinked=1&external_hr=1')
 
     expect(await screen.findByRole('button', { name: '詳細条件(2)' })).toBeInTheDocument()
     expect(screen.getByText('Microsoft未連携')).toBeInTheDocument()
@@ -209,7 +212,7 @@ describe('UserListPage', () => {
   it('clears every condition including the advanced ones with "検索条件をクリア"', async () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
 
-    renderPage('/?q=yama&external_hr=1&account_status=active&page=2')
+    renderPage('/admin/users?q=yama&external_hr=1&account_status=active&page=2')
 
     await userEvent.click((await screen.findAllByRole('button', { name: '検索条件をクリア' }))[0])
 
@@ -221,7 +224,7 @@ describe('UserListPage', () => {
     const empty: Paginated<User> = { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(empty)
 
-    renderPage('/?group_type_id=abc&group_id=12&account_status=bogus&page=0&q=yama')
+    renderPage('/admin/users?group_type_id=abc&group_id=12&account_status=bogus&page=0&q=yama')
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?q=yama$/))
     await waitFor(() => expect(usersApi.fetchUsers).toHaveBeenLastCalledWith('yama', 20, {}, 1))
@@ -232,7 +235,7 @@ describe('UserListPage', () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(empty)
     const groupId = '0A1B2C3D-0000-4000-8000-ABCDEF123456'
 
-    renderPage(`/?group_id=${groupId}&account_status=active&group_type_id=2&page=2`)
+    renderPage(`/admin/users?group_id=${groupId}&account_status=active&group_type_id=2&page=2`)
 
     await screen.findByText('条件に一致するユーザーはいません。')
     expect(screen.getByTestId('location-search').textContent).toBe(`?group_id=${groupId}&account_status=active&group_type_id=2&page=2`)

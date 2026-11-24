@@ -26,6 +26,7 @@ import {
 } from "../../components/ui/table";
 import { useCreateUser, useUsers } from "../../hooks/useUsers";
 import { useGroupTypes, useManagedGroups } from "../../hooks/useUserManagement";
+import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { notify } from "../../lib/notify";
 import {
   ACCOUNT_STATUS_OPTIONS,
@@ -172,32 +173,32 @@ export function UserListPage() {
   const groupTypeOptions = groupTypes ?? [];
 
   return (
-    <Card
-      title="ユーザー一覧"
-      actions={
-        <Link
-          className="text-sm font-medium text-primary hover:underline"
-          to="/admin/hr-import"
-        >
-          外部ID・HR連携
-        </Link>
-      }
-    >
-      <div className="mb-4">
-        {/* Pattern exception: ユーザー作成をDialog/Sheet/Pageではなく、一覧のCard内に
-            展開するインラインフォームで実装する(ui-interaction-patterns SKILL.md §2.11は
-            Dialog/Sheet/Pageの3種のみを標準としている)。
-            Reason: 入力項目が氏名・メールアドレス・社員番号・部署・役職の5項目のみで、かつ
-            管理者にとって頻度の高い操作であるため、Dialog/Pageへの遷移コストを避け、
-            一覧のコンテキストを保ったまま作成できる価値を優先した。 */}
-        <Button
-          variant="secondary"
-          onClick={() => setShowCreate((value) => !value)}
-        >
-          {showCreate ? "キャンセル" : "ユーザーを作成"}
-        </Button>
+    <div className="space-y-6">
+      <PageHeader
+        description="社員・協力会社社員のアカウントを検索し、作成や詳細の確認・編集ができます。"
+        actions={
+          <>
+            <Button variant="secondary" asChild>
+              <Link to="/admin/hr-import">外部ID・HR連携</Link>
+            </Button>
+            {/* Pattern exception: ユーザー作成をDialog/Sheet/Pageではなく、一覧のCard内に
+                展開するインラインフォームで実装する(ui-interaction-patterns SKILL.md §2.11は
+                Dialog/Sheet/Pageの3種のみを標準としている)。
+                Reason: 入力項目が氏名・メールアドレス・社員番号・部署・役職の5項目のみで、かつ
+                管理者にとって頻度の高い操作であるため、Dialog/Pageへの遷移コストを避け、
+                一覧のコンテキストを保ったまま作成できる価値を優先した。 */}
+            <Button
+              variant={showCreate ? "secondary" : "primary"}
+              onClick={() => setShowCreate((value) => !value)}
+            >
+              {showCreate ? "閉じる" : "新規作成"}
+            </Button>
+          </>
+        }
+      />
+      <Card>
         {showCreate && (
-          <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-3">
+          <div className="mb-4 grid gap-2 rounded border p-3 md:grid-cols-3">
             <Input
               aria-label="氏名"
               placeholder="氏名"
@@ -283,7 +284,6 @@ export function UserListPage() {
             )}
           </div>
         )}
-      </div>
       <ListFilterBar
         className="mb-4"
         isFiltered={isFiltered}
@@ -366,18 +366,20 @@ export function UserListPage() {
         <LoadingState />
       ) : users.length === 0 ? (
         <EmptyState
-          title={isFiltered ? "条件に一致するユーザーはいません。" : "該当するユーザーはいません。"}
+          title={isFiltered ? "条件に一致するユーザーはいません。" : "ユーザーはまだありません。"}
           description={
             isFiltered
-              ? "検索条件を変更するか、「検索条件をクリア」から条件を解除してください。"
-              : "「ユーザーを作成」から新しいユーザーを追加できます。"
+              ? "検索条件を変えると表示される場合があります。"
+              : "「新規作成」からユーザーを作成できます。"
           }
           action={
             isFiltered ? (
-              <Button variant="secondary" size="sm" onClick={clearFilters}>
+              <Button variant="secondary" onClick={clearFilters}>
                 検索条件をクリア
               </Button>
-            ) : undefined
+            ) : showCreate ? undefined : (
+              <Button onClick={() => setShowCreate(true)}>新規作成</Button>
+            )
           }
         />
       ) : (
@@ -510,5 +512,6 @@ export function UserListPage() {
         />
       )}
     </Card>
+    </div>
   );
 }

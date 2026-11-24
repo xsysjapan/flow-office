@@ -314,7 +314,11 @@ describe('WorkflowRequestListPage', () => {
     await screen.findByText('申請はまだありません。')
     expect(screen.queryByRole('link', { name: '有給申請' })).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: '新規申請' }))
+    // 空状態の作成ボタンと Card の主操作が同じ名前で2つ出る(Card の主操作が先)
+    expect(screen.getByText('「新規申請」から申請を作成できます。')).toBeInTheDocument()
+    const newRequestButtons = screen.getAllByRole('button', { name: '新規申請' })
+    expect(newRequestButtons).toHaveLength(2)
+    await userEvent.click(newRequestButtons[0])
 
     const dialog = within(await screen.findByRole('dialog'))
     expect(dialog.getByRole('button', { name: /有給申請/ })).toBeInTheDocument()

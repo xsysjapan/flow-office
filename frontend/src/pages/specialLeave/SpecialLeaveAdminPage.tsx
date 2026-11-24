@@ -9,6 +9,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
 import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { ChangeGrantDaysButton } from '../../components/ChangeGrantDaysButton/ChangeGrantDaysButton'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
@@ -776,6 +777,7 @@ function SpecialLeaveUsageCard() {
 export function SpecialLeaveAdminPage() {
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader description="特別休暇の種類・自動付与ルールを設定し、手動付与や使用状況も確認できます。" />
       <SpecialLeaveTypesCard />
       <SpecialLeaveGrantRulesCard />
       <ManualGrantCard />

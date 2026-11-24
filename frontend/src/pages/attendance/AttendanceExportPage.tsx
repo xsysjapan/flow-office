@@ -8,6 +8,7 @@ import { FormField } from '../../components/FormField/FormField'
 import { NativeSelect } from '../../components/ui/native-select'
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import { useDownloadAttendanceCsv, useDownloadAttendanceExcel } from '../../hooks/useAttendance'
 import { useUser } from '../../hooks/useUsers'
@@ -106,7 +107,9 @@ export function AttendanceExportPage() {
   }
 
   return (
-    <Card title="勤怠データ出力">
+    <div className="space-y-6">
+    <PageHeader description="対象月・社員を指定して、給与計算連携用のCSVまたは確認用のExcelを出力します。" />
+    <Card>
       <p className="mb-4 text-sm text-muted-foreground">
         承認済み・締め処理済みの月次勤怠がCSVに含まれます。対象社員を指定しない場合は全社員が対象です。
         対象月・対象社員はいずれも複数指定できます。
@@ -256,5 +259,6 @@ export function AttendanceExportPage() {
         )}
       </div>
     </Card>
+    </div>
   )
 }

@@ -5,6 +5,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { notify } from '../../lib/notify'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -94,8 +95,26 @@ export function ExpenseCategoryEditPage() {
     setIsActive(existing.is_active)
   }, [existing])
 
-  if (!isCreate && isLoading) return <LoadingState />
-  if (!isCreate && listError) return <ErrorMessage error={listError} fallback="経費区分の取得に失敗しました。" />
+  const top = (
+    <>
+      <BackLink className="mb-0" />
+      <PageHeader description="経費区分の名称・証憑要件・追加入力項目などを入力し、保存します。" />
+    </>
+  )
+  if (!isCreate && isLoading)
+    return (
+      <div className="flex flex-col gap-6">
+        {top}
+        <LoadingState />
+      </div>
+    )
+  if (!isCreate && listError)
+    return (
+      <div className="flex flex-col gap-6">
+        {top}
+        <ErrorMessage error={listError} fallback="経費区分の取得に失敗しました。" />
+      </div>
+    )
 
   const isBusy = createCategory.isPending || updateCategory.isPending
   const error = createCategory.error ?? updateCategory.error
@@ -147,9 +166,9 @@ export function ExpenseCategoryEditPage() {
   }
 
   return (
-    <>
-      <BackLink />
-      <Card title={isCreate ? '経費区分の新規作成' : '経費区分の編集'}>
+    <div className="flex flex-col gap-6">
+      {top}
+      <Card>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="コード" htmlFor="code" required>
             <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
@@ -288,6 +307,6 @@ export function ExpenseCategoryEditPage() {
           )}
         </div>
       </Card>
-    </>
+    </div>
   )
 }

@@ -39,7 +39,7 @@ function renderPage() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/admin/expense-categories']}>
         <ExpenseCategoryListPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -83,16 +83,17 @@ describe('ExpenseCategoryListPage', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/expense-categories']}>
           <ExpenseCategoryListPage />
         </MemoryRouter>
       </QueryClientProvider>,
     )
 
     expect(await screen.findByText('経費区分はまだありません。')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '経費区分を作成' })).toHaveAttribute(
-      'href',
-      '/admin/expense-categories/new',
-    )
+    expect(screen.getByText('「新規作成」から経費区分を作成できます。')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: '新規作成' })).toHaveLength(2)
+    for (const link of screen.getAllByRole('link', { name: '新規作成' })) {
+      expect(link).toHaveAttribute('href', '/admin/expense-categories/new')
+    }
   })
 })

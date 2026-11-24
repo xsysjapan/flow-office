@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { Paginated, User, WorkCalendar, WorkStyle } from '../../api/types'
 import { WorkStylesPage } from './WorkStylesPage'
@@ -66,7 +67,9 @@ function withSeeded(workStyles: WorkStyle[] = [workStyle]) {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/admin/work-styles']}>
         <WorkStylesPage />
+      </MemoryRouter>
       </QueryClientProvider>
     )
   }

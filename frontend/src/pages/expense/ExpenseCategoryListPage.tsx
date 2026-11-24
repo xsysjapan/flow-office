@@ -7,6 +7,7 @@ import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableT
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import type { ExpenseEvidenceType } from '../../api/types'
 import { useExpenseCategories } from '../../hooks/useExpenseCategories'
@@ -25,14 +26,28 @@ export function ExpenseCategoryListPage() {
   const forwardState = useForwardState()
   const { data: categories, isLoading, error } = useExpenseCategories(true)
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="経費区分の取得に失敗しました。" />
+  const description = '経費区分の一覧から、証憑要件や承認省略ルールを作成・編集できます。'
+  if (isLoading)
+    return (
+      <div className="space-y-6">
+        <PageHeader description={description} />
+        <LoadingState />
+      </div>
+    )
+  if (error)
+    return (
+      <div className="space-y-6">
+        <PageHeader description={description} />
+        <ErrorMessage error={error} fallback="経費区分の取得に失敗しました。" />
+      </div>
+    )
 
   const items = categories ?? []
 
   return (
-    <Card
-      title="経費区分一覧"
+    <div className="space-y-6">
+    <PageHeader
+      description={description}
       actions={
         <Button asChild>
           <Link to="/admin/expense-categories/new" state={forwardState}>
@@ -40,15 +55,16 @@ export function ExpenseCategoryListPage() {
           </Link>
         </Button>
       }
-    >
+    />
+    <Card>
       {items.length === 0 ? (
         <EmptyState
           title="経費区分はまだありません。"
-          description="経費区分を作成すると、社員が経費精算の明細を入力できるようになります。"
+          description="「新規作成」から経費区分を作成できます。"
           action={
-            <Button asChild variant="secondary" size="sm">
+            <Button asChild>
               <Link to="/admin/expense-categories/new" state={forwardState}>
-                経費区分を作成
+                新規作成
               </Link>
             </Button>
           }
@@ -103,5 +119,6 @@ export function ExpenseCategoryListPage() {
         </Table>
       )}
     </Card>
+    </div>
   )
 }

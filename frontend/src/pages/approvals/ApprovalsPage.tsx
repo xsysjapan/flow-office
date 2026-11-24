@@ -313,9 +313,9 @@ export function ApprovalsPage() {
         isFiltered ? (
           <EmptyState
             title="条件に一致する申請はありません。"
-            description="年月の条件を変えると表示される場合があります。"
+            description="検索条件を変えると表示される場合があります。"
             action={
-              <Button variant="secondary" size="sm" onClick={clearFilters}>
+              <Button variant="secondary" onClick={clearFilters}>
                 検索条件をクリア
               </Button>
             }

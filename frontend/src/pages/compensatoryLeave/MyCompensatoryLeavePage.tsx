@@ -368,7 +368,7 @@ export function MyCompensatoryLeavePage() {
   return (
     <div className="flex flex-col gap-6">
       <BackLink />
-      <Card title="自分の代休">
+      <Card title="代休">
         <p className="mb-4 text-sm text-foreground">
           残り<strong className="mx-1 text-lg font-semibold">{totalRemaining}</strong>日
         </p>
@@ -407,7 +407,7 @@ export function MyCompensatoryLeavePage() {
         <CompensatoryLeaveRequestForm />
       </Card>
 
-      <Card title="自分の代休申請">
+      <Card title="代休申請">
         <MyCompensatoryLeaveRequestList />
       </Card>
     </div>

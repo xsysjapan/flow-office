@@ -8,6 +8,7 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { CorrectFiscalYearDialog } from '../../components/CorrectFiscalYearDialog/CorrectFiscalYearDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
@@ -375,7 +376,14 @@ export function WorkCalendarDaysPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dates, daysMap, hoursPerDay])
 
-  if (!calendarId || !fiscalYear) return <p className="text-sm text-muted-foreground">カレンダー年度が見つかりません。</p>
+  const pageDescription = '年度ごとの勤務日・休日を日別に編集し、公開できます。公開後は従業員に適用されます。'
+  if (!calendarId || !fiscalYear)
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader description={pageDescription} />
+        <p className="text-sm text-muted-foreground">カレンダー年度が見つかりません。</p>
+      </div>
+    )
 
   const handleSyncYear = () => {
     if (!resolvedYearId) return
@@ -455,24 +463,34 @@ export function WorkCalendarDaysPage() {
       <BackLink label={calendar?.name} className="mb-0" />
 
       {isLoadingYear ? (
-        <LoadingState />
+        <>
+          <PageHeader description={pageDescription} />
+          <LoadingState />
+        </>
       ) : yearError ? (
-        <ErrorMessage error={yearError} fallback="カレンダー年度の取得に失敗しました。" />
+        <>
+          <PageHeader description={pageDescription} />
+          <ErrorMessage error={yearError} fallback="カレンダー年度の取得に失敗しました。" />
+        </>
       ) : !year ? (
-        <p className="text-sm text-muted-foreground">カレンダー年度が見つかりません。</p>
+        <>
+          <PageHeader description={pageDescription} />
+          <p className="text-sm text-muted-foreground">カレンダー年度が見つかりません。</p>
+        </>
       ) : (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-col gap-1">
-              <h1 className="text-lg font-semibold text-foreground">{year.fiscal_year}年度</h1>
-              <span className="text-sm text-muted-foreground">
-                {year.starts_on}〜{year.ends_on}
-              </span>
-            </div>
-            <Badge tone={YEAR_STATUS_TONE[year.status]}>{YEAR_STATUS_LABEL[year.status]}</Badge>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
+        <>
+          <PageHeader
+            description={pageDescription}
+            meta={
+              <>
+                <span className="text-sm text-muted-foreground">
+                  {year.starts_on}〜{year.ends_on}
+                </span>
+                <Badge tone={YEAR_STATUS_TONE[year.status]}>{YEAR_STATUS_LABEL[year.status]}</Badge>
+              </>
+            }
+            actions={
+              <>
             <Button
               variant="secondary"
               isLoading={syncYearHolidayCalendar.isPending}
@@ -549,7 +567,11 @@ export function WorkCalendarDaysPage() {
                 onConfirm={handleRegenerateYear}
               />
             )}
-          </div>
+                        </>
+            }
+          />
+
+        <div className="flex flex-col gap-3">
           {yearActionError && <ErrorMessage error={yearActionError} />}
 
           <div className="flex items-center gap-2 border-t border-dashed border-border pt-3">
@@ -595,6 +617,7 @@ export function WorkCalendarDaysPage() {
 
           {syncSummary && <p className="text-sm text-foreground">{formatSyncSummary(syncSummary)}</p>}
         </div>
+        </>
       )}
 
       <Card title="出勤日数・時間(概算)">

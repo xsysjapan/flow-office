@@ -391,7 +391,7 @@ export function MySpecialLeavePage() {
     <div className="flex flex-col gap-6">
       <BackLink />
       <Card
-        title="自分の特別休暇"
+        title="特別休暇"
         actions={
           <Button asChild variant="secondary">
             <Link to="/special-leave/history" state={forwardState}>履歴を見る</Link>
@@ -444,7 +444,7 @@ export function MySpecialLeavePage() {
         <SpecialLeaveRequestForm />
       </Card>
 
-      <Card title="自分の特別休暇申請">
+      <Card title="特別休暇申請">
         <MySpecialLeaveRequestList />
       </Card>
     </div>

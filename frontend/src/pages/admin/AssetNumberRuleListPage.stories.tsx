@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { AssetNumberRule } from '../../api/assetNumberRules'
 import { AssetNumberRuleListPage } from './AssetNumberRuleListPage'
@@ -14,7 +15,9 @@ function Decorator(props: { rules: AssetNumberRule[] }) {
   queryClient.setQueryData(['asset-number-rules'], props.rules)
   return (
     <QueryClientProvider client={queryClient}>
-      <AssetNumberRuleListPage />
+      <MemoryRouter initialEntries={['/admin/asset-number-rules']}>
+        <AssetNumberRuleListPage />
+      </MemoryRouter>
     </QueryClientProvider>
   )
 }

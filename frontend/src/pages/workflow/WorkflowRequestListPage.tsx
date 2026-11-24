@@ -352,9 +352,9 @@ export function WorkflowRequestListPage() {
         isFiltered ? (
           <EmptyState
             title="条件に一致する申請はありません。"
-            description="状態や種別の条件を変えると表示される場合があります。"
+            description="検索条件を変えると表示される場合があります。"
             action={
-              <Button variant="secondary" size="sm" onClick={clearFilters}>
+              <Button variant="secondary" onClick={clearFilters}>
                 検索条件をクリア
               </Button>
             }
@@ -362,7 +362,8 @@ export function WorkflowRequestListPage() {
         ) : (
           <EmptyState
             title="申請はまだありません。"
-            description="「新規申請」から有給・代休・経費精算・その他申請を行えます。"
+            description="「新規申請」から申請を作成できます。"
+            action={<NewRequestDialog />}
           />
         )
       ) : (

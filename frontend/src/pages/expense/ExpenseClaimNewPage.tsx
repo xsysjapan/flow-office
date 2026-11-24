@@ -292,7 +292,7 @@ type ExpenseClaimEntryMode = 'individual' | 'bulk'
  *  最初に選ばせる。 */
 function EntryModeSelectionStep({ onSelect }: { onSelect: (mode: ExpenseClaimEntryMode) => void }) {
   return (
-    <Card title="経費精算を始める">
+    <Card title="経費精算を作成">
       <p className="mb-3 text-sm text-muted-foreground">登録方法を選んでください。</p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2 rounded-md border border-border p-4">
@@ -923,7 +923,7 @@ function SavedItemsAndSubmit({
               <TableRow>
                 <TableHead>日付</TableHead>
                 <TableHead>経費区分</TableHead>
-                <TableHead>内容</TableHead>
+                <TableHead className="whitespace-normal min-w-48">内容</TableHead>
                 <TableHead>金額</TableHead>
                 <TableHead>定期区間控除</TableHead>
                 <TableHead>領収書</TableHead>
@@ -938,7 +938,7 @@ function SavedItemsAndSubmit({
                   <TableRow key={item.id}>
                     <TableCell className="text-muted-foreground">{item.usage_date}</TableCell>
                     <TableCell className="text-muted-foreground">{item.category?.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{item.description}</TableCell>
+                    <TableCell className="whitespace-normal min-w-48 text-muted-foreground">{item.description}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {item.amount.toLocaleString()}円
                       {deductionAmount > 0 && (

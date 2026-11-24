@@ -231,7 +231,7 @@ export function AttendanceMonthDetailPage() {
     <div className="flex flex-col gap-6">
       <BackLink />
       <Card
-        title="月次勤怠"
+        title={`${yearMonth.split('-')[0]}年${Number(yearMonth.split('-')[1])}月の勤怠`}
         actions={monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
         navigation={<MonthNav yearMonth={yearMonth} canSubmit={canSubmit} />}
       >

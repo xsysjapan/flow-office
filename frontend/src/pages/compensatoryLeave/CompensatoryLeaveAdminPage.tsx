@@ -8,6 +8,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
 import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { ChangeGrantDaysButton } from '../../components/ChangeGrantDaysButton/ChangeGrantDaysButton'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
@@ -292,6 +293,7 @@ function CompensatoryLeaveUsageCard() {
 export function CompensatoryLeaveAdminPage() {
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader description="休日出勤の実績日を指定して代休を手動で付与し、使用状況を確認できます。" />
       <ManualGrantCard />
       <CompensatoryLeaveUsageCard />
     </div>

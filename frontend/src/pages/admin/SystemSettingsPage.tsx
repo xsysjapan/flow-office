@@ -3,6 +3,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Ms365CredentialsFields, type Ms365CredentialsFieldsValue } from '../../components/Ms365CredentialsFields/Ms365CredentialsFields'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -64,8 +65,9 @@ export function SystemSettingsPage() {
     setCompensatoryLeaveRequiresApproval(data.compensatory_leave_requires_approval)
   }, [data])
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="システム設定の取得に失敗しました。" />
+  const header = <PageHeader description="システム全体の既定値・承認設定・Microsoft 365連携・メール通知を設定します。" />
+  if (isLoading) return <div className="space-y-6">{header}<LoadingState /></div>
+  if (error) return <div className="space-y-6">{header}<ErrorMessage error={error} fallback="システム設定の取得に失敗しました。" /></div>
 
   const handleSave = () => {
     updateSettings.mutate(
@@ -102,7 +104,9 @@ export function SystemSettingsPage() {
   }
 
   return (
-    <Card title="システム設定">
+    <div className="space-y-6">
+    {header}
+    <Card>
       <p className="mb-4 text-sm text-muted-foreground">
         変更後に新規作成されるユーザーはこのタイムゾーンで作成されます(既存ユーザーの
         タイムゾーンは変更されません)。
@@ -274,5 +278,6 @@ export function SystemSettingsPage() {
         </p>
       )}
     </Card>
+    </div>
   )
 }

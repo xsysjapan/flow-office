@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { pickYearMonth } from '../../test-support/pickerInteractions'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
@@ -12,7 +13,9 @@ function renderPage() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <AttendanceExportPage />
+      <MemoryRouter initialEntries={['/admin/attendance-export']}>
+        <AttendanceExportPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

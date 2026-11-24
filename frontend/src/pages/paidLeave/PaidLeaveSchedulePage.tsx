@@ -15,6 +15,7 @@ import { FormField } from '../../components/FormField/FormField'
 import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
 import { filterWidth } from '../../components/ListFilterBar/filterWidth'
 import { TextFilterInput } from '../../components/TextFilterInput/TextFilterInput'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PaidLeaveScheduleAssessmentPanel } from '../../components/PaidLeaveScheduleAssessmentPanel/PaidLeaveScheduleAssessmentPanel'
 import { PaidLeaveScheduleAssessmentRunCard } from '../../components/PaidLeaveScheduleAssessmentRunCard/PaidLeaveScheduleAssessmentRunCard'
@@ -268,15 +269,27 @@ export function PaidLeaveSchedulePage() {
     return { succeededIds, failures }
   }
 
-  if (isLoading) return <LoadingState />
+  const top = (
+    <>
+      <BackLink className="mb-0" />
+      <PageHeader description="有給の付与予定日と付与候補日数を確認し、自動判定を実行できます。" />
+    </>
+  )
+  if (isLoading)
+    return (
+      <div className="flex flex-col gap-4">
+        {top}
+        <LoadingState />
+      </div>
+    )
 
   const dateRange: DateRangeValue | undefined =
     scheduledOnFrom || scheduledOnTo ? { from: scheduledOnFrom || undefined, to: scheduledOnTo || undefined } : undefined
 
   return (
     <div className="flex flex-col gap-4">
-      <BackLink className="mb-0" />
-      <Card title="付与予定">
+      {top}
+      <Card>
         <PaidLeaveScheduleAssessmentRunCard
           status={runStatus.data}
           statusError={runStatus.error}
@@ -345,8 +358,9 @@ export function PaidLeaveSchedulePage() {
           isFiltered ? (
             <EmptyState
               title="条件に一致する付与予定はありません。"
+              description="検索条件を変えると表示される場合があります。"
               action={
-                <Button variant="secondary" size="sm" onClick={clearFilters}>
+                <Button variant="secondary" onClick={clearFilters}>
                   検索条件をクリア
                 </Button>
               }

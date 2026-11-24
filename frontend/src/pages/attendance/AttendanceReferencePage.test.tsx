@@ -78,7 +78,7 @@ function LocationProbe() {
   return <div data-testid="location-search">{location.search}</div>
 }
 
-function renderPage(initialEntries?: string[]) {
+function renderPage(initialEntries: string[] = ['/admin/attendance']) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
   return render(

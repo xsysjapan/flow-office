@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { Paginated, User } from '../../api/types'
 import { AttendanceExportPage } from './AttendanceExportPage'
@@ -16,7 +17,9 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/admin/attendance-export']}>
         <AttendanceExportPage />
+      </MemoryRouter>
       </QueryClientProvider>
     )
   }

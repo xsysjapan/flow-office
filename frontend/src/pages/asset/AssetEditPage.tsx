@@ -73,7 +73,7 @@ export function AssetEditPage() {
   return (
     <>
       <BackLink />
-      <Card title={`${asset.name}を編集`}>
+      <Card title="備品を編集">
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="名称" htmlFor="asset-edit-name" required>

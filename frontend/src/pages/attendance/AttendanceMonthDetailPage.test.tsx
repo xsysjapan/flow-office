@@ -317,7 +317,7 @@ describe('AttendanceMonthDetailPage', () => {
 
     renderPage('2026-08')
 
-    await screen.findByText('月次勤怠')
+    await screen.findByText('2026年8月の勤怠')
     expect(screen.queryByRole('button', { name: '提出する' })).not.toBeInTheDocument()
   })
 
@@ -331,7 +331,7 @@ describe('AttendanceMonthDetailPage', () => {
 
     renderPage()
 
-    await screen.findByText('月次勤怠')
+    await screen.findByText('2026年7月の勤怠')
     expect(screen.queryByRole('button', { name: '提出する' })).not.toBeInTheDocument()
   })
 
@@ -443,7 +443,7 @@ describe('AttendanceMonthDetailPage', () => {
 
     renderPage()
 
-    await screen.findByText('月次勤怠')
+    await screen.findByText('2026年7月の勤怠')
     expect(screen.queryByText(/差戻し理由/)).not.toBeInTheDocument()
   })
 
@@ -472,7 +472,7 @@ describe('AttendanceMonthDetailPage', () => {
 
     renderPage()
 
-    await screen.findByText('月次勤怠')
+    await screen.findByText('2026年7月の勤怠')
     expect(screen.queryByText(/未提出に戻した理由/)).not.toBeInTheDocument()
   })
 
@@ -537,7 +537,7 @@ describe('AttendanceMonthDetailPage', () => {
         const { unmount } = renderPage()
 
         await waitFor(() => expect(requestTypesApi.fetchRequestTypes).toHaveBeenCalled())
-        await screen.findByText('月次勤怠')
+        await screen.findByText('2026年7月の勤怠')
         expect(screen.queryByRole('link', { name: revertLinkName })).not.toBeInTheDocument()
         expect(screen.queryByText(/この月は承認済みのため編集できません/)).not.toBeInTheDocument()
         unmount()
@@ -556,7 +556,7 @@ describe('AttendanceMonthDetailPage', () => {
       renderPage()
 
       await waitFor(() => expect(requestTypesApi.fetchRequestTypes).toHaveBeenCalled())
-      await screen.findByText('月次勤怠')
+      await screen.findByText('2026年7月の勤怠')
       expect(screen.queryByRole('link', { name: revertLinkName })).not.toBeInTheDocument()
       expect(screen.queryByText(/この月は承認済みのため編集できません/)).not.toBeInTheDocument()
     })
@@ -572,7 +572,7 @@ describe('AttendanceMonthDetailPage', () => {
 
       renderPage()
 
-      await screen.findByText('月次勤怠')
+      await screen.findByText('2026年7月の勤怠')
       expect(screen.queryByRole('link', { name: revertLinkName })).not.toBeInTheDocument()
       expect(screen.queryByText(/この月は承認済みのため編集できません/)).not.toBeInTheDocument()
       expect(requestTypesApi.fetchRequestTypes).not.toHaveBeenCalled()
@@ -588,7 +588,7 @@ describe('AttendanceMonthDetailPage', () => {
     it('shows no back link when opened from the menu, and links to the months list instead', async () => {
       mockMonth()
       renderPage()
-      await screen.findByText('月次勤怠')
+      await screen.findByText('2026年7月の勤怠')
 
       expect(screen.queryByRole('link', { name: /に戻る$/ })).not.toBeInTheDocument()
       expect(screen.getByRole('link', { name: '月の一覧' })).toHaveAttribute('href', '/attendance/months')
@@ -597,7 +597,7 @@ describe('AttendanceMonthDetailPage', () => {
     it('hides the 月の一覧 link while the back link to the list is shown', async () => {
       mockMonth()
       renderPage(yearMonth, true, { backTo: { pathname: '/attendance/months', search: '', hash: '' } })
-      await screen.findByText('月次勤怠')
+      await screen.findByText('2026年7月の勤怠')
 
       expect(screen.getByRole('link', { name: '月次勤怠に戻る' })).toBeInTheDocument()
       expect(screen.queryByRole('link', { name: '月の一覧' })).not.toBeInTheDocument()
@@ -606,7 +606,7 @@ describe('AttendanceMonthDetailPage', () => {
     it('returns to the recorded list with its query and keeps it after moving to the previous month', async () => {
       mockMonth()
       renderPage(yearMonth, true, { backTo: { pathname: '/attendance/months', search: '?year=2026&page=2', hash: '' } })
-      await screen.findByText('月次勤怠')
+      await screen.findByText('2026年7月の勤怠')
 
       expect(screen.getByRole('link', { name: '月次勤怠に戻る' })).toHaveAttribute('href', '/attendance/months?year=2026&page=2')
 
@@ -623,7 +623,7 @@ describe('AttendanceMonthDetailPage', () => {
         Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
       renderPage()
-      await screen.findByText('月次勤怠')
+      await screen.findByText('2026年7月の勤怠')
 
       expect(screen.getByRole('button', { name: '前月' })).not.toBeDisabled()
       expect(screen.getByRole('button', { name: '次月' })).toBeDisabled()
@@ -638,7 +638,7 @@ describe('AttendanceMonthDetailPage', () => {
         monthly_calculation_totals: zeroMonthlyCalculationTotals,
       })
       renderPage()
-      await screen.findByText('月次勤怠')
+      await screen.findByText('2026年7月の勤怠')
 
       expect(screen.getByRole('button', { name: '前月' })).not.toBeDisabled()
       expect(screen.getByRole('button', { name: '次月' })).toBeDisabled()
@@ -649,7 +649,7 @@ describe('AttendanceMonthDetailPage', () => {
         Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
       renderPage()
-      await screen.findByText('月次勤怠')
+      await screen.findByText('2026年7月の勤怠')
 
       await userEvent.click(screen.getByRole('button', { name: '前月' }))
 

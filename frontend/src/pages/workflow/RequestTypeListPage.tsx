@@ -7,6 +7,7 @@ import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableT
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useRequestTypes } from '../../hooks/useRequestTypes'
 
@@ -18,14 +19,28 @@ export function RequestTypeListPage() {
   const forwardState = useForwardState()
   const { data: requestTypes, isLoading, error } = useRequestTypes(true)
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="申請種別の取得に失敗しました。" />
+  const description = '申請種別の一覧から、申請フォームと承認ルートを作成・編集できます。'
+  if (isLoading)
+    return (
+      <div className="space-y-6">
+        <PageHeader description={description} />
+        <LoadingState />
+      </div>
+    )
+  if (error)
+    return (
+      <div className="space-y-6">
+        <PageHeader description={description} />
+        <ErrorMessage error={error} fallback="申請種別の取得に失敗しました。" />
+      </div>
+    )
 
   const types = requestTypes ?? []
 
   return (
-    <Card
-      title="申請種別一覧"
+    <div className="space-y-6">
+    <PageHeader
+      description={description}
       actions={
         <Button asChild>
           <Link to="/admin/request-types/new" state={forwardState}>
@@ -33,15 +48,16 @@ export function RequestTypeListPage() {
           </Link>
         </Button>
       }
-    >
+    />
+    <Card>
       {types.length === 0 ? (
         <EmptyState
           title="申請種別はまだありません。"
-          description="申請種別を作成すると、社員が申請フォームからその種別で申請できるようになります。"
+          description="「新規作成」から申請種別を作成できます。"
           action={
-            <Button asChild variant="secondary" size="sm">
+            <Button asChild>
               <Link to="/admin/request-types/new" state={forwardState}>
-                申請種別を作成
+                新規作成
               </Link>
             </Button>
           }
@@ -86,5 +102,6 @@ export function RequestTypeListPage() {
         </Table>
       )}
     </Card>
+    </div>
   )
 }

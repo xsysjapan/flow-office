@@ -29,7 +29,7 @@ export function ExpenseClaimListPage() {
 
   return (
     <Card
-      title="自分の経費精算"
+      title="経費精算"
       actions={
         <Button asChild>
           <Link to="/expenses/new" state={forwardState}>新規作成</Link>
@@ -39,10 +39,10 @@ export function ExpenseClaimListPage() {
       {claims.length === 0 ? (
         <EmptyState
           title="経費精算はまだありません。"
-          description="経費を使ったら新規作成から精算を申請できます。"
+          description="「新規作成」から経費精算を作成できます。"
           action={
-            <Button asChild variant="secondary" size="sm">
-              <Link to="/expenses/new" state={forwardState}>経費精算を作成</Link>
+            <Button asChild>
+              <Link to="/expenses/new" state={forwardState}>新規作成</Link>
             </Button>
           }
         />

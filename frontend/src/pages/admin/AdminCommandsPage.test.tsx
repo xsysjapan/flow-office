@@ -21,7 +21,7 @@ it('公開されたコマンドのArtisanメタデータをフォームとして
   }] })
   vi.spyOn(api, 'fetchAdminCommandRuns').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 }, links: { next: null, prev: null } })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><MemoryRouter><AdminCommandsPage /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/commands']}><AdminCommandsPage /></MemoryRouter></QueryClientProvider>)
   expect(await screen.findByText('提出済みの月次勤怠を再計算する')).toBeInTheDocument()
   expect(screen.getByText('対象年月')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '実行' })).toBeInTheDocument()
@@ -35,7 +35,7 @@ it('shows the requester of a system run (requested_by_user_id is null) as シス
     exit_code: 0, output: null, error_message: null, created_at: '2026-10-01T03:00:00+09:00',
   }], meta: { current_page: 1, last_page: 1, per_page: 50, total: 1 }, links: { next: null, prev: null } })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><MemoryRouter><AdminCommandsPage /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/commands']}><AdminCommandsPage /></MemoryRouter></QueryClientProvider>)
 
   expect(await screen.findByText('paid-leave:assess-schedules')).toBeInTheDocument()
   expect(screen.getByText(/^依頼: システム \/ /)).toBeInTheDocument()
@@ -104,7 +104,7 @@ it('confirms the run and shows a toast once the run is requested', async () => {
   vi.spyOn(api, 'fetchAdminCommandRuns').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 }, links: { next: null, prev: null } })
   const runSpy = vi.spyOn(api, 'runAdminCommand').mockResolvedValue({ data: {} as never })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><MemoryRouter><AdminCommandsPage /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/commands']}><AdminCommandsPage /></MemoryRouter></QueryClientProvider>)
 
   await screen.findByText('提出済みの月次勤怠を再計算する')
   await userEvent.click(screen.getByRole('button', { name: '実行' }))

@@ -67,7 +67,7 @@ function LocationProbe() {
   return <div data-testid="location-search">{location.search}</div>
 }
 
-function renderPage(initialEntry = '/') {
+function renderPage(initialEntry = '/admin/devices') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue({
     data: devices,
@@ -144,7 +144,8 @@ describe('DeviceListPage', () => {
     renderPage()
 
     await screen.findByText('本社1階受付')
-    await user.click(screen.getByRole('button', { name: '新規登録' }))
+    await user.click(within(screen.getByRole('region', { name: '端末管理' })).getByRole('button', { name: '新規作成' }))
+    expect(within(screen.getByRole('region', { name: '端末管理' })).getByRole('button', { name: '閉じる' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('名称'), '名古屋支店入口')
     await user.click(screen.getByRole('button', { name: '登録する' }))
 
@@ -190,7 +191,7 @@ describe('DeviceListPage', () => {
     const deleteSpy = vi.spyOn(devicesApi, 'deleteDevice').mockResolvedValue(undefined)
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/devices']}>
           <DeviceListPage />
         </MemoryRouter>
       </QueryClientProvider>,
@@ -234,19 +235,21 @@ describe('DeviceListPage', () => {
     })
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/devices']}>
           <DeviceListPage />
         </MemoryRouter>
       </QueryClientProvider>,
     )
 
-    expect(await screen.findByText('登録済みの共有端末はまだありません。')).toBeInTheDocument()
+    expect(await screen.findByText('共有端末はまだありません。')).toBeInTheDocument()
+    expect(screen.getByText('「新規作成」から共有端末を作成できます。')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '新規作成' })).toHaveLength(2)
     fetchSpy.mockRestore()
   })
 
   it('toggles with_trashed via the 削除済みの端末も表示 checkbox, updates the URL (dropping page) and clears it', async () => {
     const user = userEvent.setup()
-    renderPage('/?page=2')
+    renderPage('/admin/devices?page=2')
 
     await screen.findByText('本社1階受付')
     expect(screen.queryByRole('button', { name: '検索条件をクリア' })).not.toBeInTheDocument()
@@ -279,7 +282,7 @@ describe('DeviceListPage', () => {
 
   it('opens the panel from ?deviceId even when the device is not on the current page', async () => {
     const fetchSpy = vi.spyOn(devicesApi, 'fetchDevice').mockResolvedValue({ ...devices[0], id: 'device-9', name: '別ページの端末' })
-    renderPage('/?deviceId=device-9')
+    renderPage('/admin/devices?deviceId=device-9')
 
     expect(await screen.findByRole('heading', { name: '別ページの端末' })).toBeInTheDocument()
     expect(fetchSpy).toHaveBeenCalledWith('device-9')
@@ -288,14 +291,14 @@ describe('DeviceListPage', () => {
 
   it('removes deviceId from the URL when the device is not found (404)', async () => {
     vi.spyOn(devicesApi, 'fetchDevice').mockRejectedValue(new ApiError(404, 'not found'))
-    renderPage('/?deviceId=missing')
+    renderPage('/admin/devices?deviceId=missing')
 
     await screen.findByText('本社1階受付')
     await waitFor(() => expect(screen.getByTestId('location-search')).toBeEmptyDOMElement())
   })
 
   it('drops an invalid page from the URL and shows the first page', async () => {
-    renderPage('/?page=abc&show_deleted=1')
+    renderPage('/admin/devices?page=abc&show_deleted=1')
 
     await screen.findByText('本社1階受付')
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?show_deleted=1$/))

@@ -13,6 +13,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { RevertMonthConfirmationDialog } from '../../components/RevertMonthConfirmationDialog/RevertMonthConfirmationDialog'
 import { Textarea } from '../../components/ui/textarea'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -706,7 +707,8 @@ export function AttendanceReferencePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card title="勤怠参照">
+      <PageHeader description="対象社員を選んで、月次・週次・日次の勤怠を確認できます。" />
+      <Card title="対象">
         <div className="flex flex-wrap items-end gap-4">
           <div className="max-w-sm flex-1">
             <FormField label="対象社員" htmlFor="attendance-reference-user">

@@ -7,6 +7,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PaidLeaveGrantCycleTypeField } from '../../components/PaidLeaveGrantCycleTypeField/PaidLeaveGrantCycleTypeField'
 import { PaidLeaveGrantRulePreview } from '../../components/PaidLeaveGrantRulePreview/PaidLeaveGrantRulePreview'
@@ -90,16 +91,40 @@ export function PaidLeaveGrantRuleEditPage() {
     )
   }
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="付与ルールの取得に失敗しました。" />
-  if (!rule) return <ErrorMessage error={null} fallback="対象の付与ルールが見つかりません。" />
+  const top = (
+    <>
+      <BackLink className="mb-0" />
+      <PageHeader description="有給の付与ルール(サイクル・出勤率・付与日数)を編集して保存します。" />
+    </>
+  )
+  if (isLoading)
+    return (
+      <div className="flex flex-col gap-6">
+        {top}
+        <LoadingState />
+      </div>
+    )
+  if (error)
+    return (
+      <div className="flex flex-col gap-6">
+        {top}
+        <ErrorMessage error={error} fallback="付与ルールの取得に失敗しました。" />
+      </div>
+    )
+  if (!rule)
+    return (
+      <div className="flex flex-col gap-6">
+        {top}
+        <ErrorMessage error={null} fallback="対象の付与ルールが見つかりません。" />
+      </div>
+    )
 
   const fieldErrors = updateRule.error instanceof ApiError ? updateRule.error.errors : undefined
 
   return (
-    <>
-      <BackLink />
-      <Card title={`${rule.name}を編集`}>
+    <div className="flex flex-col gap-6">
+      {top}
+      <Card title={rule.name}>
         {updateRule.error && <ErrorMessage error={updateRule.error} />}
 
         <div className="mb-4 rounded-md border border-border bg-muted/30 p-3">
@@ -173,6 +198,6 @@ export function PaidLeaveGrantRuleEditPage() {
           </Button>
         </div>
       </Card>
-    </>
+    </div>
   )
 }

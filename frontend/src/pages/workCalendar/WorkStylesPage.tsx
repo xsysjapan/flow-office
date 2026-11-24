@@ -7,6 +7,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
+import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { TimePicker } from '../../components/TimePicker/TimePicker'
@@ -199,7 +200,7 @@ function WorkStyleListCard() {
 
   return (
     <Card
-      title="勤務形態"
+      title="勤務形態の一覧"
       actions={
         <Button onClick={() => setIsCreateOpen(true)}>新規作成</Button>
       }
@@ -212,7 +213,8 @@ function WorkStyleListCard() {
       ) : list.length === 0 ? (
         <EmptyState
           title="勤務形態はまだありません。"
-          action={<Button size="sm" onClick={() => setIsCreateOpen(true)}>勤務形態を作成</Button>}
+          description="「新規作成」から勤務形態を作成できます。"
+          action={<Button onClick={() => setIsCreateOpen(true)}>新規作成</Button>}
         />
       ) : (
         <>
@@ -480,6 +482,7 @@ function MonthlyWorkStyleAssignmentCard() {
 export function WorkStylesPage() {
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader description="勤務形態(所定労働時間・労働時間制)を管理し、ユーザーの月ごとの働き方を割り当てます。" />
       <WorkStyleOnboardingCard />
       <WorkStyleListCard />
       <MonthlyWorkStyleAssignmentCard />

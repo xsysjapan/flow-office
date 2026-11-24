@@ -40,7 +40,7 @@ function withSeeded(seedTypes: SpecialLeaveType[], seedRules: SpecialLeaveGrantR
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/admin/special-leave']}>
           <SpecialLeaveAdminPage />
         </MemoryRouter>
       </QueryClientProvider>

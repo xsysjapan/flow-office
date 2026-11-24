@@ -29,7 +29,7 @@ function LocationProbe() {
   return <div data-testid="location-search">{location.search}</div>
 }
 
-function renderPage(initialEntry = '/') {
+function renderPage(initialEntry = '/admin/audit-log') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(auditLogApi, 'fetchAuditLog').mockResolvedValue(paginated)
 
@@ -83,7 +83,7 @@ describe('AuditLogPage', () => {
   })
 
   it('requeries with the entered event type after the debounce and clears page', async () => {
-    renderPage('/?page=2')
+    renderPage('/admin/audit-log?page=2')
     await screen.findByText('workflow_request.drafted')
 
     await userEvent.type(screen.getByLabelText('イベント種別'), 'workflow_request.drafted')
@@ -112,7 +112,7 @@ describe('AuditLogPage', () => {
   })
 
   it('opens the detail fields initially with the count when a detail value is in the URL', async () => {
-    renderPage('/?aggregate_type=workflow_request&aggregate_id=abc')
+    renderPage('/admin/audit-log?aggregate_type=workflow_request&aggregate_id=abc')
 
     expect(await screen.findByRole('button', { name: '詳細条件(2)' })).toBeInTheDocument()
     expect(screen.getByLabelText('対象タイプ')).toHaveValue('workflow_request')
@@ -120,7 +120,7 @@ describe('AuditLogPage', () => {
   })
 
   it('clears every condition including the detail ones with "検索条件をクリア"', async () => {
-    renderPage('/?aggregate_type=workflow_request&event_type=x&from=2026-07-01&to=2026-07-05&page=2')
+    renderPage('/admin/audit-log?aggregate_type=workflow_request&event_type=x&from=2026-07-01&to=2026-07-05&page=2')
 
     await userEvent.click((await screen.findAllByRole('button', { name: '検索条件をクリア' }))[0])
 
@@ -129,7 +129,7 @@ describe('AuditLogPage', () => {
   })
 
   it('puts from and to in the URL when a period is picked', async () => {
-    renderPage('/?page=2')
+    renderPage('/admin/audit-log?page=2')
     await screen.findByText('workflow_request.drafted')
 
     await pickDateRange(userEvent.setup(), '2026-07-01', '2026-07-10')
@@ -139,7 +139,7 @@ describe('AuditLogPage', () => {
   })
 
   it('treats a URL with only "to" as no period and drops "to" from the URL', async () => {
-    renderPage('/?to=2026-07-10&event_type=x')
+    renderPage('/admin/audit-log?to=2026-07-10&event_type=x')
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?event_type=x$/))
     await waitFor(() =>
@@ -158,7 +158,7 @@ describe('AuditLogPage', () => {
   })
 
   it('drops invalid from/to/page from the URL and shows the default', async () => {
-    renderPage('/?from=abc&to=2026-02-30&page=-1&aggregate_type=workflow_request')
+    renderPage('/admin/audit-log?from=abc&to=2026-02-30&page=-1&aggregate_type=workflow_request')
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('?aggregate_type=workflow_request'))
     expect(screen.getByTestId('location-search').textContent).not.toMatch(/from|to=|page/)
@@ -170,7 +170,7 @@ describe('AuditLogPage', () => {
   })
 
   it('keeps a valid from date in the URL', async () => {
-    renderPage('/?from=2026-07-01')
+    renderPage('/admin/audit-log?from=2026-07-01')
 
     await screen.findByText('workflow_request.drafted')
     expect(screen.getByTestId('location-search')).toHaveTextContent('?from=2026-07-01')

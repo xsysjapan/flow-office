@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import type { SearchAssetsParams } from '../../api/asset'
@@ -17,6 +18,7 @@ import { Button } from '../../components/Button/Button'
 import { ListFilterBar } from '../../components/ListFilterBar/ListFilterBar'
 import { filterWidth } from '../../components/ListFilterBar/filterWidth'
 import { TextFilterInput } from '../../components/TextFilterInput/TextFilterInput'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useAssetSearch } from '../../hooks/useAsset'
@@ -181,39 +183,45 @@ export function AssetListPage() {
     <Card
       title="備品管理"
       actions={
-        canManage && (
-          <Button size="sm" onClick={() => navigate('/assets/new', { state: forwardState })}>
-            新規登録
-          </Button>
-        )
+        <div className="flex flex-wrap items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="secondary">
+                一括操作
+                <ChevronDown aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link to="/assets/bulk/self-loan" state={forwardState}>セルフ一括貸出</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/assets/bulk/self-return" state={forwardState}>セルフ一括返却</Link>
+              </DropdownMenuItem>
+              {canManage && (
+                <>
+                  <DropdownMenuItem asChild>
+                    <Link to="/assets/bulk/lend" state={forwardState}>一括貸与</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/assets/bulk/return" state={forwardState}>一括返却</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/assets/bulk/relocate" state={forwardState}>一括移設</Link>
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {canManage && (
+            <Button onClick={() => navigate('/assets/new', { state: forwardState })}>
+              新規作成
+            </Button>
+          )}
+        </div>
       }
     >
       <div className="mb-4 flex flex-col gap-4">
-        <div className="flex flex-wrap gap-2">
-          <Link to="/assets/bulk/self-loan" state={forwardState} className="text-sm text-primary hover:underline">
-            セルフ一括貸出
-          </Link>
-          <span className="text-sm text-muted-foreground">/</span>
-          <Link to="/assets/bulk/self-return" state={forwardState} className="text-sm text-primary hover:underline">
-            セルフ一括返却
-          </Link>
-          {canManage && (
-            <>
-              <span className="text-sm text-muted-foreground">/</span>
-              <Link to="/assets/bulk/lend" state={forwardState} className="text-sm text-primary hover:underline">
-                一括貸与
-              </Link>
-              <span className="text-sm text-muted-foreground">/</span>
-              <Link to="/assets/bulk/return" state={forwardState} className="text-sm text-primary hover:underline">
-                一括返却
-              </Link>
-              <span className="text-sm text-muted-foreground">/</span>
-              <Link to="/assets/bulk/relocate" state={forwardState} className="text-sm text-primary hover:underline">
-                一括移設
-              </Link>
-            </>
-          )}
-        </div>
         <ListFilterBar
           isFiltered={isFiltered}
           onClear={clearFilters}
@@ -290,13 +298,21 @@ export function AssetListPage() {
             title="条件に一致する備品がありません。"
             description="検索条件を変えると表示される場合があります。"
             action={
-              <Button variant="secondary" size="sm" onClick={clearFilters}>
+              <Button variant="secondary" onClick={clearFilters}>
                 検索条件をクリア
               </Button>
             }
           />
         ) : (
-          <EmptyState title="登録されている備品がまだありません。" />
+          <EmptyState
+            title="備品はまだありません。"
+            description={canManage ? '「新規作成」から備品を作成できます。' : undefined}
+            action={
+              canManage ? (
+                <Button onClick={() => navigate('/assets/new', { state: forwardState })}>新規作成</Button>
+              ) : undefined
+            }
+          />
         )
       ) : (
         <Table>

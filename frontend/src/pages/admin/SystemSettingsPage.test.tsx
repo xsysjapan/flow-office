@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as systemSettingsApi from '../../api/systemSettings'
 import type { SystemSettings } from '../../api/types'
@@ -36,7 +37,9 @@ function renderPage() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <SystemSettingsPage />
+      <MemoryRouter initialEntries={['/admin/system-settings']}>
+        <SystemSettingsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

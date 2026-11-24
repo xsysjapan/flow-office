@@ -362,7 +362,7 @@ export function MyPaidLeavePage() {
     <div className="flex flex-col gap-6">
       <BackLink />
       <Card
-        title="自分の有給"
+        title="有給"
         actions={
           <Button asChild variant="secondary">
             <Link to="/paid-leave/history" state={forwardState}>履歴を見る</Link>
@@ -409,7 +409,7 @@ export function MyPaidLeavePage() {
         <PaidLeaveRequestForm />
       </Card>
 
-      <Card title="自分の有給申請">
+      <Card title="有給申請">
         <MyPaidLeaveRequestList />
       </Card>
     </div>
