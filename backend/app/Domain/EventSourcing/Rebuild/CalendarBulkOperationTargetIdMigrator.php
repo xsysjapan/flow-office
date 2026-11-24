@@ -35,12 +35,19 @@ final class CalendarBulkOperationTargetIdMigrator
     public function __construct(
         private readonly CalendarBulkOperationTargetIdPlanner $planner,
         private readonly ReadModelRebuilder $rebuilder,
+        private readonly LegacyUserSettingsDetector $userSettingsDetector,
     ) {}
 
     /** 直近の migrate() で作ったバックアップ表の名前(作っていなければnull)。 */
     public function backupTable(): ?string
     {
         return $this->backupTable;
+    }
+
+    /** 前回のバックアップ表の名前を忘れる(まとめのコマンドが実行の前に呼ぶ)。 */
+    public function forgetBackup(): void
+    {
+        $this->backupTable = null;
     }
 
     /**
@@ -50,39 +57,20 @@ final class CalendarBulkOperationTargetIdMigrator
     {
         $this->backupTable = null;
 
-        if (Schema::hasTable('snapshots') && DB::table('snapshots')->exists()) {
-            throw new RuntimeException('snapshots テーブルに行があります(集約のスナップショットは書き換え後の履歴と一致しないため、削除してから実行してください)。');
+        // 利用者の設定値が未補正の間は、作り直しが止まる(Projectorが例外にする)ため、まとめのコマンドを案内して止める。
+        $userSettingsCount = $this->userSettingsDetector->count();
+        if ($userSettingsCount > 0) {
+            throw new RuntimeException(LegacyUserSettingsDetector::messageForFixCommand($userSettingsCount));
         }
 
-        $plan = $this->planner->plan();
-        ReadModelRebuilder::heartbeat();
+        $this->assertNoSnapshots();
 
-        $mappingRows = [];
-        foreach ($plan['mapping'] as $operationId => $pairs) {
-            foreach ($pairs as $old => $new) {
-                $mappingRows[] = ['operation_id' => $operationId, 'old_id' => $old, 'new_id' => $new];
-            }
-        }
-        $idCount = 0;
-        foreach ($plan['events'] as $event) {
-            $idCount += count($this->idsOf($event['before']));
-        }
-        $summary = [
-            'status' => $plan['events'] === [] ? 'nothing' : 'done',
-            'dry_run' => $dryRun,
-            'event_count' => count($plan['events']),
-            'id_count' => $idCount,
-            'mapping_count' => count($mappingRows),
-            'mapping' => array_slice($mappingRows, 0, self::SAMPLE),
-            'unmapped' => $plan['unmapped'],
-            'backup_table' => null,
-        ];
+        $plan = $this->plan();
+        $summary = $this->summarize($plan, $dryRun);
         if ($plan['events'] === [] || $dryRun) {
             return $summary;
         }
-        if ($plan['unmapped'] !== []) {
-            throw new RuntimeException($this->unmappedMessage($plan['unmapped']));
-        }
+        $this->assertExecutable($plan);
 
         $this->createBackup(array_column($plan['events'], 'id'), $backupTable);
         $summary['backup_table'] = $this->backupTable;
@@ -95,24 +83,17 @@ final class CalendarBulkOperationTargetIdMigrator
         try {
             DB::beginTransaction();
 
-            $fingerprinter = new ReadModelFingerprinter;
-            $beforeRows = $this->rowsById($fingerprinter);
+            $beforeRows = $this->captureRows();
 
-            foreach ($plan['events'] as $event) {
-                $this->rewrite($event);
-            }
-            ReadModelRebuilder::heartbeat();
+            $this->rewriteAll($plan);
             $this->rebuilder->assertWithinTimeLimit($startedAt, $limitSeconds);
 
             $readModels = $this->rebuilder->rebuild(false, $startedAt);
             $summary['tables'] = $readModels['tables'];
             $summary['changed_tables'] = $readModels['changed_tables'];
-            $summary['other_changed_tables'] = array_values(array_column(
-                array_filter($readModels['tables'], fn (array $row) => $row['changed'] && $row['table'] !== self::TARGET_TABLE),
-                'table',
-            ));
+            $summary['other_changed_tables'] = $this->otherChangedTables($readModels);
 
-            $this->verify($plan, $beforeRows, $this->rowsById($fingerprinter));
+            $this->verify($plan, $beforeRows, $this->captureRows());
 
             DB::commit();
         } catch (Throwable $e) {
@@ -125,6 +106,107 @@ final class CalendarBulkOperationTargetIdMigrator
         }
 
         return $summary;
+    }
+
+    /** snapshots に行があれば止める(集約のスナップショットは書き換え後の履歴と一致しない)。 */
+    public function assertNoSnapshots(): void
+    {
+        if (Schema::hasTable('snapshots') && DB::table('snapshots')->exists()) {
+            throw new RuntimeException('snapshots テーブルに行があります(集約のスナップショットは書き換え後の履歴と一致しないため、削除してから実行してください)。');
+        }
+    }
+
+    /**
+     * 補正の計画を作る(読み取りのみ)。
+     *
+     * @return array{events: list<array<string, mixed>>, mapping: array<string, array<string, string>>, unmapped: list<array<string, mixed>>}
+     */
+    public function plan(): array
+    {
+        $plan = $this->planner->plan();
+        ReadModelRebuilder::heartbeat();
+
+        return $plan;
+    }
+
+    /**
+     * 要約(試し実行の表示用)。
+     *
+     * @param  array{events: list<array<string, mixed>>, mapping: array<string, array<string, string>>, unmapped: list<array<string, mixed>>}  $plan
+     * @return array<string, mixed>
+     */
+    public function summarize(array $plan, bool $dryRun): array
+    {
+        $mappingRows = [];
+        foreach ($plan['mapping'] as $operationId => $pairs) {
+            foreach ($pairs as $old => $new) {
+                $mappingRows[] = ['operation_id' => $operationId, 'old_id' => $old, 'new_id' => $new];
+            }
+        }
+        $idCount = 0;
+        foreach ($plan['events'] as $event) {
+            $idCount += count($this->idsOf($event['before']));
+        }
+
+        return [
+            'status' => $plan['events'] === [] ? 'nothing' : 'done',
+            'dry_run' => $dryRun,
+            'event_count' => count($plan['events']),
+            'id_count' => $idCount,
+            'mapping_count' => count($mappingRows),
+            'mapping' => array_slice($mappingRows, 0, self::SAMPLE),
+            'unmapped' => $plan['unmapped'],
+            'backup_table' => null,
+        ];
+    }
+
+    /**
+     * 対応が付かないidがあれば止める。
+     *
+     * @param  array{unmapped: list<array<string, mixed>>}  $plan
+     */
+    public function assertExecutable(array $plan): void
+    {
+        if ($plan['unmapped'] !== []) {
+            throw new RuntimeException($this->unmappedMessage($plan['unmapped']));
+        }
+    }
+
+    /**
+     * 計画のイベントをすべて書き換える(補正ログも書く。トランザクションの中で呼ぶ)。
+     *
+     * @param  array{events: list<array<string, mixed>>}  $plan
+     */
+    public function rewriteAll(array $plan): void
+    {
+        foreach ($plan['events'] as $event) {
+            $this->rewrite($event);
+        }
+        ReadModelRebuilder::heartbeat();
+    }
+
+    /**
+     * 作り直しの結果のうち、対象行の表以外で変更のあった表の名前。
+     *
+     * @param  array{tables: list<array{table: string, changed: bool}>}  $readModels
+     * @return list<string>
+     */
+    public function otherChangedTables(array $readModels): array
+    {
+        return array_values(array_column(
+            array_filter($readModels['tables'], fn (array $row) => $row['changed'] && $row['table'] !== self::TARGET_TABLE),
+            'table',
+        ));
+    }
+
+    /**
+     * 現在の対象行を id => (id を除く列の正規化した値) で返す(書き換え前・作り直し後の比較用)。
+     *
+     * @return array<string, array<string, string>>
+     */
+    public function captureRows(): array
+    {
+        return $this->rowsById(new ReadModelFingerprinter);
     }
 
     /** @param  array{id: int, aggregate_uuid: string, aggregate_version: ?int, event_class: string, raw: string, before: array<string, mixed>, after: array<string, mixed>|null}  $event */
@@ -158,7 +240,7 @@ final class CalendarBulkOperationTargetIdMigrator
      * @param  array<string, array<string, string>>  $before  書き換え前のライブの対象行(id => idを除く列)
      * @param  array<string, array<string, string>>  $after  作り直した後の対象行
      */
-    private function verify(array $plan, array $before, array $after): void
+    public function verify(array $plan, array $before, array $after): void
     {
         $signatures = fn (array $rows): array => array_count_values(array_map(
             fn (array $row) => json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
@@ -235,7 +317,7 @@ final class CalendarBulkOperationTargetIdMigrator
      *
      * @param  list<int|string>  $ids
      */
-    private function createBackup(array $ids, ?string $name): void
+    public function createBackup(array $ids, ?string $name): void
     {
         $backup = $name ?? self::BACKUP_PREFIX.now()->format('YmdHis');
         if (preg_match('/\A[a-z][a-z0-9_]{0,55}\z/', $backup) !== 1) {

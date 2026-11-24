@@ -21,4 +21,11 @@ final class LegacyCalendarBulkOperationTargetIdDetector
     {
         return "対象行のidが旧い体系の一括操作の取消イベントが{$count}件あります。先に運用コマンド『一括操作の対象行idの補正』(".self::COMMAND.')を実行してください。';
     }
+
+    /** 利用者の設定値の補正が拒否するときの文言。2つの補正は順に実行できないため、まとめのコマンドを案内する。 */
+    public static function messageForFixCommand(int $count): string
+    {
+        return "対象行のidが旧い体系の一括操作の取消イベントが{$count}件あります。このコマンドでは実行できません。"
+            .'先に運用コマンド『再生の決定性の補正』('.LegacyUserSettingsDetector::COMBINED_COMMAND.')を実行してください。';
+    }
 }

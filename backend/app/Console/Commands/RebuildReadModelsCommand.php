@@ -7,6 +7,7 @@ use App\Console\CurrentAdminCommandRun;
 use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
 use App\Domain\EventSourcing\Rebuild\LegacyBooleanPropertyDetector;
 use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
+use App\Domain\EventSourcing\Rebuild\LegacyUserSettingsDetector;
 use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
 use App\Services\EventSourcing\ReadModelRebuildRunService;
 use Illuminate\Console\Command;
@@ -31,7 +32,7 @@ class RebuildReadModelsCommand extends Command
     protected $description = '全ReadModelのテーブルを空にして、イベントから作り直す。実行中は全利用者がメンテナンス中(全API 503)になる。'
         .'日次バッチの時刻(1:00〜2:20)を避けて実行すること。「試し実行」は最後にロールバックし、変更のあるテーブルを出力に表示するだけでデータは変えない。';
 
-    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
+    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector, LegacyUserSettingsDetector $userSettingsDetector): int
     {
         $dryRun = (bool) $this->option('dry-run');
 
@@ -55,6 +56,16 @@ class RebuildReadModelsCommand extends Command
         $booleanCount = $booleanDetector->count();
         if ($booleanCount > 0) {
             $message = "旧項目名の真偽値のイベントが{$booleanCount}件あります。先に運用コマンド『真偽値のイベント項目名の書き換え』(events:rename-boolean-properties)を実行してください。";
+            $this->error($message);
+            $run?->update(['error_message' => $message]);
+
+            return self::FAILURE;
+        }
+
+        // タイムゾーン・テナントIDが記録されていない(未補正の)利用者のイベントが残っている間は、作り直しが例外になる(または値が変わる)ため、試し実行も含めて拒否する。
+        $userSettingsCount = $userSettingsDetector->count();
+        if ($userSettingsCount > 0) {
+            $message = LegacyUserSettingsDetector::message($userSettingsCount);
             $this->error($message);
             $run?->update(['error_message' => $message]);
 

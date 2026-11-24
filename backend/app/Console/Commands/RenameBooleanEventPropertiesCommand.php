@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Console\Attributes\AdminExecutable;
 use App\Console\CurrentAdminCommandRun;
 use App\Domain\EventSourcing\Rebuild\BooleanPropertyMigrator;
+use App\Domain\EventSourcing\Rebuild\LegacyUserSettingsDetector;
 use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
 use App\Services\EventSourcing\ReadModelRebuildRunService;
 use Illuminate\Console\Command;
@@ -29,8 +30,18 @@ class RenameBooleanEventPropertiesCommand extends Command
         .'既定は試し実行(件数と旧→新の例を出すだけ)。--execute で実行する。実行中は全利用者がメンテナンス中(全API 503)になる。'
         .'日次バッチの時刻(1:00〜2:20)を避けて実行すること。';
 
-    public function handle(BooleanPropertyMigrator $migrator, ReadModelRebuildRunService $runService): int
+    public function handle(BooleanPropertyMigrator $migrator, ReadModelRebuildRunService $runService, LegacyUserSettingsDetector $userSettingsDetector): int
     {
+        // 未補正の利用者のイベントが残っている間は、このコマンドの作り直しが例外になるため、試し実行も含めて拒否し、まとめの補正を案内する。
+        $userSettingsCount = $userSettingsDetector->count();
+        if ($userSettingsCount > 0) {
+            $message = LegacyUserSettingsDetector::messageForFixCommand($userSettingsCount);
+            $this->error($message);
+            CurrentAdminCommandRun::get()?->update(['error_message' => $message]);
+
+            return self::FAILURE;
+        }
+
         $execute = (bool) $this->option('execute');
         $dryRun = ! $execute;
         $startedAt = microtime(true);
