@@ -62,8 +62,8 @@ account/integrations/notifications等) にドメインごとに分けて置き�
    (例: `AppLayout`の管理系リンクを`/admin`配下に集約した際、
    `e2e/scenario-99-additional.spec.ts`が個別リンク名を直接参照していて修正が必要になった)。
    **`npx tsc --noEmit -p e2e/tsconfig.json`は型の整合性しか見ないため、実際に
-   `npm run test:e2e`(要 backend + mock-oidc + frontend 起動、下記参照)を1回は
-   通してから完了とする。** ナビにグループ見出しやカードのラベルを追加すると、
+   変えた画面・リンクを通るspecだけを`npm run test:e2e -- <spec>`(要 backend + mock-oidc + frontend 起動、下記参照)で
+   通してから完了とする(全件は流さない。リリース前かユーザーが求めたときだけ。ユーザーの指示(2026-11-24))。** ナビにグループ見出しやカードのラベルを追加すると、
    ページ本文の既存テキストと同じ文字列がもう1か所増えることがあり、
    `getByText`/`getByRole('link', ...)`のstrict modeがそこで初めて壊れる
    (Vitestの単体テストはコンポーネント単位でナビと本文を同時に描画しないため検知できない)。
@@ -111,6 +111,7 @@ account/integrations/notifications等) にドメインごとに分けて置き�
 - [ ] ナビのラベル/構造を変えた場合、`frontend/e2e/`を該当ラベルでgrepし、
       影響するe2eスペックを修正した(`npx tsc --noEmit -p e2e/tsconfig.json`で
       型エラーがないことも確認する)
+- [ ] 画面の分岐・表示・入力の検証・文言・並び順は、画面のテスト(Vitest + Testing Library、MSWなどでAPIを差し替える)で確かめ、判定・変換・整形のロジックは関数・hookに出した。E2Eは主要導線だけにする(`frontend/CLAUDE.md`「テストの方針」。ユーザーの指示(2026-11-24))
 - [ ] `.stories.tsx`でReact Queryのキャッシュを事前に仕込み、実APIを叩かずに描画できる
 - [ ] `.test.tsx`でapi層をモックし、`npm run test`が通る
 - [ ] 変更操作は`ui-interaction-patterns` §2.12の分類で確認の有無を決め、成功を`notify.success`(トースト)、失敗を操作の直近の`ErrorMessage`で返している。

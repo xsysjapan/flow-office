@@ -67,6 +67,7 @@ frontend/src/components/<ComponentName>/
 
 - [ ] `.stories.tsx` があり、代表的なprops組み合わせごとにstoryがある
 - [ ] `.test.tsx` があり、`npm run test` で通る
+- [ ] 部品の分岐・表示・文言・並び順は`.test.tsx`で確かめ、判定・変換・整形のロジックは部品に埋め込まず関数・hookに出してテストで直接呼べるようにした(E2Eで確かめない。`frontend/CLAUDE.md`「テストの方針」。ユーザーの指示(2026-11-24))
 - [ ] `npm run test:storybook` (storyをブラウザで描画するテスト) も通る
 - [ ] `npm run build-storybook` が失敗しない
 - [ ] `getByLabelText`/`getByRole`などのクエリが、装飾テキストの混入で壊れていない
