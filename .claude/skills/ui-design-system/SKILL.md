@@ -55,6 +55,10 @@ Dialog/Sheet/Pageの使い分け・Loading/Empty/Error/Permission・URL状態・
   (変更セット`20261123-list-layout-standard`、`ui-interaction-patterns` §2.1)。
 - **コンテナクエリ**: 部品の内側の幅切替は画面幅の`sm:`・`md:`ではなく、親に`@container`を付けて`@sm:`・`@2xl:`などで書く
   (管理画面は管理メニューの分だけ本文が狭く、画面幅では本文の幅が分からないため。例: `ListFilterBar`の`@sm:w-72`、`PageHeader`の`@2xl:flex-row`)。
+- **フォーム**(変更セット`20261123-form-layout-standard`、`ui-interaction-patterns` §2.19):
+  - 最大幅: フォームの内容は`FormLayout`の`max-w-2xl`(Cardは全幅。明細行エディタは外に出して全幅)。
+  - セクションの見出し: `FormSection`の`text-sm font-semibold text-foreground`(説明は`text-xs text-muted-foreground`)。枠で囲わない。
+  - 横並び: `FormRow`は自分の`@container`で、`@sm:grid-cols-2`(`columns={4}`は`@xl:grid-cols-4`)。
 - **角丸**: `--radius: 0.5rem`(8px)を基準にした`rounded-md`/`rounded-lg`。`rounded-full`は
   アバターやドットなど用途が明確な場合のみ。
 - **影**: `shadow-sm`のみ許可し、Popover / Dialog / DropdownMenu / Sheetなど「浮いている」

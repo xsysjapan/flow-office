@@ -103,6 +103,7 @@ account/integrations/notifications等) にドメインごとに分けて置き�
 - [ ] `ui-interaction-patterns`のImplementation Checklistを通した(用語・保存/キャンセル/
       戻る・Empty/Error/Permission・URL状態・行クリック挙動)
 - [ ] 管理画面(`/admin`配下)は`PageHeader`(見出し+説明文。title省略時は`pageHierarchy`のtitle)を置き、管理画面以外はCardのtitleを画面名にする(h1は置かない。`ui-interaction-patterns` §2.1)
+- [ ] フォームのページは`FormLayout`・`FormRow`・`FormSection`・`FormActions`を使い、送信ボタンの文言・画面名は`ui-interaction-patterns` §2.7に従う(「作成」「保存」・「〜を作成」「〜を編集」。変更セット`20261123-form-layout-standard`)
 - [ ] `PageHeader`を使う画面のテストは、`MemoryRouter`の`initialEntries`に実際のルートを渡す(または`title`を明示する)。渡さないと見出しが出ない
 - [ ] `App.tsx`にルートを追加し、認証が必要なら`RequireAuth`配下に置いた
 - [ ] `pageHierarchy.ts`に画面名・親を登録し、第2階層以下なら`BackLink`を置いた
