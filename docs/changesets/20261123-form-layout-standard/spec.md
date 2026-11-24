@@ -6,151 +6,213 @@
 > フォームのレイアウトも標準化をお願いします。
 
 ## 背景・目的
-新規作成・編集・設定のフォームで、項目の並べ方・幅・セクションの分け方・保存/キャンセルの位置と文言・エラーの位置・説明文の書き方が画面ごとに違う。
-`ui-interaction-patterns` §2.5/§2.6/§2.19 はあるが、レイアウトの具体(幅・列・ボタンの並び)が決まっていないため、標準形と部品を決めて揃える。
+作成・編集・設定のフォームでは、次の点が画面ごとに違う。
+- 項目の並べ方・幅・セクションの分け方
+- 保存・キャンセルの位置と文言
+- エラーの位置
+- 説明文の書き方
+
+`ui-interaction-patterns` に §2.5・§2.6・§2.19 はあるが、レイアウトの具体(幅・列・ボタンの並び)が決まっていない。標準の形と部品を決めて揃える。
 
 ## 現状(As-Is)
 
 ### 部品
-- `components/FormField`: label・htmlFor・required・error・className。必須は `*`(`aria-hidden`)。説明文の props なし。外側 `mb-4`(項目間の余白をこれで取っている)。`error` は pages で0件使用。
-- `components/ErrorMessage`: 項目エラーも送信エラーも同じ Alert にまとめる。
-- `components/Card` にフッターは無い(`ui/card` には `CardFooter` があるが、ラッパーは出さない)。
-- `ui/dialog` の `DialogFooter`: `flex-col-reverse`、sm 以上で右寄せ(主ボタンが右、モバイルは縦積みで主ボタンが上)。`DialogContent` の既定は `max-w-lg`、`size="large"` はモバイルで全画面になるだけで PC の幅は同じ。
+- `components/FormField`: label・htmlFor・required・error・className を持つ。
+  - 必須は `*`(`aria-hidden`)で示す。
+  - 説明文の props は無い。
+  - 外側に `mb-4` を持ち、項目間の余白をこれで取っている。
+  - `error` は pages では0件(components の `RevertMonthConfirmationDialog` で1件)。
+- `components/ErrorMessage`: 項目のエラーも送信のエラーも、同じ Alert にまとめて出す。
+- `components/Card` にフッターは無い。
+- `ui/dialog` の `DialogFooter`: `flex-col-reverse`、sm 以上で右寄せ(画面幅基準)。`DialogContent` の既定は `max-w-lg`。
+- `ui/sheet` に `SheetFooter` は無い。
 - pages に `<form>` 要素は無い(Enter で送信できない)。
+- 一覧の変更セット(`20261123-list-layout-standard`、完了)で、部品の内側の幅は画面幅(`sm:`・`md:`)ではなくコンテナクエリで決める規則にした(`ui-design-system`、`ui-interaction-patterns` §2.27)。管理画面は本文が狭く(1024pxで約446px)、画面幅では判断できないため。
 
-### 対象のフォーム(ページ13・Dialog/Sheet)
-| # | ファイル / ルート | 並べ方 | ボタン(位置・並び・文言) | エラーの位置 |
-|---|---|---|---|---|
-| F1 | workflow/WorkflowRequestNewPage `/requests/new` | 1列 | 右寄せ: キャンセル・下書き保存・提出する | ボタン行の直下 |
-| F2 | expense/ExpenseClaimNewPage `/expenses/new`・`/:id/edit` | 段階式。分岐カードは `sm:grid-cols-2` | 「次へ」単独、「登録方法の選択に戻る」 | 複数箇所 |
-| F3 | expense/ExpenseEntryPresetEditPage `/expenses/presets/new`・`/:id` | 基本 `sm:grid-cols-2`、明細行 `sm:grid-cols-3`(枠付き) | キャンセルが Card ヘッダー右上、保存は下部左「作成する」「保存する」 | 保存の直下 |
-| F4 | asset/AssetRegisterPage `/assets/new` | `sm:grid-cols-2` のペア | 左寄せ: キャンセル・作成 | ボタン行の直上 |
-| F5 | asset/AssetEditPage `/assets/:id/edit` | 名称・カテゴリ `sm:grid-cols-2`、以降1列 | 左寄せ: キャンセル・保存 | ボタン行の直上 |
-| F6 | workCalendar/WorkCalendarCreatePage `/admin/work-calendars/new` | `sm:grid-cols-2`、iCal 登録 `grid-cols-2` | 左寄せ: キャンセル・作成する。iCal は右寄せ: キャンセル・登録する | Card の先頭 |
-| F7 | workCalendar/WorkCalendarDetailPage の基本設定 `/admin/work-calendars/:id` | `grid-cols-2`・`sm:grid-cols-2` | 右寄せ: 保存する(キャンセルなし) | ボタンの直下 |
-| F8 | workflow/RequestTypeEditPage `/admin/request-types/:id` | `sm:grid-cols-2` ×3、`h3`「項目」、項目行リスト | 左寄せ: キャンセル・保存する | ボタン行の直下 |
-| F9 | expense/ExpenseCategoryEditPage `/admin/expense-categories/:id` | `sm:grid-cols-2`、項目行 `sm:grid-cols-5` | 左寄せ: キャンセル・作成/保存 | ボタンの直下 |
-| F10 | paidLeave/PaidLeaveGrantRuleEditPage `/admin/paid-leave/rules/:id/edit` | `sm:grid-cols-2` | 左寄せ: キャンセル・保存 | 上部側 |
-| F11 | admin/UserRoleEditPage `/admin/users/:id` | 基本情報 `md:grid-cols-2`、`h2`+`rounded border p-3` の枠でセクション | セクションごと: 「基本情報を保存する」ほか6つ(secondary)、キャンセルなし | 各セクションの直下 |
-| F12 | admin/GroupDetailPage `/admin/groups/:id` | `grid-cols-2` | 作成ボタン | ボタンの直上 |
-| F13 | admin/SystemSettingsPage `/admin/system-settings` | 1列、`h3` ×4 | 左寄せ: 保存する(キャンセルなし) | ボタンの直下 |
-| D1 | AttendanceDayPage「振替休日を申請する」Dialog | 1列 | DialogFooter: キャンセル・申請する | 説明の直下・項目の上 |
-| D2 | ExternalIntegrationConnectionsPage「外部連携を編集」Dialog | — | DialogFooter: キャンセル・保存 | — |
-| D3 | RoleDefinitionPage ロール作成・複製 Dialog | `md:grid-cols-2`・`md:grid-cols-3` | DialogFooter: キャンセル・作成/複製作成 | — |
-| D4 | WorkCalendarDetailPage「カレンダー年度を作成」Dialog | — | キャンセル・年度を作成する | フォームの直上 |
-| D5 | components/WorkStyleFormModal(勤務形態の作成・編集) | — | キャンセル・確定 | — |
-| D6 | UserManagementAccessPage 所属変更予約 Dialog(size large) | `md:grid-cols-2` | キャンセル・変更を予約/変更を実行/更新 | — |
-| D7 | GroupDetailPage 所属変更 Dialog | — | キャンセル・変更を予約/変更を実行 | DialogFooter の直上 |
-| D8 | UserRoleEditPage 所属変更 Dialog | — | キャンセル・登録/変更 | — |
-| D9・D10 | PaidLeavePolicyPage 付与表の新バージョン Sheet(通常・比例) | 行ごとの grid | 単独「新しいバージョンを保存」(キャンセルなし) | — |
+### 対象のフォーム
+棚卸しの表は同じフォルダの `inventory.md` に置く(ページ・Dialog・Sheet の全フォーム。今の形と、下の規則を当てた後の形)。
+- 初版の表は、並び・文言・エラーの位置に誤りが多かった(設計レビュー H2)。HEAD のコードから作り直した。
 
-- 文言: 「作成/作成する」「保存/保存する」「変更を保存」「更新する」「登録する」「申請する」「新しいバージョンを保存」が混在。「登録」は WorkCalendarCreatePage:82・WorkCalendarDetailPage:128・MyIntegrationsPage:49 で Pattern exception として記録済み。
-- 説明文: `<p className="text-xs text-muted-foreground">` の直書き、句点の有無がばらつく。見出し「備品を登録」(§2.7 の「登録」)。
-- ルール: §2.5(Create は [キャンセル][作成])、§2.6(Edit は [キャンセル][保存])、§2.7(用語)、§2.18(エラーは操作箇所の近く、送信ボタンの直下)、§2.19(単一カラム・ラベルは上・Section)。
+### 今のルール
+- §2.5: Create は [キャンセル][作成]。
+- §2.6: Edit は [キャンセル][保存]。
+- §2.7: 用語。一覧の主操作は「新規作成」、フォームの送信は「作成」。
+- §2.18: エラーは操作箇所の近く(送信ボタンの直下)。
+- §2.19: 単一カラム、ラベルは上、Section で区切る。
 
 ## 設計前提の検証
-- 正データと派生データ: 画面の表示だけの変更。API・データに影響しない。
-- 定義と実態: §2.19「単一カラム」と多列の実装が食い違う。ルールが「組で読む短い項目」の横並びを想定していない。ルールを「原則1列・許す横並びを列挙」に直す。
+- 正データと派生データ: 画面の表示だけの変更で、API・データに影響しない。
+- 定義と実態: §2.19 は「単一カラム」だが、実装は多列になっている。ルールが「組で読む短い項目」の横並びを想定していないため、「原則1列、許す横並びを列挙」に直す。
 - 原因の分類: ルールの不足(幅・ボタンの並び・説明文の部品が無い)と、それによる実装のばらつき。部品を作り、全フォームに効かせる。
-- 横展開: ページのフォーム13(F1〜F13)と Dialog/Sheet(D1〜D10、components 側の作成・編集 Dialog)。一覧・詳細の中のインラインの入力は、変更セット`20261123-list-layout-standard`の後に別の変更セットで扱う(論点8)。
-- 順序: 本変更セットは`20261123-list-layout-standard`の後に行う(同じファイルを触るため)。
+- 横展開: ページのフォームと、入力のある Dialog・Sheet のすべて(`inventory.md`)。一覧・詳細の中のインラインの作成フォームは論点8。
 
 ## 進め方(2段階)
-- 段階A: 部品(`FormLayout`・`FormSection`・`FormActions`、`FormField` の `description`)とルールの書き直し。
-- 段階B: F1〜F13・D1〜D10 への適用。
+- 段階A: 部品とルールの書き直し。部品は `FormLayout`・`FormRow`・`FormSection`・`FormActions` と、`FormField` の `description`。
+- 段階B: `inventory.md` の全フォームへの適用。
 
 ## 仕様検討
 
-### 論点1: フォームの幅
-- 選択肢: A. フォームの内容の最大幅を決める / B. Card の全幅のまま
-- 決定: A。項目・セクション・ボタン行を新しい部品 `FormLayout`(`max-w-2xl`、縦の間隔は `FormField` の `mb-4` に任せ、`gap` を足さない)の中に置く。Card は全幅のまま。Dialog の幅は変えない。
-- 理由: PC で入力欄が横に長いと目線の移動が大きく、短い値(日付・数値)の欄が不自然に長い。
-- 細則: 行を繰り返す表形式の明細行エディタ(F3 の明細、F8 の項目行、F9 の項目行)は `FormLayout` の外(全幅)に置く。ページの構成は
-  `<FormLayout>基本の項目</FormLayout>` → 明細行エディタ(全幅)→ `<FormLayout>エラー・補足・FormActions</FormLayout>` の順。ボタン行は `max-w-2xl` の右端に来る(Card ヘッダーの右端とはそろわないが、入力欄の右端にそろうのを意図とする)。
+### 論点1: フォームの幅と部品の構成
+- 決定: 項目・セクション・ボタン行を、新しい部品 `FormLayout` の中に置く。Card は全幅のまま。Dialog・Sheet の幅は変えない。
+- `FormLayout`:
+  - マークアップは `<div className="@container flex w-full max-w-2xl flex-col">`。
+  - 縦の間隔は `FormField` の `mb-4` に任せ、`gap` を足さない。
+  - Dialog・Sheet の中では使わない(器の幅がすでに狭いため)。
+- 明細行エディタ(表形式で行を繰り返すもの)は `FormLayout` の外(全幅)に置く。外側を `@container` にし、3列以上は `@2xl:` 以上でだけ横に並べ、それ未満は縦に並べる。
+  - ページの構成は、`<FormLayout>基本の項目</FormLayout>` → 明細行エディタ(全幅)→ `<FormLayout>補足・エラー・FormActions</FormLayout>` の順。
+- 理由: PC で入力欄が横に長いと目線の移動が大きく、短い値(日付・数値)の欄が不自然に長くなる。
 - 未確定・要確認事項: なし
 
 ### 論点2: 項目の並べ方(列)
-- 選択肢: A. 原則1列。横に並べてよい組を列挙する / B. `sm:grid-cols-2` を標準にする / C. 完全に1列
-- 決定: A
-- 細則:
-  - 横に並べてよいのは次の組だけ(`grid gap-4 sm:grid-cols-2`、2項目まで): 期間の開始と終了、時刻の開始と終了、数値と単位。それ以外(コードと名称、名称とカテゴリ、管理番号と名称等)は1列にする。
-  - 明細行エディタ(表形式)の3列以上は `md:` 以上でだけ横に並べ(`sm:grid-cols-3/5` を `md:` に)、それ未満は縦に並べる。
-  - Dialog の多列(D3 の `md:grid-cols-2/3`、D6 の `md:grid-cols-2`)も同じ規則にする。
-- 理由: §2.19 の単一カラムを維持し、組で読む短い項目だけ横に並べる。B は関係の薄い項目まで横に並び、読む順が分かりにくい。C は期間が縦に長くなる。
+- 選択肢:
+  - A. 原則1列。横に並べてよい組を列挙する。
+  - B. `sm:grid-cols-2` を標準にする。
+  - C. 完全に1列。
+- 決定: A。
+- 横に並べてよいのは、組で1つの値や範囲を表す次の組だけ(2項目)。
+  1. 期間の開始と終了。入社日と退社日も含む。
+  2. 時刻の開始と終了。
+  3. 数値と単位。
+  4. 月と日(年度開始の月・日など)。
+- 同じ種類の短い選択が並ぶ集まり(曜日ごとの休日区分の7項目)は、例外として格子に並べる。
+- 上の組以外は1列にする。例: コードと名称、名称とカテゴリ、管理番号と名称、2つのしきい値、複数の数値の設定。
+- 部品 `FormRow`:
+  - `columns?: 2 | 4`(既定は2)。
+  - マークアップは `<div className="@container"><div className="grid gap-x-4 grid-cols-1 @sm:grid-cols-2">`。`columns={4}` は `@sm:grid-cols-2 @xl:grid-cols-4`。
+  - 自分の幅で列を決めるので、ページ・Dialog・Sheet のどこでも同じに動く。
+  - 縦の余白は中の `FormField` の `mb-4` に任せる。
+- 理由:
+  - §2.19 の単一カラムを保ち、組で読む短い項目だけを横に並べる。
+  - B は関係の薄い項目まで横に並び、読む順が分かりにくい。
+  - C は期間が縦に長くなる。
+- 各フォームでどの組を `FormRow` にするかは、`inventory.md` の「後」の列に書き切る。
 - 未確定・要確認事項: なし
 
-### 論点3: セクション
-- 決定: 新しい部品 `FormSection`(`title`・`description?`・`children`。見出しは `h3`(`text-sm font-semibold`)、セクション間は `mt-8`)で区切る。枠線で囲まない。
-  枠で囲むのは、繰り返す単位(明細行1件、付与表の1行)だけで、`rounded-md border p-3`(角丸トークン)にする。
-- 対象: F7(会社カレンダーの基本設定)、F11(ユーザー管理の `h2`+`rounded border` の枠 → FormSection)、F13(`h3` → FormSection)、F8(`h3`「項目」→ FormSection)、D9・D10、F3。
-- 理由: ui-design-system の「すべてを枠で囲わない」に合う。
+### 論点3: セクションと枠
+- 決定: 新しい部品 `FormSection` で区切る。枠線では囲まない。
+- `FormSection`:
+  - props: `title`・`description?`・`headingLevel?: 2 | 3`(既定は3)・`children`。
+  - マークアップは `<section aria-labelledby className="mt-8 first:mt-0">`。
+  - 見出しは `text-sm font-semibold text-foreground`。
+  - 説明は `<p className="mt-1 text-xs text-muted-foreground">`。
+  - 中身は `mt-4`。
+  - 見出しのレベル: Card の title を外した画面(h1 の直後)では `headingLevel={2}`、Card の title の下では3。
+- 見出しの無い先頭のまとまりは `FormSection` にせず、そのまま並べる。
+- 枠で囲むのは、繰り返す単位(明細行の1件、付与表の1行)と、入力ではない表示(プレビュー)だけ。角丸は `rounded-md border p-3`。
+  - それ以外の枠は外す。見出しがあるまとまりは `FormSection` にする。各フォームでどの枠を外すかは `inventory.md` に書く。
+- 理由: ui-design-system の「すべてを枠で囲わない」に合う。region にすると、テストで範囲を絞れる(PageHeader と同じ形)。
 - 未確定・要確認事項: なし
 
 ### 論点4: 保存・キャンセルのボタン
 - 位置と並び:
-  - 選択肢: A. 末尾に右寄せ、[キャンセル][主ボタン](DialogFooter と同じ) / B. 左寄せ、[キャンセル][主ボタン](§2.5 の図・現状の多数派)
-  - 決定: A
-  - 理由: Dialog は既に右寄せで、ページも同じにするとどの器でも主ボタンが右下に来る。並びは §2.5/§2.6 のまま。
-  - 細則: ページのフォームは新しい部品 `FormActions`(`flex flex-col-reverse gap-2 sm:flex-row sm:justify-end`。DialogFooter と同じ並び)。Dialog は `DialogFooter` のまま(FormActions を使わない)。
-    キャンセルは `secondary`、主ボタンは `primary`(破壊的な操作は `danger`)。
+  - 選択肢:
+    - A. 末尾に右寄せ、[キャンセル][主ボタン](DialogFooter と同じ)。
+    - B. 左寄せ、[キャンセル][主ボタン](§2.5 の図・今の多数派)。
+  - 決定: A。
+  - 理由: Dialog はすでに右寄せで、ページも同じにすると、どの器でも主ボタンが右下に来る。並びは §2.5・§2.6 のまま。
+- 部品 `FormActions`:
+  - マークアップは `<div className="flex flex-col-reverse gap-2 pt-2 @sm:flex-row @sm:justify-end">`。`FormLayout` の中に置くので、コンテナクエリが効く。
+  - 狭い幅では縦に積み、主ボタンが上に来る。ボタンは全幅に伸びる。
+  - ボタンが3つのときは、[キャンセル][その他(下書き保存など)][主ボタン] の順。
+  - 入れ子の小さなフォーム(会社カレンダーの iCal の登録など)も `FormActions` を使う。
+- Dialog は `DialogFooter` のまま使う(器の幅が決まっているので、画面幅基準でよい)。`DialogFooter` の中にはボタンだけを置く。Sheet は `SheetFooter` が無いため、末尾に `FormActions` を置く。
+- ボタンの種類: キャンセルは `secondary`、主ボタンは `primary`(破壊的な操作は `danger`)。
 - 文言:
-  - 決定: 作成は「作成」、編集・設定の保存は「保存」(「〜する」を付けない)。業務の動作そのものの送信は動詞のまま(「申請する」「提出する」「下書き保存」「実行」)。
-    「更新する」「変更を保存」「新しいバージョンを保存」→「保存」、「作成する」→「作成」、「年度を作成する」→「作成」。
-    Pattern exception として記録済みの「登録する」(会社カレンダーの休日ソース、API・MCP連携)は維持する。
-    セクションごとに保存する F11 は、ボタン名が重複しないよう「{セクション名}を保存」(「基本情報を保存」等)にする(セクションごとの保存をまとめるかは論点8)。
-  - 見出し・画面名「備品を登録」→「備品を作成」(§2.7。pageHierarchy の title とブラウザのタブ名も変わる。e2e scenario-14 を追随)。
-- キャンセルの有無: 作成・編集のページ(F1〜F6、F8〜F10、F12)と Dialog/Sheet には必ず置く。設定のページ(F7・F11・F13。戻る先の無い設定)は置かなくてよい。
-  F3 の Card ヘッダー右上のキャンセルは FormActions に移す。D9・D10 にキャンセルを足す。
+  - 作成は「作成」、編集・設定の保存は「保存」(「〜する」を付けない)。
+    - 作成と編集を兼ねるページ(申請種別・経費区分・グループ・プリセット・勤務形態)は、作成時「作成」、編集時「保存」。
+    - 「作成する」「年度を作成する」は「作成」に、「保存する」「更新する」「変更を保存」「新しいバージョンを保存」は「保存」にする。
+    - 勤務形態の「登録する」は、マスタの作成・編集なので「作成」または「保存」にする。Dialog の title「勤務形態を登録」も「勤務形態を作成」にする。
+  - 業務の動作そのものの送信は、動詞のまま残す。「申請する」「提出する」「下書き保存」「複製する」「変更を予約」「変更を実行」「実行」「出力」など。各フォームの文言は `inventory.md` に書く。
+  - 「登録する」の Pattern exception(会社カレンダーの休日ソース、API・MCP連携)は記録済みなので、そのまま残す。
+  - 保存ボタンが複数ある画面(ユーザー管理 F11 の項目ごとの保存、ロール詳細のセクションごとの保存)は、名前が重複しないよう「{対象}を保存」にする(例: 「入社日を保存」「基本情報を保存」)。まとめて保存にするかは論点8。
+- キャンセルの有無:
+  - 作成・編集のページと、Dialog・Sheet には必ず置く。編集のページのキャンセルは、戻る先(一覧・詳細)へ移る。
+  - 設定のページ(戻る先が無い設定。会社カレンダーの基本設定、ユーザー管理、システム設定、ロール詳細)には置かなくてよい。
 - 未確定・要確認事項: なし
 
-### 論点5: エラーの表示位置
-- 決定: 送信のエラー(`ErrorMessage`)はボタン行(`FormActions`・`DialogFooter`)の直上に置く。§2.18 の「送信ボタンの直下」を「送信ボタン行の直上」に直す。
-  `BulkActionDialog`・`ConfirmActionDialog` も同じ位置か確認し、違えば直す。
-- 理由: ボタン行を右寄せ・モバイルで縦積みにすると、直下ではボタンと離れたり画面外になったりする。直上ならどの器でも同じ位置になる。
-- 対象: F6(Card の先頭)、F10(上部)、ボタンの直下に置いている F1・F3・F7〜F9・F11・F13、D1(項目の上)。
+### 論点5: エラーと補足の位置
+- 決定: ボタン行(`FormActions`・`DialogFooter`)の直上に、上から順に次を置く。
+  1. 補足(フォーム全体の注意、「保存すると〜されます。」、無効の理由「〜を入力してください。」)。`text-xs text-muted-foreground` で、句点で終える。
+  2. 送信のエラー(`ErrorMessage`)。
+- §2.18 の「送信ボタンの直下」は、「送信ボタン行の直上」に直す。
+- Dialog では、補足とエラーは本文の末尾(`DialogFooter` の外の直上)に置き、`DialogFooter` の中に入れない。
+- 理由: ボタン行を右寄せにし、狭い幅で縦に積むと、直下ではボタンと離れたり画面の外に出たりする。直上ならどの器でも同じ位置になる。
 - 未確定・要確認事項: なし
 
 ### 論点6: 説明文
-- 決定: `FormField` に `description?: ReactNode` を足し、ラベルの下・入力の上に `text-xs text-muted-foreground` で出す(`id` は `${htmlFor}-description`)。直書きの説明の `<p>` は `description` に置き換える。文は句点で終える。
-  フォーム全体の補足(「保存すると〜されます。」)は `FormActions` の直上(エラーより上)。
-- 入力欄と説明文を `aria-describedby` で結ぶことは、子の入力部品(NativeSelect・DatePicker 等)に属性を渡す仕組みが要るため本変更では行わない(論点8)。
+- 決定: `FormField` に `description?: ReactNode` を足す。
+  - ラベルの下・入力の上に `<p id={`${htmlFor}-description`} className="text-xs text-muted-foreground">` で出す。
+  - 直書きの説明の `<p>` は `description` に置き換える。文は句点で終える。
+- チェックボックスは `FormField` を使っていない(`<label>`+入力)ため、説明はラベルのすぐ下に `<p className="mt-1 text-xs text-muted-foreground">` で置く(書き方だけを揃える)。
+- 入力欄と説明文を `aria-describedby` で結ぶことは、本変更では行わない(論点8)。子の入力部品(NativeSelect・DatePicker 等)に属性を渡す仕組みが要るため。
 - 未確定・要確認事項: なし
 
-### 論点7: 適用範囲
-- 決定: F1〜F13・D1〜D10 と components 側の作成・編集の Dialog(WorkStyleFormModal ほか)。レイアウトだけを直し、項目・挙動は変えない。
+### 論点7: 適用範囲と画面名
+- 決定: 対象は `inventory.md` の全フォーム(ページのフォームと、入力のある Dialog・Sheet)。レイアウトと文言だけを直し、項目・挙動は変えない。
+- 一覧・詳細の中のインラインの作成フォームは対象外(論点8)。
+  - 例外: インラインのフォームと Dialog で共有している項目の部品(外部連携設定の `ConnectionFormFields` など)は、共有部品として直す。インライン側の見た目も変わるが、レイアウトだけなので許容する。
+- 作成・編集の画面名(`pageHierarchy` の title、PageHeader・ブラウザのタブ名)を、§2.5 の書き方に揃える。
+  - 「〜の新規作成」「〜を新規作成」は「〜を作成」にする(「新規作成」は一覧のボタンの語のため)。
+  - 「〜の編集」は「〜を編集」にする。
+  - 「備品を登録」は「備品を作成」にする。
+  - 対象: プリセット・グループ・申請種別・経費区分・備品。
+- 管理画面の作成・編集画面は、PageHeader と説明文を保つ(一覧の変更セットの表B)。グループの作成時の説明文が編集時と同じ文であることは、対象外とする。
+- 会社カレンダー詳細の項目は `FormSection`「基本設定」にまとめる(一覧の変更セットからの申し送り)。年度の作成 Dialog の説明文「設定は「基本設定」から変更できます」と一致させる。
 - 未確定・要確認事項: なし
 
 ### 論点8: 本変更セットで扱わないこと(別の変更セットの候補)
-- 一覧・詳細の中のインラインの入力(社員一覧・端末・外部連携設定・API・MCP連携の作成フォーム、本人の休暇の申請フォーム、シフト・特別休暇設定 等)のレイアウトと、インラインで作成すること自体の見直し(§2.11)
-- 項目エラーを項目の近くに出す(`FormField` の `error`。§2.19)
+- 一覧・詳細の中のインラインの入力(社員一覧・端末・外部連携設定・API・MCP連携・グループ種別・有給の付与ルールの作成フォーム、本人の休暇の申請フォーム、シフト・特別休暇設定 等)のレイアウトと、インラインで作成すること自体の見直し(§2.11)
+- 項目のエラーを項目の近くに出す(`FormField` の `error`。§2.19)
 - 離脱警告(`useUnsavedChangesGuard`)が4画面にしか無い(§2.9)
-- Page にすべき作業を Dialog/Sheet で行っている(働き方の編集、ロールの作成、付与表の編集、所属変更の予約。§2.11)
-- `<form>` が無く Enter で送信できない
-- 必須の表示の読み上げ(`*` が `aria-hidden`)と、説明文の `aria-describedby`(テストの `getByLabelText` 約545か所への影響の検討が要る)
-- ユーザー管理のセクションごとの保存(§2.8 の「まとめて保存」との関係)
+- Page にすべき作業を Dialog・Sheet で行っている(働き方の編集、ロールの作成、付与表の編集、所属変更の予約。§2.11)
+- `<form>` が無く、Enter で送信できない
+- 必須の表示の読み上げ(`*` が `aria-hidden`)と、説明文の `aria-describedby`(単体テストの `getByLabelText` 約545か所への影響の検討が要る)
+- ユーザー管理・ロール詳細の、項目・セクションごとの保存(§2.8 の「まとめて保存」との関係)
 - 決定: ユーザーに報告し、別の変更セットで扱う。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
 段階A:
-1. 新規 `FormLayout`(`max-w-2xl`、children を縦に並べる)、`FormSection`(`title`・`description?`、`h3 text-sm font-semibold`、セクション間 `mt-8`)、`FormActions`(`flex flex-col-reverse gap-2 sm:flex-row sm:justify-end`)。各3点セット。
-2. `FormField` に `description?: ReactNode`(id `${htmlFor}-description`、ラベルの下・入力の上)。
-3. ルール: `ui-interaction-patterns` §2.5・§2.6(右寄せ・並び・部品)、§2.7(「〜する」の使い分け、「登録」の例外の扱い)、§2.18(エラーは送信ボタン行の直上)、
-   §2.19(原則1列と横並びの組、最大幅、セクション、説明文)。`ui-design-system` にフォームの最大幅とセクション見出しを1行。`add-page` に「フォームのページは FormLayout・FormSection・FormActions を使う」を1行。
+1. 新しい部品を作る。それぞれ component・story・test の3点セットにする。
+   - `FormLayout`(論点1)
+   - `FormRow`(論点2)
+   - `FormSection`(論点3)
+   - `FormActions`(論点4)
+2. `FormField` に `description?: ReactNode` を足す(論点6)。
+3. ルールを書く。
+   - `ui-interaction-patterns`:
+     - §2.5・§2.6(右寄せ、並び、部品、キャンセルの有無)
+     - §2.7(作成・保存と業務の動詞、例外、画面名の書き方)
+     - §2.18(補足・エラーはボタン行の直上)
+     - §2.19(原則1列と横並びの組、FormRow、最大幅、セクションと枠、説明文)
+   - `ui-design-system`: フォームの最大幅、セクションの見出しの見た目、`FormRow` のコンテナクエリを1行ずつ。
+   - `add-page`: 「フォームのページは FormLayout・FormRow・FormSection・FormActions を使う」を1行。
+
 段階B:
-4. F1〜F13・D1〜D10 を論点1〜6 に合わせる(上の表の各行。横並びは論点2の組だけ、明細行は `md:`、セクションは FormSection、ボタン行は FormActions/DialogFooter、文言、エラーの位置、説明文)。
-5. 見出し・画面名「備品を作成」。
-6. テスト: 新しい部品のテスト、`FormField` の description。文言を変えた各画面のテストと e2e の追随(「作成する」「保存する」「更新する」「変更を保存」「備品を登録」等を grep)。
+4. `inventory.md` の各行の「後」のとおりに直す。
+5. 画面名の変更(論点7)。
+6. テスト:
+   - 新しい部品のテストと、`FormField` の description のテスト。
+   - 文言・画面名を変えた各画面の単体テストと e2e を追随させる。影響する箇所は `inventory.md` に列挙する。そのうえで次の規則で grep する。
+     - 改名したボタンを探すときは `exact: true` を付ける。Playwright と Testing Library の `name` は部分一致になりうるため、「作成」は「新規作成」に、「保存」は「下書き保存」に当たる。
+     - 否定の確認(`toHaveCount(0)`・`queryByRole`・`not.toBeVisible`)も grep する。キャンセルを足した Dialog・Sheet で「キャンセルが無い」を確かめているテストがあれば直す。
+     - 同じ名前のボタンが画面に2つ以上になる場合は、`FormSection` や Dialog の範囲に絞る。
 
 ## 受け入れ条件
-- F1〜F13 と D1〜D10 で、内容の幅が `max-w-2xl`(明細行エディタを除く)、ボタン行が右寄せの [キャンセル][主ボタン](モバイルは縦積み・主ボタンが上)、エラーがボタン行の直上、
-  文言が「作成」「保存」・業務の動詞・記録済みの例外のいずれか、横並びは論点2の組だけ、セクションは FormSection で区切られている。
+- `inventory.md` の全フォームが「後」の形になっている。
+  - 内容の幅は `max-w-2xl`(明細行エディタを除く)。
+  - ボタン行は右寄せの [キャンセル][主ボタン](狭い幅では縦に積み、主ボタンが上)。
+  - 補足とエラーはボタン行の直上。
+  - 横並びは論点2の組だけ。
+  - セクションは `FormSection`。
+  - 文言は「作成」「保存」・業務の動詞・記録済みの例外のいずれか。
 - 説明文が `FormField` の `description` で出ている。
 - `ui-interaction-patterns` にフォームのレイアウトのルールがある。
-- 幅1280・768・390 のスクリーンショットで F1〜F13 を確認。frontend 単体全件・型チェック・e2e 全件がPASS。
+- 撮影で確かめる。ページのフォームは幅1280・768・390、Dialog・Sheet は幅1280・390。
+- frontend の単体テスト全件・型チェック・e2e 全件が通る。
 
 ## 対象外
-- 論点8の各項目(別の変更セットの候補としてユーザーに報告)
+- 論点8の各項目(別の変更セットの候補としてユーザーに報告する)
 - 項目の追加・削除、入力部品の種類の変更
 - 一覧の検索フォーム・画面の見出し(変更セット`20261122-list-search-form-standard`・`20261123-list-layout-standard`)
 
@@ -159,26 +221,42 @@
 - docs: 変更なし(画面の見た目のみ)
 
 ## モック・アセット
-なし
+- `inventory.md`: 対象のフォームの棚卸し(今の形と後の形、影響するテスト)
 
 ## 実装対象
-- frontend/src/components: FormField(変更)、FormLayout・FormSection・FormActions(新規)
-- frontend/src/pages: F1〜F13、D1〜D10 の画面と components 側の Dialog、テスト・stories、e2e。`routes/pageHierarchy.ts`(備品を作成)
+- frontend/src/components:
+  - `FormField`(変更)
+  - `FormLayout`・`FormRow`・`FormSection`・`FormActions`(新規)
+- frontend/src/pages と components 側の Dialog: `inventory.md` の全フォーム、そのテスト・stories、e2e
+- `routes/pageHierarchy.ts`(画面名)
 - skills
 
 ## 検証方法
 - `cd frontend && npx vitest run --project unit`、`npx tsc -p tsconfig.app.json --noEmit`、e2e 全件
-- F1〜F13 を幅1280・768・390 で撮って確認
+- 受け入れ条件の幅で撮影して確かめる
 
 ## レビュー履歴
 - 初版(2026-11-23)
 - 2026-11-23 提示前の独立設計レビュー(general-purpose)の指摘を反映:
-  - 高: 棚卸し表が無い → 対象のフォームの表(F1〜F13・D1〜D10)を本文に
-  - 高: 「(必須)」の読み上げの追加は単体テスト約545か所の getByLabelText に影響 → 本変更から外し論点8へ(aria-describedby も同様)
-  - 中: `size="large"` は PC の幅を変えない → 記述を削除。FormLayout と明細行エディタ・FormActions の関係、FormField の mb-4 との関係、Dialog では DialogFooter を使うことを明記
-  - 中: 「組で読む項目」が判定できない → 横並びを許す組を列挙(期間・時刻・数値と単位)
-  - 中: 「登録」の Pattern exception の扱い、F11 のボタン名の重複、エラー位置の Dialog との整合、規模 → 段階A/Bに分割、インラインの入力は別の変更セットへ
-  - 低: CardFooter の記述、FormActions の右端の位置、備品を作成のタブ名・e2e、list-layout-standard との順序
+  - 高:
+    - 棚卸し表が無い → 対象のフォームの表を本文に置いた。
+    - 「(必須)」の読み上げの追加は、単体テスト約545か所の `getByLabelText` に影響する → 本変更から外し、論点8へ(`aria-describedby` も同様)。
+  - 中:
+    - `size="large"` は PC の幅を変えない → 記述を削除した。
+    - 次の関係を明記した: FormLayout と明細行エディタ・FormActions、FormField の `mb-4`、Dialog では DialogFooter を使うこと。
+    - 「組で読む項目」が判定できない → 横並びを許す組を列挙した。
+    - 段階A/Bに分割し、インラインの入力は別の変更セットへ。
+- 2026-11-24 実装前の独立設計レビュー(general-purpose。一覧の変更セットの実装後の HEAD と照合)の指摘を反映:
+  - 高:
+    - 部品の幅が、更新済みスキルのコンテナクエリの規則と食い違う → `FormLayout`・`FormActions` を `@container`・`@sm:` に。横並びは自分の幅で決める `FormRow` に。明細行は `@2xl:` に。
+    - 棚卸しの誤り(並び・文言・エラーの位置・枠)と漏れ(ロール詳細、一括操作の作成、勤怠データ出力、オンボーディング、Dialog 多数) → HEAD から `inventory.md` を作り直した。
+    - テストへの影響の列挙と、`exact` と否定の確認の grep 規則 → まとめ6と `inventory.md`。
+  - 中:
+    - 横並びの組が判定できない → 月と日を追加。曜日の格子の例外。各フォームの結果を `inventory.md` に書き切る。
+    - 残す枠と外す枠 → 論点3と `inventory.md`。
+    - 部品の細部 → 論点1・3・4・5。マークアップ、先頭の余白、3つのボタン、Sheet、入れ子のフォーム、無効の理由の置き場所、チェックボックスの説明を決めた。
+    - 「基本設定」の申し送り、画面名の語尾、PageHeader を保つこと、見出しのレベル → 論点3・7。
+  - 低: エラーの位置の記述の修正、Dialog・Sheet の撮影、業務の動詞の一覧 → 反映した。
 
 ## 実装結果
 未着手
