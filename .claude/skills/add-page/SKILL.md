@@ -102,6 +102,8 @@ account/integrations/notifications等) にドメインごとに分けて置き�
 - [ ] ローディング/エラー表示が`LoadingState`/`ErrorMessage`で統一されている
 - [ ] `ui-interaction-patterns`のImplementation Checklistを通した(用語・保存/キャンセル/
       戻る・Empty/Error/Permission・URL状態・行クリック挙動)
+- [ ] 管理画面(`/admin`配下)は`PageHeader`(見出し+説明文。title省略時は`pageHierarchy`のtitle)を置き、管理画面以外はCardのtitleを画面名にする(h1は置かない。`ui-interaction-patterns` §2.1)
+- [ ] `PageHeader`を使う画面のテストは、`MemoryRouter`の`initialEntries`に実際のルートを渡す(または`title`を明示する)。渡さないと見出しが出ない
 - [ ] `App.tsx`にルートを追加し、認証が必要なら`RequireAuth`配下に置いた
 - [ ] `pageHierarchy.ts`に画面名・親を登録し、第2階層以下なら`BackLink`を置いた
 - [ ] 必要なら`AppLayout`の`navGroups`または`AdminLayout`の`adminNavGroups`に追加した

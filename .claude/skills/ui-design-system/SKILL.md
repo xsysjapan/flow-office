@@ -50,6 +50,11 @@ Dialog/Sheet/Pageの使い分け・Loading/Empty/Error/Permission・URL状態・
   既定スケールにない値を使わない。
 - **文字サイズ**: 本文は`text-sm`(14px)または`text-base`(16px)。見出しは`text-base`〜
   `text-lg`程度に留め、`text-3xl`のような巨大見出しは使わない。
+  ページ見出し(h1)は`text-lg font-semibold text-foreground`(管理画面の`PageHeader`が持つ。直書きしない)、
+  説明文は`text-sm text-muted-foreground`。管理画面以外はh1を置かず、Cardのtitle(h2、`text-base font-semibold`)が画面名になる
+  (変更セット`20261123-list-layout-standard`、`ui-interaction-patterns` §2.1)。
+- **コンテナクエリ**: 部品の内側の幅切替は画面幅の`sm:`・`md:`ではなく、親に`@container`を付けて`@sm:`・`@2xl:`などで書く
+  (管理画面は管理メニューの分だけ本文が狭く、画面幅では本文の幅が分からないため。例: `ListFilterBar`の`@sm:w-72`、`PageHeader`の`@2xl:flex-row`)。
 - **角丸**: `--radius: 0.5rem`(8px)を基準にした`rounded-md`/`rounded-lg`。`rounded-full`は
   アバターやドットなど用途が明確な場合のみ。
 - **影**: `shadow-sm`のみ許可し、Popover / Dialog / DropdownMenu / Sheetなど「浮いている」
@@ -114,8 +119,9 @@ Disabledについても、見た目はこのスキル、使ってよい条件は
 
 ### 2.6 PC / スマートフォンの見た目
 
-テーブルは行の折り返しではなく、テーブル自体を`overflow-x-auto`のコンテナに入れて横
-スクロールさせる(`ui/table.tsx`の`Table`は既に内蔵)。狭幅でナビゲーションをSheetの
+テーブルは、テーブル自体を`overflow-x-auto`のコンテナに入れて横
+スクロールさせる(`ui/table.tsx`の`Table`は既に内蔵)。セルは`whitespace-nowrap`が既定で、
+自由入力の長い列だけ`whitespace-normal min-w-48`で折り返す(`ui-interaction-patterns` §2.27)。狭幅でナビゲーションをSheetの
 ドロワーに切り替える判断は`ui-interaction-patterns`(Dialog/Sheet/Pageの使い分け)。
 
 ---
