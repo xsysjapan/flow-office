@@ -58,7 +58,7 @@ Projector が、イベントの時点ではなく、再生した時点のシス�
 - Projector は設定を読まない(`UserProjector`・`UserManagementProjector` から `SystemSetting::current()` を除く)。
   - 行を作るときにタイムゾーンが null なら、例外にする(「未補正のイベント」)。設定の値は使わない。未補正のまま作り直すことは論点2の拒否で防ぐ。
   - テナントIDは、`??` による設定の値への切り替えをやめ、イベントの値をそのまま使う(null なら null)。記録した時点で設定が null なら、null を事実として記録する(今と同じ)。
-- 古い移行の道具(`UserReconciler`・`EventStoreRebuildWriter`)が作る作成系のイベントにも、タイムゾーンを入れる(今と同じく現在の既定値)。既存のテスト(`ExternalTenantIdRebuildTest`・`EventStoreRebuilderTest`・`SeededDataRebuildScenarioTest`)が通る状態を保つ。
+- (変更セット`20261124-remove-finished-migration-commands`で古い移行の道具を削除するため、次の項目は不要になった。実装しない)古い移行の道具(`UserReconciler`・`EventStoreRebuildWriter`)が作る作成系のイベントにも、タイムゾーンを入れる(今と同じく現在の既定値)。既存のテスト(`ExternalTenantIdRebuildTest`・`EventStoreRebuilderTest`・`SeededDataRebuildScenarioTest`)が通る状態を保つ。
 - `ScenarioSeeder` など、Handler を通らずに集約を呼ぶ箇所も値を渡す(grep で全て)。
 - 各イベントクラスの docblock(「旧イベントは null で、Projector は設定値を読む」)と、`ReadModelTableLister.php:29-36` の説明を、実態に合わせて直す。
 - 理由: 作成した時点の値は、作成した時点にしか分からない。イベントに持たせれば、作り直しの結果がいつでも同じになる。
