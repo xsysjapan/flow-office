@@ -26,14 +26,14 @@ final class ReadModelTableLister
 {
     /**
      * Projectorのソースに現れるが、書き込み先ではないテーブル(テーブル名 => 理由)。
-     * 全Projectorを確認した結果、モデルとして参照されて読むだけなのは system_settings(SystemSetting::current() で既定タイムゾーン・
-     * M365テナントIDを読む)のみ。ほかは Projector が参照しうる参照マスタ・認証情報を念のため除く。
+     * Projectorは system_settings を読まない(再生時の設定値で結果が変わらないよう、作成時の値はイベントに持たせる)。
+     * Projector が参照しうる参照マスタ・認証情報を念のため除く。
      */
     public const NOT_READ_MODELS = [
         'features' => '参照マスタ(機能カタログ)。シーダーで投入し、Projectorは読むだけ',
         'permissions' => '参照マスタ(権限カタログ)。シーダーで投入し、Projectorは読むだけ',
         'permission_scope_types' => '参照マスタ(権限スコープ種別)。シーダーで投入し、Projectorは読むだけ',
-        'system_settings' => '管理者専用APIから直接更新する正データ(監査イベントのみ記録)。Projectorは既定値を読むだけ',
+        'system_settings' => '管理者専用APIから直接更新する正データ(監査イベントのみ記録)。Projectorは読まない(作成時の値はイベントが持つ)',
         'stored_events' => 'イベントストア本体(再生の入力)。PaidLeaveBalanceProjectorがEloquentStoredEventを読むため拾われるが、空にすると再生するものが無くなる',
         'snapshots' => 'Spatieのスナップショット(集約の再構築用)。ReadModelではない',
         'user_credentials' => '認証情報(パスワード・remember_token)。イベントに載せず直接更新する正データ。Projectorは書かない',

@@ -63,6 +63,7 @@ class SyncUsersFromMs365Handler implements CommandHandler
                 jobTitle: $this->fieldAuthorities->isExternalHr('job_title') && $user ? $user->job_title : $graphUser->jobTitle,
                 employmentStatus: $this->fieldAuthorities->isExternalHr('employment_status') && $user ? $user->employment_status : $graphUser->employmentStatus(),
                 externalTenantId: SystemSetting::current()->m365_tenant_id,
+                timezone: SystemSetting::current()->default_timezone,
             )
             ->persist();
 

@@ -9,6 +9,7 @@ use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Aggregates\UserMembershipAggregate;
 use App\Domain\UserManagement\Commands\CreateUser;
 use App\Domain\UserManagement\Support\UserManagementStreamId;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -28,7 +29,7 @@ final class CreateUserHandler implements CommandHandler
         }
 
         UserAggregate::retrieve($command->userId)
-            ->createManually($command->attributes, $command->createdByUserId)
+            ->createManually([...$command->attributes, 'timezone' => SystemSetting::current()->default_timezone], $command->createdByUserId)
             ->persist();
 
         $allUsers = DB::table('groups')->where('code', 'ALL_USERS')->where('status', 'active')->first();

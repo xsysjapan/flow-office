@@ -19,7 +19,6 @@ use App\Domain\UserManagement\Events\MembershipChangeSetUpdated;
 use App\Domain\UserManagement\Events\MembershipPrimaryChanged;
 use App\Domain\UserManagement\Events\MembershipRemoved;
 use App\Domain\UserManagement\Events\UserFieldAuthorityChanged;
-use App\Models\SystemSetting;
 use Illuminate\Support\Facades\DB;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
@@ -50,7 +49,7 @@ class UserManagementProjector extends Projector
                 DB::table('users')->where('id', $row['user_id'])->update($attributes);
             } else {
                 $attributes['id'] = $row['user_id'];
-                $attributes['timezone'] = SystemSetting::current()->default_timezone;
+                $attributes['timezone'] = $row['timezone'] ?? throw new \RuntimeException('external_hr.import_appliedの新規行にtimezoneが無い未補正のイベントです。補正するまで利用者の表示用データは作り直せません。');
                 $attributes['usage_start_date'] = $event->createdAt()->toDateString();
                 $attributes['created_at'] = $event->createdAt();
                 DB::table('users')->insert($attributes);

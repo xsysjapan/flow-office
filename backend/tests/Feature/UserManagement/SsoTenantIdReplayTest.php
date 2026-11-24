@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 /**
  * 論点19 決定9: Entra外部IDのテナントIDは、記録時の設定値をイベントに持たせ、再生時に設定を変えても変わらないこと。
- * 旧イベント(externalTenantId の無いもの)だけは従来どおり再生時の設定値を読むこと。
+ * 旧イベント(externalTenantId の無いもの)でも再生時の設定値には切り替わらず、null のままになること(補正するまで作り直しを拒否する処理は別の変更で足す)。
  */
 class SsoTenantIdReplayTest extends TestCase
 {
@@ -41,7 +41,7 @@ class SsoTenantIdReplayTest extends TestCase
         $this->assertDatabaseHas('external_identities', ['external_subject_id' => 'entra-sso-1', 'external_tenant_id' => 'tenant-A']);
     }
 
-    public function test_an_old_event_without_the_key_takes_the_setting_at_replay(): void
+    public function test_an_old_event_without_the_key_stays_null_and_does_not_take_the_setting_at_replay(): void
     {
         $this->seed(UserManagementSeeder::class);
         SystemSetting::current()->update(['m365_tenant_id' => 'tenant-A']);
@@ -60,7 +60,7 @@ class SsoTenantIdReplayTest extends TestCase
         DB::table('external_identities')->where('external_subject_id', 'entra-sso-old')->delete();
         $this->replayUserProjector();
 
-        $this->assertDatabaseHas('external_identities', ['external_subject_id' => 'entra-sso-old', 'external_tenant_id' => 'tenant-B']);
+        $this->assertDatabaseHas('external_identities', ['external_subject_id' => 'entra-sso-old', 'external_tenant_id' => null]);
     }
 
     /** @return array<string, mixed> */

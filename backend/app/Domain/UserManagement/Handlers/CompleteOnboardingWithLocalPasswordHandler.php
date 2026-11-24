@@ -45,7 +45,7 @@ class CompleteOnboardingWithLocalPasswordHandler implements CommandHandler
         $userId = (string) Str::uuid();
 
         UserAggregate::retrieve($userId)
-            ->onboardAsAdmin(entraUserId: null, name: $command->adminName, email: $command->adminEmail, authMethod: 'local')
+            ->onboardAsAdmin(entraUserId: null, name: $command->adminName, email: $command->adminEmail, authMethod: 'local', timezone: $settings->default_timezone)
             ->persist();
 
         $this->standardMemberships->add($userId, ['ALL_USERS', 'SYSTEM_ADMINISTRATORS'], $userId);

@@ -70,7 +70,7 @@ class RecordSsoLoginHandler implements CommandHandler
         $userId = (string) Str::uuid();
 
         UserAggregate::retrieve($userId)
-            ->createFromSsoLogin($command->entraUserId, $command->name ?? $command->email, $command->email, $externalTenantId)
+            ->createFromSsoLogin($command->entraUserId, $command->name ?? $command->email, $command->email, $externalTenantId, $defaultTimezone)
             ->recordLogin(wasFirstLogin: $wasFirstLogin, loggedInAt: $loggedInAt)
             ->persist();
 

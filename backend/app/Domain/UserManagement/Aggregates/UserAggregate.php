@@ -31,7 +31,7 @@ class UserAggregate extends AggregateRoot
         return $this;
     }
 
-    public function onboardAsAdmin(?string $entraUserId, string $name, ?string $email, string $authMethod, ?string $externalTenantId = null): self
+    public function onboardAsAdmin(?string $entraUserId, string $name, ?string $email, string $authMethod, ?string $externalTenantId = null, ?string $timezone = null): self
     {
         $this->recordThat(new UserOnboardedAsAdmin(
             entraUserId: $entraUserId,
@@ -39,14 +39,15 @@ class UserAggregate extends AggregateRoot
             email: $email,
             authMethod: $authMethod,
             externalTenantId: $externalTenantId,
+            timezone: $timezone,
         ));
 
         return $this;
     }
 
-    public function createFromSsoLogin(string $entraUserId, string $name, string $email, ?string $externalTenantId = null): self
+    public function createFromSsoLogin(string $entraUserId, string $name, string $email, ?string $externalTenantId = null, ?string $timezone = null): self
     {
-        $this->recordThat(new UserCreatedFromSsoLogin(entraUserId: $entraUserId, name: $name, email: $email, externalTenantId: $externalTenantId));
+        $this->recordThat(new UserCreatedFromSsoLogin(entraUserId: $entraUserId, name: $name, email: $email, externalTenantId: $externalTenantId, timezone: $timezone));
 
         return $this;
     }
@@ -59,6 +60,7 @@ class UserAggregate extends AggregateRoot
         ?string $jobTitle,
         string $employmentStatus,
         ?string $externalTenantId = null,
+        ?string $timezone = null,
     ): self {
         $this->recordThat(new UserSyncedFromMs365(
             entraUserId: $entraUserId,
@@ -68,6 +70,7 @@ class UserAggregate extends AggregateRoot
             jobTitle: $jobTitle,
             employmentStatus: $employmentStatus,
             externalTenantId: $externalTenantId,
+            timezone: $timezone,
         ));
 
         return $this;

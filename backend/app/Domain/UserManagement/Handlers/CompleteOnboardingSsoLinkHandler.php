@@ -53,7 +53,7 @@ class CompleteOnboardingSsoLinkHandler implements CommandHandler
         $userId = (string) Str::uuid();
 
         UserAggregate::retrieve($userId)
-            ->onboardAsAdmin($command->entraUserId, $command->name, $command->email, 'sso', $settings->m365_tenant_id)
+            ->onboardAsAdmin($command->entraUserId, $command->name, $command->email, 'sso', $settings->m365_tenant_id, $settings->default_timezone)
             ->persist();
 
         $this->standardMemberships->add($userId, ['ALL_USERS', 'SYSTEM_ADMINISTRATORS'], $userId);

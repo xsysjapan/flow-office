@@ -314,6 +314,7 @@ class ScenarioSeeder extends Seeder
                     department: $definition['department'],
                     jobTitle: $definition['job_title'],
                     employmentStatus: 'active',
+                    timezone: \App\Models\SystemSetting::current()->default_timezone,
                 )
                 ->persist();
 

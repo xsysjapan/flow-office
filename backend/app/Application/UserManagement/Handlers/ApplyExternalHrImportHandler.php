@@ -11,6 +11,7 @@ use App\Domain\UserManagement\Aggregates\UserMembershipAggregate;
 use App\Domain\UserManagement\Commands\ApplyExternalHrImport;
 use App\Domain\UserManagement\Services\MembershipConstraintValidator;
 use App\Domain\UserManagement\Support\UserManagementStreamId;
+use App\Models\SystemSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -42,7 +43,7 @@ class ApplyExternalHrImportHandler implements CommandHandler
             $isNew = ! DB::table('users')->where('id', $userId)->exists();
             if ($isNew && (! isset($changes['display_name']) || ! isset($changes['email']))) {
                 throw new DomainRuleException('新規ユーザーにはdisplay_nameとemailが必要です。');
-            } $normalized[] = ['user_id' => $userId, 'external_subject_id' => $subject, 'changes' => $changes, 'group_code' => $row['group_code'] ?? null, 'effective_at' => $row['effective_at'] ?? now()->toISOString(), 'is_new' => $isNew];
+            } $normalized[] = ['user_id' => $userId, 'external_subject_id' => $subject, 'changes' => $changes, 'group_code' => $row['group_code'] ?? null, 'effective_at' => $row['effective_at'] ?? now()->toISOString(), 'is_new' => $isNew] + ($isNew ? ['timezone' => SystemSetting::current()->default_timezone] : []);
         } ExternalHrImportAggregate::retrieve($c->importId)->applyImport($normalized, $c->actorUserId)->persist();
         $allUsers = DB::table('groups')->where('code', 'ALL_USERS')->where('status', 'active')->first();
         foreach ($normalized as $row) {

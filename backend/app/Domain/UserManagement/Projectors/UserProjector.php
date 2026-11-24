@@ -15,7 +15,6 @@ use App\Domain\UserManagement\Events\UserSsoAccountLinked;
 use App\Domain\UserManagement\Events\UserSyncedFromMs365;
 use App\Domain\UserManagement\Events\UserTerminationDateSet;
 use App\Domain\UserManagement\Events\UserUsageStartDateSet;
-use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
@@ -25,11 +24,20 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  */
 class UserProjector extends Projector
 {
+    private static function uncorrectedTimezone(string $eventType): \RuntimeException
+    {
+        return new \RuntimeException("{$eventType}にtimezoneが無い未補正のイベントです。補正するまで利用者の表示用データは作り直せません。");
+    }
+
     public function onUserCreatedManually(UserCreatedManually $event): void
     {
+        $timezone = $event->attributes['timezone'] ?? null;
+        if ($timezone === null) {
+            throw self::uncorrectedTimezone('user.created_manually');
+        }
         $user = User::query()->updateOrCreate(
             ['id' => $event->aggregateRootUuid()],
-            [...$event->attributes, 'source_type' => 'local', 'timezone' => SystemSetting::current()->default_timezone,
+            [...$event->attributes, 'source_type' => 'local', 'timezone' => $timezone,
                 'usage_start_date' => $event->createdAt()->toDateString()],
         );
 
@@ -42,6 +50,7 @@ class UserProjector extends Projector
 
     public function onUserOnboardedAsAdmin(UserOnboardedAsAdmin $event): void
     {
+        $timezone = $event->timezone ?? throw self::uncorrectedTimezone('user.onboarded_as_admin');
         $user = User::query()->updateOrCreate(
             ['id' => $event->aggregateRootUuid()],
             [
@@ -51,7 +60,7 @@ class UserProjector extends Projector
                 'employment_status' => 'active',
                 'account_status' => 'active',
                 'source_type' => $event->entraUserId !== null ? 'microsoft_entra' : 'local',
-                'timezone' => SystemSetting::current()->default_timezone,
+                'timezone' => $timezone,
                 // usage_start_date未設定のまま在籍月より前の督促が誤送信されるのを防ぐため、
                 // 新規作成時はイベント記録日をデフォルト設定する。管理者は後から上書き可能。
                 'usage_start_date' => $event->createdAt()->toDateString(),
@@ -65,6 +74,7 @@ class UserProjector extends Projector
 
     public function onUserCreatedFromSsoLogin(UserCreatedFromSsoLogin $event): void
     {
+        $timezone = $event->timezone ?? throw self::uncorrectedTimezone('user.created_from_sso_login');
         $user = User::query()->updateOrCreate(
             ['id' => $event->aggregateRootUuid()],
             [
@@ -74,7 +84,7 @@ class UserProjector extends Projector
                 'employment_status' => 'active',
                 'account_status' => 'active',
                 'source_type' => 'microsoft_entra',
-                'timezone' => SystemSetting::current()->default_timezone,
+                'timezone' => $timezone,
                 // usage_start_date未設定のまま在籍月より前の督促が誤送信されるのを防ぐため、
                 // 新規作成時はイベント記録日をデフォルト設定する。管理者は後から上書き可能。
                 'usage_start_date' => $event->createdAt()->toDateString(),
@@ -99,9 +109,9 @@ class UserProjector extends Projector
                 'employment_status' => $event->employmentStatus,
                 'account_status' => $existing->account_status ?? 'active',
                 'source_type' => $existing->source_type ?? 'microsoft_entra',
-                // timezoneはMS365に存在する属性ではないため、新規作成時のみシステム設定の
-                // デフォルトを設定し、既存行のtimezoneは上書きしない。
-                'timezone' => $existing->timezone ?? SystemSetting::current()->default_timezone,
+                // timezoneはMS365に存在する属性ではないため、新規作成時のみイベントの値を設定し、
+                // 既存行のtimezoneは上書きしない。
+                'timezone' => $existing->timezone ?? $event->timezone ?? throw self::uncorrectedTimezone('user.synced_from_ms365'),
                 // usage_start_dateも同様に、新規作成時のみイベント記録日をデフォルト設定し、
                 // 既存行(手動設定済みの可能性がある)は絶対に上書きしない。
                 'usage_start_date' => $existing->usage_start_date ?? $event->createdAt()->toDateString(),
@@ -120,13 +130,13 @@ class UserProjector extends Projector
     }
 
     /**
-     * Entra IDの外部IDを投影する。テナントIDはイベントの値を使い、旧イベント(null)だけ再生時の設定値を読む(後方互換。論点19 決定9)。
+     * Entra IDの外部IDを投影する。テナントIDはイベントの値をそのまま使う(nullならnull。再生時の設定値は読まない)。
      */
     private function linkEntraIdentity(string $userId, string $subjectId, ?string $email, mixed $occurredAt, ?string $externalTenantId = null): void
     {
         DB::table('external_identities')->updateOrInsert(
             ['provider' => 'MICROSOFT_ENTRA', 'external_subject_id' => $subjectId],
-            ['user_id' => $userId, 'external_tenant_id' => $externalTenantId ?? SystemSetting::current()->m365_tenant_id, 'email' => $email, 'status' => 'active', 'linked_at' => $occurredAt, 'last_synced_at' => $occurredAt, 'created_at' => $occurredAt, 'updated_at' => $occurredAt],
+            ['user_id' => $userId, 'external_tenant_id' => $externalTenantId, 'email' => $email, 'status' => 'active', 'linked_at' => $occurredAt, 'last_synced_at' => $occurredAt, 'created_at' => $occurredAt, 'updated_at' => $occurredAt],
         );
     }
 

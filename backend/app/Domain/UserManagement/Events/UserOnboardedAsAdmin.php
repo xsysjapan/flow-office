@@ -18,7 +18,9 @@ class UserOnboardedAsAdmin extends ShouldBeStored
         public readonly ?string $email,
         /** 'sso' または 'local'。docs/06-usecases-auth.md UC-000参照。 */
         public readonly string $authMethod,
-        /** Entra IDのテナントID(記録時のsystem_settings.m365_tenant_id)。旧イベントはnull(Projectorは設定値を読む)。 */
+        /** Entra IDのテナントID(記録時のsystem_settings.m365_tenant_id)。旧イベントはキーが無くnull(未補正。補正するまで作り直しは拒否される。Projectorは設定値を読まず、そのまま使う)。 */
         public readonly ?string $externalTenantId = null,
+        /** 作成時の既定タイムゾーン(記録時のsystem_settings.default_timezone)。旧イベントはキーが無くnull(未補正。補正するまで作り直しは拒否され、Projectorは行を作るときnullなら例外にする)。 */
+        public readonly ?string $timezone = null,
     ) {}
 }
