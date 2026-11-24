@@ -380,7 +380,8 @@ describe('enum value labels (内部コードを画面に出さない)', () => {
   it('maps group statuses', () => {
     expect(groupStatusLabel('active')).toBe('有効')
     expect(groupStatusLabel('inactive')).toBe('無効')
-    expect(groupStatusLabel('planned_inactive')).toBe('planned_inactive')
+    expect(groupStatusLabel('planned_inactive')).toBe('無効化予定')
+    expect(groupStatusLabel('unknown_status')).toBe('unknown_status')
   })
 
   it('merges the membership kind with the primary marker into one label', () => {
@@ -410,7 +411,7 @@ describe('enum value labels (内部コードを画面に出さない)', () => {
   it('maps user source types', () => {
     expect(userSourceTypeLabel('local')).toBe('ローカル')
     expect(userSourceTypeLabel('external_hr')).toBe('外部人事')
-    expect(userSourceTypeLabel('microsoft_entra')).toBe('microsoft_entra')
+    expect(userSourceTypeLabel('microsoft_entra')).toBe('Microsoft 365')
   })
 
   it('maps user field keys to the labels used on the user list', () => {

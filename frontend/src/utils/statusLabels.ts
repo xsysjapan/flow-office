@@ -703,6 +703,7 @@ export function backOfficeTaskSourceTypeLabel(sourceType: string): string {
 const groupStatusLabels: Record<string, string> = {
   active: '有効',
   inactive: '無効',
+  planned_inactive: '無効化予定',
 }
 
 /** グループの状態。 */
@@ -750,6 +751,7 @@ export function shiftDayTypeLabel(dayType: string): string {
 const userSourceTypeLabels: Record<string, string> = {
   local: 'ローカル',
   external_hr: '外部人事',
+  microsoft_entra: 'Microsoft 365',
 }
 
 /** 利用者の管理元(`source_type`)。 */
