@@ -19,7 +19,7 @@ export interface ListQueueTabsProps {
 export function ListQueueTabs({ tabs, value, onChange, 'aria-label': ariaLabel, className }: ListQueueTabsProps) {
   return (
     <Tabs value={value} onValueChange={onChange} className={className}>
-      <TabsList aria-label={ariaLabel} className={cn('max-w-full overflow-x-auto')}>
+      <TabsList aria-label={ariaLabel} className={cn('h-auto max-w-full flex-wrap')}>
         {tabs.map((tab) => (
           <TabsTrigger
             key={tab.value}

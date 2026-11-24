@@ -33,13 +33,20 @@ export const WithAdvanced: Story = {
   args: {
     children: items,
     advanced: (
-      <div className={filterWidth.select}>
+      <>
         <Input aria-label="管理番号" placeholder="管理番号" />
-      </div>
+        <Input aria-label="名称" placeholder="名称" />
+        <Input aria-label="設置場所" placeholder="設置場所" />
+      </>
     ),
   },
 }
 
 export const WithAdvancedActive: Story = {
   args: { ...WithAdvanced.args, advancedActiveCount: 2, isFiltered: true },
+}
+
+export const Narrow: Story = {
+  args: { ...WithAdvancedActive.args },
+  decorators: [(Story) => <div style={{ width: 360 }}><Story /></div>],
 }

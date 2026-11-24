@@ -226,7 +226,7 @@ export function MyIntegrationsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>名称</TableHead>
+              <TableHead className="whitespace-normal min-w-48">名称</TableHead>
               <TableHead>種別</TableHead>
               <TableHead>許可された操作</TableHead>
               <TableHead>状態</TableHead>
@@ -237,7 +237,7 @@ export function MyIntegrationsPage() {
           <TableBody>
             {list.map((integration) => (
               <TableRow key={integration.id}>
-                <TableCell className="font-medium text-foreground">{integration.client_name}</TableCell>
+                <TableCell className="whitespace-normal min-w-48 font-medium text-foreground">{integration.client_name}</TableCell>
                 <TableCell className="text-muted-foreground">{CLIENT_TYPE_LABELS[integration.client_type]}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {(integration.scopes ?? []).map((scope) => SCOPE_LABELS[scope] ?? scope).join(' / ') || '-'}

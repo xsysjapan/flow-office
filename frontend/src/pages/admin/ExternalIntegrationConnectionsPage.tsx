@@ -500,7 +500,7 @@ export function ExternalIntegrationConnectionsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>プロバイダ</TableHead>
-              <TableHead>名称</TableHead>
+              <TableHead className="whitespace-normal min-w-48">名称</TableHead>
               <TableHead>認証方式</TableHead>
               <TableHead>認証情報</TableHead>
               <TableHead>状態</TableHead>
@@ -512,7 +512,7 @@ export function ExternalIntegrationConnectionsPage() {
             {list.map((connection) => (
               <TableRow key={connection.id}>
                 <TableCell className="text-foreground">{PROVIDER_LABELS[connection.provider]}</TableCell>
-                <TableCell className="font-medium text-foreground">{connection.name}</TableCell>
+                <TableCell className="whitespace-normal min-w-48 font-medium text-foreground">{connection.name}</TableCell>
                 <TableCell className="text-muted-foreground">{AUTH_TYPE_LABELS[connection.auth_type]}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {connection.auth_type === 'oauth2'

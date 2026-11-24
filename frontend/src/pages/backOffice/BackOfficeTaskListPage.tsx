@@ -65,7 +65,7 @@ function BackOfficeTaskTable({ tasks, selectedIds, onToggleRow, onToggleAll, isR
               />
             </TableHead>
           )}
-          <TableHead>タイトル</TableHead>
+          <TableHead className="whitespace-normal min-w-48">タイトル</TableHead>
           <TableHead>種別</TableHead>
           <TableHead>担当者</TableHead>
           <TableHead>期限</TableHead>
@@ -94,7 +94,7 @@ function BackOfficeTaskTable({ tasks, selectedIds, onToggleRow, onToggleAll, isR
                   />
                 </TableCell>
               )}
-              <TableCell>
+              <TableCell className="whitespace-normal min-w-48">
                 <Link
                   to={`/backoffice-tasks/${task.id}`}
                   state={forwardState}

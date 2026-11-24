@@ -225,7 +225,6 @@ export function AssetListPage() {
               label={field.label}
               placeholder={field.placeholder}
               maxLength={100}
-              className={filterWidth.select}
               value={searchParams.get(field.key) || null}
               onChange={(next) => updateParams({ [field.key]: next })}
             />
@@ -304,7 +303,7 @@ export function AssetListPage() {
           <TableHeader>
             <TableRow>
               <TableHead>管理番号</TableHead>
-              <TableHead>名称</TableHead>
+              <TableHead className="whitespace-normal min-w-48">名称</TableHead>
               <TableHead>管理区分</TableHead>
               <TableHead>現在の状況</TableHead>
             </TableRow>
@@ -317,7 +316,7 @@ export function AssetListPage() {
                 rowLabel={`${asset.name}の詳細を開く`}
               >
                 <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
-                <TableCell>
+                <TableCell className="whitespace-normal min-w-48">
                   <Link
                     to={`/assets/${asset.id}`}
                     state={forwardState}

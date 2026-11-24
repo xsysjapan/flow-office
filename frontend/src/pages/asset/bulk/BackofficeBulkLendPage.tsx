@@ -116,7 +116,7 @@ export function BackofficeBulkLendPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>管理番号</TableHead>
-                  <TableHead>名称</TableHead>
+                  <TableHead className="whitespace-normal min-w-48">名称</TableHead>
                   <TableHead>貸出方式</TableHead>
                   <TableHead aria-label="操作" />
                 </TableRow>
@@ -125,7 +125,7 @@ export function BackofficeBulkLendPage() {
                 {targets.map((asset) => (
                   <TableRow key={asset.id}>
                     <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
-                    <TableCell>{asset.name}</TableCell>
+                    <TableCell className="whitespace-normal min-w-48">{asset.name}</TableCell>
                     <TableCell>
                       <Badge tone="neutral">{asset.lending_method === 'approval' ? '承認制' : 'バックオフィス'}</Badge>
                     </TableCell>

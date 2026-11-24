@@ -329,7 +329,7 @@ export function ApprovalsPage() {
             <TableRow>
               <TableHead aria-hidden="true" />
               <TableHead>種別</TableHead>
-              <TableHead>タイトル</TableHead>
+              <TableHead className="whitespace-normal min-w-48">タイトル</TableHead>
               <TableHead>申請者</TableHead>
               <TableHead>状態</TableHead>
               <TableHead>提出日</TableHead>
@@ -359,7 +359,7 @@ export function ApprovalsPage() {
                   <TableCell>
                     <Badge tone="neutral">{subjectTypeLabel(request.subject_type ?? null)}</Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-normal min-w-48">
                     {/* 行全体をクリック可能にした上で、タイトル自体もbuttonのままにしてキーボード
                         (Tab→Enter/Space)から詳細を開けるようにする(SKILL.md §2.2)。 */}
                     <button

@@ -157,6 +157,36 @@ describe('WorkflowRequestListPage', () => {
     await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument())
   })
 
+  it('places the bulk action bar after the filter bar and before the table', async () => {
+    const withData: Paginated<WorkflowRequest> = {
+      data: [
+        {
+          id: 'workflow-request-1',
+          title: 'タクシー代',
+          status: 'submitted',
+          form_data: {},
+          submitted_at: '2026-07-01T00:00:00+09:00',
+          approved_at: null,
+          returned_at: null,
+          cancelled_at: null,
+          created_at: null,
+        },
+      ],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockResolvedValue(withData)
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'タクシー代を選択' }))
+    const filterLabel = screen.getByLabelText('種別')
+    const bulkText = screen.getByText('1件を選択中')
+    const table = screen.getByRole('table')
+    expect(filterLabel.compareDocumentPosition(bulkText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(bulkText.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('shows failed cancellations in the result and keeps only the failed requests selected', async () => {
     const base = {
       form_data: {},

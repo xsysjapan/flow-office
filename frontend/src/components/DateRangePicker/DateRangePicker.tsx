@@ -124,7 +124,7 @@ export function DateRangePicker({
           className={`w-full justify-start px-3 font-normal ${value?.from ? 'text-foreground' : 'text-muted-foreground'}`}
         >
           <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate">{triggerLabel(value, placeholder)}</span>
+          <span className="min-w-0 truncate">{triggerLabel(value, placeholder)}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start" collisionPadding={16}>

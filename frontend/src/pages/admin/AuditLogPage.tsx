@@ -149,14 +149,12 @@ export function AuditLogPage() {
               label="対象タイプ"
               placeholder="workflow_request"
               maxLength={TEXT_MAX_LENGTH}
-              className={filterWidth.select}
               value={aggregateType || null}
               onChange={(next) => updateParam('aggregate_type', next ?? '')}
             />
             <TextFilterInput
               label="対象ID"
               maxLength={TEXT_MAX_LENGTH}
-              className={filterWidth.keyword}
               value={aggregateId || null}
               onChange={(next) => updateParam('aggregate_id', next ?? '')}
             />
@@ -192,9 +190,6 @@ export function AuditLogPage() {
         <ErrorMessage error={error} fallback="監査ログの取得に失敗しました。" />
       ) : (
         <>
-          <p className="mb-3 text-sm text-muted-foreground">
-            全{data?.meta.total ?? 0}件 ({data?.meta.current_page ?? 1}/{data?.meta.last_page ?? 1}ページ)
-          </p>
           {(data?.data ?? []).length === 0 ? (
             <EmptyState
               title={isFiltered ? '条件に一致するログはありません。' : '監査ログはまだありません。'}
@@ -217,9 +212,9 @@ export function AuditLogPage() {
                 <li key={event.id} className="py-2">
                   <div className="flex flex-wrap gap-4 text-sm">
                     <span className="text-foreground">{formatDateTime(event.occurred_at)}</span>
-                    <span className="text-muted-foreground">{event.aggregate_type}</span>
-                    <span className="text-muted-foreground">#{event.aggregate_id}</span>
-                    <span className="text-foreground">{event.event_type}</span>
+                    <span className="break-all text-muted-foreground">{event.aggregate_type}</span>
+                    <span className="break-all text-muted-foreground">#{event.aggregate_id}</span>
+                    <span className="break-all text-foreground">{event.event_type}</span>
                   </div>
                   <details className="mt-1">
                     <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">

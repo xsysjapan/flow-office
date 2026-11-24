@@ -45,3 +45,7 @@ export const WithoutCount: Story = {
 export const Controlled: Story = {
   render: (args) => <ControlledExample {...args} />,
 }
+
+export const Narrow: Story = {
+  decorators: [(Story) => <div style={{ width: 320 }}><Story /></div>],
+}

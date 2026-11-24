@@ -127,7 +127,7 @@ export function RoleDefinitionPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>名称</TableHead>
+                <TableHead className="whitespace-normal min-w-48">名称</TableHead>
                 <TableHead>コード</TableHead>
                 <TableHead>状態</TableHead>
               </TableRow>
@@ -139,7 +139,7 @@ export function RoleDefinitionPage() {
                   onRowClick={() => selectRole(role)}
                   rowLabel={`${role.name}の詳細を開く`}
                 >
-                  <TableCell className="font-medium text-foreground">
+                  <TableCell className="whitespace-normal min-w-48 font-medium text-foreground">
                     {role.name}
                   </TableCell>
                   <TableCell>{role.code}</TableCell>

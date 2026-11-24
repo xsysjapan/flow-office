@@ -74,13 +74,13 @@ describe('AttendanceMonthsPage', () => {
     expect(await screen.findByText('2026-07')).toBeInTheDocument()
     expect(screen.queryByText('2026-01')).not.toBeInTheDocument()
     expect(screen.getAllByText('未提出')).toHaveLength(6)
-    expect(screen.getByText('7件 (1/2ページ)')).toBeInTheDocument()
+    expect(screen.getByText('7件中 1 / 2 ページ')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '前のページ' })).toBeDisabled()
 
     await userEvent.click(screen.getByRole('button', { name: '次のページ' }))
 
     expect(screen.getByText('2026-01')).toBeInTheDocument()
-    expect(screen.getByText('7件 (2/2ページ)')).toBeInTheDocument()
+    expect(screen.getByText('7件中 2 / 2 ページ')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '次のページ' })).toBeDisabled()
   })
 

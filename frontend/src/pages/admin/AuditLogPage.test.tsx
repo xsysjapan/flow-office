@@ -79,7 +79,7 @@ describe('AuditLogPage', () => {
     renderPage()
 
     expect(await screen.findByText('workflow_request.drafted')).toBeInTheDocument()
-    expect(screen.getByText('全1件 (1/1ページ)')).toBeInTheDocument()
+    expect(screen.queryByText(/^全\d+件/)).not.toBeInTheDocument()
   })
 
   it('requeries with the entered event type after the debounce and clears page', async () => {

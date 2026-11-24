@@ -85,8 +85,8 @@ export function AdminLayout() {
     .filter((group) => group.items.length > 0);
 
   return (
-    <div className="flex flex-col gap-6 sm:flex-row">
-      <div className="sm:hidden">
+    <div className="flex flex-col gap-6 xl:flex-row">
+      <div className="xl:hidden">
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetTrigger asChild>
             <Button variant="secondary">
@@ -108,7 +108,7 @@ export function AdminLayout() {
           </SheetContent>
         </Sheet>
       </div>
-      <aside className="hidden w-56 shrink-0 sm:block">
+      <aside className="hidden w-56 shrink-0 xl:block">
         <AdminNavigation groups={visibleGroups} />
       </aside>
       <div className="min-w-0 flex-1">

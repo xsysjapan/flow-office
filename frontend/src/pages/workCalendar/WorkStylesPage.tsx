@@ -219,7 +219,7 @@ function WorkStyleListCard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>名称</TableHead>
+                <TableHead className="whitespace-normal min-w-48">名称</TableHead>
                 <TableHead>コード</TableHead>
                 <TableHead>労働時間制</TableHead>
                 <TableHead>所定労働時間</TableHead>
@@ -231,7 +231,7 @@ function WorkStyleListCard() {
             <TableBody>
               {pageItems.map((style) => (
                 <TableRow key={style.id}>
-                  <TableCell className="font-medium text-foreground">{style.name}</TableCell>
+                  <TableCell className="whitespace-normal min-w-48 font-medium text-foreground">{style.name}</TableCell>
                   <TableCell className="text-muted-foreground">{style.code}</TableCell>
                   <TableCell className="text-muted-foreground">{workTimeSystemLabel(style.work_time_system)}</TableCell>
                   <TableCell className="text-muted-foreground">{style.prescribed_daily_minutes}分/日</TableCell>

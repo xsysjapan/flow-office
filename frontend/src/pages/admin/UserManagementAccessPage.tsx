@@ -292,7 +292,7 @@ export function UserManagementAccessPage({
               <TableHeader>
                 <TableRow>
                   <TableHead>種別</TableHead>
-                  <TableHead>名称</TableHead>
+                  <TableHead className="whitespace-normal min-w-48">名称</TableHead>
                   <TableHead>親グループ</TableHead>
                   <TableHead>メンバー</TableHead>
                   <TableHead>状態</TableHead>
@@ -308,7 +308,7 @@ export function UserManagementAccessPage({
                     rowLabel={`${g.name}の詳細を開く`}
                   >
                     <TableCell>{g.type.name}</TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-normal min-w-48">
                       <Link
                         className="font-medium text-foreground hover:text-primary hover:underline"
                         to={`/admin/groups/${g.id}`}

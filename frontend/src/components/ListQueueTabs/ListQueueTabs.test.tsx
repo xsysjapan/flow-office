@@ -35,4 +35,11 @@ describe('ListQueueTabs', () => {
     await userEvent.click(screen.getByRole('tab', { name: '承認済み 30件' }))
     expect(onChange).toHaveBeenCalledWith('approved')
   })
+
+  it('タブは折り返し、横スクロールにしない', () => {
+    render(<ListQueueTabs tabs={tabs} value="submitted" onChange={vi.fn()} aria-label="承認状態" />)
+    const list = screen.getByRole('tablist', { name: '承認状態' })
+    expect(list).toHaveClass('h-auto', 'flex-wrap', 'max-w-full')
+    expect(list).not.toHaveClass('overflow-x-auto')
+  })
 })

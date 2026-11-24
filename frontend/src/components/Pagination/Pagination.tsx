@@ -12,7 +12,7 @@ export function Pagination({ currentPage, lastPage, total, onPageChange }: Pagin
   if (lastPage <= 1) return null
 
   return (
-    <nav aria-label="ページ送り" className="mt-4 flex items-center justify-between gap-4">
+    <nav aria-label="ページ送り" className="mt-4 flex flex-wrap items-center justify-between gap-4">
       <p className="text-sm text-muted-foreground">
         {total}件中 {currentPage} / {lastPage} ページ
       </p>

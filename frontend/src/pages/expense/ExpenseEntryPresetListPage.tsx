@@ -201,7 +201,7 @@ export function ExpenseEntryPresetListPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>名称</TableHead>
+                <TableHead className="whitespace-normal min-w-48">名称</TableHead>
                 <TableHead>公開範囲</TableHead>
                 <TableHead>経費区分</TableHead>
                 <TableHead>明細件数</TableHead>
@@ -231,7 +231,7 @@ export function ExpenseEntryPresetListPage() {
                     onRowClick={() => navigate(`/expenses/presets/${preset.id}`, { state: forwardState })}
                     rowLabel={`${preset.name}の詳細を開く`}
                   >
-                    <TableCell>
+                    <TableCell className="whitespace-normal min-w-48">
                       {editable ? (
                         <Link
                           to={`/expenses/presets/${preset.id}`}

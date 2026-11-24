@@ -57,7 +57,7 @@ export function ExpenseCategoryListPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>名称</TableHead>
+              <TableHead className="whitespace-normal min-w-48">名称</TableHead>
               <TableHead>コード</TableHead>
               <TableHead>証憑タイプ既定</TableHead>
               <TableHead>レシート必須しきい値</TableHead>
@@ -72,7 +72,7 @@ export function ExpenseCategoryListPage() {
                 onRowClick={() => navigate(`/admin/expense-categories/${category.id}`, { state: forwardState })}
                 rowLabel={`${category.name}の詳細を開く`}
               >
-                <TableCell>
+                <TableCell className="whitespace-normal min-w-48">
                   <Link
                     to={`/admin/expense-categories/${category.id}`}
                     state={forwardState}

@@ -93,7 +93,7 @@ export function BackofficeBulkReturnPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>管理番号</TableHead>
-                  <TableHead>名称</TableHead>
+                  <TableHead className="whitespace-normal min-w-48">名称</TableHead>
                   <TableHead>借用者</TableHead>
                   <TableHead aria-label="操作" />
                 </TableRow>
@@ -102,7 +102,7 @@ export function BackofficeBulkReturnPage() {
                 {targets.map((asset) => (
                   <TableRow key={asset.id}>
                     <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
-                    <TableCell>{asset.name}</TableCell>
+                    <TableCell className="whitespace-normal min-w-48">{asset.name}</TableCell>
                     <TableCell className="text-muted-foreground">{asset.current_loan?.borrower?.name ?? '-'}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="secondary" size="sm" onClick={() => removeTarget(asset.id)}>

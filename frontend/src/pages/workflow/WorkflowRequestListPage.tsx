@@ -308,11 +308,6 @@ export function WorkflowRequestListPage() {
 
   return (
     <Card title="申請一覧" actions={<NewRequestDialog />}>
-      <BulkActionBar
-        selectedCount={selectedIds.size}
-        onClear={() => setSelectedIds(new Set())}
-        actions={[{ key: 'cancel', label: 'まとめて取消', variant: 'danger', onClick: openBulkDialog }]}
-      />
       <ListFilterBar className="mb-4" isFiltered={isFiltered} onClear={clearFilters}>
         <FormField label="状態" htmlFor="request-center-status" className={filterWidth.select}>
           <NativeSelect
@@ -329,7 +324,7 @@ export function WorkflowRequestListPage() {
             ))}
           </NativeSelect>
         </FormField>
-        <FormField label="種別" htmlFor="request-center-subject-type" className="w-full sm:w-48">
+        <FormField label="種別" htmlFor="request-center-subject-type" className={filterWidth.select}>
           <NativeSelect
             id="request-center-subject-type"
             value={subjectType === null ? 'none' : (subjectType ?? 'all')}
@@ -343,6 +338,11 @@ export function WorkflowRequestListPage() {
           </NativeSelect>
         </FormField>
       </ListFilterBar>
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[{ key: 'cancel', label: 'まとめて取消', variant: 'danger', onClick: openBulkDialog }]}
+      />
 
       {error ? (
         <ErrorMessage error={error} fallback="申請一覧の取得に失敗しました。" />
@@ -371,7 +371,7 @@ export function WorkflowRequestListPage() {
             <TableRow>
               <TableHead aria-hidden="true" />
               <TableHead>種別</TableHead>
-              <TableHead>タイトル</TableHead>
+              <TableHead className="whitespace-normal min-w-48">タイトル</TableHead>
               <TableHead>状態</TableHead>
             </TableRow>
           </TableHeader>
@@ -403,7 +403,7 @@ export function WorkflowRequestListPage() {
                   <TableCell>
                     <Badge tone="neutral">{requestTypeBadgeLabel(request)}</Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-normal min-w-48">
                     <Link
                       to={`/requests/${request.id}`}
                       state={forwardState}

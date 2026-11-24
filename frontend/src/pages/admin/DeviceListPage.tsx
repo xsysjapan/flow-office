@@ -216,7 +216,7 @@ export function DeviceListPage() {
       }
     >
       <ListFilterBar className="mb-4" isFiltered={showDeleted} onClear={clearConditions}>
-        <label className="flex h-10 items-center gap-2 text-sm text-foreground">
+        <label className="flex h-9 items-center gap-2 text-sm text-foreground">
           <Checkbox checked={showDeleted} onCheckedChange={(checked) => changeShowDeleted(checked === true)} />
           削除済みの端末も表示
         </label>
@@ -312,7 +312,7 @@ export function DeviceListPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>名称</TableHead>
+                <TableHead className="whitespace-normal min-w-48">名称</TableHead>
                 <TableHead>種別</TableHead>
                 <TableHead>設置場所</TableHead>
                 <TableHead>役割</TableHead>
@@ -331,7 +331,7 @@ export function DeviceListPage() {
                     rowLabel={`${device.name}の詳細を開く`}
                     disabled={isDeleted}
                   >
-                    <TableCell className="font-medium text-foreground">{device.name}</TableCell>
+                    <TableCell className="whitespace-normal min-w-48 font-medium text-foreground">{device.name}</TableCell>
                     <TableCell className="text-muted-foreground">{DEVICE_TYPE_LABELS[device.device_type]}</TableCell>
                     <TableCell className="text-muted-foreground">{device.location_name ?? '-'}</TableCell>
                     <TableCell className="text-muted-foreground">

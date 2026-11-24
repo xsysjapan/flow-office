@@ -50,7 +50,7 @@ export function ExpenseClaimListPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>タイトル</TableHead>
+              <TableHead className="whitespace-normal min-w-48">タイトル</TableHead>
               <TableHead>対象期間</TableHead>
               <TableHead>明細件数</TableHead>
               <TableHead>合計金額</TableHead>
@@ -70,7 +70,7 @@ export function ExpenseClaimListPage() {
                   onRowClick={() => navigate(`/expenses/${claim.id}`, { state: forwardState })}
                   rowLabel={`${claim.title ?? '経費精算'}の詳細を開く`}
                 >
-                  <TableCell className="text-foreground">{claim.title ?? '-'}</TableCell>
+                  <TableCell className="whitespace-normal min-w-48 text-foreground">{claim.title ?? '-'}</TableCell>
                   <TableCell>
                     <Link
                       to={`/expenses/${claim.id}`}

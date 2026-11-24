@@ -95,7 +95,7 @@ export function SelfBulkReturnPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>管理番号</TableHead>
-                        <TableHead>名称</TableHead>
+                        <TableHead className="whitespace-normal min-w-48">名称</TableHead>
                         <TableHead aria-label="操作" />
                       </TableRow>
                     </TableHeader>
@@ -103,7 +103,7 @@ export function SelfBulkReturnPage() {
                       {assets.map((asset) => (
                         <TableRow key={asset.id}>
                           <TableCell className="font-medium text-foreground">{asset.asset_no}</TableCell>
-                          <TableCell>{asset.name}</TableCell>
+                          <TableCell className="whitespace-normal min-w-48">{asset.name}</TableCell>
                           <TableCell className="text-right">
                             <Button variant="secondary" size="sm" onClick={() => removeTarget(asset.id)}>
                               取り消す

@@ -66,6 +66,16 @@ describe("AdminLayout", () => {
     );
   });
 
+  it("switches between the menu button and the sidebar at the xl breakpoint", () => {
+    const { container } = renderLayout();
+
+    const root = container.querySelector(".xl\\:flex-row");
+    expect(root).not.toBeNull();
+    expect(container.querySelector(".xl\\:hidden")).not.toBeNull();
+    expect(container.querySelector("aside")).toHaveClass("hidden", "xl:block");
+    expect(container.innerHTML).not.toMatch(/\bsm:(flex-row|hidden|block)\b/);
+  });
+
   it("shows the routed content and sidebar links for an admin user", () => {
     renderLayout();
 

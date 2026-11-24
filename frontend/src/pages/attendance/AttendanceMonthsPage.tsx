@@ -1,11 +1,10 @@
 import { useEffect } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { useAuth } from '../../auth/useAuth'
 import { Badge } from '../../components/Badge/Badge'
-import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { Pagination } from '../../components/Pagination/Pagination'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -159,19 +158,7 @@ export function AttendanceMonthsPage() {
               )
             })}
           </ul>
-          {pageCount > 1 && (
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground">{months.length}件 ({currentPage}/{pageCount}ページ)</span>
-              <div className="flex gap-2">
-                <Button variant="secondary" size="icon" title="前のページ" aria-label="前のページ" disabled={currentPage === 1} onClick={() => handlePageChange(currentPage - 1)}>
-                  <ChevronLeft aria-hidden="true" />
-                </Button>
-                <Button variant="secondary" size="icon" title="次のページ" aria-label="次のページ" disabled={currentPage === pageCount} onClick={() => handlePageChange(currentPage + 1)}>
-                  <ChevronRight aria-hidden="true" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <Pagination currentPage={currentPage} lastPage={pageCount} total={months.length} onPageChange={handlePageChange} />
         </>
       )}
     </Card>

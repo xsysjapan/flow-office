@@ -420,7 +420,7 @@ export function MySpecialLeavePage() {
                 <TableHead>付与日数</TableHead>
                 <TableHead>使用日数</TableHead>
                 <TableHead>残日数</TableHead>
-                <TableHead>付与理由</TableHead>
+                <TableHead className="whitespace-normal min-w-48">付与理由</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -432,7 +432,7 @@ export function MySpecialLeavePage() {
                   <TableCell>{grant.granted_days}</TableCell>
                   <TableCell>{grant.used_days}</TableCell>
                   <TableCell>{grant.remaining_days}</TableCell>
-                  <TableCell className="text-muted-foreground">{grant.grant_reason ?? '-'}</TableCell>
+                  <TableCell className="whitespace-normal min-w-48 text-muted-foreground">{grant.grant_reason ?? '-'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

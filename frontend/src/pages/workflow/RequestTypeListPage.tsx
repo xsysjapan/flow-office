@@ -50,7 +50,7 @@ export function RequestTypeListPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>名称</TableHead>
+              <TableHead className="whitespace-normal min-w-48">名称</TableHead>
               <TableHead>コード</TableHead>
               <TableHead>バックオフィス</TableHead>
               <TableHead>状態</TableHead>
@@ -63,7 +63,7 @@ export function RequestTypeListPage() {
                 onRowClick={() => navigate(`/admin/request-types/${type.id}`, { state: forwardState })}
                 rowLabel={`${type.name}の詳細を開く`}
               >
-                <TableCell>
+                <TableCell className="whitespace-normal min-w-48">
                   <Link
                     to={`/admin/request-types/${type.id}`}
                     state={forwardState}

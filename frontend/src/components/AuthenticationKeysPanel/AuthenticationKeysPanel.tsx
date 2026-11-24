@@ -147,7 +147,7 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>表示名</TableHead>
+              <TableHead className="whitespace-normal min-w-48">表示名</TableHead>
               <TableHead>種別</TableHead>
               <TableHead>状態</TableHead>
               <TableHead>登録日</TableHead>
@@ -157,7 +157,7 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
           <TableBody>
             {list.map((key) => (
               <TableRow key={key.id}>
-                <TableCell className="font-medium text-foreground">{key.display_name}</TableCell>
+                <TableCell className="whitespace-normal min-w-48 font-medium text-foreground">{key.display_name}</TableCell>
                 <TableCell className="text-muted-foreground">{KEY_TYPE_LABELS[key.key_type]}</TableCell>
                 <TableCell>
                   <Badge tone={KEY_STATUS_TONE[key.status]}>{KEY_STATUS_LABELS[key.status]}</Badge>
