@@ -258,7 +258,7 @@ final class CalendarBulkOperationTargetIdMigrator
         foreach ($plan['mapping'] as $pairs) {
             foreach ($pairs as $old => $new) {
                 if (! isset($before[$old], $after[$new]) || $before[$old] !== $after[$new]) {
-                    throw new RuntimeException("検証に失敗しました: 対応表の {$old} → {$new} の行が一致しません。");
+                    throw new RuntimeException("検証に失敗しました: 対応表の {$old} -> {$new} の行が一致しません。");
                 }
             }
         }

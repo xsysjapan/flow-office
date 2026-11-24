@@ -1,6 +1,6 @@
 # remove-finished-migration-commands(本番で実行済みの移行用コマンドの削除)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > それからすでに不要となった過去の移行用のコマンドは削除してもらえますか？
@@ -86,4 +86,21 @@
 ## レビュー履歴
 
 ## 実装結果
-未着手
+
+コミット: `a6b59316`(ファイルの削除。委譲先のステージが docs のコミットに混ざった)、`4f9e755b`(参照の更新)、最終コミット(docs)。
+
+- 削除したコマンドは6件(`leave:rebuild-event-store`・`events:normalize-history`・`backoffice:migrate-assignment-events`・`leave:rekey-paid-leave-streams`・`attendance:migrate-work-classifications`・`attendance:normalize-calculation-events`)。当初「7件」としたのは数え違い。
+- 専用のクラス約50(`EventStoreRebuilder`・`Reconcile/*`・各 Rebuilder・`StoredEventHistoryNormalizer`・`LegacyBackOfficeAssignmentDetector` ほか)と、テスト26件を削除した。
+- `EventStoreRebuildWriter` は、命名統一の補正が使う `write()` だけを残した。
+- 残したもの:
+  - `ReadModelRebuilder`・`ReadModelFingerprinter`・`ReadModelDiffer`・`ReadModelTableLister`・`EventRestorabilityChecker`・`LeaveUsageId`
+  - リリース待ちの補正の部品
+  - `AttendanceBackOfficeTaskHistoryBackfiller`
+  - 旧イベントの別名、migration、表
+- ReadModel の指紋を CLI で出す手段(`leave:rebuild-event-store --readmodel-fingerprint`)も無くなった。
+- テスト: 全件 2172 件成功(委譲元で再実行)。`php artisan list` に削除したコマンドが出ないことを確かめた。
+- docs:
+  - docs/27 §3.1・§3.2・§3.6、docs/32、docs/16・17・29 を「実施済み・削除済み」に直した。
+  - 過去の変更セット2つの「未実施」に、本番で実行済みを追記した。
+  - docs/09 と data-correction スキルには、過去の経緯・前例として名前が残る。
+

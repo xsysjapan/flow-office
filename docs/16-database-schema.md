@@ -76,7 +76,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 
 `system_settings`と同じく、イベントではなく直接更新する正データ(Projectorの書き込み先では
 ない)。パスワードの平文・ハッシュは`stored_events`に記録しない。旧`users.password`・
-`users.remember_token`から移行済み(論点19 決定7)。`leave:rebuild-event-store --list-readmodels`の
+`users.remember_token`から移行済み(論点19 決定7)。`ReadModelTableLister`の
 対象外。
 
 ## system_settings (システム全体設定。単一行)
@@ -904,10 +904,8 @@ docs/30-usecases-expense.md参照。MoneyForwardクラウド経費APIの`ex_item
 - 所定外法定外: `non_prescribed_statutory_excess_work_minutes`
 - 法定休日: `legal_holiday_work_minutes`
 
-既存データは管理画面の「勤怠5区分データ移行」
-(`attendance:migrate-work-classifications`)で移行する。未適用では対象件数だけを確認し、
-`apply`を有効にすると、イベントのバックアップ・5区分への履歴補正・勤怠計算Projection再構築・
-提出済み/承認済み/締め済み月次スナップショット再計算を順番に実行する。Projectionを旧集計値から
+既存データの移行(管理画面の「勤怠5区分データ移行」)は本番で実施済みで、コマンド(`attendance:migrate-work-classifications`)は削除済み。
+Projectionを旧集計値から
 SQLだけで推測変換しないため、日次実績とイベント履歴から再生成できる。
 - late_night_work_minutes
 - late_night_prescribed_work_minutes (深夜のうち所定労働にあたる分。late_night_work_minutesの内訳)

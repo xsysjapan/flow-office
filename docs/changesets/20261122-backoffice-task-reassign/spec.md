@@ -254,5 +254,6 @@
 - 受け入れ条件: 担当者変更でstatus不変・未着手の割当でassigned+status_changedの2件・完了/取消は422・新旧担当者への通知はFeatureテスト、
   画面の変更フォーム・一括の担当者設定はVitest、移行で旧形式が新構成になりリビルド後の`backoffice_tasks`が移行前と一致することはシナリオテストで確認。
 - 未実施: 本番での移行の実行(試し実行の結果を示し、許可を得てから`docs/27` 3.6の手順で行う)。
+  - 本番で実行済み(ユーザーの回答、2026-11-24)。
 - 追記(2026-11-22): 移行の実行方法は変更セット`20261122-backoffice-assignment-migration-admin`で、管理画面の運用コマンド
   `backoffice:migrate-assignment-events`(1トランザクション)に置き換えた。上記の段階的なCLI`backoffice:rebuild-assignment-events`は削除された。

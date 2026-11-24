@@ -537,7 +537,7 @@ FK・Sanctum認証・フロントエンドのユーザーID表示すべてに波
 
 独自EventStoreを利用していた最後の `export.created` はSpatie集約へ移行済みである。
 本番履歴のバックフィルと、旧ユーザーロール・月次勤怠Workflowの履歴再構成は
-`events:normalize-history` で行う。変換規則、dry-run、バックアップ、検証、ロールバックは
+`events:normalize-history` で行った(本番で実施済み。コマンドは削除済み)。変換規則・バックアップ・検証の記録は
 [32-stored-event-history-normalization.md](./32-stored-event-history-normalization.md)を参照する。
 
 `legacy_stored_events`テーブルは過去バックアップとのスキーマ互換のため残すが、通常実行時の

@@ -51,7 +51,7 @@ class RebuildReadModelsCommand extends Command
         // タイムゾーン・テナントIDが記録されていない(未補正の)利用者のイベントが残っている間は、作り直しが例外になる(または値が変わる)ため、試し実行も含めて拒否する。
         $userSettingsCount = $userSettingsDetector->count();
         if ($userSettingsCount > 0) {
-            $message = LegacyUserSettingsDetector::message($userSettingsCount);
+            $message = LegacyUserSettingsDetector::message($userSettingsCount, $bulkTargetIdDetector->count() > 0);
             $this->error($message);
             $run?->update(['error_message' => $message]);
 

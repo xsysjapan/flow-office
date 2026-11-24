@@ -30,7 +30,7 @@ final class RebuildProjectionsCommand extends Command
         // タイムゾーン・テナントIDが記録されていない(未補正の)利用者のイベントが残っている間は、再生が例外になる(または値が変わる)ため拒否する。
         $userSettingsCount = $userSettingsDetector->count();
         if ($userSettingsCount > 0) {
-            $this->error(LegacyUserSettingsDetector::message($userSettingsCount));
+            $this->error(LegacyUserSettingsDetector::message($userSettingsCount, $bulkTargetIdDetector->count() > 0));
 
             return self::FAILURE;
         }

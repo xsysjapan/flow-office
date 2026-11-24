@@ -24,6 +24,7 @@ use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -388,7 +389,7 @@ class UserSettingsAtReplayCorrectionTest extends TestCase
 
         $this->artisan(self::USER_COMMAND)
             ->expectsOutputToContain('テナントID上書き 1 件')
-            ->expectsOutputToContain('entraUserId=entra-ow null → tenant-A')
+            ->expectsOutputToContain('entraUserId=entra-ow null -> tenant-A')
             ->assertExitCode(0);
         $this->assertSame($events, $this->storedEvents());
 
@@ -542,6 +543,47 @@ class UserSettingsAtReplayCorrectionTest extends TestCase
         $this->stripKeys();
 
         return $operationId;
+    }
+
+    public function test_the_rebuild_refusal_names_the_command_that_fits_the_positive_detectors(): void
+    {
+        // 両方陽性: まとめのコマンドだけを案内する(利用者の設定値の補正は、単独では拒否するため案内しない)。
+        $this->buildBothLegacy();
+        foreach (['read-models:rebuild', 'projections:rebuild'] as $command) {
+            $this->assertSame(1, Artisan::call($command));
+            $output = Artisan::output();
+            $this->assertStringContainsString(self::COMBINED_COMMAND, $output);
+            $this->assertStringNotContainsString(self::USER_COMMAND, $output);
+        }
+        $this->assertSame(1, Artisan::call('read-models:rebuild', ['--dry-run' => true]));
+        $this->assertStringContainsString(self::COMBINED_COMMAND, Artisan::output());
+    }
+
+    public function test_the_rebuild_refusal_names_the_bulk_command_when_only_the_bulk_detector_is_positive(): void
+    {
+        $admin = $this->createEventAdmin();
+        $worker = $this->createEventUser('Bulk Worker');
+        $this->legacyBulkOperation($admin, $worker);
+        $this->assertSame(0, (new LegacyUserSettingsDetector)->count());
+        $this->assertSame(1, (new LegacyCalendarBulkOperationTargetIdDetector)->count());
+
+        foreach (['read-models:rebuild', 'projections:rebuild'] as $command) {
+            $this->assertSame(1, Artisan::call($command));
+            $output = Artisan::output();
+            $this->assertStringContainsString(self::BULK_COMMAND, $output);
+            $this->assertStringNotContainsString(self::COMBINED_COMMAND, $output);
+        }
+    }
+
+    public function test_the_captured_output_uses_an_ascii_arrow(): void
+    {
+        // laravel/pao(AIエージェント実行時の出力整形)が「→」を取り除くため、出力には ASCII の「->」を使う。
+        $this->createEventUser('Arrow');
+        $this->stripKeys();
+        $this->assertSame(0, Artisan::call(self::USER_COMMAND));
+        $output = Artisan::output();
+        $this->assertStringContainsString('->', $output);
+        $this->assertStringNotContainsString('→', $output);
     }
 
     public function test_each_single_correction_refuses_while_the_other_is_needed(): void

@@ -9,14 +9,15 @@
 ## User
 
 - `user.logged_in`
-- `user.synced_from_ms365` (payloadの`externalTenantId`: 記録時のシステム設定のEntra テナントID。null可。
-  旧イベントには無く、Projectorは再生時の設定値を読む。論点19 決定9)
+- `user.created_manually` (管理者による手動作成。`attributes.timezone`に、記録時に解決したタイムゾーン(作成時の既定値)を入れる)
+- `user.synced_from_ms365` (payloadの`externalTenantId`: 記録時のシステム設定のEntra テナントID。null可。`timezone`: 記録時に解決したタイムゾーン
+  (新規作成にならない場合も入れる。Projectorは行を作るときだけ使う)。論点19 決定9)
 - `user.onboarded_as_admin` (初回オンボーディング(UC-000)での管理者作成。payloadの
   `auth_method`が`sso`(実際のEntra IDログイン結果で作成、ExternalIdentityリンク済み)か
   `local`(ローカルパスワードで作成)かを区別する。`externalTenantId`は`sso`のときの記録時のEntra テナントID。
-  null可。旧イベントには無く、Projectorは再生時の設定値を読む。論点19 決定9)
+  null可。`timezone`は記録時に解決したタイムゾーン。論点19 決定9)
 - `user.created_from_sso_login` (UC-001 Microsoft SSOログインで、既存ユーザーに一致しない初回ログインの社員ユーザー作成。
-  payloadの`externalTenantId`は記録時のEntra テナントID。null可。旧イベントには無く、Projectorは再生時の設定値を読む。論点19 決定9)
+  payloadの`externalTenantId`は記録時のEntra テナントID。null可。`timezone`は記録時に解決したタイムゾーン。論点19 決定9)
 - `user.hire_date_set` (UC-P002 有給を自動付与する: 継続勤務期間の基準日を設定する)
 - `user.paid_leave_auto_grant_enabled_set` (有給の自動付与をユーザーごとに有効/無効化する。
   docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md参照)
@@ -24,8 +25,12 @@
   同上)
 - `user.termination_date_set` (退社日を設定または解除する)
 - `user.sso_account_linked` (UC-004 ローカルパスワードユーザーが任意のタイミングで
-  Microsoft 365アカウントを紐づける。payloadの`externalTenantId`は記録時のEntra テナントID。null可。
-  旧イベントには無く、Projectorは再生時の設定値を読む。論点19 決定9)
+  Microsoft 365アカウントを紐づける。payloadの`externalTenantId`は記録時のEntra テナントID。null可。論点19 決定9)
+- 利用者の作成系の5種類(`user.created_manually`・`user.onboarded_as_admin`・`user.created_from_sso_login`・`user.synced_from_ms365`・
+  `external_hr.import_applied`(`is_new`が true の行の`rows[i].timezone`))は、記録時に解決したタイムゾーンをイベントに持つ。Projectorは
+  システム設定を読まず、行を作るときにタイムゾーンが無ければ例外にする(未補正のイベント)。`externalTenantId`は、イベントの値をそのまま使い
+  (null なら null)、再生時の設定値には切り替えない。旧イベントのキーは運用コマンド`events:fix-rebuild-determinism`で補う
+  (変更セット`20261124-user-projection-settings-at-replay`)。補うまで、ReadModelの作り直しは拒否される。
 - `external_identity.linked`
 - `external_identity.unlinked`
 - `user.field_authority_changed`
@@ -246,7 +251,7 @@
 
 年次有給休暇は2026年9月の`PaidLeaveAccountAggregate`への再設計(cutover、
 docs/changesets/20260906-paid-leave-domain-redesign/spec.md)で、旧`paid_leave.*`イベント群は廃止された。
-2026-10-11の`stored_events`の作り直し(変更セット論点18。`leave:rebuild-event-store`)で、旧イベント列は
+2026-10-11の`stored_events`の作り直し(変更セット論点18。コマンドは本番で実行済みのため削除済み)で、旧イベント列は
 新しいイベント構成(`paid_leave_request.*`・`paid_leave_account.*`)へ変換済みであり、`paid_leave.*`は現在の
 `stored_events`に記録されない。旧イベント(`paid_leave.rule_created`・`granted`・`requested`・`usage_designated`・
 `request_approved`・`used`・`grant_revoked`等)は削除した。
@@ -574,13 +579,6 @@ StoredEventを復元するための履歴互換イベントである。旧機構
 
 ### 日次計算5区分への履歴補正
 
-カットオーバー時は、先にDB全体をバックアップしてから
-管理メニューの「運用コマンド」で「勤怠計算イベント履歴補正」を `apply` 無効で実行して
-対象件数を確認し、次に `apply` を有効にして一度だけ実行する（CLIでは
-`php artisan attendance:normalize-calculation-events`、続けて
-`php artisan attendance:normalize-calculation-events --apply`）。対象の
-`attendance_day.calculated`、`work_style.created`、`work_style.updated`を専用バックアップテーブルへ
-複製してから、5区分と作業日境界のメタデータを既存イベントへ追記する。バックアップテーブルが
-既に存在する場合は再実行を拒否する。完了後は同画面から「勤怠計算Projection再構築」、
-「月次勤怠スナップショット再計算」の順に実行する。DBマイグレーション自体はCI/CDで先に完了させ、
-これらのコマンドを処理するキューワーカーが稼働していることを確認する。
+本番で実施済み(コマンド`attendance:normalize-calculation-events`・「勤怠5区分データ移行」(`attendance:migrate-work-classifications`)は削除済み。
+変更セット`remove-finished-migration-commands`)。対象は`attendance_day.calculated`・`work_style.created`・`work_style.updated`で、
+5区分と作業日境界のメタデータを既存イベントへ追記した。再実行は不要。開発・ステージングの古いDBは`migrate:fresh --seed`で作り直す。

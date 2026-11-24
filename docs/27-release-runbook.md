@@ -113,94 +113,16 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 
 ### 3.1 休暇まわりの連携変更(変更セット `20261009-keep-leave-work-type-on-edit`)のリリース手順
 
-休暇の申請・残数・勤怠を文脈間のイベント連携に切り替えたリリース。既存データは移行コマンドではなく、
-`stored_events`の作り直しで新しいイベント構成に変換して引き継ぐ(変更セット論点18。変換規則と実行手順は
-`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/event-rebuild-mapping.md` 7章)。移行イベント・移行コマンド・
-補正イベントは作らない。作り直しは本番での実行の前に、変更セットのリハーサル手順書(`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/rehearsal-checklist.md`)の手順で複製DBに対して行い、
-試し実行の結果を確認する。以下の順序で行う。
-
-1. 事前条件の確認(試し実行で自動確認): 作り直しの表`stored_events_rebuilt`が存在しないこと、補正ログ`stored_event_corrections`が空であること、
-   本番に新しい種類の休暇申請イベント(`paid_leave_request.*`)が無いこと。違反があれば`--apply`は拒否される。
-2. 休暇の申請・承認・付与取消の操作を止める(メンテナンス窓)。書き込みの停止(メンテナンスモード、スケジューラ・キューワーカーの停止、
-   打刻端末・API・MCPの受付停止)は作り直しの前に行う。
-3. 作り直しの前に、DB全体のバックアップと、全ReadModelのテーブルのバックアップを取る(ロールバックに使う)。
-4. 試し実行: `php artisan leave:rebuild-event-store`。件数・申請の最終状態・cutoverの突き合わせ結果を確認する。
-   扱えない並びが1件でもあれば失敗する(推測で埋めない。変換規則を決めてから再実行する)。
-5. 作り直しを書く: `php artisan leave:rebuild-event-store --apply`(`stored_events_rebuilt`に書き、自己整合性を検査する)。
-   検査だけを再度行う場合は`--verify`。
-6. 複製DBで検証する。本番DBを複製し、複製に対して`--apply`・`--swap`を行い、全ReadModelを空にして全Projectorを
-   `event-sourcing:replay`した結果を、本番の作り直し前のReadModelと比較する。差分が意図した差(差し戻された休暇の消化記録の取消、
-   休暇値の削除等)だけであることを確認する。
-7. 本番で入れ替える: `php artisan leave:rebuild-event-store --swap`。元の表は`stored_events_before_rebuild_YYYYMMDDHHMMSS`として残る。
-8. 旧系統を削除した新しいコードを配備し、`php artisan migrate --force`を実行する(マイグレーション`2026_10_10_000001`〜`000009`・
-   `2026_10_11_000001`)。新しいコードは旧イベントを読めないため、7の後は新しいコードを配備するまで休暇を操作させない。
-9. ReadModelを作り直す: 運用コマンド画面の「データの作り直し(ReadModel)」(`read-models:rebuild`。権限は`admin_command.execute`)から、
-   まず「試し実行」(`--dry-run`)で、出力のテーブルごとの件数・変更の有無(利用者・権限のテーブルの変化の警告を含む)を確かめ、
-   問題が無ければ試し実行なしで実行する
-   (1トランザクションで全ReadModelを空にして全Projectorを再生する。実行中は全APIが503のメンテナンス中になり、失敗・中止ならロールバックされる。
-   実行役`admin-commands:run-pending`を毎分起動するスケジューラー(`schedule:run`のcron)が動いていることが前提。日次バッチの時刻(1:00〜2:20)を避ける)。
-   SSHからは`php artisan read-models:rebuild --dry-run`・`php artisan read-models:rebuild`でも実行できる(記録は自動で作られる)。
-   SSHで行う場合の手作業の手順: `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、
-   `php artisan event-sourcing:replay`で全Projectorを再生成する(Projectorは既存の状態を消さない前提のため、必ず空にしてから実行する)。
-10. 日次計算を再計算する: `php artisan attendance:recalculate-days --from=... --to=...`(既定は試し実行。一覧で値が変わる日を確認し、
-    `--apply`で記録する)。締め・提出済みの月の日も対象に含め、一覧に印を付ける。月次スナップショットは変えない。
-    値が変わる日と締め・提出済みの月のスナップショットとの差は、リハーサルで確認した方針に従う。
-11. 書き込みを再開する(メンテナンス窓の終了)。再開後に、休暇まわりの画面で差戻し・再申請・取消・休暇日の勤怠表示を確認する
-    (7章の疎通確認に加える)。
-
-- ロールバック: 7までに問題があれば、`RENAME TABLE stored_events TO stored_events_rebuilt_失敗時刻, stored_events_before_rebuild_YYYYMMDDHHMMSS TO stored_events`
-  で表を元に戻し、ReadModelを3の方法で取ったバックアップから戻し、旧コードを再配備する。新しいコードは旧イベントを読めないため、
-  表とコードは同時に戻す。8以降の問題は、DB全体のバックアップからの復元を検討する(ユーザーの判断)。
+**本番で実施済み(コマンドは削除済み)**(変更セット`remove-finished-migration-commands`、ユーザーの回答、2026-11-24)。休暇の申請・残数・勤怠を
+文脈間のイベント連携に切り替えたリリースで、既存データは`stored_events`の作り直し(`leave:rebuild-event-store`)で新しいイベント構成に変換して引き継いだ。
+作り直しのコマンドと、移行前のバックアップから作り直す手順は廃止した(変換規則は`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/event-rebuild-mapping.md`に残る)。
+再実行は不要で、手順は残さない。
 
 ### 3.2 有給口座・付与予定のAggregateId分離(変更セット `20261021-paid-leave-aggregate-stream-id`)のリリース手順
 
-有給口座・付与予定のイベントを、社員IDとは別のストリームIDに分けるリリース。新しいコードは、付け替えの前の履歴を正しく読めない
-(空のストリームを読んだ状態で記録される)ため、付け替えが終わる前に1件でも書かれてはならない。本番の過去のイベントは、
-`leave:rekey-paid-leave-streams`で付け替える(有給口座は新しいIDへ、付与予定の行は取り除く。変換規則・事前条件・検証は
-`docs/32-stored-event-history-normalization.md`)。本番での実行の前に、複製DBでリハーサルする。
-
-止めるもの(付け替えの前から、再開まで):
-
-- `php artisan down`(メンテナンスモード)
-- cronの`schedule:run`(`paid-leave:roll-schedules`・警告・社員同期など、有給口座・付与予定に書くスケジューラ)
-- キュー(空になるまで処理してから止める。`userId`の無いイベントを持つ古いジョブ(`ReapplyPaidLeaveSchedulePolicyJob`等)を残さない)
-- 打刻端末・API・MCPの受付
-
-実行の順:
-
-1. 本番の複製DBでリハーサルする。手順は`docs/changesets/20261024-paid-leave-release-rehearsal/assets/rehearsal-checklist.md`に従う(基準Aと合否の条件を含む)。
-2. 本番のDB全体と、全ReadModelのテーブルのバックアップを取る(戻し方に使う。基準Aにも使う)。
-2a. 基準A(旧コードで、付け替えの前に取る)。新しいコードは付け替えの前のイベントを読めない(例: `paid_leave_account.usage_designated`の旧payloadには`userId`が無い)ので、旧コードで取る。
-   - 手順2のバックアップを、同じサーバーの別のDB(例: `flow_office_before`)に戻す。
-   - 今動いている旧コードの`backend/`で、`DB_DATABASE=<別のDB>`を付けて実行する(Laravelは`.env`より環境変数を優先する)。実行の前に、`php artisan db:show`で接続先を確かめる。
-   - 一覧(`php artisan leave:rebuild-event-store --list-readmodels`)のテーブルを空にし、`php artisan event-sourcing:replay --force`で再生する。
-   - `php artisan leave:rebuild-event-store --readmodel-fingerprint`を取る(基準A)。
-   - 別のDBを作れないとき(XSERVERのDBの作成の権限・容量は要確認)は、本番のDBで旧コードで再生して取る。その場合は、本番で実行する前にユーザーの許可を取る。
-3. 新しいコードを配備する(`php artisan migrate --force`があれば実行する)。止めるものは、ここまでに止めておく。
-4. 試し実行: `php artisan leave:rekey-paid-leave-streams`。付け替える行数・取り除く付与予定の行数(種類別)・旧ID→新IDの対応の件数を確かめる。
-   事前条件に違反がある(付与予定の付与済み・判定の上書き・個別修正、`source='scheduled_batch'`の付与)ときは止まる。件数をユーザーに報告して判断を仰ぐ。
-5. `php artisan leave:rekey-paid-leave-streams --apply`(`stored_events_rebuilt`に書き、検査する)。検査だけを再度行う場合は`--verify`。
-6. `php artisan leave:rekey-paid-leave-streams --swap`(検査が通っている場合のみ。元の表は`stored_events_before_rekey_YYYYMMDDHHMMSS`として残る)。
-7. ReadModelを作り直す: 運用コマンド画面の「データの作り直し(ReadModel)」から実行する(試し実行→本実行。手順9の説明を参照)。SSHで行う場合は、
-   `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、`php artisan event-sourcing:replay`で
-   全Projectorを再生成する(必ず空にしてから)。
-8. 指紋を比べる(原則2の確認。リハーサルと本番で同じことをする)。
-   - 7の再生の後に、`php artisan leave:rebuild-event-store --readmodel-fingerprint`を取る(B)。
-   - AとBを比べる。合否の条件は次のとおり(リハーサル手順書の「7」と同じ)。
-     - 付与予定の2つの表(`paid_leave_schedule_entries`・`paid_leave_schedule_assessments`)は、Bでは0件(Aの件数は記録する)。
-     - `paid_leave_fiscal_year_settings`は、Aには無い表(このリリースで新しくできる)。Bの行が、既定の会社カレンダー(`company_calendars`の`is_default=1`の行)と、カレンダーのID・年度開始の月・日で一致すること。一致しなければ止める。
-     - それ以外の表は、件数・ハッシュがAと一致すること。
-     - 比較では、`created_at`・`updated_at`と、`stored_events.id`を指す列(`stored_event_id`・`last_changed_event_id`)を比べない(`ReadModelFingerprinter::EXCLUDED_COLUMNS`)。
-   - 差があれば`--readmodel-fingerprint-rows=<テーブル>`・`--readmodel-diff=<基準AのDB>`で行を特定して止める。
-   - 本番のReadModelと基準Aの差は、別件として報告する。
-9. 受付を再開する(`php artisan up`、`schedule:run`・キュー・打刻端末・API・MCP)。再開後に、有給の付与・消化・履歴の画面と、
-   次の`paid-leave:roll-schedules`(自動付与が有効な社員がいれば、新しいIDで付与予定が作り直される)を確認する。
-
-- 戻し方: 表をRENAMEで戻し(`RENAME TABLE stored_events TO stored_events_rekeyed_失敗時刻, stored_events_before_rekey_YYYYMMDDHHMMSS TO stored_events`)、
-  ReadModelを2のバックアップから戻す(または旧コードで再生する)、旧コードを再配備する。付け替えでは残る行のidが変わらないので、戻すのは簡単。
-  表とコードは同時に戻す(新しいコードは付け替え前の履歴を、旧コードは付け替え後の履歴を、正しく読めない)。
-- 本番で実行する前に、試し実行(手順4)の結果をユーザーに示して許可を取る(`data-correction`スキル)。許可の日時と内容は、変更セットの
-  「レビュー履歴」に残す。
+**本番で実施済み(コマンドは削除済み)**(変更セット`remove-finished-migration-commands`、ユーザーの回答、2026-11-24)。有給口座・付与予定のイベントを、
+社員IDとは別のストリームIDに分けるリリースで、過去のイベントは`leave:rekey-paid-leave-streams`で付け替えた。コマンドと手順は廃止した
+(変換規則・検証の記録は変更セット`20261021-paid-leave-aggregate-stream-id`に残る)。
 
 ### 3.3 有給の年度はじめ一斉付与・付与日数の表の区分(変更セット `20261021-paid-leave-fiscal-mass-grant-and-auto-assessment` 段階1)のリリース手順
 
@@ -257,55 +179,42 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 
 ### 3.6 バックオフィスタスクの割当イベントの分離(変更セット `20261122-backoffice-task-reassign`・`20261122-backoffice-assignment-migration-admin`)のリリース手順
 
-`backoffice_task.assigned`を「担当者の設定のみ」に改め、割当と同時の確認中への変化を`backoffice_task.status_changed`として分けて
-記録し直す(`stored_events`の作り直し。移行イベントは作らない)。移行は管理画面の運用コマンド「バックオフィス割当イベントの移行」
-(`backoffice:migrate-assignment-events {--dry-run}`)で行う。移行と全ReadModelの作り直しを1つのトランザクションで行い、途中で失敗しても
-`stored_events`・ReadModelは元のまま戻る。実行中は「データの作り直し」と同じく全利用者がメンテナンス中(全API 503)になる。
-
-配備から移行までの間も、ReadModelは旧コードで作った正しい値のままで、新しく記録される割当は新形式なので整合は保たれる。ただし移行までの間は
-**「データの作り直し(ReadModel)」の本実行と`projections:rebuild`は拒否される**(旧形式の割当イベントでは確認中への変化が再現できないため)。
-`event-sourcing:replay`は拒否できないので使わない。
-
-0. リハーサル(本番のコピーのMySQLで): 試し実行と本実行を行い、所要時間・ピークメモリ・`max_binlog_cache_size`の余裕・undoの増加・最長の単一SQL
-   (バックアップの`INSERT ... SELECT`と`stored_events`の全削除)の所要時間を測る。単一SQLが10分(心拍が途切れてメンテナンスが解ける目安)に近い場合は中止して相談する。
-1. 新しいコードを配備する(`php artisan migrate --force`。この変更でmigrationは増えない)。DB全体のバックアップを取る。
-2. 業務時間外(日次バッチの1:00〜2:20を避ける)に、管理画面「運用コマンド」で「バックオフィス割当イベントの移行」を「試し実行」で実行し、
-   対象件数・挿入件数・直前ステータス別件数(完了・取消からの変化があれば集約ID)・補正ログの付け替え件数・ReadModelの変更テーブルを確かめる。
-   `backoffice_tasks`以外に変更があれば中止する。結果をユーザーに示し、本実行の許可を得る。
-3. 「試し実行」を外して本実行する。出力のバックアップ表名(`stored_events_before_rebuild_YYYYMMDDHHMMSS`)を控える。
-4. 結果(件数・バックアップ表名・日時)を変更セット`20261122-backoffice-task-reassign`の「実装結果」と`docs/32`に記録する。
-
-- 失敗した場合は自動でロールバックされる。原因を直して再実行する。失敗時に作られたバックアップ表は、再実行の成功後に不要なら削除してよい
-  (`DROP TABLE stored_events_before_rebuild_...`。名前を確認してから)。
-- 休暇の作り直し(3.1)・有給口座の付け替え(3.2)を同じリリースで行う場合は、それらの`--swap`とReadModelの作り直しを終えてから本移行を行う。
-- 補正ログ`stored_event_corrections`とmetaの`history-normalization.source_event_id`は、新しいidへ付け替えられる。
-- 戻す場合はメンテナンス中に`stored_events`を手順3のバックアップ表から戻し、旧コードを配備して`read-models:rebuild`する。
+**本番で実施済み(コマンドは削除済み)**(変更セット`remove-finished-migration-commands`、ユーザーの回答、2026-11-24)。`backoffice_task.assigned`を
+「担当者の設定のみ」に改め、割当と同時の確認中への変化を`backoffice_task.status_changed`として分けて記録し直す`stored_events`の作り直しは、
+運用コマンド「バックオフィス割当イベントの移行」(`backoffice:migrate-assignment-events`)で行った。コマンドと旧形式の検出器(作り直しの拒否)は削除した。
+手順の記録は変更セット`20261122-backoffice-task-reassign`・`20261122-backoffice-assignment-migration-admin`に残る。
 
 ### 3.7 ReadModelの作り直しのずれの修正・中間版(変更セット `20261123-rebuild-drift-fixes`)のリリース手順
 
 ReadModelの作り直しが、ライブの内容と一致しない不具合(削除した行の子行の残り・カレンダー一括操作の対象行IDが作り直しのたびに変わる・自動採番IDを参照する列の比較)を直すリリース。
 命名統一(3.8)より**先に**、改名前のコード(`cd1d40ce`)に本変更セットのコードを載せた「中間版」として配備する(必須)。
 理由: 3.8の改名はずれがあると検証に失敗して戻る。一方、改名後のコードで補正コマンドを実行しても、旧項目名のイベントが残っている間は作り直しが拒否される。
-過去の`calendar_bulk_operation.reverted`のID(`revertedTargetIds`・`excludedTargetIds`)は、運用コマンド`events:fix-calendar-bulk-operation-target-ids`で決定的IDへ書き換える(`data-correction`)。
+過去の`calendar_bulk_operation.reverted`のID(`revertedTargetIds`・`excludedTargetIds`)と、利用者の作成系イベントのタイムゾーン・テナントID
+(再生の時点の設定値を使わないためのキー。変更セット`20261124-user-projection-settings-at-replay`)は、運用コマンド`events:fix-rebuild-determinism`で
+**まとめて1回**書き換える(`data-correction`)。2つの補正は別々に順に実行すると互いを止めるため、単独の`events:fix-calendar-bulk-operation-target-ids`・
+`events:fix-user-settings-at-replay`は、相手の補正も必要な環境ではまとめのコマンドを案内して止まる。
 
-止めるもの: 3.8と同じ(`down`・cron・キュー・MCPの受付)。以下はすべてメンテナンス中に行う。
+実行は**管理画面の運用コマンドから**行う(管理者でログインする。補正の前でも、ログインと管理画面は動く)。実行中は`ReadModelRebuildRunService`のメンテナンスで
+他の操作が止まるので、同時の書き込みは起きない。**`php artisan down`とSSHでの実行は不要**(配備そのものの短い停止は除く)。
 
 実行の順:
 
-1. 止める。
-2. 中間版を配備する。
-3. `php artisan events:fix-calendar-bulk-operation-target-ids`(`--execute`を付けない。何も変更しない)で試し実行する。
-   書き換える件数・対応表(旧ID→新ID)・対応が付かないIDを確かめる。対応が付かないIDがあれば止めて人が確認する。
-   結果をユーザーに示し、本実行の許可を得る。
-4. `php artisan events:fix-calendar-bulk-operation-target-ids --execute`。
-   バックアップ表の作成 → 書き換え → 補正ログの出力 → ReadModelの作り直し → 検証を1つの手順で行い、検証に失敗すれば戻る。
-   この手順は作り直しを含むので、別に`read-models:rebuild`は実行しない。
-5. `php artisan read-models:rebuild --dry-run`で、変更のあるテーブルが0件(差分0)であることを確かめる。0件でなければ`up`せず、ずれの表から原因を調べる。
-6. `php artisan up`、cron・キュー・MCPの受付を再開する。
+1. 中間版を配備する(`php artisan migrate --force`)。
+2. 管理画面の運用コマンドで「再生の決定性の補正」(`events:fix-rebuild-determinism`)を試し実行する(`--execute`を付けない。何も変更しない)。
+   2つの補正の結果(書き換える件数・一括操作の対応表(旧ID→新ID)・タイムゾーン・テナントIDの補完とテナントIDの上書きの一覧・補えない値)を確かめる。
+   対応が付かないID・補えない値があれば止めて人が確認する。
+3. 結果をユーザーに示し、本実行の許可を得る。
+4. 管理画面で「実行」する(`--execute`)。バックアップ表の作成 → 書き換え → 補正ログ → ReadModelの作り直し(1回)→ 検証を1つのトランザクションで行い、
+   検証に失敗すれば戻る。この手順は作り直しを含むので、別に`read-models:rebuild`は実行しない。
+5. 管理画面で「データの作り直し(ReadModel)」(`read-models:rebuild`)を試し実行し、変更のあるテーブルが0件(差分0)であることを確かめる。0件でなければ、ずれの表から原因を調べる。
 
-- 本番の実行には、試し実行の結果を示したうえでユーザーの明示的な許可が要る。許可の日時と内容は、変更セット`20261123-rebuild-drift-fixes`の「レビュー履歴」に記録する。
-- 未補正の取消イベント(IDがUUIDv5の再計算と一致しないもの)が残っている間は、`read-models:rebuild`・`projections:rebuild`・管理画面の作り直しは拒否される(補正の前に作り直すと旧IDの行が消え、対応表を作れなくなるため)。
+- 本番の実行には、試し実行の結果を示したうえでユーザーの明示的な許可が要る。許可の日時と内容は、変更セット`20261123-rebuild-drift-fixes`・`20261124-user-projection-settings-at-replay`の「レビュー履歴」に記録する。
+- 未補正のイベント(一括操作の取消イベントのIDがUUIDv5の再計算と一致しないもの、利用者の作成系イベントでタイムゾーン・テナントIDのキーが無いもの)が残っている間は、
+  `read-models:rebuild`・`projections:rebuild`・管理画面の作り直しは拒否される(補正の前に作り直すと旧IDの行が消える、または未補正のイベントで例外になるため)。
+  拒否の文言は、両方の補正が必要なら`events:fix-rebuild-determinism`、利用者の設定値だけなら`events:fix-user-settings-at-replay`、一括操作だけなら`events:fix-calendar-bulk-operation-target-ids`を案内する。
 - 冪等: 補正済みなら2回目の試し実行は「対象なし」になる。
+- **開発・ステージング・e2eのDBも、新しいコードにしたら`events:fix-rebuild-determinism`を実行する**(または`migrate:fresh --seed`で作り直す)。
+  補正の前でも、集約の取り出し(ログイン等)は動く。止まるのは作り直しだけ。
 
 ### 3.8 真偽値の命名統一(変更セット `20261123-boolean-column-naming`)のリリース手順
 
@@ -321,7 +230,7 @@ ReadModelの作り直しが、ライブの内容と一致しない不具合(削�
 - キュー(空になるまで処理してから止める。旧項目名のイベントを読むジョブを残さない)
 - MCPサーバーの受付
 
-事前条件: 旧項目名のイベントを読む移行(`leave:rebuild-event-store`等)が未実行の環境では、それらを**中間版で先に実行してから**本変更を配備する。
+事前条件: 旧項目名のイベントを読む過去の移行(休暇の作り直し等。3.1・3.2・3.6)は本番で実施済みで、コマンドは削除済みのため、事前の実行は要らない(開発・ステージングの古いDBは`migrate:fresh --seed`で作り直す)。
 
 実行の順:
 

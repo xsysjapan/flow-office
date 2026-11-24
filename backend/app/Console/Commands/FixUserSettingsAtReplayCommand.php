@@ -118,7 +118,7 @@ class FixUserSettingsAtReplayCommand extends Command
         if ($summary['tenant_overwrite_count'] > 0) {
             $command->warn('テナントIDが null で記録され、ライブが null 以外のイベント(ライブの値で上書きします):');
             foreach ($summary['tenant_overwrites'] as $row) {
-                $command->line("  - stored_events.id={$row['event_id']} {$row['event_class']} entraUserId={$row['entra_user_id']} null → {$row['live']}");
+                $command->line("  - stored_events.id={$row['event_id']} {$row['event_class']} entraUserId={$row['entra_user_id']} null -> {$row['live']}");
             }
         }
         if ($summary['timezone_difference_count'] > 0) {

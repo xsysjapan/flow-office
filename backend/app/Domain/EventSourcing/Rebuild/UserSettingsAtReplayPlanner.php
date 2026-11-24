@@ -191,7 +191,7 @@ final class UserSettingsAtReplayPlanner
                     ];
                     if ($tenantChange !== null) {
                         $event['after']['externalTenantId'] = $tenantChange['value'];
-                        $event['changes'][] = 'externalTenantId: '.(array_key_exists('externalTenantId', $properties) ? 'null' : '(なし)').' → '.($tenantChange['value'] ?? 'null');
+                        $event['changes'][] = 'externalTenantId: '.(array_key_exists('externalTenantId', $properties) ? 'null' : '(なし)').' -> '.($tenantChange['value'] ?? 'null');
                         if ($tenantChange['overwrite'] ?? false) {
                             // 上書きは、キーが無いものの補完とは別に数える。
                         } elseif ($tenantChange['null']) {
@@ -229,7 +229,7 @@ final class UserSettingsAtReplayPlanner
                 continue;
             }
             $this->setPath($events[$id]['after'], $candidate['path'], $value);
-            $events[$id]['changes'][] = implode('.', $candidate['path']).': (なし) → '.$value;
+            $events[$id]['changes'][] = implode('.', $candidate['path']).': (なし) -> '.$value;
             $timezoneFilled++;
         }
 

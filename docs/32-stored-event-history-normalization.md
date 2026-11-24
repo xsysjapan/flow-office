@@ -6,8 +6,7 @@
 ドメインモデルで意味が変わったイベント列を補正する。監査ログの保存・検索先は従来どおり
 Spatie の `stored_events` であり、検索用の別Projectionは作らない。
 
-SQLエクスポート原本は変更しない。補正は復元先DBに対して
-`php artisan events:normalize-history` を実行して行う。
+SQLエクスポート原本は変更しない。補正は復元先DBに対して`events:normalize-history`で行った(本番で実施済み。コマンドは削除済み)。
 
 ## 本番エクスポートの棚卸し結果
 
@@ -97,19 +96,10 @@ php artisan events:backfill-attendance-backoffice-tasks --apply
 
 ## 実行手順
 
-事前にDB全体のバックアップを取得し、アプリケーションをメンテナンス状態にする。
+**本番で実施済み(コマンド`events:normalize-history`は削除済み。本節の正規化の手順は廃止)**(変更セット`remove-finished-migration-commands`、
+ユーザーの回答、2026-11-24)。以下の「補正規則」「検証」は、実施した変換の記録として残す。
 
-```bash
-php artisan migrate --force
-
-# 読み取り専用の事前確認
-php artisan events:normalize-history
-
-# 適用。指定名のバックアップテーブルと `_legacy` テーブルを先に作る
-php artisan events:normalize-history \
-  --apply \
-  --backup-table=stored_events_backup_20260810
-```
+事前にDB全体のバックアップを取得し、アプリケーションをメンテナンス状態にした上で、`php artisan migrate --force`の後に補正を適用した。
 
 シーダー(`UserManagementSeeder`・`AccessControlSeeder`)は、作り直し(と旧系統を削除したコードの配備)の後に実行する。
 シーダーはCommandを発行してイベントを`stored_events`へ記録し、既にある行は飛ばす(上書きしない)ため、作り直しの前に
@@ -141,28 +131,10 @@ php artisan db:seed --class=AccessControlSeeder --force
 
 ## 休暇まわりの作り直し(変更セット 20261009-keep-leave-work-type-on-edit、論点18)
 
-休暇の旧イベント(有給・特別休暇・代休の旧系統)と、移行イベント(`*.migrated`)・補正イベント(`attendance_day.corrected`)は、
-`stored_events`の作り直しで新しいイベント構成へ変換する。移行イベント・補正イベントは作らない(`data-correction`スキル)。
-変換規則と実行手順は`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/event-rebuild-mapping.md`(2章・7章)、
-本番の手順は`docs/27-release-runbook.md` 3.1による。
-
-### 作り直しの実行
-
-```bash
-php artisan leave:rebuild-event-store                    # 試し実行(既定。書き込みなし。扱えない並びがあれば失敗)
-php artisan leave:rebuild-event-store --apply            # stored_events_rebuilt に作り直し後の行を書き、自己整合性を検査する
-php artisan leave:rebuild-event-store --verify           # stored_events_rebuilt の自己整合性(id・版の連番、旧イベントの残存)を検査する
-php artisan leave:rebuild-event-store --swap             # 検査が通っている場合に stored_events と入れ替える
-php artisan leave:rebuild-event-store --list-readmodels  # 全Projectorの書き込み先テーブル(リビルド前に空にする対象)を出す
-```
-
-- 旧イベントクラスに依存せず`stored_events`の生のJSONを読み、元の発生順にid・版を振り直す。`created_at`は元の値を引き継ぐ。
-- 扱えない並びは未対応として一覧に出し、失敗させる(推測で埋めない)。例: ReadModelに行が無く`attendance_day.created`も無い勤怠日、
-  cutover後の指定・取消の重複、`daily_calculation_adjusted`の直前に`attendance_day.calculated`が無い日、旧と口座イベントの混在、
-  申請に結び付かない消化。
-- `--swap`は`stored_events`を`stored_events_before_rebuild_YYYYMMDDHHMMSS`として残す(表名を記録する)。
-- 検証は複製DBで行う。複製に作り直し後の表を入れ、全ReadModelを空にして全Projectorをリビルドした結果を本番のReadModelと比較し、
-  差分が意図した差(差し戻された休暇の消化記録の取消、休暇値の削除等)だけであることを確認する。
+**本番で実施済み(コマンド`leave:rebuild-event-store`と`EventStoreRebuilder`は削除済み。移行前のバックアップから作り直す手順は廃止)**
+(変更セット`remove-finished-migration-commands`、ユーザーの回答、2026-11-24)。休暇の旧イベント(有給・特別休暇・代休の旧系統)と、
+移行イベント(`*.migrated`)・補正イベント(`attendance_day.corrected`)は、`stored_events`の作り直しで新しいイベント構成へ変換した。
+変換規則は`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/event-rebuild-mapping.md`に残る。
 
 ### 部分的な書き換え(`StoredEventCorrector`・補正コマンドの基底)
 
@@ -199,84 +171,26 @@ php artisan <補正コマンド> --apply --backup-table=stored_events_backup_202
 ### 作り直しの後(休暇まわりの確認)
 
 ReadModelの作り直し(全テーブルを空にしてreplay)は、運用コマンド`read-models:rebuild {--dry-run}`(運用コマンド画面の
-「データの作り直し(ReadModel)」。試し実行・本実行。変更セット`20261025-read-model-rebuild-admin-command`)からも実行できる。
-以下はSSHで`leave:rebuild-event-store --list-readmodels`と`event-sourcing:replay`を使って手作業で行う場合の手順。
+「データの作り直し(ReadModel)」。試し実行・本実行。変更セット`20261025-read-model-rebuild-admin-command`)で行う。
+全ReadModelのテーブルの一覧は`ReadModelTableLister`が持つ。
 
-- 全ReadModelのテーブル(`leave:rebuild-event-store --list-readmodels`で出す一覧)を空にしてから、全Projectorを`event-sourcing:replay`する
-  (Projectorは既存の状態を消さない前提のため空にする。手順は`docs/29`参照)。
 - 日次計算を`attendance:recalculate-days`(`--from`・`--to`必須。既定は試し実行、`--apply`で記録。締め・提出済みの日は一覧に印を付ける)で
   再計算する。締め・提出済みの月のスナップショットとの差は、リハーサルで確認する。
 - 有給・特別休暇・代休の口座と勤怠の休暇ビューを空から再生成しても、作り直し前の再生成と同じ状態になること。
 
-### 作り直しの最後の工程(有給口座・付与予定のストリーム分離)
-
-作り直し(`EventStoreRebuilder`)は、id・版を振り直した後の最後の工程として`PaidLeaveStreamRekeyer`をかける(次節と同じ変換)。
-古い形のバックアップから作り直しても、有給口座は新しいストリームIDで`userId`を持ち、付与予定のイベントは出力に無い。
-
-- 途中の工程(`UnallocatedUsageAllocator`・各Rebuilder)は`aggregate_uuid`を社員IDとして扱う。付け替えは必ず最後に行う。
-- 作り直しでは事前条件を見ずに付与予定の行を取り除く(旧版の付与予定イベントはReadModelから現行の形へ置き換えた後に取り除かれる)。
-  取り除いた件数は試し実行の報告(「最後の工程」)に出る。付与予定の付与済み・上書き・個別修正を残したい場合は、この変換の前に判断する。
-- 取り除いた行の分だけidが飛ぶため、作り直しではidを1から詰め直す(既存の`--verify`のid連番の検査はそのまま通る)。
-
 ## 有給口座・付与予定のストリーム付け替え(変更セット 20261021-paid-leave-aggregate-stream-id、論点3)
 
-有給口座(`paid_leave_account.*`)・付与予定(`paid_leave_schedule.*`)の集約IDは、以前は社員IDそのものだった(社員の集約と同じストリーム)。
-新しいコードは有給口座を`PaidLeaveAccountAggregate::streamIdFor(userId)`、付与予定を`PaidLeaveScheduleAggregate::streamIdFor(userId)`の
-別ストリームに書き、全イベントが`userId`を持つ。作り直し済みの本番の履歴は、専用の変換で直す(既存の作り直しはもう一度かけられない)。
-
-### 変換規則(`App\Domain\EventSourcing\Rebuild\PaidLeaveStreamRekeyer`。1行を1行に写す純粋な変換)
-
-- `paid_leave_account.*`: payloadに`userId`(元の`aggregate_uuid`)を入れ、`aggregate_uuid`と`meta_data`の`aggregate-root-uuid`を
-  `PaidLeaveAccountAggregate::streamIdFor(userId)`に替える。payloadの`userId`から作ったIDが`aggregate_uuid`と一致する行(付け替え済み)は
-  変えない(2回かけても同じ)。
-- `paid_leave_schedule.*`: 取り除く(自動付与の機能は使われておらず、生成は無かったことにする)。
-- 版: 影響するストリーム(付け替えた先の有給口座、行が抜けて詰まる元の社員の集約)だけを、id順に1から振り直し、`meta_data`の
-  `aggregate-root-version`も合わせる。それ以外の行は`id`・版・payload・meta・`created_at`を変えない。残る行の`id`は変えない
-  (取り除いた分は飛び番)。
-- 事前条件(1件でもあれば変換せず、件数を報告する): `paid_leave_schedule.entry_granted`・`assessment_overridden`・`entry_manually_edited`、
-  `paid_leave_account.grant_created`で`source='scheduled_batch'`のもの(付与予定が実際に使われていた形跡)。手動付与(`source='manual'`)・
-  移行(`carried_over`)は止める理由にしない(付け替えて残す)。
-
-### 実行(`leave:rekey-paid-leave-streams`。`#[AdminExecutable]`は付けず、本番ではメンテナンス中にCLIで実行する)
-
-```bash
-php artisan leave:rekey-paid-leave-streams            # 試し実行(既定。付け替える行・取り除く付与予定の行(種類別)・旧ID→新IDの件数・事前条件の結果)
-php artisan leave:rekey-paid-leave-streams --apply    # stored_events_rebuilt に書き、--verify を行う(事前条件に違反があれば拒否)
-php artisan leave:rekey-paid-leave-streams --verify   # stored_events_rebuilt を検査する
-php artisan leave:rekey-paid-leave-streams --swap     # 検査が通っていれば stored_events と入れ替える(元の表は stored_events_before_rekey_YYYYMMDDHHMMSS)
-```
-
-書き込み・入れ替えは`EventStoreRebuildWriter`(`write`・`swap`)を使う。既存の作り直しの事前条件(新しい休暇の種類がある等)では止めず、
-この変換専用の事前条件と検証(`PaidLeaveStreamRekeyVerifier`)を持つ。既存の`verify`のid連番の検査は行わない(付与予定の行を取り除くとidが飛ぶため)。
-
-### この変換の検証(`--verify`)
-
-1. `aggregate_uuid`が`users.id`の行は`user.*`だけ。
-2. `paid_leave_account.*`で、payloadの`userId`から作ったIDが`aggregate_uuid`(と`meta_data`の`aggregate-root-uuid`)と一致する。
-3. `paid_leave_schedule.*`が0件。
-4. 有給口座・付与予定・社員(`aggregate_uuid`が`users.id`)以外の行が、元の表と`id`・版・payload・meta・`created_at`すべて一致する(行の過不足も違反)。
-5. `EventRestorabilityChecker`が通る(全行を現行のイベントクラスへ復元できる)。
-
-付け替えの前後の再生結果は、`leave:rebuild-event-store --readmodel-fingerprint`(・`--readmodel-diff`)で比べる。基準A(付け替え前に全ReadModelを
-空にして再生)と、付け替え・swap後に空にして再生した指紋が、`paid_leave_schedule_entries`・`paid_leave_schedule_assessments`
-(付け替え後は空になる)を除いて一致すること。リリース手順は`docs/27-release-runbook.md` 3.2。
+**本番で実施済み(コマンド`leave:rekey-paid-leave-streams`と、作り直しの最後の工程・検証は削除済み)**
+(変更セット`remove-finished-migration-commands`、ユーザーの回答、2026-11-24)。有給口座(`paid_leave_account.*`)を社員IDとは別のストリームIDへ
+付け替え(payloadに`userId`を補う)、付与予定(`paid_leave_schedule.*`)の行を取り除いた。変換規則・事前条件・検証の記録は
+変更セット`20261021-paid-leave-aggregate-stream-id`に残る。手順は廃止した。
 
 ## バックオフィスタスクの割当イベントの分離(変更セット 20261122-backoffice-task-reassign、論点6)
 
-旧形式の`backoffice_task.assigned`(payloadに`previousAssignedUserId`キーが無いもの)は、担当者の設定と同時にステータスを確認中にしていた。
-`App\Domain\EventSourcing\Rebuild\BackOfficeTaskAssignmentSplitter`で次のとおり作り直す。実行は運用コマンド
-`backoffice:migrate-assignment-events {--dry-run}`(`BackOfficeAssignmentMigrator`)で、バックアップ表を作った後、1つのトランザクションで
-`stored_events`の書き換え・補正ログ等のidの付け替え・検証・全ReadModelの作り直しを行う(変更セット`20261122-backoffice-assignment-migration-admin`)。
-
-- 集約ごとに直前のステータス・担当者を追跡し、旧形式の`assigned`1件に`previousAssignedUserId`(直前の担当者)を補う。直前のステータスが
-  `in_review`以外なら、その直後に`status_changed`(直前→`in_review`、操作者=割当の操作者、同じ発生日時)を挿入する。
-- 変換済み(キーがある)の`assigned`はそのまま写す(イベント単位で冪等)。直前のステータスが決まらない並びは未対応として何も書かない。
-- id・版・metaの`stored-event-id`/`aggregate-root-version`を振り直し、補正ログ`stored_event_corrections`の`stored_event_id`・`aggregate_version`と
-  metaの`history-normalization.source_event_id`も新しいidへ付け替える(対応の無い補正ログの行は変えない)。検証は、id・版の連番、旧形式の残存0件、
-  バックオフィス以外の行の不変、`EventRestorabilityChecker`。
-- 移行前は`read-models:rebuild`(本実行)・`projections:rebuild`が拒否される(`LegacyBackOfficeAssignmentDetector`)。
-- **古いバックアップから休暇の作り直し(`leave:rebuild-event-store`)をやり直す場合**、`EventStoreRebuilder`は`backoffice_task.*`を
-  そのまま写すため旧形式が戻る。その後に必ず本移行をかける。リリース手順は`docs/27-release-runbook.md` 3.6。
+**本番で実施済み(コマンド`backoffice:migrate-assignment-events`・`BackOfficeAssignmentMigrator`・旧形式の検出器は削除済み)**
+(変更セット`remove-finished-migration-commands`、ユーザーの回答、2026-11-24)。旧形式の`backoffice_task.assigned`(担当者の設定と同時に
+確認中へ変える形)を、`previousAssignedUserId`を補った`assigned`と`status_changed`に分けて作り直した。変換規則・検証の記録は
+変更セット`20261122-backoffice-task-reassign`・`20261122-backoffice-assignment-migration-admin`に残る。旧形式は戻らないため、再実行の手順は残さない。
 
 ## ロールバック
 
