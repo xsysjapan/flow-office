@@ -32,7 +32,7 @@ final class EventRestorabilityChecker
     }
 
     /**
-     * 作り直し後の行(DBに書く前のメモリ上の結果。RebuildResult::$rows)を検査する。
+     * 作り直し後の行(DBに書く前のメモリ上の結果)を検査する。
      *
      * @param  list<array<string, mixed>>  $rows
      * @return array<string, array{count: int, first_id: int, message: string}>

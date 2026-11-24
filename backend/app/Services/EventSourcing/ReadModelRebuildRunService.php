@@ -20,8 +20,6 @@ class ReadModelRebuildRunService
 {
     public const COMMAND_NAME = 'read-models:rebuild';
 
-    public const MIGRATE_COMMAND_NAME = 'backoffice:migrate-assignment-events';
-
     public const RENAME_COMMAND_NAME = 'events:rename-boolean-properties';
 
     public const FIX_BULK_COMMAND_NAME = 'events:fix-calendar-bulk-operation-target-ids';
@@ -31,7 +29,7 @@ class ReadModelRebuildRunService
     public const FIX_DETERMINISM_COMMAND_NAME = 'events:fix-rebuild-determinism';
 
     /** メンテナンス(全API 503)を要するコマンド名。いずれかが`running`の間はメンテナンスで、互いに同時には開始しない。 */
-    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME, self::RENAME_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME, self::FIX_USER_SETTINGS_COMMAND_NAME, self::FIX_DETERMINISM_COMMAND_NAME];
+    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::RENAME_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME, self::FIX_USER_SETTINGS_COMMAND_NAME, self::FIX_DETERMINISM_COMMAND_NAME];
 
     public const LOCK_NAME = 'read-model-rebuild-run';
 

@@ -86,7 +86,7 @@ class RunPendingAdminCommandsTest extends TestCase
 
     public function test_a_run_with_options_passes_them_to_the_command(): void
     {
-        $run = $this->queue('attendance:migrate-work-classifications', ['year-month' => '2026-07']);
+        $run = $this->queue('attendance:recalculate-month-snapshots', ['year-month' => '2026-07']);
 
         $this->assertSame(0, Artisan::call('admin-commands:run-pending'));
 

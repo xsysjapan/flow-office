@@ -1,0 +1,533 @@
+# Resolution for 5a7d2154 (relative to cd1d40ce)
+diff --git a/backend/app/Console/Commands/RebuildProjectionsCommand.php b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+index e99eb0c4..81d0b166 100644
+--- a/backend/app/Console/Commands/RebuildProjectionsCommand.php
++++ b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+@@ -3,6 +3,7 @@
+ namespace App\Console\Commands;
+ 
+ use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
++use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
+ use Illuminate\Console\Command;
+ use Illuminate\Support\Facades\Artisan;
+ use Illuminate\Support\Str;
+@@ -15,7 +16,7 @@ final class RebuildProjectionsCommand extends Command
+ 
+     protected $description = 'Replay stored_events to Spatie projectors';
+ 
+-    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector): int
++    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
+     {
+         // 旧形式のバックオフィス割当イベントが残っている間は、再生するとステータスが失われるため拒否する。
+         $legacyCount = $legacyDetector->count();
+@@ -25,6 +26,14 @@ public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentD
+             return self::FAILURE;
+         }
+ 
++        // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、再生すると旧idの行が消えて対応表を作れなくなるため拒否する。
++        $bulkCount = $bulkTargetIdDetector->count();
++        if ($bulkCount > 0) {
++            $this->error(LegacyCalendarBulkOperationTargetIdDetector::message($bulkCount));
++
++            return self::FAILURE;
++        }
++
+         $requested = $this->argument('projector');
+         $arguments = ['--force' => true];
+ 
+diff --git a/backend/app/Console/Commands/RebuildReadModelsCommand.php b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+index 17d6d72e..03442d0e 100644
+--- a/backend/app/Console/Commands/RebuildReadModelsCommand.php
++++ b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+@@ -5,6 +5,7 @@
+ use App\Console\Attributes\AdminExecutable;
+ use App\Console\CurrentAdminCommandRun;
+ use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
++use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
+ use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
+ use App\Services\EventSourcing\ReadModelRebuildRunService;
+ use Illuminate\Console\Command;
+@@ -29,7 +30,7 @@ class RebuildReadModelsCommand extends Command
+     protected $description = '全ReadModelのテーブルを空にして、イベントから作り直す。実行中は全利用者がメンテナンス中(全API 503)になる。'
+         .'日次バッチの時刻(1:00〜2:20)を避けて実行すること。「試し実行」は最後にロールバックし、変更のあるテーブルを出力に表示するだけでデータは変えない。';
+ 
+-    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector): int
++    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
+     {
+         $dryRun = (bool) $this->option('dry-run');
+ 
+@@ -49,6 +50,16 @@ public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService
+             $this->warn('警告: '.$message);
+         }
+ 
++        // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、作り直すと旧idの行が消えて対応表を作れなくなるため、試し実行も含めて拒否する。
++        $bulkCount = $bulkTargetIdDetector->count();
++        if ($bulkCount > 0) {
++            $message = LegacyCalendarBulkOperationTargetIdDetector::message($bulkCount);
++            $this->error($message);
++            $run?->update(['error_message' => $message]);
++
++            return self::FAILURE;
++        }
++
+         if ($direct) {
+             $run = $runService->startDirectRun($dryRun);
+             if ($run === null) {
+diff --git a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+index bd059975..f7c6d230 100644
+--- a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
++++ b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+@@ -22,8 +22,10 @@ class ReadModelRebuildRunService
+ 
+     public const MIGRATE_COMMAND_NAME = 'backoffice:migrate-assignment-events';
+ 
++    public const FIX_BULK_COMMAND_NAME = 'events:fix-calendar-bulk-operation-target-ids';
++
+     /** メンテナンス(全API 503)を要するコマンド名。いずれかが`running`の間はメンテナンスで、互いに同時には開始しない。 */
+-    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME];
++    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME];
+ 
+     public const LOCK_NAME = 'read-model-rebuild-run';
+ 
+diff --git a/backend/tests/Feature/AdminCommandTest.php b/backend/tests/Feature/AdminCommandTest.php
+index ca14df48..b5b34523 100644
+--- a/backend/tests/Feature/AdminCommandTest.php
++++ b/backend/tests/Feature/AdminCommandTest.php
+@@ -23,7 +23,7 @@ public function test_only_explicitly_exposed_commands_are_listed_with_artisan_me
+ 
+         $commands = collect($response->json('data'))->keyBy('name');
+         $this->assertSame(
+-            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
++            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:fix-calendar-bulk-operation-target-ids', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
+             $commands->keys()->sort()->values()->all(),
+         );
+         $this->assertSame('apply', $commands['attendance:migrate-work-classifications']['parameters'][0]['name']);
+# Resolution for 0bd34aef: diff of resolved commit vs original 0bd34aef patch, i.e. 'git diff' between (HEAD~1 + 0bd34aef as-is) is not applicable; showing resolved commit diff for affected files
+diff --git a/backend/app/Console/Commands/RebuildProjectionsCommand.php b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+index 81d0b166..6b7c0af3 100644
+--- a/backend/app/Console/Commands/RebuildProjectionsCommand.php
++++ b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+@@ -4,6 +4,7 @@
+ 
+ use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
+ use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
++use App\Domain\EventSourcing\Rebuild\LegacyUserSettingsDetector;
+ use Illuminate\Console\Command;
+ use Illuminate\Support\Facades\Artisan;
+ use Illuminate\Support\Str;
+@@ -16,7 +17,7 @@ final class RebuildProjectionsCommand extends Command
+ 
+     protected $description = 'Replay stored_events to Spatie projectors';
+ 
+-    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
++    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector, LegacyUserSettingsDetector $userSettingsDetector): int
+     {
+         // 旧形式のバックオフィス割当イベントが残っている間は、再生するとステータスが失われるため拒否する。
+         $legacyCount = $legacyDetector->count();
+@@ -26,6 +27,14 @@ public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentD
+             return self::FAILURE;
+         }
+ 
++        // タイムゾーン・テナントIDが記録されていない(未補正の)利用者のイベントが残っている間は、再生が例外になる(または値が変わる)ため拒否する。
++        $userSettingsCount = $userSettingsDetector->count();
++        if ($userSettingsCount > 0) {
++            $this->error(LegacyUserSettingsDetector::message($userSettingsCount));
++
++            return self::FAILURE;
++        }
++
+         // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、再生すると旧idの行が消えて対応表を作れなくなるため拒否する。
+         $bulkCount = $bulkTargetIdDetector->count();
+         if ($bulkCount > 0) {
+diff --git a/backend/app/Console/Commands/RebuildReadModelsCommand.php b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+index 03442d0e..1eca1a75 100644
+--- a/backend/app/Console/Commands/RebuildReadModelsCommand.php
++++ b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+@@ -6,6 +6,7 @@
+ use App\Console\CurrentAdminCommandRun;
+ use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
+ use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
++use App\Domain\EventSourcing\Rebuild\LegacyUserSettingsDetector;
+ use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
+ use App\Services\EventSourcing\ReadModelRebuildRunService;
+ use Illuminate\Console\Command;
+@@ -30,7 +31,7 @@ class RebuildReadModelsCommand extends Command
+     protected $description = '全ReadModelのテーブルを空にして、イベントから作り直す。実行中は全利用者がメンテナンス中(全API 503)になる。'
+         .'日次バッチの時刻(1:00〜2:20)を避けて実行すること。「試し実行」は最後にロールバックし、変更のあるテーブルを出力に表示するだけでデータは変えない。';
+ 
+-    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
++    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector, LegacyUserSettingsDetector $userSettingsDetector): int
+     {
+         $dryRun = (bool) $this->option('dry-run');
+ 
+@@ -50,6 +51,16 @@ public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService
+             $this->warn('警告: '.$message);
+         }
+ 
++        // タイムゾーン・テナントIDが記録されていない(未補正の)利用者のイベントが残っている間は、作り直しが例外になる(または値が変わる)ため、試し実行も含めて拒否する。
++        $userSettingsCount = $userSettingsDetector->count();
++        if ($userSettingsCount > 0) {
++            $message = LegacyUserSettingsDetector::message($userSettingsCount);
++            $this->error($message);
++            $run?->update(['error_message' => $message]);
++
++            return self::FAILURE;
++        }
++
+         // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、作り直すと旧idの行が消えて対応表を作れなくなるため、試し実行も含めて拒否する。
+         $bulkCount = $bulkTargetIdDetector->count();
+         if ($bulkCount > 0) {
+diff --git a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+index f7c6d230..9fd6377b 100644
+--- a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
++++ b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+@@ -24,8 +24,12 @@ class ReadModelRebuildRunService
+ 
+     public const FIX_BULK_COMMAND_NAME = 'events:fix-calendar-bulk-operation-target-ids';
+ 
++    public const FIX_USER_SETTINGS_COMMAND_NAME = 'events:fix-user-settings-at-replay';
++
++    public const FIX_DETERMINISM_COMMAND_NAME = 'events:fix-rebuild-determinism';
++
+     /** メンテナンス(全API 503)を要するコマンド名。いずれかが`running`の間はメンテナンスで、互いに同時には開始しない。 */
+-    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME];
++    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME, self::FIX_USER_SETTINGS_COMMAND_NAME, self::FIX_DETERMINISM_COMMAND_NAME];
+ 
+     public const LOCK_NAME = 'read-model-rebuild-run';
+ 
+diff --git a/backend/tests/Feature/AdminCommandTest.php b/backend/tests/Feature/AdminCommandTest.php
+index b5b34523..c66cb089 100644
+--- a/backend/tests/Feature/AdminCommandTest.php
++++ b/backend/tests/Feature/AdminCommandTest.php
+@@ -23,7 +23,7 @@ public function test_only_explicitly_exposed_commands_are_listed_with_artisan_me
+ 
+         $commands = collect($response->json('data'))->keyBy('name');
+         $this->assertSame(
+-            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:fix-calendar-bulk-operation-target-ids', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
++            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:fix-calendar-bulk-operation-target-ids', 'events:fix-rebuild-determinism', 'events:fix-user-settings-at-replay', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
+             $commands->keys()->sort()->values()->all(),
+         );
+         $this->assertSame('apply', $commands['attendance:migrate-work-classifications']['parameters'][0]['name']);
+# UserSettingsAtReplayCorrectionTest.php: removed 2 lines (events:rename-boolean-properties refusal asserts; command absent at cd1d40ce)
+# RenameBooleanEventPropertiesCommand.php: modify/delete conflict -> kept deleted
+
+########## Resolved vs original commit (what the resolution removed/changed) ##########
+## 5a7d2154 -> a46cb663
+diff --git a/backend/app/Console/Commands/RebuildProjectionsCommand.php b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+index a7ccb94a..81d0b166 100644
+--- a/backend/app/Console/Commands/RebuildProjectionsCommand.php
++++ b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+@@ -3,7 +3,6 @@
+ namespace App\Console\Commands;
+ 
+ use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
+-use App\Domain\EventSourcing\Rebuild\LegacyBooleanPropertyDetector;
+ use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
+ use Illuminate\Console\Command;
+ use Illuminate\Support\Facades\Artisan;
+@@ -17,7 +16,7 @@ final class RebuildProjectionsCommand extends Command
+ 
+     protected $description = 'Replay stored_events to Spatie projectors';
+ 
+-    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
++    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
+     {
+         // 旧形式のバックオフィス割当イベントが残っている間は、再生するとステータスが失われるため拒否する。
+         $legacyCount = $legacyDetector->count();
+@@ -27,14 +26,6 @@ public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentD
+             return self::FAILURE;
+         }
+ 
+-        // 旧項目名の真偽値のイベントが残っている間は、再生すると読めない(または既定値に化ける)ため拒否する。
+-        $booleanCount = $booleanDetector->count();
+-        if ($booleanCount > 0) {
+-            $this->error("旧項目名の真偽値のイベントが{$booleanCount}件あります。先に運用コマンド『真偽値のイベント項目名の書き換え』(events:rename-boolean-properties)を実行してください。");
+-
+-            return self::FAILURE;
+-        }
+-
+         // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、再生すると旧idの行が消えて対応表を作れなくなるため拒否する。
+         $bulkCount = $bulkTargetIdDetector->count();
+         if ($bulkCount > 0) {
+diff --git a/backend/app/Console/Commands/RebuildReadModelsCommand.php b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+index 773ab9b6..03442d0e 100644
+--- a/backend/app/Console/Commands/RebuildReadModelsCommand.php
++++ b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+@@ -5,7 +5,6 @@
+ use App\Console\Attributes\AdminExecutable;
+ use App\Console\CurrentAdminCommandRun;
+ use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
+-use App\Domain\EventSourcing\Rebuild\LegacyBooleanPropertyDetector;
+ use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
+ use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
+ use App\Services\EventSourcing\ReadModelRebuildRunService;
+@@ -31,7 +30,7 @@ class RebuildReadModelsCommand extends Command
+     protected $description = '全ReadModelのテーブルを空にして、イベントから作り直す。実行中は全利用者がメンテナンス中(全API 503)になる。'
+         .'日次バッチの時刻(1:00〜2:20)を避けて実行すること。「試し実行」は最後にロールバックし、変更のあるテーブルを出力に表示するだけでデータは変えない。';
+ 
+-    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
++    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
+     {
+         $dryRun = (bool) $this->option('dry-run');
+ 
+@@ -51,16 +50,6 @@ public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService
+             $this->warn('警告: '.$message);
+         }
+ 
+-        // 旧項目名の真偽値のイベントが残っている間は、新しいコードが読めず作り直しに失敗する(または既定値に化ける)ため、試し実行も含めて拒否する。
+-        $booleanCount = $booleanDetector->count();
+-        if ($booleanCount > 0) {
+-            $message = "旧項目名の真偽値のイベントが{$booleanCount}件あります。先に運用コマンド『真偽値のイベント項目名の書き換え』(events:rename-boolean-properties)を実行してください。";
+-            $this->error($message);
+-            $run?->update(['error_message' => $message]);
+-
+-            return self::FAILURE;
+-        }
+-
+         // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、作り直すと旧idの行が消えて対応表を作れなくなるため、試し実行も含めて拒否する。
+         $bulkCount = $bulkTargetIdDetector->count();
+         if ($bulkCount > 0) {
+diff --git a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+index faa446c3..f7c6d230 100644
+--- a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
++++ b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+@@ -22,12 +22,10 @@ class ReadModelRebuildRunService
+ 
+     public const MIGRATE_COMMAND_NAME = 'backoffice:migrate-assignment-events';
+ 
+-    public const RENAME_COMMAND_NAME = 'events:rename-boolean-properties';
+-
+     public const FIX_BULK_COMMAND_NAME = 'events:fix-calendar-bulk-operation-target-ids';
+ 
+     /** メンテナンス(全API 503)を要するコマンド名。いずれかが`running`の間はメンテナンスで、互いに同時には開始しない。 */
+-    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME, self::RENAME_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME];
++    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME];
+ 
+     public const LOCK_NAME = 'read-model-rebuild-run';
+ 
+diff --git a/backend/tests/Feature/AdminCommandTest.php b/backend/tests/Feature/AdminCommandTest.php
+index e4b7fa47..b5b34523 100644
+--- a/backend/tests/Feature/AdminCommandTest.php
++++ b/backend/tests/Feature/AdminCommandTest.php
+@@ -23,7 +23,7 @@ public function test_only_explicitly_exposed_commands_are_listed_with_artisan_me
+ 
+         $commands = collect($response->json('data'))->keyBy('name');
+         $this->assertSame(
+-            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:fix-calendar-bulk-operation-target-ids', 'events:rename-boolean-properties', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
++            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:fix-calendar-bulk-operation-target-ids', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
+             $commands->keys()->sort()->values()->all(),
+         );
+         $this->assertSame('apply', $commands['attendance:migrate-work-classifications']['parameters'][0]['name']);
+## 0bd34aef -> b031ef58
+diff --git a/backend/app/Console/Commands/RebuildProjectionsCommand.php b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+index b788204f..6b7c0af3 100644
+--- a/backend/app/Console/Commands/RebuildProjectionsCommand.php
++++ b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+@@ -3,7 +3,6 @@
+-use App\Domain\EventSourcing\Rebuild\LegacyBooleanPropertyDetector;
+@@ -18,7 +17,7 @@ final class RebuildProjectionsCommand extends Command
+-    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector, LegacyUserSettingsDetector $userSettingsDetector): int
++    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector, LegacyUserSettingsDetector $userSettingsDetector): int
+@@ -28,14 +27,6 @@ public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentD
+-        // 旧項目名の真偽値のイベントが残っている間は、再生すると読めない(または既定値に化ける)ため拒否する。
+-        $booleanCount = $booleanDetector->count();
+-        if ($booleanCount > 0) {
+-            $this->error("旧項目名の真偽値のイベントが{$booleanCount}件あります。先に運用コマンド『真偽値のイベント項目名の書き換え』(events:rename-boolean-properties)を実行してください。");
+-
+-            return self::FAILURE;
+-        }
+-
+diff --git a/backend/app/Console/Commands/RebuildReadModelsCommand.php b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+index 1f2d899b..1eca1a75 100644
+--- a/backend/app/Console/Commands/RebuildReadModelsCommand.php
++++ b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+@@ -5,7 +5,6 @@
+-use App\Domain\EventSourcing\Rebuild\LegacyBooleanPropertyDetector;
+@@ -32,7 +31,7 @@ class RebuildReadModelsCommand extends Command
+-    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector, LegacyUserSettingsDetector $userSettingsDetector): int
++    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector, LegacyUserSettingsDetector $userSettingsDetector): int
+@@ -52,16 +51,6 @@ public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService
+-        // 旧項目名の真偽値のイベントが残っている間は、新しいコードが読めず作り直しに失敗する(または既定値に化ける)ため、試し実行も含めて拒否する。
+-        $booleanCount = $booleanDetector->count();
+-        if ($booleanCount > 0) {
+-            $message = "旧項目名の真偽値のイベントが{$booleanCount}件あります。先に運用コマンド『真偽値のイベント項目名の書き換え』(events:rename-boolean-properties)を実行してください。";
+-            $this->error($message);
+-            $run?->update(['error_message' => $message]);
+-
+-            return self::FAILURE;
+-        }
+-
+diff --git a/backend/app/Console/Commands/RenameBooleanEventPropertiesCommand.php b/backend/app/Console/Commands/RenameBooleanEventPropertiesCommand.php
+deleted file mode 100644
+index c4fc67f6..00000000
+--- a/backend/app/Console/Commands/RenameBooleanEventPropertiesCommand.php
++++ /dev/null
+@@ -1,144 +0,0 @@
+-<?php
+-
+-namespace App\Console\Commands;
+-
+-use App\Console\Attributes\AdminExecutable;
+-use App\Console\CurrentAdminCommandRun;
+-use App\Domain\EventSourcing\Rebuild\BooleanPropertyMigrator;
+-use App\Domain\EventSourcing\Rebuild\LegacyUserSettingsDetector;
+-use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
+-use App\Services\EventSourcing\ReadModelRebuildRunService;
+-use Illuminate\Console\Command;
+-use Throwable;
+-
+-/**
+- * 旧項目名で記録された stored_events の真偽値の項目を新しい項目名へ書き換え、ReadModelを作り直す運用コマンド
+- * (docs/changesets/20261123-boolean-column-naming/spec.md 論点5・7)。変換表は`BooleanPropertyConverter::RULES`。
+- *
+- * - 既定は試し実行(対象の event_class ごとの件数・補う件数・旧→新の例を出すだけで、何も書かない)。`--execute`で、バックアップ表を作ったうえで
+- *   1つのトランザクションで「書き換え → ReadModelの作り直し → 検証」を行う。失敗したら全て戻る(バックアップ表は残る)。
+- * - 記録・心拍・メンテナンス・排他は`read-models:rebuild`と同じ仕組みを使う(実行役から呼ばれたときは`CurrentAdminCommandRun`、CLIから直接のときは`startDirectRun`)。
+- * - 本番はメンテナンス窓の中でSSHから実行する(docs/27-release-runbook.md)。次のリリースで削除する。
+- */
+-#[AdminExecutable(label: '真偽値のイベント項目名の書き換え')]
+-class RenameBooleanEventPropertiesCommand extends Command
+-{
+-    protected $signature = 'events:rename-boolean-properties
+-        {--execute : 書き換えを実行する(省略時は試し実行で、何も変更しない)}';
+-
+-    protected $description = '旧項目名で記録された stored_events の真偽値の項目を新しい項目名へ書き換え、ReadModelを作り直して検証する(1つのトランザクション)。'
+-        .'既定は試し実行(件数と旧→新の例を出すだけ)。--execute で実行する。実行中は全利用者がメンテナンス中(全API 503)になる。'
+-        .'日次バッチの時刻(1:00〜2:20)を避けて実行すること。';
+-
+-    public function handle(BooleanPropertyMigrator $migrator, ReadModelRebuildRunService $runService, LegacyUserSettingsDetector $userSettingsDetector): int
+-    {
+-        // 未補正の利用者のイベントが残っている間は、このコマンドの作り直しが例外になるため、試し実行も含めて拒否し、まとめの補正を案内する。
+-        $userSettingsCount = $userSettingsDetector->count();
+-        if ($userSettingsCount > 0) {
+-            $message = LegacyUserSettingsDetector::messageForFixCommand($userSettingsCount);
+-            $this->error($message);
+-            CurrentAdminCommandRun::get()?->update(['error_message' => $message]);
+-
+-            return self::FAILURE;
+-        }
+-
+-        $execute = (bool) $this->option('execute');
+-        $dryRun = ! $execute;
+-        $startedAt = microtime(true);
+-
+-        $run = CurrentAdminCommandRun::get();
+-        $direct = $run === null;
+-        if ($direct) {
+-            $run = $runService->startDirectRun($dryRun, ReadModelRebuildRunService::RENAME_COMMAND_NAME);
+-            if ($run === null) {
+-                $this->error($runService->isRunning()
+-                    ? ReadModelRebuildRunService::REBUILD_ACTIVE_MESSAGE
+-                    : ReadModelRebuildRunService::ASSESSMENT_ACTIVE_MESSAGE);
+-
+-                return self::FAILURE;
+-            }
+-        } elseif ($runService->isOtherMaintenanceRunning($run)) {
+-            $this->error(ReadModelRebuildRunService::REBUILD_ACTIVE_MESSAGE);
+-            $run->update(['error_message' => ReadModelRebuildRunService::REBUILD_ACTIVE_MESSAGE]);
+-
+-            return self::FAILURE;
+-        }
+-
+-        try {
+-            ReadModelRebuilder::heartbeat();
+-            $wait = (int) config('read_model_rebuild.claim_wait_seconds', 60);
+-            // 実行中の書き込み(他のリクエスト)が済むのを待つのは、書き込む本実行だけ。
+-            if ($execute && $wait > 0) {
+-                sleep($wait);
+-            }
+-
+-            $summary = $migrator->migrate($dryRun, $startedAt);
+-        } catch (Throwable $e) {
+-            report($e);
+-            $backup = $migrator->backupTable();
+-            $message = '書き換えを実行できませんでした: '.$e->getMessage()
+-                .($backup !== null ? " ロールバックしたため、stored_events・ReadModelは変わっていません(バックアップ表 {$backup} は残っています)。" : ' 何も変更していません。');
+-            $this->error($message);
+-            $run->update(['error_message' => mb_substr($message, 0, 2000)]);
+-            ReadModelRebuilder::clearHeartbeat();
+-            if ($direct) {
+-                $runService->markFailed($run, $message);
+-            }
+-
+-            return self::FAILURE;
+-        }
+-
+-        $run->update(['summary' => $summary]);
+-        ReadModelRebuilder::clearHeartbeat();
+-        if ($direct) {
+-            $runService->markSucceeded($run, $summary);
+-        }
+-
+-        $this->printResult($summary);
+-
+-        return self::SUCCESS;
+-    }
+-
+-    /** @param  array<string, mixed>  $summary */
+-    private function printResult(array $summary): void
+-    {
+-        if ($summary['unfillable'] !== []) {
+-            $this->warn('補えない行(旧キーも新キーも無く、補う値も無い必須項目): '.count($summary['unfillable']).' 件。--execute はこの行がある間エラーで止まります。人が確認してください。');
+-            foreach ($summary['unfillable'] as $row) {
+-                $this->line("  - id={$row['id']} {$row['event_class']}: {$row['reason']}");
+-            }
+-        }
+-        if ($summary['status'] === 'nothing') {
+-            $this->info('対象なし(旧項目名の行が無い)。何も変更していません。');
+-
+-            return;
+-        }
+-
+-        $this->info(($summary['dry_run'] ? '試し実行(データは変更していません。--execute で実行します)' : '書き換えました')
+-            .": 対象 {$summary['target_count']} 件(うち旧キーが無く既定値を補う行 {$summary['filled_count']} 件)");
+-        $this->table(['event_class', '対象', '補う', '例(id)', '旧 → 新'], array_map(
+-            fn (string $class, array $event) => [
+-                $class, $event['target'], $event['filled'],
+-                $event['example']['id'].($event['filled_example'] !== null && $event['filled_example']['id'] !== $event['example']['id'] ? ' / 補完 '.$event['filled_example']['id'] : ''),
+-                implode(' / ', $event['example']['changes'])
+-                    .($event['filled_example'] !== null && $event['filled_example']['id'] !== $event['example']['id'] ? ' / 補完の例: '.implode(' / ', $event['filled_example']['changes']) : ''),
+-            ],
+-            array_keys($summary['events']),
+-            array_values($summary['events']),
+-        ));
+-        if ($summary['backup_table'] !== null) {
+-            $this->line("バックアップ表: {$summary['backup_table']}");
+-        }
+-        if ($summary['dry_run']) {
+-            return;
+-        }
+-
+-        $this->info('ReadModelの作り直し: 変更のあったテーブル'.$summary['changed_tables'].'件(0件が合格)');
+-        $rows = $summary['tables'];
+-        usort($rows, fn (array $a, array $b) => [$b['changed'], $a['table']] <=> [$a['changed'], $b['table']]);
+-        $this->table(
+-            ['テーブル', '前', '後', '変更'],
+-            array_map(fn (array $row) => [$row['table'], $row['before'], $row['after'], $row['changed'] ? '変更あり' : ''], $rows),
+-        );
+-    }
+-}
+diff --git a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+index 20964009..9fd6377b 100644
+--- a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
++++ b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+@@ -22,8 +22,6 @@ class ReadModelRebuildRunService
+-    public const RENAME_COMMAND_NAME = 'events:rename-boolean-properties';
+-
+@@ -31,7 +29,7 @@ class ReadModelRebuildRunService
+-    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME, self::RENAME_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME, self::FIX_USER_SETTINGS_COMMAND_NAME, self::FIX_DETERMINISM_COMMAND_NAME];
++    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME, self::FIX_USER_SETTINGS_COMMAND_NAME, self::FIX_DETERMINISM_COMMAND_NAME];
+diff --git a/backend/tests/Feature/AdminCommandTest.php b/backend/tests/Feature/AdminCommandTest.php
+index 91bb4276..c66cb089 100644
+--- a/backend/tests/Feature/AdminCommandTest.php
++++ b/backend/tests/Feature/AdminCommandTest.php
+@@ -23,7 +23,7 @@ public function test_only_explicitly_exposed_commands_are_listed_with_artisan_me
+-            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:fix-calendar-bulk-operation-target-ids', 'events:fix-rebuild-determinism', 'events:fix-user-settings-at-replay', 'events:rename-boolean-properties', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
++            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:fix-calendar-bulk-operation-target-ids', 'events:fix-rebuild-determinism', 'events:fix-user-settings-at-replay', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
+diff --git a/backend/tests/Feature/EventSourcing/UserSettingsAtReplayCorrectionTest.php b/backend/tests/Feature/EventSourcing/UserSettingsAtReplayCorrectionTest.php
+index 9fa73b3e..9cde6b05 100644
+--- a/backend/tests/Feature/EventSourcing/UserSettingsAtReplayCorrectionTest.php
++++ b/backend/tests/Feature/EventSourcing/UserSettingsAtReplayCorrectionTest.php
+@@ -492,8 +492,6 @@ public function test_the_rebuild_and_the_correction_commands_are_refused_while_u
+-        $this->artisan('events:rename-boolean-properties')->expectsOutputToContain(self::COMBINED_COMMAND)->assertExitCode(1);
+-        $this->artisan('events:rename-boolean-properties', ['--execute' => true])->expectsOutputToContain(self::COMBINED_COMMAND)->assertExitCode(1);

@@ -16,7 +16,7 @@ use Throwable;
  * 手順: 件数とハッシュを取る → 外部キーの検査を切る → トランザクション開始 → 全テーブルをDELETE → 全Projectorをreplay →
  * 件数とハッシュを取り直す → 時間の上限を確かめる → 試し実行ならロールバック・本実行ならコミット
  * (例外ならロールバックして再送出)→ 外部キーの検査を戻す。TRUNCATEは暗黙にコミットされるため使わない。
- * 対象は`ReadModelTableLister::tables()`(`leave:rebuild-event-store --list-readmodels`と同じ一覧)のうちDBに存在するもの。
+ * 対象は`ReadModelTableLister::tables()`のうちDBに存在するもの。
  * 心拍は`Cache::store('file')`(既定のキャッシュはDBで、トランザクションの中の書き込みは他の接続から見えないため)。
  */
 class ReadModelRebuilder
