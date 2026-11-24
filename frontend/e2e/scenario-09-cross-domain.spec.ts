@@ -13,7 +13,7 @@ import {
   generateShiftAssignments,
   requestPaidLeave,
   submitAndApproveMonth,
-  submitApproveAndCloseCurrentMonth,
+  submitApproveAndCloseFixedMonth,
   submitMonth,
 } from './support/api'
 import { pickDate, pickUser } from './support/ui'
@@ -317,6 +317,12 @@ test('§5-15: 複数の労働時間制度が混在する月の月次締め', asy
   }
 })
 
+/**
+ * §5-16・§5-17専用の固定の過去月・勤務日(2026-09-01は火曜)。「今日」に依存せず、
+ * 当月を締めないため、日本時間の0時をまたいでも422にならない。他のspecでは使わない。
+ */
+const CLOSED_MONTH_FIXTURE = { yearMonth: '2026-09', workDate: '2026-09-01' }
+
 test('§5-17: 締め済み月次勤怠をバックオフィス詳細から引き続き確認できる', async ({ browser }) => {
   test.setTimeout(180000)
 
@@ -334,7 +340,7 @@ test('§5-17: 締め済み月次勤怠をバックオフィス詳細から引き
   await loginAs(adminPage, SCENARIO_USERS.admin)
   await loginAs(hrStaffPage, SCENARIO_USERS.hrStaff)
 
-  const { yearMonth } = await submitApproveAndCloseCurrentMonth(applicantPage, approverPage, adminPage)
+  const { yearMonth } = await submitApproveAndCloseFixedMonth(applicantPage, approverPage, adminPage, CLOSED_MONTH_FIXTURE)
   expect(await fetchMonthStatus(applicantPage, yearMonth)).toBe('closed')
 
   // 月次勤怠確認タスクの担当部署は人事部(CreateBackOfficeTaskFromAttendanceMonthApprovalHandler
@@ -386,9 +392,9 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await loginAs(generalAffairsPage, SCENARIO_USERS.generalAffairsStaff)
     await loginAs(adminPage, SCENARIO_USERS.admin)
 
-    // 当月の勤怠を提出〜承認〜締めまで進める(既に他のシナリオの実行で締め済みなら
+    // 固定の過去月の勤怠を提出〜承認〜締めまで進める(既に前回までの実行で締め済みなら
     // 冪等にスキップされる、UC-A008〜UC-A011)。
-    const { yearMonth } = await submitApproveAndCloseCurrentMonth(applicantPage, approverPage, adminPage)
+    const { yearMonth } = await submitApproveAndCloseFixedMonth(applicantPage, approverPage, adminPage, CLOSED_MONTH_FIXTURE)
     expect(await fetchMonthStatus(applicantPage, yearMonth)).toBe('closed')
 
     // 月次締め後も、同月内に発生した交通費精算の後処理(承認〜経理タスク完了)が

@@ -7,7 +7,7 @@ import {
   fetchAttendancePunches,
   grantAdditionalPaidLeave,
   recordAttendancePunch,
-  submitApproveAndCloseCurrentMonth,
+  submitApproveAndCloseFixedMonth,
 } from "./support/api";
 import { pickDate, pickUser, pickYearMonth } from "./support/ui";
 
@@ -245,6 +245,12 @@ test("§5-6+7: ロール変更が即座に反映され、監査ログに記録�
   ).toBeVisible();
 });
 
+/** §5-3・§5-8専用の固定の年月・勤務日(2026-08-03は月曜)。他のspecでは使わない。 */
+const CLOSED_MONTH_FIXTURE = {
+  yearMonth: "2026-08",
+  workDate: "2026-08-03",
+};
+
 test("§5-3: 月次締め後は日次実績が編集できない", async ({ browser }) => {
   test.setTimeout(360000);
 
@@ -260,12 +266,15 @@ test("§5-3: 月次締め後は日次実績が編集できない", async ({ brow
     await loginAs(approverPage, SCENARIO_USERS.approver);
     await loginAs(adminPage, SCENARIO_USERS.admin);
 
-    // 当月の月次勤怠を提出〜承認〜締めまで進める(UC-A008〜UC-A011)。同一日に何度
-    // 実行しても、既に進んでいるステータスはスキップするため冪等に動く。
-    const { workDate } = await submitApproveAndCloseCurrentMonth(
+    // §5-3・§5-8専用の固定の過去月(他のspecが使わない月)の日次実績を作り、提出〜承認〜
+    // 締めまで進める(UC-A008〜UC-A011)。「今日」に依存しないため、日本時間の0時をまたいでも
+    // 締め済みの月に打刻を試して422になることがなく、当月も締めない。既に進んでいる
+    // ステータスはスキップするため、繰り返し実行しても冪等に動く。
+    const { workDate } = await submitApproveAndCloseFixedMonth(
       applicantPage,
       approverPage,
       adminPage,
+      CLOSED_MONTH_FIXTURE,
     );
 
     // 締め済みの日は日次勤怠画面(`/attendance/days/{date}`)で編集操作自体を表示せず、
@@ -368,10 +377,12 @@ test("§5-8: 締めた月の勤怠CSV出力", async ({ browser }) => {
     await loginAs(approverPage, SCENARIO_USERS.approver);
     await loginAs(adminPage, SCENARIO_USERS.admin);
 
-    const { yearMonth } = await submitApproveAndCloseCurrentMonth(
+    // §5-3と同じ固定の過去月を使う(締め済みなら冪等にスキップされる)。
+    const { yearMonth } = await submitApproveAndCloseFixedMonth(
       applicantPage,
       approverPage,
       adminPage,
+      CLOSED_MONTH_FIXTURE,
     );
 
     await adminPage.goto("/admin/attendance-export");

@@ -224,11 +224,18 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
   await pageHeader(page, "グループ")
     .getByRole("link", { name: "新規作成" })
     .click();
-  await page
+  // 遷移を待ってから入力する。一覧の絞り込みにも同じ「グループ種別」ラベルがあり、
+  // 遷移前に入力すると一覧側に当たるため、作成フォーム(基本情報の Card)に限定する。
+  await expect(page).toHaveURL(/\/admin\/groups\/new$/);
+  await expect(
+    page.getByRole("heading", { name: "グループを作成", level: 1 }),
+  ).toBeVisible();
+  const groupForm = card(page, "基本情報");
+  await groupForm
     .getByLabel("グループ種別", { exact: true })
     .selectOption({ label: groupTypeName });
-  await page.getByLabel("名称", { exact: true }).fill(groupName);
-  await page.getByRole("button", { name: "作成", exact: true }).click();
+  await groupForm.getByLabel("名称", { exact: true }).fill(groupName);
+  await groupForm.getByRole("button", { name: "作成", exact: true }).click();
   // 作成後は一覧ではなく作成されたグループ自身の詳細画面へ遷移する(更新時に同ページへ
   // 留まる挙動と揃える)。
   await expect(

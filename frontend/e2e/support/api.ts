@@ -523,6 +523,48 @@ export async function submitApproveAndCloseCurrentMonth(
   return { yearMonth, monthId, dayId, workDate }
 }
 
+/**
+ * UC-A008〜UC-A011: 「今日」に依存せず、固定の過去の年月・勤務日で、ログイン中の社員の
+ * 日次実績作成〜提出〜承認〜締めまでを行う。`submitApproveAndCloseCurrentMonth`は日本時間の
+ * 0時をまたぐと、締め済みの月に出勤打刻を試して422になる(`ensureTodayClockedOut`)ため、
+ * 当月を締めたくない・日付境界に依存したくないテストはこちらを使う。
+ * 同じ年月に何度実行しても冪等(既に日次実績がある・締め済みならスキップ)。
+ * `yearMonth`と`workDate`は、他のspecが使う年月と重ならない専用の値を呼び出し側が選ぶ。
+ */
+export async function submitApproveAndCloseFixedMonth(
+  employeePage: Page,
+  approverPage: Page,
+  adminPage: Page,
+  input: { yearMonth: string; workDate: string },
+): Promise<{ yearMonth: string; monthId: string; workDate: string }> {
+  const { yearMonth, workDate } = input
+
+  if ((await fetchMonthStatus(employeePage, yearMonth)) !== 'closed') {
+    const userId = await fetchOwnUserId(employeePage)
+    try {
+      await createAttendanceDay(employeePage, {
+        userId,
+        workDate,
+        actualStartAt: `${workDate}T09:00:00+09:00`,
+        actualEndAt: `${workDate}T18:00:00+09:00`,
+        breaks: [{ start: `${workDate}T12:00:00+09:00`, end: `${workDate}T13:00:00+09:00` }],
+        reason: '固定の過去月の月次締め確認用(E2E)',
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      // 前回実行分の日次実績が残っている場合は、そのまま続ける。
+      if (!message.includes('既に存在します')) throw error
+    }
+    await submitAndApproveMonth(employeePage, approverPage, yearMonth)
+    await closeMonth(adminPage, employeePage, yearMonth)
+  }
+
+  const months = await apiFetch<MonthSummary[]>(employeePage, '/attendance/months/mine')
+  const month = months.find((m) => m.year_month === yearMonth)
+  if (!month) throw new Error(`E2E setup: month ${yearMonth} not found`)
+  return { yearMonth, monthId: month.id, workDate }
+}
+
 export async function fetchMonthStatus(page: Page, yearMonth: string): Promise<string | undefined> {
   const months = await apiFetch<MonthSummary[]>(page, '/attendance/months/mine')
   return months.find((m) => m.year_month === yearMonth)?.status
