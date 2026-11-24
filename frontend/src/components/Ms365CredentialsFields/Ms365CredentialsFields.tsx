@@ -76,19 +76,21 @@ export function Ms365CredentialsFields({
         />
       </FormField>
 
-      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
-        <Checkbox
-          checked={value.mockEnabled}
-          onCheckedChange={(checked) =>
-            onChange({ ...value, mockEnabled: checked === true })
-          }
-        />
-        ローカル開発用モックOIDC(mock-oidc)を使う
-      </label>
-      <p className="mb-4 text-xs text-muted-foreground">
-        本番・検証環境では有効にしないこと。有効にすると開発専用の危険なエンドポイント
-        (DB初期化)も到達可能になる。
-      </p>
+      <div className="mb-4">
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Checkbox
+            checked={value.mockEnabled}
+            onCheckedChange={(checked) =>
+              onChange({ ...value, mockEnabled: checked === true })
+            }
+          />
+          ローカル開発用モックOIDC(mock-oidc)を使う
+        </label>
+        <p className="mt-1 text-xs text-muted-foreground">
+          本番・検証環境では有効にしないこと。有効にすると開発専用の危険なエンドポイント
+          (DB初期化)も到達可能になる。
+        </p>
+      </div>
     </>
   );
 }

@@ -4,9 +4,11 @@ import { Button } from '../Button/Button'
 import { DatePicker } from '../DatePicker/DatePicker'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
+import { FormRow } from '../FormRow/FormRow'
+import { FormSection } from '../FormSection/FormSection'
 import { TimePicker } from '../TimePicker/TimePicker'
 import { Checkbox } from '../ui/checkbox'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
 import { useCreateWorkStyle, useUpdateWorkStyle } from '../../hooks/useWorkStyles'
@@ -167,12 +169,10 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="large" className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEditing ? `勤務形態を編集(${workStyle?.name})` : '勤務形態を登録'}</DialogTitle>
+          <DialogTitle>{isEditing ? `勤務形態を編集(${workStyle?.name})` : '勤務形態を作成'}</DialogTitle>
         </DialogHeader>
 
-        {mutation.error && <ErrorMessage error={mutation.error} />}
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
           <FormField label="コード" htmlFor="work-style-code" required>
             <Input id="work-style-code" value={form.code} onChange={(e) => patch({ code: e.target.value })} />
           </FormField>
@@ -214,7 +214,12 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
             />
           </FormField>
 
-          <FormField label="作業日の区切り" htmlFor="work-style-day-boundary" required>
+          <FormField
+            label="作業日の区切り"
+            htmlFor="work-style-day-boundary"
+            description="作業日基準でも1件の勤務実績は最大24時間です。"
+            required
+          >
             <NativeSelect
               id="work-style-day-boundary"
               value={form.workdayBoundaryType}
@@ -224,7 +229,6 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               <option value="midnight">0時基準（暦日）</option>
               <option value="custom">指定時刻基準</option>
             </NativeSelect>
-            <p className="mt-1 text-xs text-muted-foreground">作業日基準でも1件の勤務実績は最大24時間です。</p>
           </FormField>
 
           {form.workdayBoundaryType === 'custom' && (
@@ -237,21 +241,23 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
             </FormField>
           )}
 
-          <FormField label="標準開始時刻" htmlFor="work-style-start-time">
-            <TimePicker
-              id="work-style-start-time"
-              value={form.defaultStartTime}
-              onChange={(time) => patch({ defaultStartTime: time ?? '' })}
-            />
-          </FormField>
+          <FormRow>
+            <FormField label="標準開始時刻" htmlFor="work-style-start-time">
+              <TimePicker
+                id="work-style-start-time"
+                value={form.defaultStartTime}
+                onChange={(time) => patch({ defaultStartTime: time ?? '' })}
+              />
+            </FormField>
 
-          <FormField label="標準終了時刻" htmlFor="work-style-end-time">
-            <TimePicker
-              id="work-style-end-time"
-              value={form.defaultEndTime}
-              onChange={(time) => patch({ defaultEndTime: time ?? '' })}
-            />
-          </FormField>
+            <FormField label="標準終了時刻" htmlFor="work-style-end-time">
+              <TimePicker
+                id="work-style-end-time"
+                value={form.defaultEndTime}
+                onChange={(time) => patch({ defaultEndTime: time ?? '' })}
+              />
+            </FormField>
+          </FormRow>
 
           <FormField label="標準休憩(分)" htmlFor="work-style-break-minutes">
             <Input
@@ -262,26 +268,32 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
             />
           </FormField>
 
-          <FormField label="標準休憩開始時刻" htmlFor="work-style-break-start-time">
-            <TimePicker
-              id="work-style-break-start-time"
-              value={form.defaultBreakStartTime}
-              onChange={(time) => patch({ defaultBreakStartTime: time ?? '' })}
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              日次勤怠の入力画面で、勤務予定・打刻のいずれも無い日の初期値(システムの初期設定)に使う。
-            </p>
-          </FormField>
+          <FormRow>
+            <FormField label="標準休憩開始時刻" htmlFor="work-style-break-start-time">
+              <TimePicker
+                id="work-style-break-start-time"
+                value={form.defaultBreakStartTime}
+                onChange={(time) => patch({ defaultBreakStartTime: time ?? '' })}
+              />
+            </FormField>
 
-          <FormField label="標準休憩終了時刻" htmlFor="work-style-break-end-time">
-            <TimePicker
-              id="work-style-break-end-time"
-              value={form.defaultBreakEndTime}
-              onChange={(time) => patch({ defaultBreakEndTime: time ?? '' })}
-            />
-          </FormField>
+            <FormField label="標準休憩終了時刻" htmlFor="work-style-break-end-time">
+              <TimePicker
+                id="work-style-break-end-time"
+                value={form.defaultBreakEndTime}
+                onChange={(time) => patch({ defaultBreakEndTime: time ?? '' })}
+              />
+            </FormField>
+          </FormRow>
+          <p className="-mt-2 mb-4 text-xs text-muted-foreground">
+            日次勤怠の入力画面で、勤務予定・打刻のいずれも無い日の初期値(システムの初期設定)に使う。
+          </p>
 
-          <FormField label="打刻の丸め単位" htmlFor="work-style-rounding-unit-minutes">
+          <FormField
+            label="打刻の丸め単位"
+            htmlFor="work-style-rounding-unit-minutes"
+            description="日次勤怠の入力画面で打刻内容を初期値として反映する際、この単位・方向に丸める。"
+          >
             <NativeSelect
               id="work-style-rounding-unit-minutes"
               value={roundingSelectValue(form.roundingUnitMinutes, form.roundingMode)}
@@ -299,9 +311,6 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
                 )),
               )}
             </NativeSelect>
-            <p className="mt-1 text-xs text-muted-foreground">
-              日次勤怠の入力画面で打刻内容を初期値として反映する際、この単位・方向に丸める。
-            </p>
           </FormField>
 
           <FormField label="カレンダー" htmlFor="work-style-calendar" required={!isEditing}>
@@ -318,149 +327,174 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               ))}
             </NativeSelect>
           </FormField>
-        </div>
-
-        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Checkbox
-            checked={form.autoBreakEnabled}
-            onCheckedChange={(checked) => patch({ autoBreakEnabled: checked === true })}
-          />
-          退勤時に標準休憩を自動で記録する
-        </label>
-        <p className="-mt-2 text-xs text-muted-foreground">
-          その日に休憩が1件も打刻・記録されておらず、実働時間が6時間以上、かつ標準休憩の時間帯が実働時間内に
-          収まる場合に限り、標準休憩開始・終了時刻を自動でその日の休憩として記録する。実際に打刻・編集された
-          休憩がある日には影響しない。
-        </p>
-
-        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Checkbox checked={form.isShiftBased} onCheckedChange={(checked) => patch({ isShiftBased: checked === true })} />
-          シフト制
-        </label>
-
-        {form.isShiftBased && (
-          <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
-            <FormField label="法定休日の与え方" htmlFor="work-style-legal-holiday-rule">
-              <NativeSelect
-                id="work-style-legal-holiday-rule"
-                value={form.legalHolidayRule}
-                onChange={(e) => patch({ legalHolidayRule: e.target.value as LegalHolidayRule })}
-              >
-                <option value="weekly">毎週1日</option>
-                <option value="four_weeks_four_days">4週4日以上(変形休日制)</option>
-              </NativeSelect>
-              <p className="mt-1 text-xs text-muted-foreground">
-                月次まとめ承認時に、この要件を満たしているか警告表示される(UC-C005)。
-              </p>
-            </FormField>
-
-            {form.legalHolidayRule === 'four_weeks_four_days' && (
-              <FormField label="4週間の起算日" htmlFor="work-style-four-week-start" required>
-                <DatePicker
-                  id="work-style-four-week-start"
-                  value={form.fourWeekPeriodStartDate || undefined}
-                  onChange={(date) => patch({ fourWeekPeriodStartDate: date ?? '' })}
-                />
-                <p className="mt-1 text-xs text-muted-foreground">就業規則で定めた4週間の起算日。</p>
-              </FormField>
-            )}
-
-            <FormField label="連続勤務日数の上限(任意)" htmlFor="work-style-max-consecutive-work-days">
-              <Input
-                id="work-style-max-consecutive-work-days"
-                type="number"
-                min={1}
-                value={form.maxConsecutiveWorkDays}
-                onChange={(e) => patch({ maxConsecutiveWorkDays: e.target.value })}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                未設定ならチェックしない。3交代制シフト表の公開前確認(UC-C004)で警告に使う。
-              </p>
-            </FormField>
-          </div>
-        )}
-
-        {isDiscretionary && (
-          <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
-            <FormField label="みなし労働時間(分/日)" htmlFor="work-style-deemed-daily-minutes" required>
-              <Input
-                id="work-style-deemed-daily-minutes"
-                type="number"
-                min={1}
-                value={form.deemedDailyMinutes}
-                onChange={(e) => patch({ deemedDailyMinutes: e.target.value })}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                裁量労働制の対象日は、実労働時間にかかわらずこの時間を給与計算上の労働時間として採用する。
-              </p>
-            </FormField>
-          </div>
-        )}
-
-        {isFlex && (
-          <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
-            <FormField label="清算期間の起算日(任意)" htmlFor="work-style-settlement-start-day">
-              <Input
-                id="work-style-settlement-start-day"
-                type="number"
-                min={1}
-                max={31}
-                value={form.settlementStartDay}
-                onChange={(e) => patch({ settlementStartDay: e.target.value })}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">未設定なら毎月1日を起算日とする。</p>
-            </FormField>
-
-            <FormField label="勤務可能開始時刻" htmlFor="work-style-flexible-start">
-              <TimePicker
-                id="work-style-flexible-start"
-                value={form.flexibleTimeStart}
-                onChange={(time) => patch({ flexibleTimeStart: time ?? '' })}
-              />
-            </FormField>
-
-            <FormField label="勤務可能終了時刻" htmlFor="work-style-flexible-end">
-              <TimePicker
-                id="work-style-flexible-end"
-                value={form.flexibleTimeEnd}
-                onChange={(time) => patch({ flexibleTimeEnd: time ?? '' })}
-              />
-            </FormField>
-
-            <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:col-span-2">
+          <div className="mb-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <Checkbox
-                checked={form.coreTimeEnabled}
-                onCheckedChange={(checked) => patch({ coreTimeEnabled: checked === true })}
+                checked={form.autoBreakEnabled}
+                onCheckedChange={(checked) => patch({ autoBreakEnabled: checked === true })}
               />
-              コアタイムあり
+              退勤時に標準休憩を自動で記録する
             </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              その日に休憩が1件も打刻・記録されておらず、実働時間が6時間以上、かつ標準休憩の時間帯が実働時間内に
+              収まる場合に限り、標準休憩開始・終了時刻を自動でその日の休憩として記録する。実際に打刻・編集された
+              休憩がある日には影響しない。
+            </p>
+          </div>
 
-            {form.coreTimeEnabled && (
-              <>
-                <FormField label="コアタイム開始時刻" htmlFor="work-style-core-time-start" required>
+          <div className="mb-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Checkbox checked={form.isShiftBased} onCheckedChange={(checked) => patch({ isShiftBased: checked === true })} />
+              シフト制
+            </label>
+          </div>
+
+          {form.isShiftBased && (
+            <FormSection title="シフト制">
+              <FormField
+                label="法定休日の与え方"
+                htmlFor="work-style-legal-holiday-rule"
+                description="月次まとめ承認時に、この要件を満たしているか警告表示される(UC-C005)。"
+              >
+                <NativeSelect
+                  id="work-style-legal-holiday-rule"
+                  value={form.legalHolidayRule}
+                  onChange={(e) => patch({ legalHolidayRule: e.target.value as LegalHolidayRule })}
+                >
+                  <option value="weekly">毎週1日</option>
+                  <option value="four_weeks_four_days">4週4日以上(変形休日制)</option>
+                </NativeSelect>
+              </FormField>
+
+              {form.legalHolidayRule === 'four_weeks_four_days' && (
+                <FormField
+                  label="4週間の起算日"
+                  htmlFor="work-style-four-week-start"
+                  description="就業規則で定めた4週間の起算日。"
+                  required
+                >
+                  <DatePicker
+                    id="work-style-four-week-start"
+                    value={form.fourWeekPeriodStartDate || undefined}
+                    onChange={(date) => patch({ fourWeekPeriodStartDate: date ?? '' })}
+                  />
+                </FormField>
+              )}
+
+              <FormField
+                label="連続勤務日数の上限(任意)"
+                htmlFor="work-style-max-consecutive-work-days"
+                description="未設定ならチェックしない。3交代制シフト表の公開前確認(UC-C004)で警告に使う。"
+              >
+                <Input
+                  id="work-style-max-consecutive-work-days"
+                  type="number"
+                  min={1}
+                  value={form.maxConsecutiveWorkDays}
+                  onChange={(e) => patch({ maxConsecutiveWorkDays: e.target.value })}
+                />
+              </FormField>
+            </FormSection>
+          )}
+
+          {isDiscretionary && (
+            <FormSection title="裁量労働制">
+              <FormField
+                label="みなし労働時間(分/日)"
+                htmlFor="work-style-deemed-daily-minutes"
+                description="裁量労働制の対象日は、実労働時間にかかわらずこの時間を給与計算上の労働時間として採用する。"
+                required
+              >
+                <Input
+                  id="work-style-deemed-daily-minutes"
+                  type="number"
+                  min={1}
+                  value={form.deemedDailyMinutes}
+                  onChange={(e) => patch({ deemedDailyMinutes: e.target.value })}
+                />
+              </FormField>
+            </FormSection>
+          )}
+
+          {isFlex && (
+            <FormSection title="フレックスタイム制">
+              <FormField
+                label="清算期間の起算日(任意)"
+                htmlFor="work-style-settlement-start-day"
+                description="未設定なら毎月1日を起算日とする。"
+              >
+                <Input
+                  id="work-style-settlement-start-day"
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={form.settlementStartDay}
+                  onChange={(e) => patch({ settlementStartDay: e.target.value })}
+                />
+              </FormField>
+
+              <FormRow>
+                <FormField label="勤務可能開始時刻" htmlFor="work-style-flexible-start">
                   <TimePicker
-                    id="work-style-core-time-start"
-                    value={form.coreTimeStart}
-                    onChange={(time) => patch({ coreTimeStart: time ?? '' })}
+                    id="work-style-flexible-start"
+                    value={form.flexibleTimeStart}
+                    onChange={(time) => patch({ flexibleTimeStart: time ?? '' })}
                   />
                 </FormField>
 
-                <FormField label="コアタイム終了時刻" htmlFor="work-style-core-time-end" required>
+                <FormField label="勤務可能終了時刻" htmlFor="work-style-flexible-end">
                   <TimePicker
-                    id="work-style-core-time-end"
-                    value={form.coreTimeEnd}
-                    onChange={(time) => patch({ coreTimeEnd: time ?? '' })}
+                    id="work-style-flexible-end"
+                    value={form.flexibleTimeEnd}
+                    onChange={(time) => patch({ flexibleTimeEnd: time ?? '' })}
                   />
-                  <p className="mt-1 text-xs text-muted-foreground">
+                </FormField>
+              </FormRow>
+
+              <div className="mb-4">
+                <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Checkbox
+                    checked={form.coreTimeEnabled}
+                    onCheckedChange={(checked) => patch({ coreTimeEnabled: checked === true })}
+                  />
+                  コアタイムあり
+                </label>
+              </div>
+
+              {form.coreTimeEnabled && (
+                <>
+                  <FormRow>
+                    <FormField label="コアタイム開始時刻" htmlFor="work-style-core-time-start" required>
+                      <TimePicker
+                        id="work-style-core-time-start"
+                        value={form.coreTimeStart}
+                        onChange={(time) => patch({ coreTimeStart: time ?? '' })}
+                      />
+                    </FormField>
+
+                    <FormField label="コアタイム終了時刻" htmlFor="work-style-core-time-end" required>
+                      <TimePicker
+                        id="work-style-core-time-end"
+                        value={form.coreTimeEnd}
+                        onChange={(time) => patch({ coreTimeEnd: time ?? '' })}
+                      />
+                    </FormField>
+                  </FormRow>
+                  <p className="-mt-2 mb-4 text-xs text-muted-foreground">
                     労働時間は足りていてもコアタイム中に不在の場合は別枠の警告になる(指示書7.4節)。
                   </p>
-                </FormField>
-              </>
-            )}
-          </div>
-        )}
+                </>
+              )}
+            </FormSection>
+          )}
+        </div>
 
-        <div className="flex flex-wrap gap-3">
+        {mutation.error && <ErrorMessage error={mutation.error} />}
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            キャンセル
+          </Button>
           <Button
             isLoading={mutation.isPending}
             disabled={
@@ -477,12 +511,9 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
             }
             onClick={handleSubmit}
           >
-            {isEditing ? '更新する' : '登録する'}
+            {isEditing ? '保存' : '作成'}
           </Button>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            キャンセル
-          </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

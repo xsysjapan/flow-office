@@ -4,6 +4,7 @@ import { useCorrectWorkCalendarYearFiscalYear } from '../../hooks/useWorkCalenda
 import { Button } from '../Button/Button'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
+import { FormRow } from '../FormRow/FormRow'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
@@ -84,9 +85,7 @@ export function CorrectFiscalYearDialog({ year, companyCalendarId, onOpenChange,
           </DialogDescription>
         </DialogHeader>
 
-        {correctFiscalYear.error && <ErrorMessage error={correctFiscalYear.error} />}
-
-        <div className="flex flex-col gap-1">
+        <div>
           <FormField label="年度番号" htmlFor="correct-fiscal-year">
             <Input
               id="correct-fiscal-year"
@@ -95,21 +94,25 @@ export function CorrectFiscalYearDialog({ year, companyCalendarId, onOpenChange,
               onChange={(e) => setFiscalYear(e.target.value)}
             />
           </FormField>
-          <FormField label="開始日" htmlFor="correct-starts-on">
-            <Input
-              id="correct-starts-on"
-              type="date"
-              value={startsOn}
-              onChange={(e) => setStartsOn(e.target.value)}
-            />
-          </FormField>
-          <FormField label="終了日" htmlFor="correct-ends-on">
-            <Input id="correct-ends-on" type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
-          </FormField>
+          <FormRow>
+            <FormField label="開始日" htmlFor="correct-starts-on">
+              <Input
+                id="correct-starts-on"
+                type="date"
+                value={startsOn}
+                onChange={(e) => setStartsOn(e.target.value)}
+              />
+            </FormField>
+            <FormField label="終了日" htmlFor="correct-ends-on">
+              <Input id="correct-ends-on" type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
+            </FormField>
+          </FormRow>
           <FormField label="訂正理由(任意)" htmlFor="correct-reason">
             <Textarea id="correct-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
           </FormField>
         </div>
+
+        {correctFiscalYear.error && <ErrorMessage error={correctFiscalYear.error} />}
 
         <DialogFooter>
           <Button variant="secondary" onClick={() => handleOpenChange(false)}>

@@ -81,7 +81,7 @@ describe('WorkStyleFormModal', () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-2', code: 'discretionary' })
     renderModal()
 
-    expect(await screen.findByRole('heading', { name: '勤務形態を登録' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '勤務形態を作成' })).toBeInTheDocument()
 
     await userEvent.type(screen.getByLabelText('コード'), 'discretionary')
     await userEvent.type(screen.getByLabelText('名称'), '裁量労働制勤務')
@@ -90,7 +90,7 @@ describe('WorkStyleFormModal', () => {
     await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
     await userEvent.type(screen.getByLabelText('みなし労働時間(分/日)'), '540')
     await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
-    await userEvent.click(screen.getByRole('button', { name: '登録する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(
@@ -127,7 +127,7 @@ describe('WorkStyleFormModal', () => {
 
     await userEvent.clear(nameField)
     await userEvent.type(nameField, '標準勤務(改)')
-    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
       expect(workStylesApi.updateWorkStyle).toHaveBeenCalledWith(
@@ -160,7 +160,7 @@ describe('WorkStyleFormModal', () => {
       screen.getByLabelText('打刻の丸め単位'),
       '15分(切り捨て(勤務時間が短くなる方向))',
     )
-    await userEvent.click(screen.getByRole('button', { name: '登録する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(

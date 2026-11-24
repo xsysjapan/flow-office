@@ -10,6 +10,7 @@ import { EmptyState } from "../EmptyState/EmptyState";
 import { ErrorMessage } from "../ErrorMessage/ErrorMessage";
 import { notify } from "../../lib/notify";
 import { FormField } from "../FormField/FormField";
+import { FormRow } from "../FormRow/FormRow";
 import { Checkbox } from "../ui/checkbox";
 import {
   Dialog,
@@ -248,22 +249,24 @@ export function RoleAssignmentSection({
             />
             配下を含む
           </label>
-          <FormField label="有効開始日時" htmlFor="role-assignment-starts-at">
-            <DateTimePicker
-              id="role-assignment-starts-at"
-              aria-label="Role有効開始日時"
-              value={form.starts_at}
-              onChange={(value) => setForm({ ...form, starts_at: value ?? "" })}
-            />
-          </FormField>
-          <FormField label="有効終了日時" htmlFor="role-assignment-ends-at">
-            <DateTimePicker
-              id="role-assignment-ends-at"
-              aria-label="Role有効終了日時"
-              value={form.ends_at}
-              onChange={(value) => setForm({ ...form, ends_at: value ?? "" })}
-            />
-          </FormField>
+          <FormRow>
+            <FormField label="有効開始日時" htmlFor="role-assignment-starts-at">
+              <DateTimePicker
+                id="role-assignment-starts-at"
+                aria-label="Role有効開始日時"
+                value={form.starts_at}
+                onChange={(value) => setForm({ ...form, starts_at: value ?? "" })}
+              />
+            </FormField>
+            <FormField label="有効終了日時" htmlFor="role-assignment-ends-at">
+              <DateTimePicker
+                id="role-assignment-ends-at"
+                aria-label="Role有効終了日時"
+                value={form.ends_at}
+                onChange={(value) => setForm({ ...form, ends_at: value ?? "" })}
+              />
+            </FormField>
+          </FormRow>
           {(createAssignment.error || updateAssignment.error) && (
             <ErrorMessage error={createAssignment.error ?? updateAssignment.error} />
           )}

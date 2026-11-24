@@ -208,7 +208,7 @@ describe('WorkStylesPage', () => {
     expect(nameField).toHaveValue('標準勤務')
     await userEvent.clear(nameField)
     await userEvent.type(nameField, '標準勤務(改)')
-    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
       expect(workStylesApi.updateWorkStyle).toHaveBeenCalledWith(
@@ -223,7 +223,7 @@ describe('WorkStylesPage', () => {
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
-    expect(await screen.findByRole('heading', { name: '勤務形態を登録' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '勤務形態を作成' })).toBeInTheDocument()
 
     await userEvent.type(screen.getByLabelText('コード'), 'discretionary')
     await userEvent.type(screen.getByLabelText('名称'), '裁量労働制勤務')
@@ -232,7 +232,7 @@ describe('WorkStylesPage', () => {
     await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
     await userEvent.type(screen.getByLabelText('みなし労働時間(分/日)'), '540')
     await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
-    await userEvent.click(screen.getByRole('button', { name: '登録する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(expect.objectContaining({
@@ -272,7 +272,7 @@ describe('WorkStylesPage', () => {
     await userEvent.click(screen.getByLabelText('シフト制'))
     await userEvent.selectOptions(screen.getByLabelText('法定休日の与え方'), '4週4日以上(変形休日制)')
     await pickDate(userEvent.setup(), '4週間の起算日', '2026-06-01')
-    await userEvent.click(screen.getByRole('button', { name: '登録する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(
@@ -301,7 +301,7 @@ describe('WorkStylesPage', () => {
     await userEvent.click(screen.getByLabelText('コアタイムあり'))
     await pickTime(userEvent.setup(), 'コアタイム開始時刻', '10:00')
     await pickTime(userEvent.setup(), 'コアタイム終了時刻', '15:00')
-    await userEvent.click(screen.getByRole('button', { name: '登録する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(

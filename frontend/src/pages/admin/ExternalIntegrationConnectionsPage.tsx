@@ -140,7 +140,7 @@ function ConnectionFormFields({
   isCreate: boolean
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <>
       {isCreate && (
         <FormField label="プロバイダ" htmlFor={`${idPrefix}-provider`} required>
           <NativeSelect
@@ -223,18 +223,16 @@ function ConnectionFormFields({
         </FormField>
       )}
 
-      <div className="sm:col-span-2">
-        <FormField label="カスタム設定(JSON)" htmlFor={`${idPrefix}-custom-settings`}>
-          <Textarea
-            id={`${idPrefix}-custom-settings`}
-            value={value.customSettingsText}
-            onChange={(e) => onChange({ ...value, customSettingsText: e.target.value })}
-            placeholder='任意。例: {"tax_category": "10"}'
-            rows={3}
-          />
-        </FormField>
-      </div>
-    </div>
+      <FormField label="カスタム設定(JSON)" htmlFor={`${idPrefix}-custom-settings`}>
+        <Textarea
+          id={`${idPrefix}-custom-settings`}
+          value={value.customSettingsText}
+          onChange={(e) => onChange({ ...value, customSettingsText: e.target.value })}
+          placeholder='任意。例: {"tax_category": "10"}'
+          rows={3}
+        />
+      </FormField>
+    </>
   )
 }
 

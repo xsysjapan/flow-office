@@ -1,4 +1,6 @@
 import { Badge } from '../Badge/Badge'
+import { FormField } from '../FormField/FormField'
+import { FormRow } from '../FormRow/FormRow'
 import { Checkbox } from '../ui/checkbox'
 import { TimePicker } from '../TimePicker/TimePicker'
 import { WEEKDAYS, weekdayEntry, type WeekdayRowState } from '../WeekdayScheduleFields/WeekdayScheduleFields'
@@ -87,32 +89,29 @@ export function SimplePatternFields({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-foreground" htmlFor="simple-pattern-start-time">
-            開始時刻
-            <div className="w-28">
-              <TimePicker id="simple-pattern-start-time" value={state.startTime} onChange={(time) => onChange({ startTime: time ?? '' })} />
-            </div>
-          </label>
-          <span className="text-sm text-muted-foreground">〜</span>
-          <label className="flex items-center gap-2 text-sm text-foreground" htmlFor="simple-pattern-end-time">
-            終了時刻
-            <div className="w-28">
-              <TimePicker id="simple-pattern-end-time" value={state.endTime} onChange={(time) => onChange({ endTime: time ?? '' })} />
-            </div>
-          </label>
-        </div>
-        {crossesMidnight(state) && <Badge tone="neutral">翌日</Badge>}
+      <div>
+        <FormRow>
+          <FormField label="開始時刻" htmlFor="simple-pattern-start-time">
+            <TimePicker id="simple-pattern-start-time" value={state.startTime} onChange={(time) => onChange({ startTime: time ?? '' })} />
+          </FormField>
+          <FormField label="終了時刻" htmlFor="simple-pattern-end-time">
+            <TimePicker id="simple-pattern-end-time" value={state.endTime} onChange={(time) => onChange({ endTime: time ?? '' })} />
+          </FormField>
+        </FormRow>
+        {crossesMidnight(state) && (
+          <div className="-mt-2 mb-4">
+            <Badge tone="neutral">翌日</Badge>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-        <label className="flex items-center gap-2 text-sm text-foreground">
+      <div>
+        <label className="mb-2 flex items-center gap-2 text-sm text-foreground">
           <Checkbox checked={state.breakEnabled} onCheckedChange={(checked) => onChange({ breakEnabled: checked === true })} />
           休憩
         </label>
-        <div className="flex items-center gap-2">
-          <div className="w-28">
+        <FormRow>
+          <div>
             <TimePicker
               aria-label="休憩開始時刻"
               disabled={!state.breakEnabled}
@@ -120,8 +119,7 @@ export function SimplePatternFields({
               onChange={(time) => onChange({ breakStartTime: time ?? '' })}
             />
           </div>
-          <span className="text-sm text-muted-foreground">〜</span>
-          <div className="w-28">
+          <div>
             <TimePicker
               aria-label="休憩終了時刻"
               disabled={!state.breakEnabled}
@@ -129,7 +127,7 @@ export function SimplePatternFields({
               onChange={(time) => onChange({ breakEndTime: time ?? '' })}
             />
           </div>
-        </div>
+        </FormRow>
       </div>
     </div>
   )

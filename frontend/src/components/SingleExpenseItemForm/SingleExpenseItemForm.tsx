@@ -197,49 +197,45 @@ export function SingleExpenseItemForm({
     <div className="flex flex-col gap-1">
       <h3 className="text-sm font-semibold text-foreground">{fieldSetTitle[fieldSet]}</h3>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="利用日" htmlFor="single-item-usage-date" required>
-          <DatePicker
-            id="single-item-usage-date"
-            value={usageDate || undefined}
-            onChange={(date) => setUsageDate(date ?? '')}
-          />
-        </FormField>
+      <FormField label="利用日" htmlFor="single-item-usage-date" required>
+        <DatePicker
+          id="single-item-usage-date"
+          value={usageDate || undefined}
+          onChange={(date) => setUsageDate(date ?? '')}
+        />
+      </FormField>
 
-        <FormField label="金額" htmlFor="single-item-amount" required>
-          <Input
-            id="single-item-amount"
-            type="number"
-            min={0}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </FormField>
-      </div>
+      <FormField label="金額" htmlFor="single-item-amount" required>
+        <Input
+          id="single-item-amount"
+          type="number"
+          min={0}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+      </FormField>
 
       {fieldSet === 'meal' && (
         <>
           <FormField label="取引先" htmlFor="single-item-payee" required>
             <Input id="single-item-payee" value={payee} onChange={(e) => setPayee(e.target.value)} />
           </FormField>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="参加者氏名" htmlFor="single-item-participants" required>
-              <Input
-                id="single-item-participants"
-                value={participants}
-                onChange={(e) => setParticipants(e.target.value)}
-              />
-            </FormField>
-            <FormField label="参加人数" htmlFor="single-item-participant-count" required>
-              <Input
-                id="single-item-participant-count"
-                type="number"
-                min={0}
-                value={participantCount}
-                onChange={(e) => setParticipantCount(e.target.value)}
-              />
-            </FormField>
-          </div>
+          <FormField label="参加者氏名" htmlFor="single-item-participants" required>
+            <Input
+              id="single-item-participants"
+              value={participants}
+              onChange={(e) => setParticipants(e.target.value)}
+            />
+          </FormField>
+          <FormField label="参加人数" htmlFor="single-item-participant-count" required>
+            <Input
+              id="single-item-participant-count"
+              type="number"
+              min={0}
+              value={participantCount}
+              onChange={(e) => setParticipantCount(e.target.value)}
+            />
+          </FormField>
           <FormField label="内容" htmlFor="single-item-content" required>
             <Textarea id="single-item-content" value={content} onChange={(e) => setContent(e.target.value)} />
           </FormField>
@@ -248,31 +244,26 @@ export function SingleExpenseItemForm({
 
       {fieldSet === 'transport' && (
         <>
-          <div className="flex items-center gap-1">
-            <FormField label="出発地" htmlFor="single-item-departure">
-              <Input
-                id="single-item-departure"
-                value={departure}
-                onChange={(e) => {
-                  setDeparture(e.target.value)
-                  setContent(composeRouteDescription(e.target.value, destination))
-                }}
-              />
-            </FormField>
-            <span aria-hidden="true" className="mt-6 text-muted-foreground">
-              →
-            </span>
-            <FormField label="到着地" htmlFor="single-item-destination">
-              <Input
-                id="single-item-destination"
-                value={destination}
-                onChange={(e) => {
-                  setDestination(e.target.value)
-                  setContent(composeRouteDescription(departure, e.target.value))
-                }}
-              />
-            </FormField>
-          </div>
+          <FormField label="出発地" htmlFor="single-item-departure">
+            <Input
+              id="single-item-departure"
+              value={departure}
+              onChange={(e) => {
+                setDeparture(e.target.value)
+                setContent(composeRouteDescription(e.target.value, destination))
+              }}
+            />
+          </FormField>
+          <FormField label="到着地" htmlFor="single-item-destination">
+            <Input
+              id="single-item-destination"
+              value={destination}
+              onChange={(e) => {
+                setDestination(e.target.value)
+                setContent(composeRouteDescription(departure, e.target.value))
+              }}
+            />
+          </FormField>
           <FormField label="内容" htmlFor="single-item-content" required>
             <Input
               id="single-item-content"
@@ -369,7 +360,11 @@ export function SingleExpenseItemForm({
         </FormField>
       ))}
 
-      <FormField label="領収書(任意)" htmlFor="single-item-receipt-file">
+      <FormField
+        label="領収書(任意)"
+        htmlFor="single-item-receipt-file"
+        description="この場で選択すると、明細の保存と同時に添付されます。後から追加・変更することもできます。"
+      >
         <input
           key={receiptInputKey}
           id="single-item-receipt-file"
@@ -378,7 +373,6 @@ export function SingleExpenseItemForm({
           className="text-sm text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1 file:text-sm file:font-medium file:text-foreground"
           onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
         />
-        <p className="mt-1 text-xs text-muted-foreground">この場で選択すると、明細の保存と同時に添付されます。後から追加・変更することもできます。</p>
       </FormField>
 
       <div>

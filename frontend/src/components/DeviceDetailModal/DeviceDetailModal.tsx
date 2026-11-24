@@ -4,6 +4,7 @@ import { Button } from '../Button/Button'
 import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
+import { FormSection } from '../FormSection/FormSection'
 import { DevicePairingQr } from '../DevicePairingQr/DevicePairingQr'
 import { Checkbox } from '../ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
@@ -242,11 +243,8 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
           <dd className="text-foreground">{device.app_version ?? '-'}</dd>
         </dl>
 
-        <div className="rounded-md border border-border p-3">
-          <p className="mb-3 text-sm font-medium text-foreground">役割</p>
-          {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
-
-          <fieldset className="mb-3">
+        <FormSection title="役割">
+          <fieldset className="mb-4">
             <div className="flex flex-wrap gap-4">
               {EDITABLE_ROLE_TYPES.map((roleType) => (
                 <label key={roleType} className="flex items-center gap-2 text-sm text-foreground">
@@ -257,15 +255,20 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
             </div>
           </fieldset>
 
-          <Button
-            size="sm"
-            isLoading={updateRoles.isPending}
-            disabled={roleTypes.length === 0}
-            onClick={handleSaveRoles}
-          >
-            役割を保存する
-          </Button>
-        </div>
+          {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
+
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="secondary"
+              isLoading={updateRoles.isPending}
+              disabled={roleTypes.length === 0}
+              onClick={handleSaveRoles}
+            >
+              役割を保存
+            </Button>
+          </div>
+        </FormSection>
 
         {(device.status === 'pending_pairing' || device.status === 'active') && (
           <div className="rounded-md border border-border p-3">
@@ -348,11 +351,8 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
           </div>
         )}
 
-        <div className="rounded-md border border-border p-3">
-          <p className="mb-3 text-sm font-medium text-foreground">設定変更</p>
-          {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
-
-          <div className="grid gap-3 sm:grid-cols-2">
+        <FormSection title="設定変更">
+          <div>
             <FormField label="名称" htmlFor="device-detail-name" required>
               <Input id="device-detail-name" value={name} onChange={(e) => setName(e.target.value)} />
             </FormField>
@@ -388,7 +388,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
             </FormField>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-4">
+          <div className="mb-4 flex flex-col gap-2">
             <label className="flex items-center gap-2 text-sm text-foreground">
               <Checkbox checked={allowOffline} onCheckedChange={(v) => setAllowOffline(v === true)} />
               オフライン打刻を許可する
@@ -403,15 +403,16 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
             </label>
           </div>
 
-          <Button className="mt-4" isLoading={updateSettings.isPending} disabled={!name} onClick={handleSave}>
-            保存する
-          </Button>
-        </div>
+          {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
 
-        <div className="rounded-md border border-border p-3">
-          <p className="mb-2 text-sm font-medium text-foreground">スコープ(APIアクセス権)</p>
-          {grantScope.error && <ErrorMessage error={grantScope.error} />}
+          <div className="flex justify-end">
+            <Button variant="secondary" isLoading={updateSettings.isPending} disabled={!name} onClick={handleSave}>
+              設定を保存
+            </Button>
+          </div>
+        </FormSection>
 
+        <FormSection title="スコープ(APIアクセス権)">
           <div className="mb-3 flex flex-wrap gap-1">
             {grantedScopes.length === 0 ? (
               <span className="text-sm text-muted-foreground">付与済みのスコープはありません。</span>
@@ -447,7 +448,8 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
               </Button>
             </div>
           )}
-        </div>
+          {grantScope.error && <ErrorMessage error={grantScope.error} />}
+        </FormSection>
       </DialogContent>
     </Dialog>
   )

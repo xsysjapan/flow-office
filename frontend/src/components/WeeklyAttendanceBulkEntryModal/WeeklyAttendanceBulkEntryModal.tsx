@@ -15,7 +15,7 @@ import {
   SimplePatternFields,
   type SimplePatternState,
 } from '../SimplePatternFields/SimplePatternFields'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
@@ -129,8 +129,6 @@ export function WeeklyAttendanceBulkEntryModal({
 
         <p className="text-sm text-muted-foreground">適用期間: {defaultFrom} 〜 {defaultTo}</p>
 
-        {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
-
         <FormField label="タイムゾーンオフセット" htmlFor="weekly-attendance-offset" required>
           <Input
             id="weekly-attendance-offset"
@@ -151,9 +149,6 @@ export function WeeklyAttendanceBulkEntryModal({
               state={simplePatternState}
               onChange={(patch) => setSimplePatternState((prev) => ({ ...prev, ...patch }))}
             />
-            <p className="mt-3 text-xs text-muted-foreground">
-              内容を確認のうえ確定するため、「次へ(曜日ごとの内容を確認)」を押すと「曜日ごとに設定」タブに展開されます。ここではまだ確定されません。
-            </p>
           </TabsContent>
           <TabsContent value="detailed">
             <WeekdayScheduleFields
@@ -173,7 +168,11 @@ export function WeeklyAttendanceBulkEntryModal({
           />
         </FormField>
 
-        <FormField label="既存の実績がある日の扱い" htmlFor="weekly-attendance-overwrite-mode">
+        <FormField
+          label="既存の実績がある日の扱い"
+          htmlFor="weekly-attendance-overwrite-mode"
+          description="締め済み・承認済みの月に属する日はどちらを選んでも変更されない。"
+        >
           <NativeSelect
             id="weekly-attendance-overwrite-mode"
             value={overwriteMode}
@@ -182,16 +181,28 @@ export function WeeklyAttendanceBulkEntryModal({
             <option value="skip_existing">既存の実績がある日はスキップする(安全)</option>
             <option value="overwrite_existing">既存の実績がある日も上書きする</option>
           </NativeSelect>
-          <p className="mt-1 text-xs text-muted-foreground">締め済み・承認済みの月に属する日はどちらを選んでも変更されない。</p>
         </FormField>
 
-        {activeTab === 'simple' ? (
-          <Button onClick={handleExpandToDetailed}>次へ(曜日ごとの内容を確認)</Button>
-        ) : (
-          <Button isLoading={generatePattern.isPending} disabled={!user} onClick={handleGenerate}>
-            確定する
-          </Button>
+        {activeTab === 'simple' && (
+          <p className="text-xs text-muted-foreground">
+            内容を確認のうえ確定するため、「次へ(曜日ごとの内容を確認)」を押すと「曜日ごとに設定」タブに展開されます。ここではまだ確定されません。
+          </p>
         )}
+
+        {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => handleOpenChange(false)}>
+            キャンセル
+          </Button>
+          {activeTab === 'simple' ? (
+            <Button onClick={handleExpandToDetailed}>次へ(曜日ごとの内容を確認)</Button>
+          ) : (
+            <Button isLoading={generatePattern.isPending} disabled={!user} onClick={handleGenerate}>
+              確定する
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

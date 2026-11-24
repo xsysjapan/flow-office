@@ -120,7 +120,7 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await pickTime(page, "標準開始時刻", "09:00");
   await pickTime(page, "標準終了時刻", "18:00");
   await page.getByLabel("カレンダー").selectOption({ label: calendarName });
-  await page.getByRole("button", { name: "登録する" }).click();
+  await page.getByRole("button", { name: "作成", exact: true }).click();
   // 登録成功でモーダルが閉じ、一覧が再取得されるまで待ってから探す(閉じる途中でページ送りを
   // すると、一覧の再取得と競合して「次のページ」が無効のまま残ることがあるため)。
   await expect(page.getByRole("dialog")).toHaveCount(0);

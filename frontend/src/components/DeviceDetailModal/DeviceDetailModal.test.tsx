@@ -176,7 +176,7 @@ describe('DeviceDetailModal', () => {
     expect(screen.getByRole('checkbox', { name: '入退室管理' })).not.toBeChecked()
 
     await user.click(screen.getByRole('checkbox', { name: '入退室管理' }))
-    await user.click(screen.getByRole('button', { name: '役割を保存する' }))
+    await user.click(screen.getByRole('button', { name: '役割を保存' }))
 
     expect(updateRolesSpy).toHaveBeenCalledWith('device-1', ['attendance_reader', 'access_control'])
   })
@@ -193,7 +193,7 @@ describe('DeviceDetailModal', () => {
     const locationInput = screen.getByLabelText('設置場所')
     await user.clear(locationInput)
     await user.type(locationInput, '本社2階会議室')
-    await user.click(screen.getByRole('button', { name: '保存する' }))
+    await user.click(screen.getByRole('button', { name: '設定を保存' }))
 
     expect(updateSpy).toHaveBeenCalledWith(
       'device-1',

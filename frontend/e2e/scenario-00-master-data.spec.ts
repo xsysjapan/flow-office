@@ -110,7 +110,7 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   await pickTime(page, "標準開始時刻", "09:00");
   await pickTime(page, "標準終了時刻", "18:00");
   await page.getByLabel("カレンダー").selectOption({ label: calendarName });
-  await page.getByRole("button", { name: "登録する" }).click();
+  await page.getByRole("button", { name: "作成", exact: true }).click();
   await expect(page.getByText(workStyleCode)).toBeVisible();
 
   // --- UC-C003: シフト生成(シフトページ) ---

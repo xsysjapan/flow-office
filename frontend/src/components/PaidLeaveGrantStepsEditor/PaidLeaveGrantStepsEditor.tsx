@@ -65,7 +65,7 @@ export function PaidLeaveGrantStepsEditor({ steps, onChange, statutory, fieldErr
   }
 
   return (
-    <div className="mb-4 flex flex-col gap-2">
+    <div className="@container mb-4 flex flex-col gap-2">
       <span className="text-sm font-medium text-foreground">付与日数</span>
 
       <Tabs value={activeCategory} onValueChange={(value) => setActiveCategory(value as PaidLeaveGrantCategory)}>
@@ -135,7 +135,7 @@ export function PaidLeaveGrantStepsEditor({ steps, onChange, statutory, fieldErr
 
       <div className="mt-2 flex flex-col gap-1">
         <p className="text-xs text-muted-foreground">追加先: {GRANT_CATEGORY_LABELS[activeCategory]}</p>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-end">
           <FormField label="継続勤務(か月)" htmlFor="step-months">
             <Input id="step-months" type="number" value={monthsInput} onChange={(e) => setMonthsInput(e.target.value)} />
           </FormField>
