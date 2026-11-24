@@ -51,9 +51,26 @@ Projector化しない(`ApprovePaidLeaveRequestHandler`のように、承認1件�
 該当)。この場合は正データとしてCommandHandlerが直接読み書きする側に留める。
 詳細は`docs/03-architecture.md`「集約ルート自体をProjector化する場合は主キーをUUIDにする」参照。
 
+## 作り直しを決定的にするための規則
+
+`ReadModelRebuilder`は外部キーの検査を切って全表を空にし、全Projectorを再生する。ライブと同じ結果に
+ならないProjectorは作り直しで差分(や孤児行)を生むため、次を守る
+(根拠: 変更セット`20261123-rebuild-drift-fixes`)。
+
+- **`cascadeOnDelete`・`nullOnDelete`に頼らない**: 作り直しの間は外部キーの連鎖が働かない。自分の表の行は、
+  削除イベントで明示的に消す。子の表を書くProjectorは親の削除イベントを購読して自分の行を消し、
+  親子を同じProjectorが書くなら子→親の順に消す(複数Projectorの処理順は問わない)。
+  `cascadeOnDelete`の定義は残してよい。
+- **Projectorで乱数のID(`Str::uuid()`等)を作らない**: イベントの内容から決まるID(UUIDv5。名前空間は定数にして固定)にする。
+- **自動採番のIDをイベントに記録しない**: 作り直しで採番が変わるため。他の表から自動採番のIDを参照する場合は、
+  `ReadModelFingerprinter`が参照先の内容で比較すること(比較の対象外の前提)を理解して使う。
+- **再生の時点の設定値(`SystemSetting::current()`等)を使わない**: 必要な値はイベントに持たせる。
+
 ## チェックリスト (実装後)
 
 - [ ] Projectorはイベントに対して冪等
+- [ ] 削除イベントで、自分の表の行(子を含む)を明示的に消した(`cascadeOnDelete`頼みにしていない)
+- [ ] Projectorで乱数のIDを作らず、自動採番のIDをイベントに記録せず、再生の時点の設定値を使っていない
 - [ ] Projection Tableを空にして全イベント再生しても同じ結果になる
 - [ ] Controller/UIはProjectionだけを参照している
 - [ ] 真偽値の列は `boolean` `NOT NULL`・既定値あり(三値が必要なら nullable にし、理由を `docs/16-database-schema.md` に書く)で、modelの casts に `boolean` を書いた

@@ -108,7 +108,11 @@
 - `holiday_calendar_source.disabled` (祝日iCalendarソースの無効化)
 - `calendar_bulk_operation.applied` (複数従業員予定の一括操作の確定適用。
   `operation_type`〔`calendar_apply`/`rotation_generate`/`bulk_edit`〕を含む)
-- `calendar_bulk_operation.reverted` (一括操作の取消。除外件数を含む)
+- `calendar_bulk_operation.reverted` (一括操作の取消。除外件数を含む。
+  `revertedTargetIds`・`excludedTargetIds`は、決定的ID〔操作ID+適用イベントの`targets`内の
+  0始まりの位置のUUIDv5。`CalendarBulkOperationProjector::TARGET_ID_NAMESPACE`〕を指し、
+  ReadModelを作り直しても変わらない。過去分は補正コマンド
+  `events:fix-calendar-bulk-operation-target-ids`で書き換えた。変更セット`20261123-rebuild-drift-fixes`)
 - `work_style.created`
 - `work_style.default_changed` (会社のデフォルト働き方の切り替え。既存デフォルトの解除も
   同一イベントの`previous_default_work_style_id`に記録する。初回オンボーディングで

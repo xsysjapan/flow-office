@@ -93,6 +93,7 @@ ReadModel(Projection)だけを書き換える補正は、どんな場合も行�
   変更セットに書く。
 - **前例**: `events:rename-boolean-properties`(変更セット`20261123-boolean-column-naming`)。イベント項目名の改名を、idと発生順を保ったまま行ごとに書き換える。
   補えない行・旧新両方の行がある場合は止め、旧キーが残っている間は`read-models:rebuild`・`projections:rebuild`を検出器で拒否する。
+- **前例(事実の出所がライブの行しかない例外)**: `events:fix-calendar-bulk-operation-target-ids`(変更セット`20261123-rebuild-drift-fixes`)。取消イベントの対象IDを、ライブの対象行と適用イベントの突き合わせで決定的IDに書き換える。
 
 ## ReadModelの作り直し(Projectorの修正の反映)
 

@@ -281,7 +281,33 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 - 補正ログ`stored_event_corrections`とmetaの`history-normalization.source_event_id`は、新しいidへ付け替えられる。
 - 戻す場合はメンテナンス中に`stored_events`を手順3のバックアップ表から戻し、旧コードを配備して`read-models:rebuild`する。
 
-### 3.7 真偽値の命名統一(変更セット `20261123-boolean-column-naming`)のリリース手順
+### 3.7 ReadModelの作り直しのずれの修正・中間版(変更セット `20261123-rebuild-drift-fixes`)のリリース手順
+
+ReadModelの作り直しが、ライブの内容と一致しない不具合(削除した行の子行の残り・カレンダー一括操作の対象行IDが作り直しのたびに変わる・自動採番IDを参照する列の比較)を直すリリース。
+命名統一(3.8)より**先に**、改名前のコード(`cd1d40ce`)に本変更セットのコードを載せた「中間版」として配備する(必須)。
+理由: 3.8の改名はずれがあると検証に失敗して戻る。一方、改名後のコードで補正コマンドを実行しても、旧項目名のイベントが残っている間は作り直しが拒否される。
+過去の`calendar_bulk_operation.reverted`のID(`revertedTargetIds`・`excludedTargetIds`)は、運用コマンド`events:fix-calendar-bulk-operation-target-ids`で決定的IDへ書き換える(`data-correction`)。
+
+止めるもの: 3.8と同じ(`down`・cron・キュー・MCPの受付)。以下はすべてメンテナンス中に行う。
+
+実行の順:
+
+1. 止める。
+2. 中間版を配備する。
+3. `php artisan events:fix-calendar-bulk-operation-target-ids`(`--execute`を付けない。何も変更しない)で試し実行する。
+   書き換える件数・対応表(旧ID→新ID)・対応が付かないIDを確かめる。対応が付かないIDがあれば止めて人が確認する。
+   結果をユーザーに示し、本実行の許可を得る。
+4. `php artisan events:fix-calendar-bulk-operation-target-ids --execute`。
+   バックアップ表の作成 → 書き換え → 補正ログの出力 → ReadModelの作り直し → 検証を1つの手順で行い、検証に失敗すれば戻る。
+   この手順は作り直しを含むので、別に`read-models:rebuild`は実行しない。
+5. `php artisan read-models:rebuild --dry-run`で、変更のあるテーブルが0件(差分0)であることを確かめる。0件でなければ`up`せず、ずれの表から原因を調べる。
+6. `php artisan up`、cron・キュー・MCPの受付を再開する。
+
+- 本番の実行には、試し実行の結果を示したうえでユーザーの明示的な許可が要る。許可の日時と内容は、変更セット`20261123-rebuild-drift-fixes`の「レビュー履歴」に記録する。
+- 未補正の取消イベント(IDがUUIDv5の再計算と一致しないもの)が残っている間は、`read-models:rebuild`・`projections:rebuild`・管理画面の作り直しは拒否される(補正の前に作り直すと旧IDの行が消え、対応表を作れなくなるため)。
+- 冪等: 補正済みなら2回目の試し実行は「対象なし」になる。
+
+### 3.8 真偽値の命名統一(変更セット `20261123-boolean-column-naming`)のリリース手順
 
 列・イベント項目の真偽値の名前を命名ルール(`api-design`スキルの「命名」)に合わせ、`paid_leave_usages.confirmed` を削除するリリース。
 列の改名(migration)と、`stored_events` の旧項目名の書き換え(運用コマンド`events:rename-boolean-properties`)を1回のメンテナンス窓で行う。
@@ -295,14 +321,15 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 - キュー(空になるまで処理してから止める。旧項目名のイベントを読むジョブを残さない)
 - MCPサーバーの受付
 
-事前条件: 旧項目名のイベントを読む移行(`leave:rebuild-event-store`等)が未実行の環境では、それらを**旧コードで先に実行してから**本変更を配備する。
+事前条件: 旧項目名のイベントを読む移行(`leave:rebuild-event-store`等)が未実行の環境では、それらを**中間版で先に実行してから**本変更を配備する。
 
 実行の順:
 
 0. リハーサル(本番の複製DBで、この手順をすべて行う): 所要時間・`max_binlog_cache_size`・ピークメモリを測る。試し実行で「補えない行」が出ないことを確かめる。
-1. 旧コードで基準値を取る(配備の前。新しいコードは旧項目名のイベントを読めないため、旧コードで行う)。
+1. 中間版で基準値を取る(配備の前。新しいコードは旧項目名のイベントを読めないため、中間版で行う)。
    - 本番のDB全体と全ReadModelのテーブルのバックアップを取る(戻し方に使う)。
    - `php artisan read-models:rebuild --dry-run`で、変更のあるテーブルが0件であることを確かめる(既存のずれが0であること)。
+     0件でなければ、ずれの表(テーブルごとの差分)を確認し、原因を特定するまで手順2以降に進まない(ずれたまま改名の`--execute`を実行すると検証に失敗して戻る)。
    - 下の「基準値のSQL」(旧列名)を実行し、結果を控える(基準値)。
 2. 止める: `down`、cron(`schedule:run`)、キュー、端末・API・MCPの受付。
 3. frontendとbackendを同じ窓で配備する(管理画面の旧画面が旧名で送ると、新しいbackendは422を返す。論点10)。
@@ -325,12 +352,12 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
      端末アプリが使う打刻の応答に`is_offline`と`offline`の両方が返ることを、1件のテスト打刻で確かめる。
 
 - 戻し方(検証が失敗して本実行が戻った場合は、stored_events・ReadModelは変わっていない。原因を直して手順4からやり直すか、下の手順で戻す):
-  配備の後に戻す場合は、受付を止めたまま次の順に行う。新しいコードは旧項目名の履歴を読めず、旧コードは新項目名の履歴を読めないため、表とコードは同時に戻す。
+  配備の後に戻す場合は、受付を止めたまま次の順に行う。新しいコードは旧項目名の履歴を読めず、中間版は新項目名の履歴を読めないため、表とコードは同時に戻す。
   1. `stored_events`をバックアップ表から戻す: `RENAME TABLE stored_events TO stored_events_after_rename_YYYYMMDDHHMMSS, stored_events_backup_YYYYMMDDHHMMSS TO stored_events;`
      戻す前に`stored_events`の件数がバックアップ表と同じであることを確かめる(メンテナンス中のため同じはず。違えばバックアップ以降に書かれた行を失うので止める)。
   2. `php artisan migrate:rollback --step=1`(列を旧名に戻す。downで`paid_leave_usages.confirmed`を作り直し、`UPDATE paid_leave_usages SET confirmed = is_confirmed`で値を入れる)。
-  3. 旧コードを frontend と backend の両方で配備する。
-  4. 旧コードで`php artisan read-models:rebuild`を実行し、手順1の基準値(旧列名)と一致することを確かめる。
+  3. 中間版を frontend と backend の両方で配備する。
+  4. 中間版で`php artisan read-models:rebuild`を実行し、手順1の基準値(旧列名)と一致することを確かめる。
   5. 受付を再開する(`up`、cron・キュー・受付)。
   この戻し方はバックアップ以降に書かれたイベントを失うため、必ずメンテナンス中に行う。
 - 本番で実行する前に、リハーサルの結果と試し実行(手順4)の件数・例をユーザーに示して許可を取る(`data-correction`スキル)。
@@ -360,7 +387,7 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 | `asset_number_rules` | `enabled` | `is_active` |
 | `system_settings` | `prohibit_self_privileged_role_assignment` | `prohibits_self_privileged_role_assignment` |
 
-基準値のSQL(旧列名。手順1で旧コードの配備前のDBに対して実行する。結果は`列 / 値 / 件数`の行の一覧になる):
+基準値のSQL(旧列名。手順1で中間版の配備前のDBに対して実行する。結果は`列 / 値 / 件数`の行の一覧になる):
 
 ```sql
 SELECT 'paid_leave_usages.is_confirmed' AS c, is_confirmed AS v, COUNT(*) AS n FROM paid_leave_usages GROUP BY is_confirmed
