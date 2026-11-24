@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -175,5 +175,31 @@ describe("AdminLayout", () => {
     expect(
       screen.queryByRole("dialog", { name: "管理メニュー" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows the 管理メニュー heading only once inside the mobile sheet", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+
+    await user.click(
+      screen.getByRole("button", { name: "管理メニューを開く" }),
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getAllByText("管理メニュー")).toHaveLength(1);
+  });
+
+  it("makes the sheet title a link to the 管理メニュー top page", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+
+    await user.click(
+      screen.getByRole("button", { name: "管理メニューを開く" }),
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "管理メニュー" });
+    expect(
+      within(dialog).getByRole("link", { name: "管理メニュー" }),
+    ).toHaveAttribute("href", "/admin");
   });
 });

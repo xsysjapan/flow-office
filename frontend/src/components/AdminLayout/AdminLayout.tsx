@@ -18,9 +18,14 @@ import { adminNavGroups, canAccessAdminItem } from "./adminNavGroups";
 type NavigationProps = {
   groups: typeof adminNavGroups;
   onNavigate?: () => void;
+  showHeading?: boolean;
 };
 
-function AdminNavigation({ groups, onNavigate }: NavigationProps) {
+function AdminNavigation({
+  groups,
+  onNavigate,
+  showHeading = true,
+}: NavigationProps) {
   const { pathname } = useLocation();
   const activePaths = findActiveNavPath(pathname, [
     "/admin",
@@ -28,13 +33,15 @@ function AdminNavigation({ groups, onNavigate }: NavigationProps) {
   ], ["/admin"]);
   return (
     <nav className="flex flex-col gap-5" aria-label="管理メニュー">
-      <Link
-        to="/admin"
-        className="text-sm font-semibold text-foreground"
-        onClick={onNavigate}
-      >
-        管理メニュー
-      </Link>
+      {showHeading && (
+        <Link
+          to="/admin"
+          className="text-sm font-semibold text-foreground"
+          onClick={onNavigate}
+        >
+          管理メニュー
+        </Link>
+      )}
       {groups.map((group) => (
         <div key={group.label} className="flex flex-col gap-1.5">
           <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -96,7 +103,11 @@ export function AdminLayout() {
           </SheetTrigger>
           <SheetContent className="overflow-y-auto">
             <SheetHeader>
-              <SheetTitle>管理メニュー</SheetTitle>
+              <SheetTitle asChild>
+                <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>
+                  管理メニュー
+                </Link>
+              </SheetTitle>
               <SheetDescription>
                 管理する項目を選択してください。
               </SheetDescription>
@@ -104,6 +115,7 @@ export function AdminLayout() {
             <AdminNavigation
               groups={visibleGroups}
               onNavigate={() => setMobileMenuOpen(false)}
+              showHeading={false}
             />
           </SheetContent>
         </Sheet>
