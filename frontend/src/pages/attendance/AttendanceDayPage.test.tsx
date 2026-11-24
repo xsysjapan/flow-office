@@ -211,7 +211,7 @@ describe('AttendanceDayPage', () => {
     renderPage([recordedDay])
 
     await userEvent.click(await screen.findByRole('button', { name: '編集' }))
-    await userEvent.type(screen.getByLabelText('修正理由(必須)'), '打刻ミスの修正')
+    await userEvent.type(screen.getByLabelText('修正理由'), '打刻ミスの修正')
     await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
@@ -424,7 +424,7 @@ describe('AttendanceDayPage', () => {
 
     expect(await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')).toBeInTheDocument()
 
-    await userEvent.type(screen.getByLabelText('作成理由(必須)'), '実績の入力漏れ')
+    await userEvent.type(screen.getByLabelText('作成理由'), '実績の入力漏れ')
     await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
@@ -499,7 +499,7 @@ describe('AttendanceDayPage', () => {
 
     expect(await screen.findByText(/休憩が60分未満です/)).toBeInTheDocument()
 
-    await userEvent.type(screen.getByLabelText('作成理由(必須)'), '休憩なしで退勤した')
+    await userEvent.type(screen.getByLabelText('作成理由'), '休憩なしで退勤した')
     expect(screen.getByRole('button', { name: '作成' })).not.toBeDisabled()
   })
 
@@ -515,7 +515,7 @@ describe('AttendanceDayPage', () => {
     const overtimeInput = screen.getByLabelText('法定内残業時間(分)')
     await userEvent.clear(overtimeInput)
     await userEvent.type(overtimeInput, '30')
-    await userEvent.type(screen.getByLabelText('補正理由(必須)'), '休憩の取り方を考慮して補正')
+    await userEvent.type(screen.getByLabelText('補正理由'), '休憩の取り方を考慮して補正')
     await userEvent.click(screen.getByRole('button', { name: '補正を保存' }))
 
     await waitFor(() =>
@@ -538,7 +538,7 @@ describe('AttendanceDayPage', () => {
     const payrollInput = screen.getByLabelText('給与計算上の労働時間(分)(みなし時間等)')
     await userEvent.clear(payrollInput)
     await userEvent.type(payrollInput, '540')
-    await userEvent.type(screen.getByLabelText('補正理由(必須)'), 'みなし時間の個別補正')
+    await userEvent.type(screen.getByLabelText('補正理由'), 'みなし時間の個別補正')
     await userEvent.click(screen.getByRole('button', { name: '補正を保存' }))
 
     await waitFor(() =>
@@ -584,7 +584,7 @@ describe('AttendanceDayPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '遅刻・早退を追加' }))
     await pickDateTime(userEvent.setup(), '遅刻・早退開始(日付)', '遅刻・早退開始(時刻)', `${date}T09:00`)
     await pickDateTime(userEvent.setup(), '遅刻・早退終了(日付)', '遅刻・早退終了(時刻)', `${date}T11:00`)
-    await userEvent.type(screen.getByLabelText('作成理由(必須)'), '午前は欠勤')
+    await userEvent.type(screen.getByLabelText('作成理由'), '午前は欠勤')
     await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
@@ -971,7 +971,7 @@ describe('AttendanceDayPage', () => {
       await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
       await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
       await userEvent.type(screen.getByLabelText('休暇の理由'), '私用のため')
-      await userEvent.type(screen.getByLabelText('修正理由(必須)'), '休暇を設定')
+      await userEvent.type(screen.getByLabelText('修正理由'), '休暇を設定')
       await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
       await waitFor(() =>
@@ -1032,7 +1032,7 @@ describe('AttendanceDayPage', () => {
       expect(screen.getByLabelText('休暇')).toHaveValue('paid')
 
       await userEvent.selectOptions(screen.getByLabelText('休暇'), '休暇なし')
-      await userEvent.type(screen.getByLabelText('修正理由(必須)'), '出勤できることになったので取消')
+      await userEvent.type(screen.getByLabelText('修正理由'), '出勤できることになったので取消')
       await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
       await waitFor(() => expect(paidLeaveApi.cancelPaidLeaveRequest).toHaveBeenCalledWith(approvedPaidLeaveRequest.id))

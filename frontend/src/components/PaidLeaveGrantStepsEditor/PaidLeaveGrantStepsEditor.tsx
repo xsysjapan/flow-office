@@ -69,7 +69,7 @@ export function PaidLeaveGrantStepsEditor({ steps, onChange, statutory, fieldErr
       <span className="text-sm font-medium text-foreground">付与日数</span>
 
       <Tabs value={activeCategory} onValueChange={(value) => setActiveCategory(value as PaidLeaveGrantCategory)}>
-        <TabsList className="flex-wrap">
+        <TabsList className="h-auto max-w-full flex-wrap">
           {GRANT_CATEGORIES.map((category) => (
             <TabsTrigger key={category} value={category}>
               {GRANT_CATEGORY_LABELS[category]}
@@ -94,17 +94,21 @@ export function PaidLeaveGrantStepsEditor({ steps, onChange, statutory, fieldErr
                     return (
                       <li
                         key={`${step.grant_category}-${step.continuous_service_months}`}
-                        className="flex flex-wrap items-center gap-2 text-sm"
+                        className="flex flex-wrap items-end gap-2 text-sm"
                       >
-                        <span className="text-foreground">継続勤務{step.continuous_service_months}か月</span>
-                        <Input
-                          type="number"
-                          aria-label={`${GRANT_CATEGORY_LABELS[category]} 継続勤務${step.continuous_service_months}か月の付与日数`}
-                          className="w-24"
-                          value={step.grant_days}
-                          onChange={(e) => handleChangeDays(index, Number(e.target.value))}
-                        />
-                        <span className="text-foreground">日</span>
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-foreground">継続勤務{step.continuous_service_months}か月</span>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              aria-label={`${GRANT_CATEGORY_LABELS[category]} 継続勤務${step.continuous_service_months}か月の付与日数`}
+                              className="w-24"
+                              value={step.grant_days}
+                              onChange={(e) => handleChangeDays(index, Number(e.target.value))}
+                            />
+                            <span className="text-foreground">日</span>
+                          </div>
+                        </div>
                         {minimum !== undefined && (
                           <span className="text-xs text-muted-foreground">
                             {`(この継続勤務月数の法定最低日数: ${minimum}日)`}
@@ -135,11 +139,11 @@ export function PaidLeaveGrantStepsEditor({ steps, onChange, statutory, fieldErr
 
       <div className="mt-2 flex flex-col gap-1">
         <p className="text-xs text-muted-foreground">追加先: {GRANT_CATEGORY_LABELS[activeCategory]}</p>
-        <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-end">
-          <FormField label="継続勤務(か月)" htmlFor="step-months">
+        <div className="flex flex-wrap items-end gap-3">
+          <FormField label="継続勤務(か月)" htmlFor="step-months" className="mb-0">
             <Input id="step-months" type="number" value={monthsInput} onChange={(e) => setMonthsInput(e.target.value)} />
           </FormField>
-          <FormField label="付与日数" htmlFor="step-days">
+          <FormField label="付与日数" htmlFor="step-days" className="mb-0">
             <Input id="step-days" type="number" value={daysInput} onChange={(e) => setDaysInput(e.target.value)} />
           </FormField>
           <Button variant="secondary" disabled={addDisabledReason !== undefined} onClick={handleAdd}>

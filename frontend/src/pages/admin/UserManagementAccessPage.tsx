@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useForwardState, useSearchParamsKeepingBackState } from "../../navigation/backState";
+import {
+  useForwardState,
+  useSearchParamsKeepingBackState,
+} from "../../navigation/backState";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
@@ -284,7 +287,10 @@ export function UserManagementAccessPage({
                 }
                 action={
                   groupTypeFilter ? (
-                    <Button variant="secondary" onClick={() => setGroupTypeFilter("")}>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setGroupTypeFilter("")}
+                    >
                       検索条件をクリア
                     </Button>
                   ) : (
@@ -297,53 +303,57 @@ export function UserManagementAccessPage({
                 }
               />
             ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>種別</TableHead>
-                  <TableHead className="whitespace-normal min-w-48">名称</TableHead>
-                  <TableHead>親グループ</TableHead>
-                  <TableHead>メンバー</TableHead>
-                  <TableHead>状態</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleGroups?.map((g) => (
-                  <ClickableTableRow
-                    key={g.id}
-                    onRowClick={() =>
-                      navigate(`/admin/groups/${g.id}`, { state: forwardState })
-                    }
-                    rowLabel={`${g.name}の詳細を開く`}
-                  >
-                    <TableCell>{g.type.name}</TableCell>
-                    <TableCell className="whitespace-normal min-w-48">
-                      <Link
-                        className="font-medium text-foreground hover:text-primary hover:underline"
-                        to={`/admin/groups/${g.id}`}
-                        state={forwardState}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {g.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {groups.data?.find(
-                        (parent) => parent.id === g.parent_group_id,
-                      )?.name ?? "親なし"}
-                    </TableCell>
-                    <TableCell>{g.memberships_count}人</TableCell>
-                    <TableCell>
-                      <Badge
-                        tone={g.status === "active" ? "success" : "neutral"}
-                      >
-                        {g.status}
-                      </Badge>
-                    </TableCell>
-                  </ClickableTableRow>
-                ))}
-              </TableBody>
-            </Table>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>種別</TableHead>
+                    <TableHead className="whitespace-normal min-w-48">
+                      名称
+                    </TableHead>
+                    <TableHead>親グループ</TableHead>
+                    <TableHead>メンバー</TableHead>
+                    <TableHead>状態</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleGroups?.map((g) => (
+                    <ClickableTableRow
+                      key={g.id}
+                      onRowClick={() =>
+                        navigate(`/admin/groups/${g.id}`, {
+                          state: forwardState,
+                        })
+                      }
+                      rowLabel={`${g.name}の詳細を開く`}
+                    >
+                      <TableCell>{g.type.name}</TableCell>
+                      <TableCell className="whitespace-normal min-w-48">
+                        <Link
+                          className="font-medium text-foreground hover:text-primary hover:underline"
+                          to={`/admin/groups/${g.id}`}
+                          state={forwardState}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {g.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        {groups.data?.find(
+                          (parent) => parent.id === g.parent_group_id,
+                        )?.name ?? "親なし"}
+                      </TableCell>
+                      <TableCell>{g.memberships_count}人</TableCell>
+                      <TableCell>
+                        <Badge
+                          tone={g.status === "active" ? "success" : "neutral"}
+                        >
+                          {g.status}
+                        </Badge>
+                      </TableCell>
+                    </ClickableTableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </Card>
         </>
@@ -369,7 +379,10 @@ export function UserManagementAccessPage({
                   placeholder="Provider"
                   value={identityForm.provider}
                   onChange={(e) =>
-                    setIdentityForm({ ...identityForm, provider: e.target.value })
+                    setIdentityForm({
+                      ...identityForm,
+                      provider: e.target.value,
+                    })
                   }
                 />
               </FormField>
@@ -399,7 +412,10 @@ export function UserManagementAccessPage({
                   }
                 />
               </FormField>
-              <FormField label="外部コード" htmlFor="identity-form-external-code">
+              <FormField
+                label="外部コード"
+                htmlFor="identity-form-external-code"
+              >
                 <Input
                   id="identity-form-external-code"
                   placeholder="外部コード"
@@ -430,7 +446,9 @@ export function UserManagementAccessPage({
                   対象ユーザー・Provider・Subject IDを入力してください。
                 </p>
               )}
-              {linkIdentity.error && <ErrorMessage error={linkIdentity.error} />}
+              {linkIdentity.error && (
+                <ErrorMessage error={linkIdentity.error} />
+              )}
               <FormActions>
                 <Button
                   disabled={
@@ -450,7 +468,9 @@ export function UserManagementAccessPage({
                           email: identityForm.email || null,
                         },
                       },
-                      { onSuccess: () => notify.success("外部IDを連携しました") },
+                      {
+                        onSuccess: () => notify.success("外部IDを連携しました"),
+                      },
                     )
                   }
                 >
@@ -459,7 +479,8 @@ export function UserManagementAccessPage({
               </FormActions>
             </FormLayout>
             <div className="mt-3 flex flex-wrap gap-2">
-              {(identities.data?.filter((i) => i.status === "active") ?? []).length === 0 && (
+              {(identities.data?.filter((i) => i.status === "active") ?? [])
+                .length === 0 && (
                 <EmptyState
                   title="連携済みの外部IDはありません。"
                   description="上のフォームから外部IDを紐付けられます。"
@@ -488,7 +509,9 @@ export function UserManagementAccessPage({
                       onConfirm={() =>
                         unlinkIdentity
                           .mutateAsync(i.id)
-                          .then(() => notify.success("外部ID連携を解除しました"))
+                          .then(() =>
+                            notify.success("外部ID連携を解除しました"),
+                          )
                       }
                     />
                   </span>
@@ -508,7 +531,8 @@ export function UserManagementAccessPage({
                         {
                           fieldKey: a.field_key,
                           authorityType: e.target.value as
-                            "LOCAL" | "EXTERNAL_HR",
+                            | "LOCAL"
+                            | "EXTERNAL_HR",
                           provider:
                             e.target.value === "EXTERNAL_HR"
                               ? "EXTERNAL_HR"
@@ -516,7 +540,9 @@ export function UserManagementAccessPage({
                         },
                         {
                           onSuccess: () =>
-                            notify.success(`${a.field_key}の管理元を変更しました`),
+                            notify.success(
+                              `${a.field_key}の管理元を変更しました`,
+                            ),
                         },
                       )
                     }
@@ -550,7 +576,10 @@ export function UserManagementAccessPage({
                 if (!open) closeChangeDialog();
               }}
             >
-              <DialogContent size="large" className="sm:max-h-[90vh] sm:max-w-3xl">
+              <DialogContent
+                size="large"
+                className="sm:max-h-[90vh] sm:max-w-3xl"
+              >
                 <DialogHeader>
                   <DialogTitle>
                     {editingChangeSet ? "所属変更予約を変更" : "変更予約作成"}
@@ -559,7 +588,7 @@ export function UserManagementAccessPage({
                     対象ユーザー、適用日時、変更内容を指定してください。複数の変更を一度に予約できます。
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-3 md:grid-cols-2">
+                <div>
                   <FormField
                     label="対象ユーザー"
                     htmlFor="membership-change-user"
@@ -651,7 +680,7 @@ export function UserManagementAccessPage({
                       }
                     />
                   </FormField>
-                  <div className="flex items-end pb-4">
+                  <div className="mb-4">
                     <Button
                       variant="secondary"
                       disabled={!selectedFrom && !selectedTo}
@@ -660,32 +689,34 @@ export function UserManagementAccessPage({
                       明細に追加
                     </Button>
                   </div>
-                </div>
-                <div className="my-3 rounded border p-3">
-                  <div className="mb-2 text-sm font-medium">
-                    変更明細（{changeItems.length}件）
-                  </div>
-                  {changeItems.map((item, index) => (
-                    <div
-                      className="flex flex-wrap items-center justify-between gap-2 text-sm"
-                      key={`${item.operation}-${index}`}
-                    >
-                      <span>
-                        {membershipChangeDescription(item, groups.data)}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() =>
-                          setChangeItems((items) =>
-                            items.filter((_, itemIndex) => itemIndex !== index),
-                          )
-                        }
-                      >
-                        削除
-                      </Button>
+                  <div className="mb-4 rounded border p-3">
+                    <div className="mb-2 text-sm font-medium">
+                      変更明細（{changeItems.length}件）
                     </div>
-                  ))}
+                    {changeItems.map((item, index) => (
+                      <div
+                        className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                        key={`${item.operation}-${index}`}
+                      >
+                        <span>
+                          {membershipChangeDescription(item, groups.data)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            setChangeItems((items) =>
+                              items.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            )
+                          }
+                        >
+                          削除
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 {(scheduleChange.error ||
                   createDraft.error ||
@@ -759,7 +790,9 @@ export function UserManagementAccessPage({
                             {
                               onSuccess: () => {
                                 closeChangeDialog();
-                                notify.success("所属変更の下書きを保存しました");
+                                notify.success(
+                                  "所属変更の下書きを保存しました",
+                                );
                               },
                             },
                           )
@@ -802,124 +835,136 @@ export function UserManagementAccessPage({
               </DialogContent>
             </Dialog>
             {(scheduleExisting.error || applyChange.error) && (
-              <ErrorMessage error={scheduleExisting.error ?? applyChange.error} />
+              <ErrorMessage
+                error={scheduleExisting.error ?? applyChange.error}
+              />
             )}
             {changeSets.data?.length === 0 ? (
               <EmptyState
                 title="所属変更はまだありません。"
                 description="「新規作成」から所属変更を即時または日時指定で予約できます。"
-                action={<Button onClick={openCreateChangeDialog}>新規作成</Button>}
+                action={
+                  <Button onClick={openCreateChangeDialog}>新規作成</Button>
+                }
               />
             ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>適用日時</TableHead>
-                  <TableHead>対象</TableHead>
-                  <TableHead>状態</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {changeSets.data?.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(s.effective_at).toLocaleString()}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {s.user_name ??
-                        users.data?.data.find((u) => u.id === s.user_id)
-                          ?.name ??
-                        s.user_id}
-                      <div className="mt-1 text-sm font-medium text-foreground">
-                        {s.items.map((item, index) => (
-                          <div key={`${item.operation}-${index}`}>
-                            {membershipChangeDescription(item, groups.data)}
-                          </div>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge tone={s.status === "applied" ? "success" : "info"}>
-                        {membershipChangeStatusLabel(s.status)}
-                      </Badge>
-                      {s.failure_reason && (
-                        <div className="text-xs text-destructive">
-                          {s.failure_reason}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {["draft", "scheduled"].includes(s.status) && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => openEditChangeDialog(s)}
-                        >
-                          変更
-                        </Button>
-                      )}
-                      {s.status === "draft" && (
-                        <span className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              scheduleExisting.mutate(s.id, {
-                                onSuccess: () => notify.success("所属変更を予約しました"),
-                              })
-                            }
-                          >
-                            予約確定
-                          </Button>
-                          <ConfirmActionDialog
-                            triggerLabel="取消"
-                            title="所属変更を取消"
-                            description="この所属変更の下書きを取り消します。"
-                            confirmLabel="取り消す"
-                            isPending={cancelChange.isPending}
-                            error={cancelChange.error}
-                            onConfirm={() =>
-                              cancelChange
-                                .mutateAsync(s.id)
-                                .then(() => notify.success("所属変更を取り消しました"))
-                            }
-                          />
-                        </span>
-                      )}
-                      {s.status === "scheduled" && (
-                        <span className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              applyChange.mutate(s.id, {
-                                onSuccess: () => notify.success("所属変更を適用しました"),
-                              })
-                            }
-                          >
-                            適用
-                          </Button>
-                          <ConfirmActionDialog
-                            triggerLabel="取消"
-                            title="所属変更を取消"
-                            description="予約済みの所属変更を取り消します。"
-                            confirmLabel="取り消す"
-                            isPending={cancelChange.isPending}
-                            error={cancelChange.error}
-                            onConfirm={() =>
-                              cancelChange
-                                .mutateAsync(s.id)
-                                .then(() => notify.success("所属変更を取り消しました"))
-                            }
-                          />
-                        </span>
-                      )}
-                    </TableCell>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>適用日時</TableHead>
+                    <TableHead>対象</TableHead>
+                    <TableHead>状態</TableHead>
+                    <TableHead>操作</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {changeSets.data?.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(s.effective_at).toLocaleString()}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {s.user_name ??
+                          users.data?.data.find((u) => u.id === s.user_id)
+                            ?.name ??
+                          s.user_id}
+                        <div className="mt-1 text-sm font-medium text-foreground">
+                          {s.items.map((item, index) => (
+                            <div key={`${item.operation}-${index}`}>
+                              {membershipChangeDescription(item, groups.data)}
+                            </div>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          tone={s.status === "applied" ? "success" : "info"}
+                        >
+                          {membershipChangeStatusLabel(s.status)}
+                        </Badge>
+                        {s.failure_reason && (
+                          <div className="text-xs text-destructive">
+                            {s.failure_reason}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {["draft", "scheduled"].includes(s.status) && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => openEditChangeDialog(s)}
+                          >
+                            変更
+                          </Button>
+                        )}
+                        {s.status === "draft" && (
+                          <span className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                scheduleExisting.mutate(s.id, {
+                                  onSuccess: () =>
+                                    notify.success("所属変更を予約しました"),
+                                })
+                              }
+                            >
+                              予約確定
+                            </Button>
+                            <ConfirmActionDialog
+                              triggerLabel="取消"
+                              title="所属変更を取消"
+                              description="この所属変更の下書きを取り消します。"
+                              confirmLabel="取り消す"
+                              isPending={cancelChange.isPending}
+                              error={cancelChange.error}
+                              onConfirm={() =>
+                                cancelChange
+                                  .mutateAsync(s.id)
+                                  .then(() =>
+                                    notify.success("所属変更を取り消しました"),
+                                  )
+                              }
+                            />
+                          </span>
+                        )}
+                        {s.status === "scheduled" && (
+                          <span className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                applyChange.mutate(s.id, {
+                                  onSuccess: () =>
+                                    notify.success("所属変更を適用しました"),
+                                })
+                              }
+                            >
+                              適用
+                            </Button>
+                            <ConfirmActionDialog
+                              triggerLabel="取消"
+                              title="所属変更を取消"
+                              description="予約済みの所属変更を取り消します。"
+                              confirmLabel="取り消す"
+                              isPending={cancelChange.isPending}
+                              error={cancelChange.error}
+                              onConfirm={() =>
+                                cancelChange
+                                  .mutateAsync(s.id)
+                                  .then(() =>
+                                    notify.success("所属変更を取り消しました"),
+                                  )
+                              }
+                            />
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </Card>
         </>
@@ -991,10 +1036,7 @@ export function UserManagementAccessPage({
               </div>
               <p className="mt-2">
                 上記以外の項目(氏名など)を外部HRから取り込みたい場合は、先に
-                <Link
-                  to="/admin/identity-settings"
-                  className="underline"
-                >
+                <Link to="/admin/identity-settings" className="underline">
                   外部ID・項目管理責任
                 </Link>
                 の画面で対象項目を「外部HR管理」に設定してください。設定していない項目はCSVに列があっても反映されません。
@@ -1050,7 +1092,10 @@ export function UserManagementAccessPage({
                         onSuccess: () => {
                           notify.success(
                             `外部HR CSVの差分を適用しました(新規${summary.new}件・変更${summary.changed}件)`,
-                            { description: "反映結果はユーザー一覧から確認できます。" },
+                            {
+                              description:
+                                "反映結果はユーザー一覧から確認できます。",
+                            },
                           );
                           setCsvFile(null);
                           setCsvInputKey((key) => key + 1);

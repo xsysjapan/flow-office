@@ -139,9 +139,11 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
           </DialogDescription>
         </DialogHeader>
         {approvalRequired && (
-          <FormField label="承認者" htmlFor="approver" required>
-            <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
-          </FormField>
+          <div>
+            <FormField label="承認者" htmlFor="approver" required>
+              <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
+            </FormField>
+          </div>
         )}
         {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
         <DialogFooter>

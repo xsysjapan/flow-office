@@ -180,6 +180,7 @@ export function MonthlyAttendanceBulkEntryModal({
           <DialogDescription>出退勤・休憩時刻を指定して一括で確定する。</DialogDescription>
         </DialogHeader>
 
+        <div>
         <p className="text-sm text-muted-foreground">適用期間: {from} 〜 {to}</p>
 
         <FormField label="タイムゾーンオフセット" htmlFor="monthly-attendance-offset" required>
@@ -320,6 +321,7 @@ export function MonthlyAttendanceBulkEntryModal({
             内容を確認のうえ確定するため、「次へ(日にちごとの内容を確認)」を押すと「日にちごとに設定」タブに展開されます。ここではまだ確定されません。
           </p>
         )}
+        </div>
 
         {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
 

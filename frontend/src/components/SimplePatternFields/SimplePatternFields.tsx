@@ -111,22 +111,24 @@ export function SimplePatternFields({
           休憩
         </label>
         <FormRow>
-          <div>
+          <FormField label="休憩開始" htmlFor="simple-pattern-break-start-time">
             <TimePicker
+              id="simple-pattern-break-start-time"
               aria-label="休憩開始時刻"
               disabled={!state.breakEnabled}
               value={state.breakStartTime}
               onChange={(time) => onChange({ breakStartTime: time ?? '' })}
             />
-          </div>
-          <div>
+          </FormField>
+          <FormField label="休憩終了" htmlFor="simple-pattern-break-end-time">
             <TimePicker
+              id="simple-pattern-break-end-time"
               aria-label="休憩終了時刻"
               disabled={!state.breakEnabled}
               value={state.breakEndTime}
               onChange={(time) => onChange({ breakEndTime: time ?? '' })}
             />
-          </div>
+          </FormField>
         </FormRow>
       </div>
     </div>

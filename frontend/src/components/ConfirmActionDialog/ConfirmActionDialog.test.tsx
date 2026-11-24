@@ -136,6 +136,27 @@ describe("ConfirmActionDialog", () => {
     expect(screen.getByLabelText("失効理由")).toBeInTheDocument();
   });
 
+  it("wraps several children in one element so the dialog gap applies once", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConfirmActionDialog
+        triggerLabel="開く"
+        title="確認"
+        description="説明。"
+        confirmLabel="実行"
+        onConfirm={vi.fn()}
+      >
+        <input aria-label="項目A" />
+        <input aria-label="項目B" />
+      </ConfirmActionDialog>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "開く" }));
+
+    const a = screen.getByLabelText("項目A");
+    expect(a.parentElement).toBe(screen.getByLabelText("項目B").parentElement);
+  });
+
   it("shows an error message when provided", async () => {
     const user = userEvent.setup();
     render(

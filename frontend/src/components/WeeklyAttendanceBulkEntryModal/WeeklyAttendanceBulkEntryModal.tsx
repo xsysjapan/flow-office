@@ -127,6 +127,7 @@ export function WeeklyAttendanceBulkEntryModal({
           <DialogDescription>出退勤・休憩時刻を指定して一括で確定する。</DialogDescription>
         </DialogHeader>
 
+        <div>
         <p className="text-sm text-muted-foreground">適用期間: {defaultFrom} 〜 {defaultTo}</p>
 
         <FormField label="タイムゾーンオフセット" htmlFor="weekly-attendance-offset" required>
@@ -188,6 +189,7 @@ export function WeeklyAttendanceBulkEntryModal({
             内容を確認のうえ確定するため、「次へ(曜日ごとの内容を確認)」を押すと「曜日ごとに設定」タブに展開されます。ここではまだ確定されません。
           </p>
         )}
+        </div>
 
         {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
 

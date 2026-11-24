@@ -289,7 +289,7 @@ function PresetDefinitionRowFields({
 
   return (
     <div className="@container flex flex-col gap-3 rounded-md border border-border p-3">
-      <div className="grid grid-cols-1 gap-x-3 @2xl:grid-cols-3">
+      <div className="grid grid-cols-1 items-end gap-x-3 @2xl:grid-cols-3">
         <FormField label="経費区分" htmlFor={`preset-item-${row.rowId}-category`} required>
           <NativeSelect
             id={`preset-item-${row.rowId}-category`}

@@ -188,7 +188,7 @@ function BreakRowsEditor({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-muted-foreground">休憩</span>
+      <span className="text-sm font-medium text-foreground">休憩</span>
       {rows.map((row) => (
         <div key={row.rowId} className="flex flex-wrap items-center gap-2">
           <DateTimePicker
@@ -252,7 +252,7 @@ function LeaveSegmentsEditor({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-muted-foreground">遅刻・早退</span>
+      <span className="text-sm font-medium text-foreground">遅刻・早退</span>
       {rows.map((row) => (
         <div key={row.rowId} className="flex flex-wrap items-center gap-2">
           <DateTimePicker
@@ -793,17 +793,15 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
             />
           </FormField>
         </FormRow>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          現地時刻オフセット(海外出張時などに変更)
-          <Input value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
-        </label>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          作業内容
-          <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
-        </label>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          勤務形態区分
+        <FormField label="現地時刻オフセット(海外出張時などに変更)" htmlFor="day-edit-offset">
+          <Input id="day-edit-offset" value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
+        </FormField>
+        <FormField label="作業内容" htmlFor="day-edit-work-type">
+          <Input id="day-edit-work-type" value={workType} onChange={(e) => setWorkType(e.target.value)} />
+        </FormField>
+        <FormField label="勤務形態区分" htmlFor="day-edit-work-location-type">
           <NativeSelect
+            id="day-edit-work-location-type"
             value={workLocationType}
             onChange={(e) => setWorkLocationType(e.target.value as WorkLocationType | '')}
           >
@@ -814,11 +812,10 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
               </option>
             ))}
           </NativeSelect>
-        </label>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          備考
-          <Input value={note} onChange={(e) => setNote(e.target.value)} />
-        </label>
+        </FormField>
+        <FormField label="備考" htmlFor="day-edit-note">
+          <Input id="day-edit-note" value={note} onChange={(e) => setNote(e.target.value)} />
+        </FormField>
       </FormLayout>
 
       <BreakRowsEditor date={day.work_date} rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
@@ -832,10 +829,9 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
       />
 
       <FormLayout>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          修正理由(必須)
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} />
-        </label>
+        <FormField label="修正理由" htmlFor="day-edit-reason" required>
+          <Input id="day-edit-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </FormField>
 
         {breakWarning && <p className="mb-2 text-sm text-warning">{breakWarning}</p>}
         {updateDay.error && <ErrorMessage error={updateDay.error} />}
@@ -962,17 +958,15 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
             />
           </FormField>
         </FormRow>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          現地時刻オフセット(海外出張時などに変更)
-          <Input value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
-        </label>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          作業内容
-          <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
-        </label>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          勤務形態区分
+        <FormField label="現地時刻オフセット(海外出張時などに変更)" htmlFor="day-create-offset">
+          <Input id="day-create-offset" value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
+        </FormField>
+        <FormField label="作業内容" htmlFor="day-create-work-type">
+          <Input id="day-create-work-type" value={workType} onChange={(e) => setWorkType(e.target.value)} />
+        </FormField>
+        <FormField label="勤務形態区分" htmlFor="day-create-work-location-type">
           <NativeSelect
+            id="day-create-work-location-type"
             value={workLocationType}
             onChange={(e) => setWorkLocationType(e.target.value as WorkLocationType | '')}
           >
@@ -983,11 +977,10 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
               </option>
             ))}
           </NativeSelect>
-        </label>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          備考
-          <Input value={note} onChange={(e) => setNote(e.target.value)} />
-        </label>
+        </FormField>
+        <FormField label="備考" htmlFor="day-create-note">
+          <Input id="day-create-note" value={note} onChange={(e) => setNote(e.target.value)} />
+        </FormField>
       </FormLayout>
 
       <BreakRowsEditor date={date} rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
@@ -1001,10 +994,9 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
       />
 
       <FormLayout>
-        <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          作成理由(必須)
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} />
-        </label>
+        <FormField label="作成理由" htmlFor="day-create-reason" required>
+          <Input id="day-create-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </FormField>
 
         <p className="mb-2 text-sm text-muted-foreground">この日の勤怠記録はまだありません。実績を入力して作成できます。</p>
         {defaults && DAY_DEFAULTS_SOURCE_LABEL[defaults.source] && (
@@ -1115,21 +1107,20 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
   return (
     <FormLayout>
       {fieldLabels.map(({ key, label }) => (
-        <label key={key} className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          {label}
+        <FormField key={key} label={label} htmlFor={`day-adjust-${key}`}>
           <Input
+            id={`day-adjust-${key}`}
             type="number"
             min={0}
             value={fields[key]}
             onChange={(e) => updateField(key, e.target.value)}
           />
-        </label>
+        </FormField>
       ))}
 
-      <label className="mb-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-        補正理由(必須)
-        <Input value={reason} onChange={(e) => setReason(e.target.value)} />
-      </label>
+      <FormField label="補正理由" htmlFor="day-adjust-reason" required>
+        <Input id="day-adjust-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+      </FormField>
 
       {adjustCalculation.error && <ErrorMessage error={adjustCalculation.error} />}
       <FormActions>
@@ -1215,6 +1206,7 @@ function ShiftSwapRequestDialog({
             </DialogDescription>
           </DialogHeader>
 
+          <div>
           <FormField
             label={targetIsHoliday ? '振替先日(休みになる日)' : '振替先日(出勤する日)'}
             htmlFor="shift-swap-substitute-date"
@@ -1243,6 +1235,7 @@ function ShiftSwapRequestDialog({
               現在の設定では振替休日申請に承認は不要です。申請すると同時に確定します。
             </p>
           )}
+          </div>
           {createRequest.error && <ErrorMessage error={createRequest.error} />}
 
           <DialogFooter>

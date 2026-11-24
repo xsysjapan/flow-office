@@ -603,9 +603,9 @@ export function UserRoleEditPage() {
               />
             )}
 
-            <div className="grid gap-3">
+            <div>
               {membershipChange.from_group_id && (
-                <div className="rounded bg-muted p-3 text-sm">
+                <div className="mb-4 rounded bg-muted p-3 text-sm">
                   対象:{" "}
                   {user.memberships?.find(
                     (membership) =>
@@ -657,7 +657,7 @@ export function UserRoleEditPage() {
                 </FormField>
               )}
               {membershipChange.operation === "set_primary" && (
-                <p className="rounded bg-muted p-3 text-sm text-muted-foreground">
+                <p className="mb-4 rounded bg-muted p-3 text-sm text-muted-foreground">
                   主所属は、同じグループ種別の中で代表として扱う所属です。現在の主所属がある場合は、このグループへ切り替えます。
                 </p>
               )}
@@ -789,7 +789,7 @@ export function UserRoleEditPage() {
             {updateTerminationDate.error && (
               <ErrorMessage error={updateTerminationDate.error} />
             )}
-            <FormActions>
+            <div className="flex flex-wrap justify-end gap-2">
               <Button
                 variant="secondary"
                 isLoading={updateHireDate.isPending}
@@ -818,7 +818,7 @@ export function UserRoleEditPage() {
               >
                 退社日を保存
               </Button>
-            </FormActions>
+            </div>
 
             <div className="mt-4">
               <FormField

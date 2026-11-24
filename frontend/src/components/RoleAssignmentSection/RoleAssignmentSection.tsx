@@ -173,6 +173,7 @@ export function RoleAssignmentSection({
                 : "このグループに割り当てるRoleと対象範囲、有効期間を指定してください。"}
             </DialogDescription>
           </DialogHeader>
+          <div>
           <FormField label={targetLabel} htmlFor="role-assignment-target">
             <NativeSelect
               id="role-assignment-target"
@@ -267,6 +268,7 @@ export function RoleAssignmentSection({
               />
             </FormField>
           </FormRow>
+          </div>
           {(createAssignment.error || updateAssignment.error) && (
             <ErrorMessage error={createAssignment.error ?? updateAssignment.error} />
           )}

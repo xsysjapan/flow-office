@@ -31,6 +31,12 @@ describe('PaidLeaveGrantStepsEditor', () => {
     expect(screen.queryByLabelText('週4日 継続勤務6か月の付与日数')).not.toBeInTheDocument()
   })
 
+  it('wraps the category tabs instead of overflowing', () => {
+    render(<PaidLeaveGrantStepsEditor steps={steps} onChange={vi.fn()} statutory={statutory} />)
+
+    expect(screen.getByRole('tablist')).toHaveClass('h-auto', 'flex-wrap')
+  })
+
   it('switches to a proportional tab and shows only that category rows', async () => {
     render(<PaidLeaveGrantStepsEditor steps={steps} onChange={vi.fn()} statutory={statutory} />)
 

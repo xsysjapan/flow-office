@@ -254,7 +254,7 @@ describe('BackOfficeTaskDetailPage', () => {
     await screen.findByText('タクシー代の経理処理')
     // 現在の状態のままでは更新できない
     expect(screen.getByRole('button', { name: '状態を変更' })).toBeDisabled()
-    expect(screen.getByText('変更後のステータスを選択してください')).toBeInTheDocument()
+    expect(screen.getByText('変更後のステータスを選択してください。')).toBeInTheDocument()
 
     await userEvent.selectOptions(screen.getByLabelText('状態'), '処理中')
     await userEvent.type(screen.getByLabelText('コメント(任意)'), '発注しました')

@@ -53,6 +53,14 @@ describe('SimplePatternFields', () => {
     expect(onChange).toHaveBeenCalledWith({ startTime: '22:00' })
   })
 
+  it('shows visible labels for the break start and end', () => {
+    render(<SimplePatternFields state={defaultSimplePatternState()} onChange={vi.fn()} />)
+
+    expect(screen.getByText('休憩開始')).toBeInTheDocument()
+    expect(screen.getByText('休憩終了')).toBeInTheDocument()
+    expect(screen.getByLabelText('休憩開始時刻')).toBeInTheDocument()
+  })
+
   it('notifies onChange when a weekday checkbox is toggled', async () => {
     const onChange = vi.fn()
     render(<SimplePatternFields state={defaultSimplePatternState()} onChange={onChange} />)

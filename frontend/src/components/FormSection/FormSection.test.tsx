@@ -9,6 +9,11 @@ describe('FormSection', () => {
     expect(screen.getByRole('heading', { level: 3, name: '基本設定' })).toBeInTheDocument()
   })
 
+  it('draws a divider under the heading', () => {
+    render(<FormSection title="基本設定">中身</FormSection>)
+    expect(screen.getByRole('heading', { name: '基本設定' })).toHaveClass('border-b', 'pb-2')
+  })
+
   it('renders h2 when headingLevel is 2', () => {
     render(
       <FormSection title="基本設定" headingLevel={2}>

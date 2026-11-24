@@ -502,7 +502,7 @@ function GroupMembersCard({
               即時に反映するか、指定日時に反映するかを選択してください。
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3">
+          <div>
             {operation === "add" ? (
               <FormField label="対象ユーザー" htmlFor="group-membership-user">
                 <NativeSelect
@@ -519,7 +519,7 @@ function GroupMembersCard({
                 </NativeSelect>
               </FormField>
             ) : (
-              <p className="rounded bg-muted p-3 text-sm">
+              <p className="mb-4 rounded bg-muted p-3 text-sm">
                 対象: {selectedUser?.name ?? userId}
               </p>
             )}

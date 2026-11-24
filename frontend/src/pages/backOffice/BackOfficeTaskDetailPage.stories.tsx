@@ -105,6 +105,6 @@ export const LimitedStatusOptions: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(await canvas.findByRole('button', { name: '状態を変更' })).toBeDisabled()
-    await expect(canvas.getByText('変更後のステータスを選択してください')).toBeInTheDocument()
+    await expect(canvas.getByText('変更後のステータスを選択してください。')).toBeInTheDocument()
   },
 }

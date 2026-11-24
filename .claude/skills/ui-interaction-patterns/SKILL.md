@@ -181,6 +181,7 @@ Createは新規オブジェクトを作る行為。UI文言は原則「作成」
 - **位置と並び**: 末尾に右寄せで [キャンセル][主ボタン]。3つのときは [キャンセル][その他(下書き保存など)][主ボタン]。狭い幅では縦に積み、主ボタンが上に来る。
 - **部品**: ページは`components/FormActions`、Dialogは`DialogFooter`(中にはボタンだけを置く)、Sheetは`SheetFooter`が無いので末尾に`FormActions`。入れ子の小さなフォームも`FormActions`。
 - **キャンセルの有無**: 作成・編集のページとDialog・Sheetには必ず置く(編集のキャンセルは戻る先へ移る)。戻る先の無い設定・操作の画面(基本設定、ユーザー管理、システム設定、ロール詳細、日次の作成、一括操作の作成、データ出力、初回セットアップ、運用コマンド等)には置かない。
+- **対象ごとの保存が複数並ぶ行**(入社日を保存・退社日を保存など)は`FormActions`を使わず、`flex flex-wrap justify-end gap-2`で項目の順に並べる。
 - **ボタンの種類**: キャンセルは`secondary`、主ボタンは`primary`(破壊的な操作は`danger`)。1画面に「{対象}を保存」が複数並ぶ設定の画面は、primaryが並ばないよう`secondary`にする。
 
 作成成功後は、作成されたオブジェクトの詳細画面、または元の一覧へ遷移する。どちらにするかは
@@ -435,9 +436,10 @@ Errorでは「何が失敗したか」と「次に何ができるか」を示す
 - **`FormLayout`**(`max-w-2xl`、`@container`)の中に項目・セクション・ボタン行を置く。Cardは全幅のまま。項目間の余白は`FormField`の`mb-4`に任せ、`gap`を足さない。
   - 明細行エディタ(表形式で行を繰り返すもの)は`FormLayout`の外(全幅)に置き、外側を`@container`にして3列以上は`@2xl:`以上でだけ横に並べる。構成は `<FormLayout>基本の項目</FormLayout>` → 明細行エディタ → `<FormLayout>補足・エラー・FormActions</FormLayout>`。
   - **Dialogでは`FormLayout`を使わない**(器の幅が狭いため)。`DialogFooter`を使う(§2.5)。
-- **`FormSection`**(`title`・`description?`・`headingLevel?: 2 | 3`)で区切る。枠線で囲わない。見出しレベルは、Cardのtitleを外した画面(h1の直後)では2、Cardのtitleの下では3(既定)。見出しの無い先頭のまとまりは`FormSection`にせず、そのまま並べる。
+- **`FormSection`**(`title`・`description?`・`headingLevel?: 2 | 3`)で区切る。枠線で囲わず、見出しの下に区切り線(`border-b pb-2`)を引く。見出しレベルは、Cardのtitleを外した画面(h1の直後)では2、Cardのtitleの下では3(既定)。見出しの無い先頭のまとまりは`FormSection`にせず、そのまま並べる。
   - 枠(`rounded-md border p-3`)を残すのは、繰り返す単位(明細行の1件、付与表の1行、Permissionのカテゴリ)と、入力ではない表示の箱(結果・プレビュー・警告・登録済みの表示)だけ。説明文だけの箱は外して、ふつうの説明文にする。
 - **説明文**は`FormField`の`description`(ラベルの下・入力の上。`text-xs text-muted-foreground`、句点で終える)。直書きの`<p>`にしない。チェックボックスは`FormField`を使わないので、ラベル直下に`<p className="mt-1 text-xs text-muted-foreground">`で置く。
+- **Dialogの本文の項目は1つの`<div>`にまとめる**(`DialogContent`の`gap-4`が項目ごとにかかって`FormField`の`mb-4`と重なり、余白が2倍になるため。`ConfirmActionDialog`はchildrenを1つの`<div>`で包む)。
 - ボタン行・補足・エラーの順序と位置は§2.5・§2.18。文言は§2.7。
 
 ### 2.20 Search / Filter / Sort / Pagination

@@ -258,7 +258,7 @@ export function BackOfficeTaskDetailPage() {
                 <Input id="status-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
               </FormField>
               {statusUnchanged && (
-                <p className="mb-2 text-xs text-muted-foreground">変更後のステータスを選択してください</p>
+                <p className="mb-2 text-xs text-muted-foreground">変更後のステータスを選択してください。</p>
               )}
               {changeStatus.error && <ErrorMessage error={changeStatus.error} />}
               <FormActions>

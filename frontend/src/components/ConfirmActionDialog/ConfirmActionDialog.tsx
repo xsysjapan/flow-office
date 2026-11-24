@@ -99,7 +99,7 @@ export function ConfirmActionDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        {children}
+        {children && <div>{children}</div>}
         {error !== undefined && error !== null && (
           <ErrorMessage error={error} />
         )}

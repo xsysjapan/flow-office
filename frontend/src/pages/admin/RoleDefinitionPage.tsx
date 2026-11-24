@@ -186,8 +186,8 @@ export function RoleDefinitionPage() {
                 : "新しいロールのコード・名称・説明を入力してください。"}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3">
-            <FormField label="ロールコード" htmlFor="role-form-code">
+          <div>
+            <FormField label="ロールコード" htmlFor="role-form-code" required>
               <Input
                 id="role-form-code"
                 value={roleForm.code}
@@ -196,7 +196,7 @@ export function RoleDefinitionPage() {
                 }
               />
             </FormField>
-            <FormField label="ロール名" htmlFor="role-form-name">
+            <FormField label="ロール名" htmlFor="role-form-name" required>
               <Input
                 id="role-form-name"
                 value={roleForm.name}

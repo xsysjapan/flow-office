@@ -276,7 +276,7 @@ export function ExpenseCategoryEditPage() {
           <FormField
             label="承認省略しきい値(円・任意)"
             htmlFor="approval-skip-threshold"
-            description="この金額以下の明細は承認を1段階省略できます"
+            description="この金額以下の明細は承認を1段階省略できます。"
           >
             <Input
               id="approval-skip-threshold"
@@ -293,7 +293,7 @@ export function ExpenseCategoryEditPage() {
         </label>
 
         {(!code || !name) && (
-          <p className="mb-2 text-xs text-muted-foreground">コードと名称を入力してください</p>
+          <p className="mb-2 text-xs text-muted-foreground">コードと名称を入力してください。</p>
         )}
         {error && <ErrorMessage error={error} />}
         <FormActions>
