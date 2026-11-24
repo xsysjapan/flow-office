@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
 use App\Domain\EventSourcing\Rebuild\LegacyBooleanPropertyDetector;
+use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
@@ -16,7 +17,7 @@ final class RebuildProjectionsCommand extends Command
 
     protected $description = 'Replay stored_events to Spatie projectors';
 
-    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector): int
+    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
     {
         // 旧形式のバックオフィス割当イベントが残っている間は、再生するとステータスが失われるため拒否する。
         $legacyCount = $legacyDetector->count();
@@ -30,6 +31,14 @@ final class RebuildProjectionsCommand extends Command
         $booleanCount = $booleanDetector->count();
         if ($booleanCount > 0) {
             $this->error("旧項目名の真偽値のイベントが{$booleanCount}件あります。先に運用コマンド『真偽値のイベント項目名の書き換え』(events:rename-boolean-properties)を実行してください。");
+
+            return self::FAILURE;
+        }
+
+        // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、再生すると旧idの行が消えて対応表を作れなくなるため拒否する。
+        $bulkCount = $bulkTargetIdDetector->count();
+        if ($bulkCount > 0) {
+            $this->error(LegacyCalendarBulkOperationTargetIdDetector::message($bulkCount));
 
             return self::FAILURE;
         }

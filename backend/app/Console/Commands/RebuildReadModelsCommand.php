@@ -6,6 +6,7 @@ use App\Console\Attributes\AdminExecutable;
 use App\Console\CurrentAdminCommandRun;
 use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
 use App\Domain\EventSourcing\Rebuild\LegacyBooleanPropertyDetector;
+use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
 use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
 use App\Services\EventSourcing\ReadModelRebuildRunService;
 use Illuminate\Console\Command;
@@ -30,7 +31,7 @@ class RebuildReadModelsCommand extends Command
     protected $description = '全ReadModelのテーブルを空にして、イベントから作り直す。実行中は全利用者がメンテナンス中(全API 503)になる。'
         .'日次バッチの時刻(1:00〜2:20)を避けて実行すること。「試し実行」は最後にロールバックし、変更のあるテーブルを出力に表示するだけでデータは変えない。';
 
-    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector): int
+    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyBooleanPropertyDetector $booleanDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
     {
         $dryRun = (bool) $this->option('dry-run');
 
@@ -54,6 +55,16 @@ class RebuildReadModelsCommand extends Command
         $booleanCount = $booleanDetector->count();
         if ($booleanCount > 0) {
             $message = "旧項目名の真偽値のイベントが{$booleanCount}件あります。先に運用コマンド『真偽値のイベント項目名の書き換え』(events:rename-boolean-properties)を実行してください。";
+            $this->error($message);
+            $run?->update(['error_message' => $message]);
+
+            return self::FAILURE;
+        }
+
+        // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、作り直すと旧idの行が消えて対応表を作れなくなるため、試し実行も含めて拒否する。
+        $bulkCount = $bulkTargetIdDetector->count();
+        if ($bulkCount > 0) {
+            $message = LegacyCalendarBulkOperationTargetIdDetector::message($bulkCount);
             $this->error($message);
             $run?->update(['error_message' => $message]);
 

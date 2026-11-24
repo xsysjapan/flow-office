@@ -23,7 +23,7 @@ class AdminCommandTest extends TestCase
 
         $commands = collect($response->json('data'))->keyBy('name');
         $this->assertSame(
-            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:rename-boolean-properties', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
+            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:fix-calendar-bulk-operation-target-ids', 'events:rename-boolean-properties', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
             $commands->keys()->sort()->values()->all(),
         );
         $this->assertSame('apply', $commands['attendance:migrate-work-classifications']['parameters'][0]['name']);

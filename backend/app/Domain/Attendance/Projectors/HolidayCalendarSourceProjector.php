@@ -202,12 +202,12 @@ class HolidayCalendarSourceProjector extends Projector
     }
 
     /**
-     * 祝日iCalendarソースを削除する。holiday_calendar_eventsはholiday_calendar_source_idへの
-     * 外部キーにcascadeOnDeleteが設定されているため、この行を削除するだけで自動的に
-     * 削除される。
+     * 祝日iCalendarソースを削除する。子(holiday_calendar_events)→親の順に明示的に消す
+     * (ReadModelの作り直しの間は外部キーの検査が切れてcascadeOnDeleteが働かないため、外部キーに頼らない)。
      */
     public function onHolidayCalendarSourceDeleted(HolidayCalendarSourceDeleted $event): void
     {
+        HolidayCalendarEvent::query()->where('holiday_calendar_source_id', $event->aggregateRootUuid())->delete();
         HolidayCalendarSource::query()->whereKey($event->aggregateRootUuid())->delete();
     }
 }

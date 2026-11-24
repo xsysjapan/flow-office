@@ -186,12 +186,14 @@ class ExpenseClaimProjector extends Projector
     }
 
     /**
-     * 不要な下書きの削除。expense_itemsはexpense_claimsへのcascadeOnDeleteで一緒に消える。
+     * 不要な下書きの削除。子(expense_items)→親の順に明示的に消す(ReadModelの作り直しの間は外部キーの検査が切れて
+     * cascadeOnDeleteが働かないため、外部キーに頼らない)。
      * 再生時にdrafted→deletedを再適用しても最終状態は「行が存在しない」で変わらないため
      * 冪等。
      */
     public function onExpenseClaimDeleted(ExpenseClaimDeleted $event): void
     {
+        ExpenseItem::query()->where('claim_id', $event->aggregateRootUuid())->delete();
         ExpenseClaim::query()->whereKey($event->aggregateRootUuid())->delete();
     }
 

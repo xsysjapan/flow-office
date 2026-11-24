@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -153,6 +154,31 @@ class CalendarBulkOperationControllerTest extends TestCase
         $this->assertDatabaseHas('employee_calendar_entries', [
             'user_id' => $employee->id, 'work_date' => '2026-07-01 00:00:00', 'schedule_state' => 'UNASSIGNED',
         ]);
+    }
+
+    public function test_reverting_an_already_reverted_operation_is_rejected_with_422(): void
+    {
+        $admin = $this->makeAdmin();
+        $workStyle = $this->makeWorkStyle();
+        $employee = User::factory()->create();
+
+        $payload = [
+            'operation_type' => 'calendar_apply',
+            'target_scope' => ['user_ids' => [$employee->id], 'work_style_id' => $workStyle->id, 'from' => '2026-07-01', 'to' => '2026-07-01'],
+            'conflict_policy' => 'skip_existing',
+            'reason' => '新規生成',
+        ];
+        $bulkOperationId = $this->actingAs($admin)->postJson('/api/calendar-bulk-operations', $payload)->json('id');
+        $this->actingAs($admin)->postJson("/api/calendar-bulk-operations/{$bulkOperationId}/revert")->assertOk();
+        $eventCount = DB::table('stored_events')->count();
+
+        $this->actingAs($admin)->postJson("/api/calendar-bulk-operations/{$bulkOperationId}/revert")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', '既に取消済みの一括操作は重ねて取り消せません。');
+
+        // 2回目は何も記録されない(イベントも予定の復元もやり直されない)。
+        $this->assertSame($eventCount, DB::table('stored_events')->count());
+        $this->assertSame(1, DB::table('stored_events')->where('event_class', 'calendar_bulk_operation.reverted')->count());
     }
 
     public function test_bulk_edit_sets_schedule_state_directly(): void

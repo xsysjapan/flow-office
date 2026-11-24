@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
+use App\Domain\Attendance\Events\CompanyCalendarDeleted;
 use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
 use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
 use App\Domain\Attendance\Events\CompanyCalendarYearDeleted;
@@ -109,12 +110,36 @@ class CompanyCalendarYearProjector extends Projector
 
     /**
      * カレンダー年度を削除する(UC-C009 手順5、旧「廃止」を置き換える操作)。
-     * `company_calendar_days`はcompany_calendar_years.idへの外部キーにcascadeOnDeleteが
-     * 設定されているため、この行を削除するだけで自動的に削除される。
+     * ReadModelの作り直しの間は外部キーの検査が切れてcascadeOnDeleteが働かないため、
+     * 出典(company_calendar_day_sources)→日(company_calendar_days)→年度の順に明示的に消す。
      */
     public function onCompanyCalendarYearDeleted(CompanyCalendarYearDeleted $event): void
     {
-        CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->delete();
+        $this->deleteYears([$event->aggregateRootUuid()]);
+    }
+
+    /**
+     * 会社カレンダーの削除で、その年度・日・出典(自分の表)を消す。会社カレンダー本体(company_calendars)は
+     * CompanyCalendarProjectorが消す。どちらが先でも結果は同じ(先に消えれば、ここでの削除は0件になる)。
+     */
+    public function onCompanyCalendarDeleted(CompanyCalendarDeleted $event): void
+    {
+        $this->deleteYears(
+            CompanyCalendarYear::query()->where('company_calendar_id', $event->aggregateRootUuid())->pluck('id')->all(),
+        );
+    }
+
+    /** @param  list<string>  $yearIds */
+    private function deleteYears(array $yearIds): void
+    {
+        foreach (array_chunk($yearIds, 100) as $chunk) {
+            $dayIds = CompanyCalendarDay::query()->whereIn('calendar_id', $chunk)->pluck('id');
+            foreach ($dayIds->chunk(500) as $dayChunk) {
+                CompanyCalendarDaySource::query()->whereIn('company_calendar_day_id', $dayChunk->all())->delete();
+            }
+            CompanyCalendarDay::query()->whereIn('calendar_id', $chunk)->delete();
+            CompanyCalendarYear::query()->whereIn('id', $chunk)->delete();
+        }
     }
 
     public function onCompanyCalendarYearFiscalYearCorrected(CompanyCalendarYearFiscalYearCorrected $event): void

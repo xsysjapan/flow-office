@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Schema;
  *
  * 読み取りのみ。比較から除く列: created_at・updated_at、stored_events.id を指す列(EXCLUDED_COLUMNS)、
  * 自動採番の整数主キー(UUID等の主キーは比較に含める)。
+ * 自動採番の整数主キーを参照する外部キー列は、作り直しで採番が変わるため、参照先の行の内容(参照先の主キーを除いた
+ * 正規化値のハッシュ)に置き換えて比較する(外部キーの定義から自動で判断する。参照先が無い孤児は
+ * ORPHAN_MARK にして差分として出す)。
  * 残った列を名前順に並べて各行を正規化した文字列にし、行の文字列をソートして連結し、sha256を取る。
  * DBの種類(MySQL/SQLite)に依らず同じ値になるよう、正規化はPHP側で行う。
  */
@@ -24,7 +27,17 @@ final class ReadModelFingerprinter
      */
     public const EXCLUDED_COLUMNS = ['created_at', 'updated_at', 'stored_event_id', 'last_changed_event_id'];
 
+    /** 参照先の行が無い(孤児の)外部キー列の値。参照先の内容のハッシュ(`ref:...`)と区別できる。 */
+    public const ORPHAN_MARK = 'ORPHAN';
+
     private const CHUNK = 1000;
+
+    /**
+     * 参照先の表ごとの「自動採番の主キー(文字列) => 行の内容のハッシュ」(同じインスタンスの中で使い回す)。
+     *
+     * @var array<string, array<string, string>>
+     */
+    private array $contentIndexes = [];
 
     /** @param  string|null  $connection 読む接続名(null は既定の接続) */
     public function __construct(private readonly ?string $connection = null) {}
@@ -70,6 +83,22 @@ final class ReadModelFingerprinter
      */
     public function normalizedRows(string $table): ?array
     {
+        $data = $this->collect($table, [$table]);
+        if ($data === null) {
+            return null;
+        }
+
+        return ['key' => $data['key'], 'kinds' => $data['kinds'], 'rows' => $data['rows']];
+    }
+
+    /**
+     * 正規化した行と、各行の自動採番の主キー(ids。行と同じ順。自動採番の主キーが無ければ空)。
+     *
+     * @param  list<string>  $stack  参照をたどっている表(循環の検出用)
+     * @return array{key: string|null, kinds: array<string, string>, rows: list<array<string, string>>, ids: list<string>}|null
+     */
+    private function collect(string $table, array $stack): ?array
+    {
         $schema = Schema::connection($this->connection);
         if (! $schema->hasTable($table)) {
             return null;
@@ -77,13 +106,8 @@ final class ReadModelFingerprinter
 
         $columns = $schema->getColumns($table);
         $primary = $this->primaryKeyColumn($table);
-        $autoIncrementPrimary = null;
-        foreach ($columns as $column) {
-            if ($column['name'] === $primary && ($column['auto_increment'] ?? false)
-                && $this->kind($column['type_name']) === 'integer') {
-                $autoIncrementPrimary = $primary;
-            }
-        }
+        $autoIncrementPrimary = $this->autoIncrementPrimary($table);
+        $references = $this->autoIncrementReferences($table, $stack);
 
         $types = [];
         foreach ($columns as $column) {
@@ -91,19 +115,25 @@ final class ReadModelFingerprinter
             if (in_array($name, self::EXCLUDED_COLUMNS, true) || $name === $autoIncrementPrimary) {
                 continue;
             }
-            $types[$name] = $this->kind($column['type_name']);
+            $types[$name] = isset($references[$name]) ? 'string' : $this->kind($column['type_name']);
         }
         ksort($types);
 
         $result = [];
-        $handle = function ($rows) use ($types, &$result): void {
+        $ids = [];
+        $handle = function ($rows) use ($types, $references, $autoIncrementPrimary, $stack, &$result, &$ids): void {
             foreach ($rows as $row) {
                 $row = (array) $row;
                 $normalized = [];
                 foreach ($types as $name => $kind) {
-                    $normalized[$name] = $this->normalize($row[$name] ?? null, $kind);
+                    $normalized[$name] = isset($references[$name])
+                        ? $this->normalizeReference($row[$name] ?? null, $references[$name], $stack)
+                        : $this->normalize($row[$name] ?? null, $kind);
                 }
                 $result[] = $normalized;
+                if ($autoIncrementPrimary !== null) {
+                    $ids[] = (string) (int) $row[$autoIncrementPrimary];
+                }
             }
         };
 
@@ -120,7 +150,83 @@ final class ReadModelFingerprinter
 
         $key = ($primary !== null && $primary !== $autoIncrementPrimary && isset($types[$primary])) ? $primary : null;
 
-        return ['key' => $key, 'kinds' => $types, 'rows' => $result];
+        return ['key' => $key, 'kinds' => $types, 'rows' => $result, 'ids' => $ids];
+    }
+
+    /** 自動採番の整数主キーの列名(無ければ null)。 */
+    private function autoIncrementPrimary(string $table): ?string
+    {
+        $primary = $this->primaryKeyColumn($table);
+        if ($primary === null) {
+            return null;
+        }
+        foreach (Schema::connection($this->connection)->getColumns($table) as $column) {
+            if ($column['name'] === $primary && ($column['auto_increment'] ?? false)
+                && $this->kind($column['type_name']) === 'integer') {
+                return $primary;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 自動採番の整数主キーを参照する外部キー列(1列の外部キーだけ)。外部キーの定義から自動で判断する。
+     * 循環(参照先をたどる途中で自分に戻る)する参照は、そのまま(生の値で)比較する。
+     *
+     * @param  list<string>  $stack
+     * @return array<string, string> 列名 => 参照先の表
+     */
+    private function autoIncrementReferences(string $table, array $stack): array
+    {
+        $schema = Schema::connection($this->connection);
+        $references = [];
+        foreach ($schema->getForeignKeys($table) as $foreignKey) {
+            if (count($foreignKey['columns']) !== 1 || count($foreignKey['foreign_columns']) !== 1) {
+                continue;
+            }
+            $foreignTable = $foreignKey['foreign_table'];
+            if (in_array($foreignTable, $stack, true) || ! $schema->hasTable($foreignTable)) {
+                continue;
+            }
+            if ($this->autoIncrementPrimary($foreignTable) !== $foreignKey['foreign_columns'][0]) {
+                continue;
+            }
+            $references[$foreignKey['columns'][0]] = $foreignTable;
+        }
+
+        return $references;
+    }
+
+    /**
+     * 参照先の行の内容のハッシュ。参照先が無ければ ORPHAN_MARK、参照がnullなら 'NULL'。
+     *
+     * @param  list<string>  $stack
+     */
+    private function normalizeReference(mixed $value, string $foreignTable, array $stack): string
+    {
+        if ($value === null) {
+            return 'NULL';
+        }
+        $index = $this->contentIndexes[$foreignTable] ??= $this->buildContentIndex($foreignTable, $stack);
+
+        return $index[(string) (int) $value] ?? self::ORPHAN_MARK;
+    }
+
+    /**
+     * @param  list<string>  $stack
+     * @return array<string, string>
+     */
+    private function buildContentIndex(string $foreignTable, array $stack): array
+    {
+        $data = $this->collect($foreignTable, [...$stack, $foreignTable]);
+        $index = [];
+        foreach ($data['rows'] ?? [] as $i => $normalized) {
+            $json = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            $index[$data['ids'][$i]] = 'ref:'.substr(hash('sha256', $json), 0, 16);
+        }
+
+        return $index;
     }
 
     /** 主キーが1列ならその列名(複合主キー・主キー無しは null)。 */

@@ -20,9 +20,12 @@ use App\Domain\Asset\Events\AssetRepairStarted;
 use App\Domain\Asset\Events\AssetReportedLost;
 use App\Domain\Asset\Events\AssetReturned;
 use App\Models\Asset;
+use App\Models\AssetDefaultLocationChange;
 use App\Models\AssetInstallationStatus;
 use App\Models\AssetLendingStatus;
+use App\Models\AssetLoan;
 use App\Models\AssetManagementType;
+use App\Models\AssetPlacement;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
@@ -66,10 +69,14 @@ class AssetProjector extends Projector
 
     public function onAssetDeleted(AssetDeleted $event): void
     {
-        // asset_default_location_changes / asset_placements / asset_loans は
-        // 外部キーのcascadeOnDeleteで併せて削除される。stored_eventsは削除しない
-        // (spec 論点9)。
-        Asset::query()->whereKey($event->aggregateRootUuid())->delete();
+        // 子(asset_default_location_changes / asset_placements / asset_loans)→親の順に明示的に消す。
+        // ReadModelの作り直しの間は外部キーの検査が切れてcascadeOnDeleteが働かないため、外部キーに頼らない。
+        // stored_eventsは削除しない(spec 論点9)。
+        $assetId = $event->aggregateRootUuid();
+        AssetDefaultLocationChange::query()->where('asset_id', $assetId)->delete();
+        AssetPlacement::query()->where('asset_id', $assetId)->delete();
+        AssetLoan::query()->where('asset_id', $assetId)->delete();
+        Asset::query()->whereKey($assetId)->delete();
     }
 
     public function onAssetManagementTypeChanged(AssetManagementTypeChanged $event): void

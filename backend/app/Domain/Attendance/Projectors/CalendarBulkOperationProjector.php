@@ -6,7 +6,7 @@ use App\Domain\Attendance\Events\CalendarBulkOperationApplied;
 use App\Domain\Attendance\Events\CalendarBulkOperationReverted;
 use App\Models\CalendarBulkOperation;
 use App\Models\CalendarBulkOperationTarget;
-use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
@@ -15,6 +15,18 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  */
 class CalendarBulkOperationProjector extends Projector
 {
+    /** 対象行のidをuuid5で決める名前空間(変更しない。中間版とHEADで同じ値を使う)。 */
+    public const TARGET_ID_NAMESPACE = '31a7798f-6768-41ef-b5ed-c1d036bc1215';
+
+    /**
+     * 対象行のid。再生のたびに同じ値になるよう、操作IDと適用イベントの`targets`配列内の位置(0始まり)から決める。
+     * 取消イベントの`revertedTargetIds`・`excludedTargetIds`はこのidを記録する。
+     */
+    public static function targetId(string $operationId, int $position): string
+    {
+        return Uuid::uuid5(self::TARGET_ID_NAMESPACE, "{$operationId}:{$position}")->toString();
+    }
+
     public function onCalendarBulkOperationApplied(CalendarBulkOperationApplied $event): void
     {
         $id = $event->aggregateRootUuid();
@@ -33,9 +45,9 @@ class CalendarBulkOperationProjector extends Projector
             ],
         );
 
-        foreach ($event->targets as $target) {
+        foreach ($event->targets as $position => $target) {
             CalendarBulkOperationTarget::query()->create([
-                'id' => (string) Str::uuid(),
+                'id' => self::targetId($id, (int) $position),
                 'calendar_bulk_operation_id' => $id,
                 'user_id' => $target['user_id'],
                 'work_date' => $target['work_date'],

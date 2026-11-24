@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
+use App\Domain\Attendance\Events\AttendanceDayDeleted;
 use App\Domain\Attendance\Events\AttendanceWeeklyOvertimeAllocated;
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceWeeklyOvertimeAllocation;
@@ -10,6 +11,15 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 class AttendanceWeeklyOvertimeAllocationProjector extends Projector
 {
+    /**
+     * 親(attendance_days)の削除で、自分の表の行を消す。ReadModelの作り直しの間は外部キーの検査が切れて
+     * cascadeOnDeleteが働かないため、外部キーに頼らない(.claude/skills/add-projection)。
+     */
+    public function onAttendanceDayDeleted(AttendanceDayDeleted $event): void
+    {
+        AttendanceWeeklyOvertimeAllocation::query()->where('attendance_day_id', $event->aggregateRootUuid())->delete();
+    }
+
     public function onAttendanceDayCalculated(AttendanceDayCalculated $event): void
     {
         AttendanceWeeklyOvertimeAllocation::query()->where('attendance_day_id', $event->aggregateRootUuid())->delete();

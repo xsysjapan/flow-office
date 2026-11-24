@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Aggregates;
 
 use App\Domain\Attendance\Events\CalendarBulkOperationApplied;
 use App\Domain\Attendance\Events\CalendarBulkOperationReverted;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -11,6 +12,8 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  */
 class CalendarBulkOperationAggregate extends AggregateRoot
 {
+    private bool $reverted = false;
+
     /**
      * @param  array<string, mixed>  $targetScope
      * @param  list<array{user_id: string, work_date: string, employee_calendar_entry_id: ?string, result: string, error_code: ?string, previous_snapshot: ?array<string, mixed>}>  $targets
@@ -41,6 +44,10 @@ class CalendarBulkOperationAggregate extends AggregateRoot
      */
     public function revert(array $revertedTargetIds, array $excludedTargetIds, string $revertedByUserId): self
     {
+        if ($this->reverted) {
+            throw new DomainRuleException('既に取消済みの一括操作は重ねて取り消せません。');
+        }
+
         $this->recordThat(new CalendarBulkOperationReverted(
             revertedTargetIds: $revertedTargetIds,
             excludedTargetIds: $excludedTargetIds,
@@ -48,5 +55,16 @@ class CalendarBulkOperationAggregate extends AggregateRoot
         ));
 
         return $this;
+    }
+
+    /** 再構成では例外を投げない(過去に二重に記録された取消イベントも再生できるようにする)。 */
+    protected function applyCalendarBulkOperationApplied(CalendarBulkOperationApplied $event): void
+    {
+        $this->reverted = false;
+    }
+
+    protected function applyCalendarBulkOperationReverted(CalendarBulkOperationReverted $event): void
+    {
+        $this->reverted = true;
     }
 }

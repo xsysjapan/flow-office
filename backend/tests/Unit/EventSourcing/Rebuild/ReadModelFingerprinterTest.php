@@ -173,4 +173,87 @@ class ReadModelFingerprinterTest extends TestCase
 
         $this->assertEquals($before, DB::table('fingerprint_sample')->get()->toArray());
     }
+
+    private function createParentChildTables(): void
+    {
+        Schema::create('fingerprint_parent', function (Blueprint $table) {
+            $table->id();
+            $table->date('on_date');
+            $table->string('label');
+        });
+        Schema::create('fingerprint_child', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignId('parent_id')->nullable()->constrained('fingerprint_parent');
+            $table->string('kind');
+        });
+    }
+
+    /** @param  list<array{id: int, on_date: string, label: string}>  $parents  @param  list<array{string, int|null}>  $children [childId, parentId] */
+    private function fillParentChild(array $parents, array $children): void
+    {
+        DB::statement('PRAGMA defer_foreign_keys = ON');
+        DB::table('fingerprint_child')->delete();
+        DB::table('fingerprint_parent')->delete();
+        DB::table('fingerprint_parent')->insert($parents);
+        DB::table('fingerprint_child')->insert(array_map(
+            fn (array $child) => ['id' => $child[0], 'parent_id' => $child[1], 'kind' => 'holiday_sync'],
+            $children,
+        ));
+    }
+
+    public function test_自動採番の主キーを参照する列は_idが変わっても参照先の内容が同じなら一致する(): void
+    {
+        $this->createParentChildTables();
+        $child = '11111111-1111-1111-1111-111111111111';
+
+        $this->fillParentChild([['id' => 1, 'on_date' => '2026-05-05', 'label' => 'a'], ['id' => 2, 'on_date' => '2026-05-06', 'label' => 'b']], [[$child, 2]]);
+        $before = (new ReadModelFingerprinter)->fingerprint('fingerprint_child');
+
+        // 作り直し後は採番が変わる(参照先の行の内容は同じ)。
+        $this->fillParentChild([['id' => 40, 'on_date' => '2026-05-06', 'label' => 'b'], ['id' => 41, 'on_date' => '2026-05-05', 'label' => 'a']], [[$child, 40]]);
+        $after = (new ReadModelFingerprinter)->fingerprint('fingerprint_child');
+
+        $this->assertSame($before, $after);
+    }
+
+    public function test_自動採番の主キーを参照する列は_参照先の内容が違えば別になる(): void
+    {
+        $this->createParentChildTables();
+        $child = '11111111-1111-1111-1111-111111111111';
+
+        $this->fillParentChild([['id' => 1, 'on_date' => '2026-05-05', 'label' => 'a'], ['id' => 2, 'on_date' => '2026-05-06', 'label' => 'b']], [[$child, 1]]);
+        $before = (new ReadModelFingerprinter)->fingerprint('fingerprint_child');
+
+        // 同じ子が、別の内容の親を指す。
+        $this->fillParentChild([['id' => 1, 'on_date' => '2026-05-05', 'label' => 'a'], ['id' => 2, 'on_date' => '2026-05-06', 'label' => 'b']], [[$child, 2]]);
+
+        $this->assertNotSame($before['hash'], (new ReadModelFingerprinter)->fingerprint('fingerprint_child')['hash']);
+    }
+
+    public function test_参照先が無い孤児は_区別できる値になり差分になる(): void
+    {
+        $this->createParentChildTables();
+        $child = '11111111-1111-1111-1111-111111111111';
+
+        $this->fillParentChild([['id' => 1, 'on_date' => '2026-05-05', 'label' => 'a']], [[$child, 1]]);
+        $valid = (new ReadModelFingerprinter)->fingerprint('fingerprint_child');
+
+        $this->fillParentChild([['id' => 1, 'on_date' => '2026-05-05', 'label' => 'a']], [[$child, 999]]);
+        $orphan = (new ReadModelFingerprinter)->fingerprint('fingerprint_child');
+        $rows = (new ReadModelFingerprinter)->normalizedRows('fingerprint_child');
+
+        $this->assertNotSame($valid['hash'], $orphan['hash']);
+        $this->assertSame(ReadModelFingerprinter::ORPHAN_MARK, $rows['rows'][0]['parent_id']);
+        $this->assertSame('string', $rows['kinds']['parent_id']);
+    }
+
+    public function test_参照がnullの行はnullのまま比較する(): void
+    {
+        $this->createParentChildTables();
+        $this->fillParentChild([['id' => 1, 'on_date' => '2026-05-05', 'label' => 'a']], [['11111111-1111-1111-1111-111111111111', null]]);
+
+        $rows = (new ReadModelFingerprinter)->normalizedRows('fingerprint_child');
+
+        $this->assertSame('NULL', $rows['rows'][0]['parent_id']);
+    }
 }

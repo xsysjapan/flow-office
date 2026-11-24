@@ -65,8 +65,9 @@ class CompanyCalendarProjector extends Projector
     }
 
     /**
-     * company_calendar_years(cascadeOnDelete)経由でcompany_calendar_daysも
-     * 自動的に削除される(company_calendar_days.company_calendar_year_idのDB制約)。
+     * 会社カレンダー本体だけを消す。年度・日・出典は、それぞれを書くCompanyCalendarYearProjectorが
+     * 同じイベントで消す(ReadModelの作り直しの間は外部キーの検査が切れてcascadeOnDeleteが働かないため、
+     * 外部キーに頼らない)。
      */
     public function onCompanyCalendarDeleted(CompanyCalendarDeleted $event): void
     {

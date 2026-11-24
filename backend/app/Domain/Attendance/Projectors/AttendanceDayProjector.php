@@ -8,9 +8,11 @@ use App\Domain\Attendance\Events\AttendanceDayDeleted;
 use App\Domain\Attendance\Events\AttendanceDayEdited;
 use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
 use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
+use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
+use App\Models\AttendanceLeaveSegment;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
@@ -70,9 +72,14 @@ class AttendanceDayProjector extends Projector
 
     public function onAttendanceDayDeleted(AttendanceDayDeleted $event): void
     {
-        // attendance_breaks / attendance_leave_segments / attendance_daily_calculations は
-        // 外部キーのcascadeOnDeleteで併せて削除される。
-        AttendanceDay::query()->whereKey($event->aggregateRootUuid())->delete();
+        // 子(attendance_breaks / attendance_leave_segments)→親の順に明示的に消す。ReadModelの作り直しの間は
+        // 外部キーの検査が切れてcascadeOnDeleteが働かないため、外部キーに頼らない。
+        // attendance_daily_calculations / attendance_weekly_overtime_allocations は、それぞれを書くProjectorが
+        // 同じイベントで消す。
+        $dayId = $event->aggregateRootUuid();
+        AttendanceBreak::query()->where('attendance_day_id', $dayId)->delete();
+        AttendanceLeaveSegment::query()->where('attendance_day_id', $dayId)->delete();
+        AttendanceDay::query()->whereKey($dayId)->delete();
     }
 
     public function onAttendanceDayLiveStatusSynced(AttendanceDayLiveStatusSynced $event): void
