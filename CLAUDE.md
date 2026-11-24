@@ -111,6 +111,7 @@ Bearerトークン方式(Cookieベースではない)。
    補正・データ移行は`.claude/skills/data-correction`に従い、常にできる限り過去のイベント履歴
    そのものを修正する(データ移行では`stored_events`を新しいイベント構成で作り直し、移行イベントは
    作らない)。過去の事実が決められない場合のみ補正用のCommand/Eventを追記する。
+   補正・移行のコマンドは管理画面の運用コマンドから実行できるようにする(CLIだけにしない。`data-correction`)。
    いずれもProjectorのリビルドで反映する(再生成しても同じ結果になることを保証する)。
 3. **勤怠の正は日次実績・勤務予定・有給付与**: `employee_shift_assignments` /
    `attendance_days` / `attendance_breaks` / `paid_leave_grants` が正。入力・編集は必ず

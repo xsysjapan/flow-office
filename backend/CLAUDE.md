@@ -97,6 +97,7 @@ database/        migrations(タイムスタンプ順、素朴なLaravel構成) /
 - `api-design` — backend APIの仕様(エンドポイント・クエリ・JSON・レスポンス・OpenAPI)の決め方
 - `add-workflow-request-type` — 新しい汎用申請種別(申請種別マスタ)を追加する
 - `add-notification` — 新しいメール通知種別をDBキュー経由で追加する
+- `data-correction` — データ補正・移行(stored_eventsの書き換え・作り直し)。コマンドは`AdminExecutable`にして管理画面の運用コマンドから試し実行・実行できるようにし(CLIだけにしない)、`stored_events`を書き換えるものは`ReadModelRebuildRunService::MAINTENANCE_COMMANDS`に登録、マイグレーションでデータを補正しない
 - `attendance-calc-review` — 勤怠集計ロジック変更時のセルフレビューチェックリスト
 
 ## 常駐プロセスを前提にしない

@@ -54,6 +54,8 @@ Projection Table の流れを守る (`docs/03-architecture.md`)。新しい業�
 
 - Reactorから発行するCommandは`bool $viaReactor = false`と`?string $initiatedByUserId`を持ち、起点の操作者は起点の
   イベントのpayloadから引き継ぐ。`viaReactor=true`のHandlerは、対象が既に目的の状態なら何もせず正常終了する(冪等)。
+- 既存のイベントに項目を足すときは、null許容・既定値付きにして旧イベントを読めるようにする(必須の引数にしない)。旧データの補正は
+  管理画面の運用コマンドで行い、補正前でもログイン・管理画面が動くようにする(`data-correction`の「実行の経路」。ユーザーの指示2026-11-24)。
 - Reactorが必要とする値は起点のイベントに持たせ、他文脈のテーブルを読まない(不足する項目はイベントの末尾に既定値付きで追加)。
 - 同じイベント内ではProjectorがReactorより先に処理される。Projectorは行が無ければ何もしない(順序非依存。`findOrFail`を使わない)。
 - 連鎖全体を通すシナリオテストを書く(`.claude/skills/domain-test`)。
