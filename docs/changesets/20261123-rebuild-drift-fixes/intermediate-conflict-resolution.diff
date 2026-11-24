@@ -1,0 +1,103 @@
+diff --git a/backend/app/Console/Commands/RebuildProjectionsCommand.php b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+index e99eb0c4..81d0b166 100644
+--- a/backend/app/Console/Commands/RebuildProjectionsCommand.php
++++ b/backend/app/Console/Commands/RebuildProjectionsCommand.php
+@@ -3,6 +3,7 @@
+ namespace App\Console\Commands;
+ 
+ use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
++use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
+ use Illuminate\Console\Command;
+ use Illuminate\Support\Facades\Artisan;
+ use Illuminate\Support\Str;
+@@ -15,7 +16,7 @@ final class RebuildProjectionsCommand extends Command
+ 
+     protected $description = 'Replay stored_events to Spatie projectors';
+ 
+-    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector): int
++    public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
+     {
+         // 旧形式のバックオフィス割当イベントが残っている間は、再生するとステータスが失われるため拒否する。
+         $legacyCount = $legacyDetector->count();
+@@ -25,6 +26,14 @@ public function handle(Projectionist $projectionist, LegacyBackOfficeAssignmentD
+             return self::FAILURE;
+         }
+ 
++        // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、再生すると旧idの行が消えて対応表を作れなくなるため拒否する。
++        $bulkCount = $bulkTargetIdDetector->count();
++        if ($bulkCount > 0) {
++            $this->error(LegacyCalendarBulkOperationTargetIdDetector::message($bulkCount));
++
++            return self::FAILURE;
++        }
++
+         $requested = $this->argument('projector');
+         $arguments = ['--force' => true];
+ 
+diff --git a/backend/app/Console/Commands/RebuildReadModelsCommand.php b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+index 17d6d72e..03442d0e 100644
+--- a/backend/app/Console/Commands/RebuildReadModelsCommand.php
++++ b/backend/app/Console/Commands/RebuildReadModelsCommand.php
+@@ -5,6 +5,7 @@
+ use App\Console\Attributes\AdminExecutable;
+ use App\Console\CurrentAdminCommandRun;
+ use App\Domain\EventSourcing\Rebuild\LegacyBackOfficeAssignmentDetector;
++use App\Domain\EventSourcing\Rebuild\LegacyCalendarBulkOperationTargetIdDetector;
+ use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
+ use App\Services\EventSourcing\ReadModelRebuildRunService;
+ use Illuminate\Console\Command;
+@@ -29,7 +30,7 @@ class RebuildReadModelsCommand extends Command
+     protected $description = '全ReadModelのテーブルを空にして、イベントから作り直す。実行中は全利用者がメンテナンス中(全API 503)になる。'
+         .'日次バッチの時刻(1:00〜2:20)を避けて実行すること。「試し実行」は最後にロールバックし、変更のあるテーブルを出力に表示するだけでデータは変えない。';
+ 
+-    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector): int
++    public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService $runService, LegacyBackOfficeAssignmentDetector $legacyDetector, LegacyCalendarBulkOperationTargetIdDetector $bulkTargetIdDetector): int
+     {
+         $dryRun = (bool) $this->option('dry-run');
+ 
+@@ -49,6 +50,16 @@ public function handle(ReadModelRebuilder $rebuilder, ReadModelRebuildRunService
+             $this->warn('警告: '.$message);
+         }
+ 
++        // 対象行のidが旧い体系の一括操作の取消イベントが残っている間は、作り直すと旧idの行が消えて対応表を作れなくなるため、試し実行も含めて拒否する。
++        $bulkCount = $bulkTargetIdDetector->count();
++        if ($bulkCount > 0) {
++            $message = LegacyCalendarBulkOperationTargetIdDetector::message($bulkCount);
++            $this->error($message);
++            $run?->update(['error_message' => $message]);
++
++            return self::FAILURE;
++        }
++
+         if ($direct) {
+             $run = $runService->startDirectRun($dryRun);
+             if ($run === null) {
+diff --git a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+index bd059975..f7c6d230 100644
+--- a/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
++++ b/backend/app/Services/EventSourcing/ReadModelRebuildRunService.php
+@@ -22,8 +22,10 @@ class ReadModelRebuildRunService
+ 
+     public const MIGRATE_COMMAND_NAME = 'backoffice:migrate-assignment-events';
+ 
++    public const FIX_BULK_COMMAND_NAME = 'events:fix-calendar-bulk-operation-target-ids';
++
+     /** メンテナンス(全API 503)を要するコマンド名。いずれかが`running`の間はメンテナンスで、互いに同時には開始しない。 */
+-    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME];
++    public const MAINTENANCE_COMMANDS = [self::COMMAND_NAME, self::MIGRATE_COMMAND_NAME, self::FIX_BULK_COMMAND_NAME];
+ 
+     public const LOCK_NAME = 'read-model-rebuild-run';
+ 
+diff --git a/backend/tests/Feature/AdminCommandTest.php b/backend/tests/Feature/AdminCommandTest.php
+index ca14df48..b5b34523 100644
+--- a/backend/tests/Feature/AdminCommandTest.php
++++ b/backend/tests/Feature/AdminCommandTest.php
+@@ -23,7 +23,7 @@ public function test_only_explicitly_exposed_commands_are_listed_with_artisan_me
+ 
+         $commands = collect($response->json('data'))->keyBy('name');
+         $this->assertSame(
+-            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
++            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'backoffice:migrate-assignment-events', 'events:fix-calendar-bulk-operation-target-ids', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
+             $commands->keys()->sort()->values()->all(),
+         );
+         $this->assertSame('apply', $commands['attendance:migrate-work-classifications']['parameters'][0]['name']);

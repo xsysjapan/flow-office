@@ -1,6 +1,6 @@
 # rebuild-drift-fixes(ReadModelの作り直しで内容がずれる不具合の修正)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -185,7 +185,7 @@
 - `docs/08`(UC-C013): 再取消の拒否を追記する。
 
 ## モック・アセット
-なし
+- `intermediate-conflict-resolution.diff`: 中間版(`cd1d40ce`に`5a7d2154`をcherry-pick)で衝突した4ファイルの解消の差分(真偽値の改名の検出器・コマンド名を除き、一括操作の補正だけを残す)。
 
 ## 実装対象
 1. 論点1: 削除イベントで子の行を消す(6つの削除イベント、各Projector)。
@@ -215,4 +215,30 @@
   - 低: UUIDv5の仕様・再取消の置き場所・子を消すProjector → 論点2・5・1。
 
 ## 実装結果
-未着手
+
+コミット: `5a7d2154`(コード)、`d6d061c4`(docs・スキル)。
+
+- 論点1: 6つの削除イベントで、子の表を書く各Projectorが自分の行を明示的に消す。
+  - `AttendanceDailyCalculationProjector`・`AttendanceWeeklyOvertimeAllocationProjector`は`attendance_day.deleted`を購読する。
+  - `CompanyCalendarYearProjector`は会社カレンダーの削除も購読し、出典→日→年度を消す。
+- 論点2・3:
+  - `CalendarBulkOperationProjector::targetId()`(UUIDv5、`TARGET_ID_NAMESPACE`固定)。
+  - `events:fix-calendar-bulk-operation-target-ids`(試し実行が既定、バックアップ表、`stored_event_corrections`への補正ログ、作り直し込みの検証、冪等)。運用コマンド(管理画面)・メンテナンス対象にも登録した。
+  - `LegacyCalendarBulkOperationTargetIdDetector`で、未補正の間は`read-models:rebuild`(試し実行を含む)・`projections:rebuild`を拒否する。
+- 論点4: `ReadModelFingerprinter`が、自動採番の主キーを参照する1列の外部キーを、参照先の内容のハッシュで比較する(孤児は`ORPHAN`)。
+- 論点5: `CalendarBulkOperationAggregate`が取消済みを持ち、再取消を`DomainRuleException`(422)で拒否する。
+- テスト:
+  - `ReadModelRebuildAfterDeletionScenarioTest`(6件)。修正前に、勤怠日・カレンダー・祝日の出典・経費の各ケースが失敗することを確認した。備品のケースは、修正前の失敗をテストデータの不備のため直接は確認できていない。
+  - `CalendarBulkOperationTargetIdScenarioTest`(9件)、`CalendarBulkOperationAggregateTest`(4件)、`ReadModelFingerprinterTest`(4件追加)、APIの再取消422。
+- 全件テスト:
+  - HEAD: 2425件成功(委譲元で再実行。`APP_KEY`を環境変数で与える。`.env`が無いと鍵を使う既存テストが落ちる)。
+  - 中間版(`cd1d40ce`+`5a7d2154`、衝突4ファイルを解消): 2388件成功。
+  - 中間版を作る際、`vendor`をシンボリックリンクにするとHEADの`app/`が読み込まれる。コピーして`composer dump-autoload`すること。
+- リハーサル(旧コードのe2eで作ったDB A。命名統一の`--execute`が失敗したDB):
+  1. 中間版で、補正前の作り直しが拒否されることを確認した。
+  2. 補正の試し実行の結果: 取消イベント1件、対応1件、未対応0件。
+  3. `--execute`: 変わった表は`calendar_bulk_operation_targets`だけ。2回目の試し実行は「対象なし」。
+  4. `read-models:rebuild --dry-run`の差分が0になった。削除日の計算行のずれも解消した。
+  5. HEADで`migrate` → `events:rename-boolean-properties --execute`の結果: 対象379件、既定値の補完4件、changed_tables 0。作り直しの差分も0。
+- 本番の実行: 未実施。docs/27 §3.7の手順で、ユーザーの明示的な許可を得て行う。
+
