@@ -458,8 +458,8 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
       { value: 'payment_scheduled', label: '支払予定' },
       { value: 'completed', label: '完了' },
     ]) {
-      await accountingPage.getByLabel('状態').selectOption(step.value)
-      await accountingPage.getByRole('button', { name: '更新する' }).click()
+      await accountingPage.getByLabel('状態', { exact: true }).selectOption(step.value)
+      await accountingPage.getByRole('button', { name: '状態を変更', exact: true }).click()
       await expect(accountingPage.getByRole('status', { name: step.label })).toBeVisible()
     }
 
@@ -503,8 +503,8 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
       { value: 'shipped', label: '発送済み' },
       { value: 'completed', label: '完了' },
     ]) {
-      await generalAffairsPage.getByLabel('状態').selectOption(step.value)
-      await generalAffairsPage.getByRole('button', { name: '更新する' }).click()
+      await generalAffairsPage.getByLabel('状態', { exact: true }).selectOption(step.value)
+      await generalAffairsPage.getByRole('button', { name: '状態を変更', exact: true }).click()
       await expect(generalAffairsPage.getByRole('status', { name: step.label })).toBeVisible()
     }
 

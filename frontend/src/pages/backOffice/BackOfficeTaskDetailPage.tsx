@@ -8,7 +8,10 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
+import { FormSection } from '../../components/FormSection/FormSection'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { notify } from '../../lib/notify'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
@@ -233,29 +236,32 @@ export function BackOfficeTaskDetailPage() {
           </div>
         )}
 
-        <div className="mt-5 border-t border-border pt-4">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">状態を変更する</h3>
+        <FormSection title="状態を変更する">
           {noNextStatus ? (
             <p className="text-sm text-muted-foreground">この状態から変更できるステータスはありません</p>
           ) : (
-            <>
-              <div className="flex flex-wrap items-end gap-3">
-                <FormField label="状態" htmlFor="status">
-                  <NativeSelect
-                    id="status"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as BackOfficeTaskStatus)}
-                  >
-                    {statusOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {backOfficeTaskStatusLabel(option).label}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </FormField>
-                <FormField label="コメント(任意)" htmlFor="status-comment">
-                  <Input id="status-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
-                </FormField>
+            <FormLayout>
+              <FormField label="状態" htmlFor="status">
+                <NativeSelect
+                  id="status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as BackOfficeTaskStatus)}
+                >
+                  {statusOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {backOfficeTaskStatusLabel(option).label}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+              <FormField label="コメント(任意)" htmlFor="status-comment">
+                <Input id="status-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
+              </FormField>
+              {statusUnchanged && (
+                <p className="mb-2 text-xs text-muted-foreground">変更後のステータスを選択してください</p>
+              )}
+              {changeStatus.error && <ErrorMessage error={changeStatus.error} />}
+              <FormActions>
                 <Button
                   isLoading={changeStatus.isPending}
                   disabled={statusUnchanged}
@@ -271,14 +277,12 @@ export function BackOfficeTaskDetailPage() {
                     )
                   }
                 >
-                  更新する
+                  状態を変更
                 </Button>
-              </div>
-              {statusUnchanged && <p className="text-xs text-muted-foreground">変更後のステータスを選択してください</p>}
-              {changeStatus.error && <ErrorMessage error={changeStatus.error} />}
-            </>
+              </FormActions>
+            </FormLayout>
           )}
-        </div>
+        </FormSection>
 
         {task.task_type === 'attendance_month_confirmation' && task.source_type === 'attendance_month' && (
           <AttendanceMonthConfirmationSection attendanceMonthId={task.source_id} />

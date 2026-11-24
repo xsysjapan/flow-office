@@ -9,7 +9,11 @@ import { DatePicker } from "../../components/DatePicker/DatePicker";
 import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
+import { FormActions } from "../../components/FormActions/FormActions";
 import { FormField } from "../../components/FormField/FormField";
+import { FormLayout } from "../../components/FormLayout/FormLayout";
+import { FormRow } from "../../components/FormRow/FormRow";
+import { FormSection } from "../../components/FormSection/FormSection";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { AttendanceSubmissionReminderExclusionPanel } from "../../components/AttendanceSubmissionReminderExclusionPanel/AttendanceSubmissionReminderExclusionPanel";
@@ -330,9 +334,8 @@ export function UserRoleEditPage() {
     <div className="space-y-4">
       {top}
       <Card title={user.name}>
-        <div className="mb-6 rounded border p-3">
-          <h2 className="mb-3 font-medium">基本情報</h2>
-          <div className="grid gap-3 md:grid-cols-2">
+        <FormLayout className="mb-6">
+          <FormSection title="基本情報">
             <FormField
               label={`氏名${isExternalHrField("name") ? "（外部HR管理）" : ""}`}
               htmlFor="user-profile-name"
@@ -416,35 +419,37 @@ export function UserRoleEditPage() {
                 ))}
               </NativeSelect>
             </FormField>
-          </div>
-          <Button
-            variant="secondary"
-            isLoading={updateUser.isPending}
-            disabled={!profile.name || !profile.email}
-            onClick={() => {
-              const input = Object.fromEntries(
-                Object.entries({
-                  ...profile,
-                  employee_number: profile.employee_number || null,
-                  department: profile.department || null,
-                  job_title: profile.job_title || null,
-                }).filter(([key]) => !isExternalHrField(key)),
-              ) as Partial<UserProfileInput>;
-              updateUser.mutate(
-                { id: userId, input },
-                { onSuccess: () => notify.success("基本情報を保存しました") },
-              );
-            }}
-          >
-            基本情報を保存する
-          </Button>
-          {updateUser.error && <ErrorMessage error={updateUser.error} />}
           {(!profile.name || !profile.email) && (
-            <p className="mt-1.5 text-xs text-muted-foreground">
+            <p className="mb-2 text-xs text-muted-foreground">
               氏名とメールアドレスを入力してください。
             </p>
           )}
-        </div>
+          {updateUser.error && <ErrorMessage error={updateUser.error} />}
+          <FormActions>
+            <Button
+              variant="secondary"
+              isLoading={updateUser.isPending}
+              disabled={!profile.name || !profile.email}
+              onClick={() => {
+                const input = Object.fromEntries(
+                  Object.entries({
+                    ...profile,
+                    employee_number: profile.employee_number || null,
+                    department: profile.department || null,
+                    job_title: profile.job_title || null,
+                  }).filter(([key]) => !isExternalHrField(key)),
+                ) as Partial<UserProfileInput>;
+                updateUser.mutate(
+                  { id: userId, input },
+                  { onSuccess: () => notify.success("基本情報を保存しました") },
+                );
+              }}
+            >
+              基本情報を保存
+            </Button>
+          </FormActions>
+          </FormSection>
+        </FormLayout>
         <div className="mb-6 rounded border p-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -748,33 +753,43 @@ export function UserRoleEditPage() {
           </DialogContent>
         </Dialog>
 
-        <div className="mt-6 border-t border-border pt-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField
-              label="入社日(有給の自動付与に使用)"
-              htmlFor="user-role-edit-hire-date"
-            >
-              <DatePicker
-                id="user-role-edit-hire-date"
-                value={hireDate || undefined}
-                onChange={(date) => setHireDate(date ?? "")}
-              />
-            </FormField>
-            <FormField
-              label="退社日(未設定なら在籍中)"
-              htmlFor="user-role-edit-termination-date"
-            >
-              <DatePicker
-                id="user-role-edit-termination-date"
-                min={hireDate || undefined}
-                value={terminationDate || undefined}
-                onChange={(date) => setTerminationDate(date ?? "")}
-              />
-            </FormField>
-          </div>
-
-          <div className="flex flex-wrap items-start gap-2">
-            <div>
+        <FormLayout className="mt-8">
+          <FormSection title="在籍・利用期間">
+            <FormRow>
+              <FormField
+                label="入社日(有給の自動付与に使用)"
+                htmlFor="user-role-edit-hire-date"
+              >
+                <DatePicker
+                  id="user-role-edit-hire-date"
+                  value={hireDate || undefined}
+                  onChange={(date) => setHireDate(date ?? "")}
+                />
+              </FormField>
+              <FormField
+                label="退社日(未設定なら在籍中)"
+                htmlFor="user-role-edit-termination-date"
+              >
+                <DatePicker
+                  id="user-role-edit-termination-date"
+                  min={hireDate || undefined}
+                  value={terminationDate || undefined}
+                  onChange={(date) => setTerminationDate(date ?? "")}
+                />
+              </FormField>
+            </FormRow>
+            {!hireDate && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                入社日を入力してください。
+              </p>
+            )}
+            {updateHireDate.error && (
+              <ErrorMessage error={updateHireDate.error} />
+            )}
+            {updateTerminationDate.error && (
+              <ErrorMessage error={updateTerminationDate.error} />
+            )}
+            <FormActions>
               <Button
                 variant="secondary"
                 isLoading={updateHireDate.isPending}
@@ -786,18 +801,8 @@ export function UserRoleEditPage() {
                   )
                 }
               >
-                入社日を保存する
+                入社日を保存
               </Button>
-              {!hireDate && (
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  入社日を入力してください。
-                </p>
-              )}
-              {updateHireDate.error && (
-                <ErrorMessage error={updateHireDate.error} />
-              )}
-            </div>
-            <div>
               <Button
                 variant="secondary"
                 isLoading={updateTerminationDate.isPending}
@@ -811,207 +816,201 @@ export function UserRoleEditPage() {
                   )
                 }
               >
-                退社日を保存する
+                退社日を保存
               </Button>
-              {updateTerminationDate.error && (
-                <ErrorMessage error={updateTerminationDate.error} />
-              )}
-            </div>
-          </div>
-        </div>
+            </FormActions>
 
-        <div className="mt-6 border-t border-border pt-4">
-          <FormField
-            label="利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)"
-            htmlFor="user-role-edit-usage-start-date"
-          >
-            <DatePicker
-              id="user-role-edit-usage-start-date"
-              value={usageStartDate || undefined}
-              onChange={(date) => setUsageStartDate(date ?? "")}
-            />
-          </FormField>
-
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              isLoading={updateUsageStartDate.isPending}
-              disabled={!usageStartDate}
-              onClick={() =>
-                updateUsageStartDate.mutate(
-                  { id: userId, usageStartDate },
-                  { onSuccess: () => notify.success("利用開始日を保存しました") },
-                )
-              }
-            >
-              利用開始日を保存する
-            </Button>
-          </div>
-          {updateUsageStartDate.error && (
-            <ErrorMessage error={updateUsageStartDate.error} />
-          )}
-        </div>
-
-        <div className="mt-6 border-t border-border pt-4">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">
-            休暇の自動付与
-          </h3>
-
-          <div className="mb-3 flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Checkbox
-                  id="user-role-edit-paid-leave-auto-grant-enabled"
-                  checked={paidLeaveAutoGrantEnabled}
-                  onCheckedChange={(checked) =>
-                    setPaidLeaveAutoGrantEnabled(checked === true)
-                  }
-                />
-                有給の自動付与を有効にする
-              </label>
-              {user.paid_leave_auto_grant_enabled === false && (
-                <Badge tone="warning">自動付与:無効</Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Checkbox
-                  id="user-role-edit-special-leave-auto-grant-enabled"
-                  checked={specialLeaveAutoGrantEnabled}
-                  onCheckedChange={(checked) =>
-                    setSpecialLeaveAutoGrantEnabled(checked === true)
-                  }
-                />
-                特別休暇の自動付与を有効にする
-              </label>
-              {user.special_leave_auto_grant_enabled === false && (
-                <Badge tone="warning">自動付与:無効</Badge>
-              )}
-            </div>
-          </div>
-
-          <Button
-            variant="secondary"
-            isLoading={
-              updatePaidLeaveAutoGrantEnabled.isPending ||
-              updateSpecialLeaveAutoGrantEnabled.isPending
-            }
-            onClick={() => {
-              updatePaidLeaveAutoGrantEnabled.mutate(
-                {
-                  id: userId,
-                  enabled: paidLeaveAutoGrantEnabled,
-                },
-                { onSuccess: () => notify.success("有給の自動付与設定を保存しました") },
-              );
-              updateSpecialLeaveAutoGrantEnabled.mutate(
-                {
-                  id: userId,
-                  enabled: specialLeaveAutoGrantEnabled,
-                },
-                { onSuccess: () => notify.success("特別休暇の自動付与設定を保存しました") },
-              );
-            }}
-          >
-            自動付与設定を保存する
-          </Button>
-          {updatePaidLeaveAutoGrantEnabled.error && (
-            <ErrorMessage error={updatePaidLeaveAutoGrantEnabled.error} />
-          )}
-          {updateSpecialLeaveAutoGrantEnabled.error && (
-            <ErrorMessage error={updateSpecialLeaveAutoGrantEnabled.error} />
-          )}
-        </div>
-
-        <div className="mt-6 border-t border-border pt-4">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">
-            働き方({currentYearMonth})
-          </h3>
-
-          <div className="mb-4 flex flex-col gap-2">
-            <RadioGroup
-              value={workStyleMode}
-              onValueChange={(value) =>
-                setWorkStyleMode(value as typeof workStyleMode)
-              }
-            >
-              <label className="flex items-start gap-2 text-sm text-foreground">
-                <RadioGroupItem value="default" className="mt-1" />
-                <span>
-                  会社のデフォルトを使用
-                  {defaultWorkStyle && (
-                    <span className="block text-xs text-muted-foreground">
-                      {defaultWorkStyle.name}
-                      {defaultWorkStyle.default_start_time &&
-                      defaultWorkStyle.default_end_time
-                        ? `(${defaultWorkStyle.default_start_time}〜${defaultWorkStyle.default_end_time})`
-                        : ""}
-                    </span>
-                  )}
-                </span>
-              </label>
-
-              <label className="flex items-start gap-2 text-sm text-foreground">
-                <RadioGroupItem value="specify" className="mt-1" />
-                <span>別の働き方を指定</span>
-              </label>
-            </RadioGroup>
-
-            {workStyleMode === "specify" && (
-              <NativeSelect
-                aria-label="指定する働き方"
-                value={selectedWorkStyleId}
-                onChange={(e) => setSelectedWorkStyleId(e.target.value)}
-              >
-                <option value="">選択してください</option>
-                {workStyles?.map((style) => (
-                  <option key={style.id} value={style.id}>
-                    {style.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            )}
-          </div>
-
-          <Button
-            variant="secondary"
-            isLoading={
-              assignWorkStyleForMonth.isPending ||
-              removeWorkStyleAssignment.isPending
-            }
-            disabled={workStyleMode === "specify" && !selectedWorkStyleId}
-            onClick={handleSaveWorkStyle}
-          >
-            働き方を保存する
-          </Button>
-          {assignWorkStyleForMonth.error && (
-            <ErrorMessage error={assignWorkStyleForMonth.error} />
-          )}
-          {removeWorkStyleAssignment.error && (
-            <ErrorMessage error={removeWorkStyleAssignment.error} />
-          )}
-          {workStyleMode === "specify" && !selectedWorkStyleId && (
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              指定する働き方を選択してください。
-            </p>
-          )}
-
-          {(workStyleHistory ?? []).length > 0 && (
             <div className="mt-4">
-              <h4 className="mb-2 text-xs font-semibold text-muted-foreground">
-                適用履歴
-              </h4>
-              <ul className="divide-y divide-border text-sm">
-                {workStyleHistory?.map((assignment) => (
-                  <li key={assignment.id} className="py-1 text-foreground">
-                    {assignment.year_month}:{" "}
-                    {assignment.work_style?.name ?? assignment.work_style_id}
-                  </li>
-                ))}
-              </ul>
+              <FormField
+                label="利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)"
+                htmlFor="user-role-edit-usage-start-date"
+              >
+                <DatePicker
+                  id="user-role-edit-usage-start-date"
+                  value={usageStartDate || undefined}
+                  onChange={(date) => setUsageStartDate(date ?? "")}
+                />
+              </FormField>
+              {updateUsageStartDate.error && (
+                <ErrorMessage error={updateUsageStartDate.error} />
+              )}
+              <FormActions>
+                <Button
+                  variant="secondary"
+                  isLoading={updateUsageStartDate.isPending}
+                  disabled={!usageStartDate}
+                  onClick={() =>
+                    updateUsageStartDate.mutate(
+                      { id: userId, usageStartDate },
+                      { onSuccess: () => notify.success("利用開始日を保存しました") },
+                    )
+                  }
+                >
+                  利用開始日を保存
+                </Button>
+              </FormActions>
             </div>
-          )}
-        </div>
+          </FormSection>
+        </FormLayout>
+
+        <FormLayout className="mt-8">
+          <FormSection title="休暇の自動付与">
+            <div className="mb-4 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Checkbox
+                    id="user-role-edit-paid-leave-auto-grant-enabled"
+                    checked={paidLeaveAutoGrantEnabled}
+                    onCheckedChange={(checked) =>
+                      setPaidLeaveAutoGrantEnabled(checked === true)
+                    }
+                  />
+                  有給の自動付与を有効にする
+                </label>
+                {user.paid_leave_auto_grant_enabled === false && (
+                  <Badge tone="warning">自動付与:無効</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Checkbox
+                    id="user-role-edit-special-leave-auto-grant-enabled"
+                    checked={specialLeaveAutoGrantEnabled}
+                    onCheckedChange={(checked) =>
+                      setSpecialLeaveAutoGrantEnabled(checked === true)
+                    }
+                  />
+                  特別休暇の自動付与を有効にする
+                </label>
+                {user.special_leave_auto_grant_enabled === false && (
+                  <Badge tone="warning">自動付与:無効</Badge>
+                )}
+              </div>
+            </div>
+            {updatePaidLeaveAutoGrantEnabled.error && (
+              <ErrorMessage error={updatePaidLeaveAutoGrantEnabled.error} />
+            )}
+            {updateSpecialLeaveAutoGrantEnabled.error && (
+              <ErrorMessage error={updateSpecialLeaveAutoGrantEnabled.error} />
+            )}
+            <FormActions>
+              <Button
+                variant="secondary"
+                isLoading={
+                  updatePaidLeaveAutoGrantEnabled.isPending ||
+                  updateSpecialLeaveAutoGrantEnabled.isPending
+                }
+                onClick={() => {
+                  updatePaidLeaveAutoGrantEnabled.mutate(
+                    {
+                      id: userId,
+                      enabled: paidLeaveAutoGrantEnabled,
+                    },
+                    { onSuccess: () => notify.success("有給の自動付与設定を保存しました") },
+                  );
+                  updateSpecialLeaveAutoGrantEnabled.mutate(
+                    {
+                      id: userId,
+                      enabled: specialLeaveAutoGrantEnabled,
+                    },
+                    { onSuccess: () => notify.success("特別休暇の自動付与設定を保存しました") },
+                  );
+                }}
+              >
+                自動付与設定を保存
+              </Button>
+            </FormActions>
+          </FormSection>
+        </FormLayout>
+
+        <FormLayout className="mt-8">
+          <FormSection title={`働き方(${currentYearMonth})`}>
+            <div className="mb-4 flex flex-col gap-2">
+              <RadioGroup
+                value={workStyleMode}
+                onValueChange={(value) =>
+                  setWorkStyleMode(value as typeof workStyleMode)
+                }
+              >
+                <label className="flex items-start gap-2 text-sm text-foreground">
+                  <RadioGroupItem value="default" className="mt-1" />
+                  <span>
+                    会社のデフォルトを使用
+                    {defaultWorkStyle && (
+                      <span className="block text-xs text-muted-foreground">
+                        {defaultWorkStyle.name}
+                        {defaultWorkStyle.default_start_time &&
+                        defaultWorkStyle.default_end_time
+                          ? `(${defaultWorkStyle.default_start_time}〜${defaultWorkStyle.default_end_time})`
+                          : ""}
+                      </span>
+                    )}
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-2 text-sm text-foreground">
+                  <RadioGroupItem value="specify" className="mt-1" />
+                  <span>別の働き方を指定</span>
+                </label>
+              </RadioGroup>
+
+              {workStyleMode === "specify" && (
+                <NativeSelect
+                  aria-label="指定する働き方"
+                  value={selectedWorkStyleId}
+                  onChange={(e) => setSelectedWorkStyleId(e.target.value)}
+                >
+                  <option value="">選択してください</option>
+                  {workStyles?.map((style) => (
+                    <option key={style.id} value={style.id}>
+                      {style.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              )}
+            </div>
+            {workStyleMode === "specify" && !selectedWorkStyleId && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                指定する働き方を選択してください。
+              </p>
+            )}
+
+            {assignWorkStyleForMonth.error && (
+              <ErrorMessage error={assignWorkStyleForMonth.error} />
+            )}
+            {removeWorkStyleAssignment.error && (
+              <ErrorMessage error={removeWorkStyleAssignment.error} />
+            )}
+            <FormActions>
+              <Button
+                variant="secondary"
+                isLoading={
+                  assignWorkStyleForMonth.isPending ||
+                  removeWorkStyleAssignment.isPending
+                }
+                disabled={workStyleMode === "specify" && !selectedWorkStyleId}
+                onClick={handleSaveWorkStyle}
+              >
+                働き方を保存
+              </Button>
+            </FormActions>
+            {(workStyleHistory ?? []).length > 0 && (
+              <div className="mt-4">
+                <h4 className="mb-2 text-xs font-semibold text-muted-foreground">
+                  適用履歴
+                </h4>
+                <ul className="divide-y divide-border text-sm">
+                  {workStyleHistory?.map((assignment) => (
+                    <li key={assignment.id} className="py-1 text-foreground">
+                      {assignment.year_month}:{" "}
+                      {assignment.work_style?.name ?? assignment.work_style_id}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </FormSection>
+        </FormLayout>
 
         <div className="mt-6 border-t border-border pt-4">
           <AttendanceSubmissionReminderExclusionPanel userId={userId} />

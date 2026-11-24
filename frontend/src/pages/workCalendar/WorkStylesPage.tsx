@@ -6,7 +6,10 @@ import { Card } from '../../components/Card/Card'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
+import { FormRow } from '../../components/FormRow/FormRow'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
@@ -77,8 +80,7 @@ function WorkStyleOnboardingCard() {
 
   return (
     <Card title="一般的な勤務設定を用意しました">
-      {createDefault.error && <ErrorMessage error={createDefault.error} />}
-
+      <FormLayout>
       {!isEditing ? (
         <>
           <ul className="mb-4 text-sm text-foreground">
@@ -91,18 +93,19 @@ function WorkStyleOnboardingCard() {
             <li>土日祝休み</li>
           </ul>
 
-          <div className="flex flex-wrap gap-3">
-            <Button isLoading={createDefault.isPending} onClick={handleStart}>
-              この設定で始める
-            </Button>
+          {createDefault.error && <ErrorMessage error={createDefault.error} />}
+          <FormActions>
             <Button variant="secondary" onClick={() => setIsEditing(true)}>
               内容を変更する
             </Button>
-          </div>
+            <Button isLoading={createDefault.isPending} onClick={handleStart}>
+              この設定で始める
+            </Button>
+          </FormActions>
         </>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
             <FormField label="名称" htmlFor="onboarding-work-style-name" required>
               <Input id="onboarding-work-style-name" value={name} onChange={(e) => setName(e.target.value)} />
             </FormField>
@@ -117,25 +120,29 @@ function WorkStyleOnboardingCard() {
               />
             </FormField>
 
-            <FormField label="始業時刻" htmlFor="onboarding-work-style-start-time" required>
-              <TimePicker id="onboarding-work-style-start-time" value={startTime} onChange={(time) => setStartTime(time ?? '')} />
-            </FormField>
+            <FormRow>
+              <FormField label="始業時刻" htmlFor="onboarding-work-style-start-time" required>
+                <TimePicker id="onboarding-work-style-start-time" value={startTime} onChange={(time) => setStartTime(time ?? '')} />
+              </FormField>
 
-            <FormField label="終業時刻" htmlFor="onboarding-work-style-end-time" required>
-              <TimePicker id="onboarding-work-style-end-time" value={endTime} onChange={(time) => setEndTime(time ?? '')} />
-            </FormField>
+              <FormField label="終業時刻" htmlFor="onboarding-work-style-end-time" required>
+                <TimePicker id="onboarding-work-style-end-time" value={endTime} onChange={(time) => setEndTime(time ?? '')} />
+              </FormField>
+            </FormRow>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Button isLoading={createDefault.isPending} onClick={handleSaveEdited}>
-              保存して開始する
-            </Button>
+          {createDefault.error && <ErrorMessage error={createDefault.error} />}
+          <FormActions>
             <Button variant="secondary" onClick={() => setIsEditing(false)}>
               キャンセル
             </Button>
-          </div>
+            <Button isLoading={createDefault.isPending} onClick={handleSaveEdited}>
+              保存して開始
+            </Button>
+          </FormActions>
         </>
       )}
+      </FormLayout>
     </Card>
   )
 }
@@ -369,10 +376,8 @@ function MonthlyWorkStyleAssignmentCard() {
       <p className="mb-4 text-sm text-muted-foreground">
         働き方が設定されていない月は、システムのデフォルト働き方にフォールバックする。
       </p>
-      {assignForMonth.error && <ErrorMessage error={assignForMonth.error} />}
-      {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <FormLayout>
+      <div>
         <FormField label="働き方の対象社員" htmlFor="monthly-work-style-user" required>
           <UserPicker id="monthly-work-style-user" value={targetUserId} onChange={handleUserChange} />
         </FormField>
@@ -402,10 +407,13 @@ function MonthlyWorkStyleAssignmentCard() {
       </div>
 
       {!isConfirming ? (
-        <Button disabled={!targetUserId || !yearMonth || !workStyleId} onClick={() => setIsConfirming(true)}>
-          変更内容を確認する
-        </Button>
+        <FormActions>
+          <Button disabled={!targetUserId || !yearMonth || !workStyleId} onClick={() => setIsConfirming(true)}>
+            変更内容を確認する
+          </Button>
+        </FormActions>
       ) : (
+        <>
         <div className="mb-4 rounded-md border border-border p-4 text-sm">
           <p className="mb-3 font-semibold text-foreground">変更内容の確認</p>
 
@@ -441,16 +449,20 @@ function MonthlyWorkStyleAssignmentCard() {
             この働き方をもとに{yearMonth}の勤務予定を自動生成する(既存の勤務予定は上書きされます)
           </label>
 
-          <div className="flex flex-wrap gap-3">
-            <Button isLoading={assignForMonth.isPending || generateShifts.isPending} onClick={handleSave}>
-              この内容で保存する
-            </Button>
-            <Button variant="secondary" onClick={() => setIsConfirming(false)}>
-              キャンセル
-            </Button>
-          </div>
         </div>
+        {assignForMonth.error && <ErrorMessage error={assignForMonth.error} />}
+        {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
+        <FormActions>
+          <Button variant="secondary" onClick={() => setIsConfirming(false)}>
+            キャンセル
+          </Button>
+          <Button isLoading={assignForMonth.isPending || generateShifts.isPending} onClick={handleSave}>
+            この内容で保存
+          </Button>
+        </FormActions>
+        </>
       )}
+      </FormLayout>
 
       {targetUserId !== undefined && (
         <div className="mt-5 border-t border-border pt-4">

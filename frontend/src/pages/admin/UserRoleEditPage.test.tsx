@@ -408,7 +408,7 @@ describe("UserRoleEditPage", () => {
       "2024-04-01",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "入社日を保存する" }),
+      screen.getByRole("button", { name: "入社日を保存" }),
     );
 
     await waitFor(() =>
@@ -436,7 +436,7 @@ describe("UserRoleEditPage", () => {
       await screen.findByRole("button", { name: "クリア" }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "退社日を保存する" }),
+      screen.getByRole("button", { name: "退社日を保存" }),
     );
 
     await waitFor(() =>
@@ -474,7 +474,7 @@ describe("UserRoleEditPage", () => {
       "2026-07-01",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "利用開始日を保存する" }),
+      screen.getByRole("button", { name: "利用開始日を保存" }),
     );
 
     await waitFor(() =>
@@ -508,7 +508,7 @@ describe("UserRoleEditPage", () => {
 
     await userEvent.click(paidLeaveCheckbox);
     await userEvent.click(
-      screen.getByRole("button", { name: "自動付与設定を保存する" }),
+      screen.getByRole("button", { name: "自動付与設定を保存" }),
     );
 
     await waitFor(() =>
@@ -563,7 +563,7 @@ describe("UserRoleEditPage", () => {
       "フレックスタイム制",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "働き方を保存する" }),
+      screen.getByRole("button", { name: "働き方を保存" }),
     );
 
     await waitFor(() =>
@@ -608,7 +608,7 @@ describe("UserRoleEditPage", () => {
       screen.getByRole("radio", { name: /会社のデフォルトを使用/ }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "働き方を保存する" }),
+      screen.getByRole("button", { name: "働き方を保存" }),
     );
 
     await waitFor(() =>

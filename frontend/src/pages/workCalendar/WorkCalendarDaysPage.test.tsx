@@ -151,7 +151,7 @@ describe('WorkCalendarDaysPage', () => {
     expect(await screen.findByText('29日')).toBeInTheDocument()
     expect(screen.getByText('232時間')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '保存する' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(workCalendarsApi.putWorkCalendarDays).toHaveBeenCalled())
     const [, savedDays] = vi.mocked(workCalendarsApi.putWorkCalendarDays).mock.calls[0]
@@ -200,7 +200,7 @@ describe('WorkCalendarDaysPage', () => {
         : d,
     )
     vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(editedDays)
-    await user.click(screen.getByRole('button', { name: '保存する' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => expect(workCalendarsApi.putWorkCalendarDays).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByRole('button', { name: '2026-04-05 所定休日' })).toBeInTheDocument())
 
@@ -459,7 +459,7 @@ describe('WorkCalendarDaysPage', () => {
     /**
      * 同期はサーバ側の日別データ(祝日フラグ・祝日名)を書き換えるため、同期後はグリッドが
      * 再読み込みされて同期結果を反映していなければならない。これが無いと、画面には同期前の
-     * 内容が残ったままになり、その状態で「保存する」を押すと同期結果を古い内容で
+     * 内容が残ったままになり、その状態で「保存」を押すと同期結果を古い内容で
      * 上書きしてしまう(データ消失)。
      */
     it('reloads the grid from the server after a sync so the synced holidays are not overwritten on save', async () => {
@@ -506,7 +506,7 @@ describe('WorkCalendarDaysPage', () => {
       expect(fetchDays.mock.calls.length).toBeGreaterThan(1)
 
       // その状態で保存すると、同期結果(祝日)が保持されたまま送信される。
-      await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+      await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
       await waitFor(() => expect(workCalendarsApi.putWorkCalendarDays).toHaveBeenCalled())
 

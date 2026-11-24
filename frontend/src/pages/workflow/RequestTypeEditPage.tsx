@@ -4,7 +4,10 @@ import { BackLink } from '../../components/BackLink/BackLink'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
+import { FormSection } from '../../components/FormSection/FormSection'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -159,7 +162,7 @@ export function RequestTypeEditPage() {
       {top}
 
       <Card>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormLayout>
           <FormField label="コード" htmlFor="code" required>
             <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
           </FormField>
@@ -167,7 +170,6 @@ export function RequestTypeEditPage() {
           <FormField label="名称" htmlFor="name" required>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-        </div>
 
         <FormField label="説明" htmlFor="description">
           <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -182,7 +184,7 @@ export function RequestTypeEditPage() {
           />
         </FormField>
 
-        <div className="mb-4 flex flex-col gap-2">
+        <div className="mb-4 flex flex-col gap-4">
           <label className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Checkbox
               id="requires-attachment"
@@ -193,7 +195,7 @@ export function RequestTypeEditPage() {
           </label>
 
           {requiresAttachment && (
-            <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+            <div>
               <FormField label="添付ファイルの上限サイズ(KB)" htmlFor="attachment-max-size-kb">
                 <Input
                   id="attachment-max-size-kb"
@@ -216,7 +218,7 @@ export function RequestTypeEditPage() {
           )}
         </div>
 
-        <div className="mb-4 flex flex-col gap-2">
+        <div className="mb-4 flex flex-col gap-4">
           <label className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Checkbox
               id="requires-backoffice-task"
@@ -227,7 +229,7 @@ export function RequestTypeEditPage() {
           </label>
 
           {requiresBackOfficeTask && (
-            <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+            <div>
               <FormField label="バックオフィスタスク種別" htmlFor="backoffice-task-type">
                 <Input
                   id="backoffice-task-type"
@@ -252,16 +254,17 @@ export function RequestTypeEditPage() {
                 />
               </FormField>
 
-              <FormField label="ステータス遷移(JSON、任意)" htmlFor="allowed-status-transitions">
+              <FormField
+                label="ステータス遷移(JSON、任意)"
+                htmlFor="allowed-status-transitions"
+                description="未設定なら遷移制限なし。設定するとUC-B003のステータス変更がこの定義に従う。"
+              >
                 <Textarea
                   id="allowed-status-transitions"
                   placeholder={'{"not_started": ["in_review"], "in_review": ["payment_scheduled"]}'}
                   value={allowedStatusTransitionsJson}
                   onChange={(e) => setAllowedStatusTransitionsJson(e.target.value)}
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  未設定なら遷移制限なし。設定するとUC-B003のステータス変更がこの定義に従う。
-                </p>
                 {allowedStatusTransitionsError && <p className="mt-1 text-xs text-destructive">{allowedStatusTransitionsError}</p>}
               </FormField>
             </div>
@@ -273,60 +276,65 @@ export function RequestTypeEditPage() {
           </label>
         </div>
 
-        <h3 className="mb-3 text-sm font-semibold text-foreground">入力項目</h3>
-        <ul className="mb-3 flex flex-col gap-2">
-          {rows.map((row) => (
-            <li key={row.rowId} className="flex flex-wrap items-center gap-2">
-              <Input
-                className="w-auto"
-                placeholder="キー"
-                value={row.key}
-                onChange={(e) => updateRow(row.rowId, { key: e.target.value })}
-              />
-              <Input
-                className="w-auto"
-                placeholder="ラベル"
-                value={row.label}
-                onChange={(e) => updateRow(row.rowId, { label: e.target.value })}
-              />
-              <NativeSelect
-                className="w-auto"
-                value={row.type}
-                onChange={(e) => updateRow(row.rowId, { type: e.target.value as RequestFormFieldSchema['type'] })}
-              >
-                <option value="text">テキスト</option>
-                <option value="number">数値</option>
-                <option value="date">日付</option>
-              </NativeSelect>
-              <label className="flex items-center gap-2 text-sm text-foreground">
-                <Checkbox
-                  checked={row.required ?? false}
-                  onCheckedChange={(checked) => updateRow(row.rowId, { required: checked === true })}
-                />
-                必須
-              </label>
-              <Button variant="danger" onClick={() => removeRow(row.rowId)}>
-                削除
-              </Button>
-            </li>
-          ))}
-        </ul>
-        <Button variant="secondary" onClick={() => addRow({ key: '', label: '', type: 'text' })}>
-          項目を追加
-        </Button>
+        </FormLayout>
 
-        <div className="mt-5 flex items-center gap-3">
-          <Button variant="secondary" disabled={isBusy} onClick={handleCancel}>
-            キャンセル
+        <FormSection title="入力項目" headingLevel={2}>
+          <ul className="mb-3 flex flex-col gap-2">
+            {rows.map((row) => (
+              <li key={row.rowId} className="flex flex-wrap items-center gap-2">
+                <Input
+                  className="w-auto"
+                  placeholder="キー"
+                  value={row.key}
+                  onChange={(e) => updateRow(row.rowId, { key: e.target.value })}
+                />
+                <Input
+                  className="w-auto"
+                  placeholder="ラベル"
+                  value={row.label}
+                  onChange={(e) => updateRow(row.rowId, { label: e.target.value })}
+                />
+                <NativeSelect
+                  className="w-auto"
+                  value={row.type}
+                  onChange={(e) => updateRow(row.rowId, { type: e.target.value as RequestFormFieldSchema['type'] })}
+                >
+                  <option value="text">テキスト</option>
+                  <option value="number">数値</option>
+                  <option value="date">日付</option>
+                </NativeSelect>
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <Checkbox
+                    checked={row.required ?? false}
+                    onCheckedChange={(checked) => updateRow(row.rowId, { required: checked === true })}
+                  />
+                  必須
+                </label>
+                <Button variant="danger" onClick={() => removeRow(row.rowId)}>
+                  削除
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <Button variant="secondary" onClick={() => addRow({ key: '', label: '', type: 'text' })}>
+            項目を追加
           </Button>
-          <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
-            保存する
-          </Button>
-        </div>
-        {error && <ErrorMessage error={error} />}
-        {(!code || !name) && (
-          <p className="mt-2 text-xs text-muted-foreground">コードと名称を入力すると保存できます。</p>
-        )}
+        </FormSection>
+
+        <FormLayout className="mt-4">
+          {(!code || !name) && (
+            <p className="mb-2 text-xs text-muted-foreground">コードと名称を入力すると保存できます。</p>
+          )}
+          {error && <ErrorMessage error={error} />}
+          <FormActions>
+            <Button variant="secondary" disabled={isBusy} onClick={handleCancel}>
+              キャンセル
+            </Button>
+            <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
+              {isCreate ? '作成' : '保存'}
+            </Button>
+          </FormActions>
+        </FormLayout>
       </Card>
     </div>
   )

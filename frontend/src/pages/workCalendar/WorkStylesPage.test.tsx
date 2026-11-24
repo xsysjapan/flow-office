@@ -165,7 +165,7 @@ describe('WorkStylesPage', () => {
     const nameInput = screen.getByLabelText('名称')
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, '標準勤務(編集済み)')
-    await userEvent.click(screen.getByRole('button', { name: '保存して開始する' }))
+    await userEvent.click(screen.getByRole('button', { name: '保存して開始' }))
 
     await waitFor(() =>
       expect(workStylesApi.createDefaultWorkStyle).toHaveBeenCalledWith({
@@ -405,7 +405,7 @@ describe('WorkStylesPage', () => {
         assigned_by_user_id: 'admin-1',
       },
     ])
-    await userEvent.click(screen.getByRole('button', { name: 'この内容で保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: 'この内容で保存' }))
 
     await waitFor(() =>
       expect(userWorkStyleMonthlyAssignmentsApi.assignUserWorkStyleForMonth).toHaveBeenCalledWith({
@@ -482,7 +482,7 @@ describe('WorkStylesPage', () => {
     await userEvent.selectOptions(screen.getByLabelText('働き方'), '標準勤務')
     await userEvent.click(screen.getByRole('button', { name: '変更内容を確認する' }))
     await userEvent.click(await screen.findByLabelText(/この働き方をもとに2026-11の勤務予定を自動生成する/))
-    await userEvent.click(screen.getByRole('button', { name: 'この内容で保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: 'この内容で保存' }))
 
     await waitFor(() =>
       expect(employeeShiftAssignmentsApi.generateShiftAssignments).toHaveBeenCalledWith({

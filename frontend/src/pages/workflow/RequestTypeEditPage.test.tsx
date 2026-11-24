@@ -113,7 +113,7 @@ describe('RequestTypeEditPage', () => {
 
     await userEvent.type(await screen.findByLabelText('コード'), 'new_type')
     await userEvent.type(screen.getByLabelText('名称'), '新規種別')
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(requestTypesApi.createRequestType).toHaveBeenCalledWith({
@@ -142,7 +142,7 @@ describe('RequestTypeEditPage', () => {
     renderPage('/admin/request-types/1')
 
     await screen.findByDisplayValue('経費精算')
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
       expect(requestTypesApi.updateRequestType).toHaveBeenCalledWith(1, {

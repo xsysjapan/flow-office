@@ -6,7 +6,10 @@ import { Card } from "../../components/Card/Card";
 import { ClickableTableRow } from "../../components/ClickableTableRow/ClickableTableRow";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
+import { FormActions } from "../../components/FormActions/FormActions";
 import { FormField } from "../../components/FormField/FormField";
+import { FormLayout } from "../../components/FormLayout/FormLayout";
+import { FormSection } from "../../components/FormSection/FormSection";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { notify } from "../../lib/notify";
@@ -212,6 +215,13 @@ export function RoleDefinitionPage() {
               />
             </FormField>
           </div>
+          {(!roleForm.code || !roleForm.name) && (
+            <p className="text-xs text-muted-foreground">
+              ロールコードと名称を入力してください。
+            </p>
+          )}
+          {createRole.error && <ErrorMessage error={createRole.error} />}
+          {cloneRole.error && <ErrorMessage error={cloneRole.error} />}
           <DialogFooter>
             <Button
               variant="secondary"
@@ -219,51 +229,42 @@ export function RoleDefinitionPage() {
             >
               キャンセル
             </Button>
-            <div>
-              <Button
-                disabled={!roleForm.code || !roleForm.name}
-                isLoading={
-                  createMode === "clone"
-                    ? cloneRole.isPending
-                    : createRole.isPending
-                }
-                onClick={() => {
-                  const input = {
-                    code: roleForm.code,
-                    name: roleForm.name,
-                    description: roleForm.description || undefined,
-                  };
-                  if (createMode === "clone" && selectedRole) {
-                    cloneRole.mutate(
-                      { id: selectedRole.id, input },
-                      {
-                        onSuccess: () => {
-                          setCreateDialogOpen(false);
-                          notify.success("ロールを複製しました");
-                        },
-                      },
-                    );
-                  } else {
-                    createRole.mutate(input, {
+            <Button
+              disabled={!roleForm.code || !roleForm.name}
+              isLoading={
+                createMode === "clone"
+                  ? cloneRole.isPending
+                  : createRole.isPending
+              }
+              onClick={() => {
+                const input = {
+                  code: roleForm.code,
+                  name: roleForm.name,
+                  description: roleForm.description || undefined,
+                };
+                if (createMode === "clone" && selectedRole) {
+                  cloneRole.mutate(
+                    { id: selectedRole.id, input },
+                    {
                       onSuccess: () => {
                         setCreateDialogOpen(false);
-                        notify.success("ロールを作成しました");
+                        notify.success("ロールを複製しました");
                       },
-                    });
-                  }
-                }}
-              >
-                {createMode === "clone" ? "複製する" : "作成"}
-              </Button>
-              {(!roleForm.code || !roleForm.name) && (
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  ロールコードと名称を入力してください。
-                </p>
-              )}
-            </div>
+                    },
+                  );
+                } else {
+                  createRole.mutate(input, {
+                    onSuccess: () => {
+                      setCreateDialogOpen(false);
+                      notify.success("ロールを作成しました");
+                    },
+                  });
+                }
+              }}
+            >
+              {createMode === "clone" ? "複製する" : "作成"}
+            </Button>
           </DialogFooter>
-          {createRole.error && <ErrorMessage error={createRole.error} />}
-          {cloneRole.error && <ErrorMessage error={cloneRole.error} />}
         </DialogContent>
       </Dialog>
 
@@ -384,9 +385,8 @@ function RoleDetail({
         </Button>
       }
     >
-      <div className="mb-6 rounded border p-3">
-        <h2 className="mb-3 font-medium">基本情報</h2>
-        <div className="grid gap-3 md:grid-cols-2">
+      <FormLayout>
+        <FormSection title="基本情報">
           <FormField label="ロール名" htmlFor="role-basic-name">
             <Input
               id="role-basic-name"
@@ -405,7 +405,15 @@ function RoleDetail({
               }
             />
           </FormField>
-          <FormField label="状態" htmlFor="role-basic-status">
+          <FormField
+            label="状態"
+            htmlFor="role-basic-status"
+            description={
+              role.is_system
+                ? "システム標準ロールのため状態は変更できません。"
+                : undefined
+            }
+          >
             <NativeSelect
               id="role-basic-status"
               disabled={role.is_system}
@@ -417,155 +425,152 @@ function RoleDetail({
               <option value="active">有効</option>
               <option value="inactive">廃止</option>
             </NativeSelect>
-            {Boolean(role.is_system) && (
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                システム標準ロールのため状態は変更できません。
-              </p>
-            )}
           </FormField>
-        </div>
-        <Button
-          variant="secondary"
-          isLoading={updateRole.isPending}
-          disabled={!basicForm.name}
-          onClick={() =>
-            updateRole.mutate(
-              {
-                id: role.id,
-                input: {
-                  name: basicForm.name,
-                  description: basicForm.description || null,
-                  status: basicForm.status,
-                },
-              },
-              { onSuccess: () => notify.success("ロールの基本情報を保存しました") },
-            )
-          }
-        >
-          基本情報を保存
-        </Button>
-        {!basicForm.name && (
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            ロール名を入力してください。
-          </p>
-        )}
-        {updateRole.error && <ErrorMessage error={updateRole.error} />}
-      </div>
-
-      <div className="mb-6 rounded border p-3">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-medium">Permission</h2>
-          <Button
-            isLoading={updateRolePermissions.isPending}
-            onClick={() =>
-              updateRolePermissions.mutate(
-                {
-                  roleId: role.id,
-                  permissionIds: selectedPermissions,
-                },
-                { onSuccess: () => notify.success("Permissionを保存しました") },
-              )
-            }
-          >
-            Permissionを保存
-          </Button>
-        </div>
-        {updateRolePermissions.error && (
-          <ErrorMessage error={updateRolePermissions.error} />
-        )}
-        <div className="grid gap-3 md:grid-cols-3">
-          {permissionGroups.map(([resource, items]) => (
-            <fieldset className="rounded border p-3" key={resource}>
-              <legend className="px-1 text-sm font-medium">{resource}</legend>
-              {items.map((permission) => (
-                <label className="flex gap-2 text-sm" key={permission.id}>
-                  <Checkbox
-                    checked={selectedPermissions.includes(permission.id)}
-                    onCheckedChange={(checked) =>
-                      setSelectedPermissions((current) =>
-                        checked === true
-                          ? [...current, permission.id]
-                          : current.filter((id) => id !== permission.id),
-                      )
-                    }
-                  />
-                  <span>
-                    {permission.action}
-                    {permission.description && (
-                      <span className="block text-xs text-muted-foreground">
-                        {permission.description}
-                      </span>
-                    )}
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-          ))}
-          {permissionGroups.length === 0 && (
-            <EmptyState title="Permissionはまだありません。" />
+          {!basicForm.name && (
+            <p className="mb-2 text-xs text-muted-foreground">
+              ロール名を入力してください。
+            </p>
           )}
-        </div>
-      </div>
+          {updateRole.error && <ErrorMessage error={updateRole.error} />}
+          <FormActions>
+            <Button
+              variant="secondary"
+              isLoading={updateRole.isPending}
+              disabled={!basicForm.name}
+              onClick={() =>
+                updateRole.mutate(
+                  {
+                    id: role.id,
+                    input: {
+                      name: basicForm.name,
+                      description: basicForm.description || null,
+                      status: basicForm.status,
+                    },
+                  },
+                  { onSuccess: () => notify.success("ロールの基本情報を保存しました") },
+                )
+              }
+            >
+              基本情報を保存
+            </Button>
+          </FormActions>
+        </FormSection>
 
-      <div className="rounded border p-3">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-medium">Feature構成</h2>
-          <Button
-            isLoading={updateRoleFeatures.isPending}
-            onClick={() =>
-              updateRoleFeatures.mutate(
-                {
-                  roleId: role.id,
-                  featureIds: selectedFeatureIds,
-                },
-                { onSuccess: () => notify.success("Feature構成を保存しました") },
-              )
-            }
-          >
-            Feature構成を保存
-          </Button>
-        </div>
-        {updateRoleFeatures.error && (
-          <ErrorMessage error={updateRoleFeatures.error} />
-        )}
-        {allFeatures.length === 0 ? (
-          <EmptyState title="Featureはまだありません。" />
-        ) : (
-          <div className="space-y-2">
-            {allFeatures.map((feature) => (
-              <div key={feature.id}>
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={selectedFeatureIds.includes(feature.id)}
-                    onCheckedChange={(checked) =>
-                      toggleFeature(feature.id, checked === true)
-                    }
-                  />
-                  <span className="font-medium">{feature.name}</span>
-                </label>
-                {(feature.children ?? []).length > 0 && (
-                  <div className="ml-6 mt-1 space-y-1">
-                    {feature.children?.map((child) => (
-                      <label
-                        className="flex items-center gap-2 text-sm"
-                        key={child.id}
-                      >
-                        <Checkbox
-                          checked={selectedFeatureIds.includes(child.id)}
-                          onCheckedChange={(checked) =>
-                            toggleFeature(child.id, checked === true)
-                          }
-                        />
-                        <span>{child.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
+        <FormSection title="Permission">
+          <div className="mb-4 grid gap-3">
+            {permissionGroups.map(([resource, items]) => (
+              <fieldset className="rounded-md border p-3" key={resource}>
+                <legend className="px-1 text-sm font-medium">{resource}</legend>
+                {items.map((permission) => (
+                  <label className="flex gap-2 text-sm" key={permission.id}>
+                    <Checkbox
+                      checked={selectedPermissions.includes(permission.id)}
+                      onCheckedChange={(checked) =>
+                        setSelectedPermissions((current) =>
+                          checked === true
+                            ? [...current, permission.id]
+                            : current.filter((id) => id !== permission.id),
+                        )
+                      }
+                    />
+                    <span>
+                      {permission.action}
+                      {permission.description && (
+                        <span className="block text-xs text-muted-foreground">
+                          {permission.description}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
             ))}
+            {permissionGroups.length === 0 && (
+              <EmptyState title="Permissionはまだありません。" />
+            )}
           </div>
-        )}
-      </div>
+          {updateRolePermissions.error && (
+            <ErrorMessage error={updateRolePermissions.error} />
+          )}
+          <FormActions>
+            <Button
+              variant="secondary"
+              isLoading={updateRolePermissions.isPending}
+              onClick={() =>
+                updateRolePermissions.mutate(
+                  {
+                    roleId: role.id,
+                    permissionIds: selectedPermissions,
+                  },
+                  { onSuccess: () => notify.success("Permissionを保存しました") },
+                )
+              }
+            >
+              Permissionを保存
+            </Button>
+          </FormActions>
+        </FormSection>
+
+        <FormSection title="Feature構成">
+          {allFeatures.length === 0 ? (
+            <EmptyState title="Featureはまだありません。" />
+          ) : (
+            <div className="mb-4 space-y-2">
+              {allFeatures.map((feature) => (
+                <div key={feature.id}>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={selectedFeatureIds.includes(feature.id)}
+                      onCheckedChange={(checked) =>
+                        toggleFeature(feature.id, checked === true)
+                      }
+                    />
+                    <span className="font-medium">{feature.name}</span>
+                  </label>
+                  {(feature.children ?? []).length > 0 && (
+                    <div className="ml-6 mt-1 space-y-1">
+                      {feature.children?.map((child) => (
+                        <label
+                          className="flex items-center gap-2 text-sm"
+                          key={child.id}
+                        >
+                          <Checkbox
+                            checked={selectedFeatureIds.includes(child.id)}
+                            onCheckedChange={(checked) =>
+                              toggleFeature(child.id, checked === true)
+                            }
+                          />
+                          <span>{child.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {updateRoleFeatures.error && (
+            <ErrorMessage error={updateRoleFeatures.error} />
+          )}
+          <FormActions>
+            <Button
+              variant="secondary"
+              isLoading={updateRoleFeatures.isPending}
+              onClick={() =>
+                updateRoleFeatures.mutate(
+                  {
+                    roleId: role.id,
+                    featureIds: selectedFeatureIds,
+                  },
+                  { onSuccess: () => notify.success("Feature構成を保存しました") },
+                )
+              }
+            >
+              Feature構成を保存
+            </Button>
+          </FormActions>
+        </FormSection>
+      </FormLayout>
 
       <div className="mt-6">
         <RoleAssignmentSection

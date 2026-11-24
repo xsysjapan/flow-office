@@ -6,7 +6,9 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { CategoryCombobox } from '../../components/CategoryCombobox/CategoryCombobox'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Textarea } from '../../components/ui/textarea'
@@ -83,38 +85,33 @@ export function AssetRegisterPage() {
   return (
     <>
       <BackLink />
-      <Card title="備品を登録">
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="管理番号" htmlFor="asset-no" required={!isAutoNumbered}>
-              <Input
-                id="asset-no"
-                value={isAutoNumbered ? '' : assetNo}
-                onChange={(e) => setAssetNo(e.target.value)}
-                placeholder={isAutoNumbered ? '保存時に自動採番されます' : '例: EQ-00121'}
-                disabled={isAutoNumbered}
-                readOnly={isAutoNumbered}
-              />
-            </FormField>
-            <FormField label="名称" htmlFor="asset-name" required>
-              <Input id="asset-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例: ThinkPad X1" />
-            </FormField>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="カテゴリ" htmlFor="asset-category" required>
-              <CategoryCombobox
-                id="asset-category"
-                value={category}
-                onChange={setCategory}
-                suggestions={numberRuleCategories.data ?? []}
-                placeholder="例: ノートPC"
-              />
-            </FormField>
-            <FormField label="シリアル番号" htmlFor="asset-serial">
-              <Input id="asset-serial" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
-            </FormField>
-          </div>
+      <Card title="備品を作成">
+        <FormLayout>
+          <FormField label="管理番号" htmlFor="asset-no" required={!isAutoNumbered}>
+            <Input
+              id="asset-no"
+              value={isAutoNumbered ? '' : assetNo}
+              onChange={(e) => setAssetNo(e.target.value)}
+              placeholder={isAutoNumbered ? '保存時に自動採番されます' : '例: EQ-00121'}
+              disabled={isAutoNumbered}
+              readOnly={isAutoNumbered}
+            />
+          </FormField>
+          <FormField label="名称" htmlFor="asset-name" required>
+            <Input id="asset-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例: ThinkPad X1" />
+          </FormField>
+          <FormField label="カテゴリ" htmlFor="asset-category" required>
+            <CategoryCombobox
+              id="asset-category"
+              value={category}
+              onChange={setCategory}
+              suggestions={numberRuleCategories.data ?? []}
+              placeholder="例: ノートPC"
+            />
+          </FormField>
+          <FormField label="シリアル番号" htmlFor="asset-serial">
+            <Input id="asset-serial" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
+          </FormField>
 
           <FormField label="管理区分" htmlFor="asset-management-type" required>
             <NativeSelect
@@ -147,16 +144,18 @@ export function AssetRegisterPage() {
           )}
 
           {isLending && (
-            <FormField label="通常配置場所" htmlFor="asset-default-location" required={requiresDefaultLocation}>
+            <FormField
+              label="通常配置場所"
+              htmlFor="asset-default-location"
+              required={requiresDefaultLocation}
+              description={requiresDefaultLocation ? 'セルフ貸出方式では通常配置場所の設定が必須です。' : undefined}
+            >
               <Input
                 id="asset-default-location"
                 value={defaultLocationText}
                 onChange={(e) => setDefaultLocationText(e.target.value)}
                 placeholder="例: 本社4F 備品庫"
               />
-              {requiresDefaultLocation && (
-                <p className="mt-1 text-xs text-muted-foreground">セルフ貸出方式では通常配置場所の設定が必須です。</p>
-              )}
             </FormField>
           )}
 
@@ -164,21 +163,19 @@ export function AssetRegisterPage() {
             <Textarea id="asset-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
 
-          <div className="mt-1 flex flex-col gap-1.5">
-            {registerAsset.error && <ErrorMessage error={registerAsset.error} />}
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
-                キャンセル
-              </Button>
-              <Button isLoading={registerAsset.isPending} disabled={!isValid} onClick={() => void handleSave()}>
-                作成
-              </Button>
-            </div>
-            {requiresDefaultLocation && !defaultLocationText && (
-              <p className="text-xs text-muted-foreground">通常配置場所を入力してください。</p>
-            )}
-          </div>
-        </div>
+          {requiresDefaultLocation && !defaultLocationText && (
+            <p className="mb-2 text-xs text-muted-foreground">通常配置場所を入力してください。</p>
+          )}
+          {registerAsset.error && <ErrorMessage error={registerAsset.error} />}
+          <FormActions>
+            <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
+              キャンセル
+            </Button>
+            <Button isLoading={registerAsset.isPending} disabled={!isValid} onClick={() => void handleSave()}>
+              作成
+            </Button>
+          </FormActions>
+        </FormLayout>
       </Card>
     </>
   )

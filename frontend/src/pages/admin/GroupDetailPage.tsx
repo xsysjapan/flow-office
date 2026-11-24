@@ -7,7 +7,9 @@ import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/Confir
 import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
+import { FormActions } from "../../components/FormActions/FormActions";
 import { FormField } from "../../components/FormField/FormField";
+import { FormLayout } from "../../components/FormLayout/FormLayout";
 import { notify } from "../../lib/notify";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
@@ -129,7 +131,7 @@ export function GroupDetailPage() {
     <div className="space-y-4">
       {top}
       <Card title={isNew ? "基本情報" : group!.name}>
-        <div className="grid gap-3 md:grid-cols-2">
+        <FormLayout>
           <FormField label="グループ種別" htmlFor="group-detail-type">
             <NativeSelect
               id="group-detail-type"
@@ -211,63 +213,66 @@ export function GroupDetailPage() {
               </NativeSelect>
             </FormField>
           )}
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            disabled={!form.group_type_id || !form.name}
-            isLoading={mutation.isPending}
-            onClick={() => {
-              if (isNew) {
-                createGroup.mutate(
-                  {
-                    group_type_id: Number(form.group_type_id),
-                    name: form.name,
-                    parent_group_id: form.parent_group_id || undefined,
-                  },
-                  {
-                    // 作成後は更新時と同じ「詳細画面に留まる」挙動に揃えるため、一覧ではなく
-                    // 作成されたグループ自身の詳細画面(このページ)へ遷移する(SKILL.md §2.6)。
-                    onSuccess: async (data) => {
-                      const newGroupId = (data as { id: string }).id;
-                      if (form.initial_role_id) {
-                        await createAssignment.mutateAsync({
-                          subject_type: "group",
-                          subject_id: newGroupId,
-                          role_id: Number(form.initial_role_id),
-                          scope_type: "global",
-                          scope_group_id: null,
-                          includes_descendants: false,
-                          starts_at: null,
-                          ends_at: null,
+          {mutation.error && <ErrorMessage error={mutation.error} />}
+          <FormActions>
+            <Button variant="secondary" onClick={() => navigate("/admin/groups")}>
+              キャンセル
+            </Button>
+            <Button
+              disabled={!form.group_type_id || !form.name}
+              isLoading={mutation.isPending}
+              onClick={() => {
+                if (isNew) {
+                  createGroup.mutate(
+                    {
+                      group_type_id: Number(form.group_type_id),
+                      name: form.name,
+                      parent_group_id: form.parent_group_id || undefined,
+                    },
+                    {
+                      // 作成後は更新時と同じ「詳細画面に留まる」挙動に揃えるため、一覧ではなく
+                      // 作成されたグループ自身の詳細画面(このページ)へ遷移する(SKILL.md §2.6)。
+                      onSuccess: async (data) => {
+                        const newGroupId = (data as { id: string }).id;
+                        if (form.initial_role_id) {
+                          await createAssignment.mutateAsync({
+                            subject_type: "group",
+                            subject_id: newGroupId,
+                            role_id: Number(form.initial_role_id),
+                            scope_type: "global",
+                            scope_group_id: null,
+                            includes_descendants: false,
+                            starts_at: null,
+                            ends_at: null,
+                          });
+                        }
+                        notify.success("グループを作成しました");
+                        navigate(`/admin/groups/${newGroupId}`, {
+                          replace: true,
+                          state: keepBackState,
                         });
-                      }
-                      notify.success("グループを作成しました");
-                      navigate(`/admin/groups/${newGroupId}`, {
-                        replace: true,
-                        state: keepBackState,
-                      });
+                      },
+                    },
+                  );
+                  return;
+                }
+                updateGroup.mutate(
+                  {
+                    id,
+                    input: {
+                      name: form.name,
+                      parent_group_id: form.parent_group_id || null,
+                      status: form.status,
                     },
                   },
+                  { onSuccess: () => notify.success("グループを保存しました") },
                 );
-                return;
-              }
-              updateGroup.mutate(
-                {
-                  id,
-                  input: {
-                    name: form.name,
-                    parent_group_id: form.parent_group_id || null,
-                    status: form.status,
-                  },
-                },
-                { onSuccess: () => notify.success("グループを保存しました") },
-              );
-            }}
-          >
-            {isNew ? "作成する" : "変更を保存"}
-          </Button>
-          {mutation.error && <ErrorMessage error={mutation.error} />}
-        </div>
+              }}
+            >
+              {isNew ? "作成" : "保存"}
+            </Button>
+          </FormActions>
+        </FormLayout>
       </Card>
       {!isNew && group && (
         <RoleAssignmentSection

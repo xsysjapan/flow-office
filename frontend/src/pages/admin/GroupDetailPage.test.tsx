@@ -163,7 +163,7 @@ describe("GroupDetailPage", () => {
     await userEvent.type(screen.getByLabelText("名称"), "新規グループ");
     // 作成後にグループ一覧が再取得された際、新規グループ自身が含まれるようにする
     fetchGroupsSpy.mockResolvedValue([parent, group, newGroup]);
-    await userEvent.click(screen.getByRole("button", { name: "作成する" }));
+    await userEvent.click(screen.getByRole("button", { name: "作成" }));
 
     // 作成後は一覧ではなく作成されたグループ自身の詳細画面(このページ)へ遷移する
     // (更新時に同ページへ留まる挙動と揃える。SKILL.md §2.6)。
@@ -216,7 +216,7 @@ describe("GroupDetailPage", () => {
       group,
       newGroup,
     ]);
-    await userEvent.click(screen.getByRole("button", { name: "作成する" }));
+    await userEvent.click(screen.getByRole("button", { name: "作成" }));
 
     await waitFor(() =>
       expect(createAssignmentSpy).toHaveBeenCalledWith(
@@ -247,7 +247,7 @@ describe("GroupDetailPage", () => {
       "group-parent",
     );
     await userEvent.selectOptions(screen.getByLabelText("状態"), "inactive");
-    await userEvent.click(screen.getByRole("button", { name: "変更を保存" }));
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() =>
       expect(userManagementApi.updateGroup).toHaveBeenCalledWith("group-1", {

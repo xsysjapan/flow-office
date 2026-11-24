@@ -82,8 +82,8 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
       { value: 'completed', label: '完了' },
     ]
     for (const step of statusSteps) {
-      await generalAffairsPage.getByLabel('状態').selectOption(step.value)
-      await generalAffairsPage.getByRole('button', { name: '更新する' }).click()
+      await generalAffairsPage.getByLabel('状態', { exact: true }).selectOption(step.value)
+      await generalAffairsPage.getByRole('button', { name: '状態を変更', exact: true }).click()
       // 前段の更新が反映されてから次のステータス変更に進む(連打による競合を避ける)。
       await expect(generalAffairsPage.getByRole('status', { name: step.label })).toBeVisible()
     }

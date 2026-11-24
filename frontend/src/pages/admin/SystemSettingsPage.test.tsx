@@ -65,7 +65,7 @@ describe('SystemSettingsPage', () => {
     const input = await screen.findByLabelText('既定タイムゾーン')
     await userEvent.clear(input)
     await userEvent.type(input, 'America/Los_Angeles')
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
       expect(systemSettingsApi.updateSystemSettings).toHaveBeenCalledWith({
@@ -107,7 +107,7 @@ describe('SystemSettingsPage', () => {
     expect(attendanceCheckbox).not.toBeChecked()
     expect(expenseCheckbox).not.toBeChecked()
 
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
       expect(systemSettingsApi.updateSystemSettings).toHaveBeenCalledWith(
@@ -124,7 +124,7 @@ describe('SystemSettingsPage', () => {
     renderPage()
 
     await screen.findByLabelText('既定タイムゾーン')
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('保存に失敗しました')
   })

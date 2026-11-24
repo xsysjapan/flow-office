@@ -15,7 +15,9 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { ExpenseItemsTable } from '../../components/ExpenseItemsTable/ExpenseItemsTable'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { SingleExpenseItemForm } from '../../components/SingleExpenseItemForm/SingleExpenseItemForm'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -351,36 +353,40 @@ function BulkTitleStep({
         </Button>
       }
     >
-      {error !== null && error !== undefined && <ErrorMessage error={error} />}
-      <p className="mb-3 text-sm text-muted-foreground">例: 2026年7月分交通費、大阪出張分</p>
+      <FormLayout>
+        <p className="mb-3 text-sm text-muted-foreground">例: 2026年7月分交通費、大阪出張分</p>
 
-      <div className="mb-3 flex flex-wrap gap-2">
-        {suggestions.map((suggestion) => (
-          <Button
-            key={suggestion}
-            type="button"
-            variant="secondary"
-            size="sm"
-            isLoading={isSubmitting}
-            onClick={() => onSubmit(suggestion)}
-          >
-            {suggestion}
+        <div className="mb-3 flex flex-wrap gap-2">
+          {suggestions.map((suggestion) => (
+            <Button
+              key={suggestion}
+              type="button"
+              variant="secondary"
+              size="sm"
+              isLoading={isSubmitting}
+              onClick={() => onSubmit(suggestion)}
+            >
+              {suggestion}
+            </Button>
+          ))}
+        </div>
+
+        <FormField label="タイトル" htmlFor="bulk-claim-title" required>
+          <Input
+            id="bulk-claim-title"
+            placeholder="例: 2026年7月分交通費"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </FormField>
+
+        {error !== null && error !== undefined && <ErrorMessage error={error} />}
+        <FormActions>
+          <Button disabled={!title.trim()} isLoading={isSubmitting} onClick={() => onSubmit(title.trim())}>
+            次へ
           </Button>
-        ))}
-      </div>
-
-      <FormField label="タイトル" htmlFor="bulk-claim-title" required>
-        <Input
-          id="bulk-claim-title"
-          placeholder="例: 2026年7月分交通費"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-      </FormField>
-
-      <Button disabled={!title.trim()} isLoading={isSubmitting} onClick={() => onSubmit(title.trim())}>
-        次へ
-      </Button>
+        </FormActions>
+      </FormLayout>
     </Card>
   )
 }
@@ -743,14 +749,18 @@ function ExpenseClaimNewContent() {
 
             {rows.length > 0 && (
               <div className="mt-4">
-                <Button
-                  isLoading={createClaim.isPending || addItemsBulk.isPending || uploadAttachment.isPending}
-                  onClick={() => void handleSaveItems()}
-                >
-                  明細を保存する({rows.length}件)
-                </Button>
-                {addItemsBulk.error && <ErrorMessage error={addItemsBulk.error} />}
-                {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
+                <FormLayout>
+                  {addItemsBulk.error && <ErrorMessage error={addItemsBulk.error} />}
+                  {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
+                  <FormActions>
+                    <Button
+                      isLoading={createClaim.isPending || addItemsBulk.isPending || uploadAttachment.isPending}
+                      onClick={() => void handleSaveItems()}
+                    >
+                      明細を保存({rows.length}件)
+                    </Button>
+                  </FormActions>
+                </FormLayout>
               </div>
             )}
           </>
@@ -880,36 +890,39 @@ function SavedItemsAndSubmit({
   return (
     <>
       <Card title="申請タイトル(任意)">
-        {updateTitle.error && <ErrorMessage error={updateTitle.error} />}
-        <div className="flex items-center gap-2">
-          <Input
-            aria-label="申請タイトル"
-            placeholder="例: 7月分の立替経費、大阪出張分"
-            value={titleInput}
-            onChange={(e) => {
-              setTitleInput(e.target.value)
-              setTitleEditedByUser(true)
-            }}
-          />
-          <Button
-            variant="secondary"
-            isLoading={updateTitle.isPending}
-            disabled={titleInput === (claim.title ?? '')}
-            onClick={() =>
-              updateTitle.mutate(
-                { claimId: claim.id, title: titleInput || null },
-                {
-                  onSuccess: () => {
-                    setTitleEditedByUser(false)
-                    notify.success('申請タイトルを保存しました')
+        <FormLayout>
+          <FormField label="申請タイトル" htmlFor="claim-title">
+            <Input
+              id="claim-title"
+              placeholder="例: 7月分の立替経費、大阪出張分"
+              value={titleInput}
+              onChange={(e) => {
+                setTitleInput(e.target.value)
+                setTitleEditedByUser(true)
+              }}
+            />
+          </FormField>
+          {updateTitle.error && <ErrorMessage error={updateTitle.error} />}
+          <FormActions>
+            <Button
+              isLoading={updateTitle.isPending}
+              disabled={titleInput === (claim.title ?? '')}
+              onClick={() =>
+                updateTitle.mutate(
+                  { claimId: claim.id, title: titleInput || null },
+                  {
+                    onSuccess: () => {
+                      setTitleEditedByUser(false)
+                      notify.success('申請タイトルを保存しました')
+                    },
                   },
-                },
-              )
-            }
-          >
-            保存
-          </Button>
-        </div>
+                )
+              }
+            >
+              保存
+            </Button>
+          </FormActions>
+        </FormLayout>
       </Card>
 
       <Card title={`保存済みの明細(${claim.items.length}件・対象期間: ${period})`}>
@@ -1022,38 +1035,41 @@ function SavedItemsAndSubmit({
       </Card>
 
       <Card title="申請する">
-        {submitClaim.error && <ErrorMessage error={submitClaim.error} />}
-        {deleteClaimMutation.error && <ErrorMessage error={deleteClaimMutation.error} />}
-        {approvalRequired ? (
-          <FormField label="承認者" htmlFor="approver" required>
-            <UserPicker id="approver" value={approverUserId} onChange={onApproverChange} />
-          </FormField>
-        ) : (
-          <p className="mb-3 text-xs text-muted-foreground">
-            現在の設定では経費精算の申請に承認は不要です。申請すると同時に確定します。
-          </p>
-        )}
-        <div className="flex items-center gap-3">
-          <Button
-            isLoading={submitClaim.isPending}
-            disabled={(approvalRequired && !approverUserId) || claim.items.length === 0}
-            onClick={onSubmit}
-          >
-            申請する
-          </Button>
-          <Badge tone="neutral">下書き</Badge>
-          {claim.status === 'draft' && (
-            <ConfirmActionDialog
-              triggerLabel="この下書きを削除する"
-              triggerVariant="danger"
-              title="この経費精算を削除しますか?"
-              description="削除すると元に戻せません。保存済みの明細もすべて削除されます。"
-              confirmLabel="削除する"
-              isPending={deleteClaimMutation.isPending}
-              onConfirm={onDeleteClaim}
-            />
+        <FormLayout>
+          {approvalRequired && (
+            <FormField label="承認者" htmlFor="approver" required>
+              <UserPicker id="approver" value={approverUserId} onChange={onApproverChange} />
+            </FormField>
           )}
-        </div>
+          {!approvalRequired && (
+            <p className="mb-3 text-xs text-muted-foreground">
+              現在の設定では経費精算の申請に承認は不要です。申請すると同時に確定します。
+            </p>
+          )}
+          {submitClaim.error && <ErrorMessage error={submitClaim.error} />}
+          {deleteClaimMutation.error && <ErrorMessage error={deleteClaimMutation.error} />}
+          <div className="flex items-center gap-3">
+            <Button
+              isLoading={submitClaim.isPending}
+              disabled={(approvalRequired && !approverUserId) || claim.items.length === 0}
+              onClick={onSubmit}
+            >
+              申請する
+            </Button>
+            <Badge tone="neutral">下書き</Badge>
+            {claim.status === 'draft' && (
+              <ConfirmActionDialog
+                triggerLabel="この下書きを削除する"
+                triggerVariant="danger"
+                title="この経費精算を削除しますか?"
+                description="削除すると元に戻せません。保存済みの明細もすべて削除されます。"
+                confirmLabel="削除する"
+                isPending={deleteClaimMutation.isPending}
+                onConfirm={onDeleteClaim}
+              />
+            )}
+          </div>
+        </FormLayout>
       </Card>
     </>
   )

@@ -104,7 +104,7 @@ export const LimitedStatusOptions: Story = {
   render: withSeeded({ ...baseTask, status: 'in_review', allowed_next_statuses: ['processing', 'needs_fix'] }),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(await canvas.findByRole('button', { name: '更新する' })).toBeDisabled()
+    await expect(await canvas.findByRole('button', { name: '状態を変更' })).toBeDisabled()
     await expect(canvas.getByText('変更後のステータスを選択してください')).toBeInTheDocument()
   },
 }

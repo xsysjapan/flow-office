@@ -4,6 +4,8 @@ import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { FormField } from '../../components/FormField/FormField'
 import { NativeSelect } from '../../components/ui/native-select'
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group'
@@ -110,15 +112,12 @@ export function AttendanceExportPage() {
     <div className="space-y-6">
     <PageHeader description="対象月・社員を指定して、給与計算連携用のCSVまたは確認用のExcelを出力します。" />
     <Card>
-      <p className="mb-4 text-sm text-muted-foreground">
-        承認済み・締め処理済みの月次勤怠がCSVに含まれます。対象社員を指定しない場合は全社員が対象です。
-        対象月・対象社員はいずれも複数指定できます。
-      </p>
+      <FormLayout>
+        <p className="mb-4 text-sm text-muted-foreground">
+          承認済み・締め処理済みの月次勤怠がCSVに含まれます。対象社員を指定しない場合は全社員が対象です。
+          対象月・対象社員はいずれも複数指定できます。
+        </p>
 
-      {downloadCsv.error && <ErrorMessage error={downloadCsv.error} fallback="勤怠CSVの取得に失敗しました。" />}
-      {downloadExcel.error && <ErrorMessage error={downloadExcel.error} fallback="勤怠Excelの取得に失敗しました。" />}
-
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="対象月(複数可)" htmlFor="attendance-export-year-month" required>
           <YearMonthPicker id="attendance-export-year-month" value={undefined} onChange={addYearMonth} />
           {yearMonths.length > 0 && (
@@ -183,11 +182,9 @@ export function AttendanceExportPage() {
             </label>
           </RadioGroup>
         </FormField>
-      </div>
 
-      {outputType === 'csv' && (
-        <>
-          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {outputType === 'csv' && (
+          <>
             <FormField label="CSV出力フォーマット" htmlFor="attendance-export-format">
               <NativeSelect
                 id="attendance-export-format"
@@ -201,37 +198,38 @@ export function AttendanceExportPage() {
                 ))}
               </NativeSelect>
             </FormField>
-          </div>
+            <div className="mb-4 text-xs text-muted-foreground">
+              <p>{selectedFormat.description}</p>
+              {selectedFormat.links && (
+                <ul className="mt-2 list-inside list-disc">
+                  {selectedFormat.links.map((link) => (
+                    <li key={link.href}>
+                      <a href={link.href} target="_blank" rel="noreferrer" className="underline">
+                        {link.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <p className="mb-4 text-xs text-muted-foreground">
+              従業員番号列には、flow-office内部の社員ID(UUID)を出力します。給与計算ソフト側の従業員番号と直接一致しない場合は、事前にマッピングを確認してください。
+            </p>
+          </>
+        )}
 
-          <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-            <p>{selectedFormat.description}</p>
-            {selectedFormat.links && (
-              <ul className="mt-2 list-inside list-disc">
-                {selectedFormat.links.map((link) => (
-                  <li key={link.href}>
-                    <a href={link.href} target="_blank" rel="noreferrer" className="underline">
-                      {link.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
+        {outputType === 'excel' && (
           <p className="mb-4 text-xs text-muted-foreground">
-            従業員番号列には、flow-office内部の社員ID(UUID)を出力します。給与計算ソフト側の従業員番号と直接一致しない場合は、事前にマッピングを確認してください。
+            対象(月×社員)の組み合わせが1件の場合は.xlsxが、2件以上の場合は全件をまとめたZIPがダウンロードされます。
           </p>
-        </>
-      )}
+        )}
 
-      {outputType === 'excel' && (
-        <p className="mb-4 text-xs text-muted-foreground">
-          対象(月×社員)の組み合わせが1件の場合は.xlsxが、2件以上の場合は全件をまとめたZIPがダウンロードされます。
-        </p>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-3">
+        {yearMonths.length === 0 && (
+          <p className="mb-2 text-xs text-muted-foreground">対象月を1つ以上選択するとダウンロードできます。</p>
+        )}
+        {downloadCsv.error && <ErrorMessage error={downloadCsv.error} fallback="勤怠CSVの取得に失敗しました。" />}
+        {downloadExcel.error && <ErrorMessage error={downloadExcel.error} fallback="勤怠Excelの取得に失敗しました。" />}
+        <FormActions>
           {outputType === 'csv' ? (
             <Button
               isLoading={downloadCsv.isPending}
@@ -253,11 +251,8 @@ export function AttendanceExportPage() {
               Excelダウンロード
             </Button>
           )}
-        </div>
-        {yearMonths.length === 0 && (
-          <p className="text-xs text-muted-foreground">対象月を1つ以上選択するとダウンロードできます。</p>
-        )}
-      </div>
+        </FormActions>
+      </FormLayout>
     </Card>
     </div>
   )

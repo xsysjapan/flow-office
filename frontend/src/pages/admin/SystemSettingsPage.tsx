@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
+import { FormSection } from '../../components/FormSection/FormSection'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Ms365CredentialsFields, type Ms365CredentialsFieldsValue } from '../../components/Ms365CredentialsFields/Ms365CredentialsFields'
@@ -107,6 +110,7 @@ export function SystemSettingsPage() {
     <div className="space-y-6">
     {header}
     <Card>
+      <FormLayout>
       <p className="mb-4 text-sm text-muted-foreground">
         変更後に新規作成されるユーザーはこのタイムゾーンで作成されます(既存ユーザーの
         タイムゾーンは変更されません)。
@@ -125,6 +129,7 @@ export function SystemSettingsPage() {
         label="勤怠未提出の警告基準日(当月の何日)"
         htmlFor="system-settings-submission-deadline-day"
         required
+        description="この日を過ぎても前月分の勤怠が未提出の在籍社員に、解消するまで毎日通知する。"
       >
         <Input
           id="system-settings-submission-deadline-day"
@@ -134,15 +139,13 @@ export function SystemSettingsPage() {
           value={submissionDeadlineDay}
           onChange={(e) => setSubmissionDeadlineDay(e.target.value)}
         />
-        <p className="mt-1 text-xs text-muted-foreground">
-          この日を過ぎても前月分の勤怠が未提出の在籍社員に、解消するまで毎日通知する。
-        </p>
       </FormField>
 
       <FormField
         label="月次締め前警告の基準日(当月の何日)"
         htmlFor="system-settings-month-close-deadline-day"
         required
+        description="この日の3日前になっても前月分の月次勤怠が締められていない場合に通知する。"
       >
         <Input
           id="system-settings-month-close-deadline-day"
@@ -152,15 +155,13 @@ export function SystemSettingsPage() {
           value={monthCloseDeadlineDay}
           onChange={(e) => setMonthCloseDeadlineDay(e.target.value)}
         />
-        <p className="mt-1 text-xs text-muted-foreground">
-          この日の3日前になっても前月分の月次勤怠が締められていない場合に通知する。
-        </p>
       </FormField>
 
-      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">承認設定</h3>
-      <p className="mb-4 text-sm text-muted-foreground">
-        オフにすると、その申請は承認者を指定しなくてもよくなり、承認不要のまま申請と同時に確定する。
-      </p>
+      <FormSection
+        title="承認設定"
+        headingLevel={2}
+        description="オフにすると、その申請は承認者を指定しなくてもよくなり、承認不要のまま申請と同時に確定する。"
+      >
 
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
@@ -210,7 +211,9 @@ export function SystemSettingsPage() {
         代休の消化申請に承認を必須にする
       </label>
 
-      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">特権操作</h3>
+      </FormSection>
+
+      <FormSection title="特権操作" headingLevel={2}>
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={prohibitSelfPrivilegedRoleAssignment}
@@ -219,11 +222,18 @@ export function SystemSettingsPage() {
         自分自身への特権Role付与を禁止する
       </label>
 
-      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">Microsoft 365連携設定</h3>
-      <p className="mb-4 text-sm text-muted-foreground">
-        SSOログイン・MS365ユーザー同期・メール通知(Graph API <code>sendMail</code>)で共有する
-        Entra IDアプリ登録の資格情報。初回オンボーディングで登録済みだが、ここから変更できる。
-      </p>
+      </FormSection>
+
+      <FormSection
+        title="Microsoft 365連携設定"
+        headingLevel={2}
+        description={
+          <>
+            SSOログイン・MS365ユーザー同期・メール通知(Graph API <code>sendMail</code>)で共有する
+            Entra IDアプリ登録の資格情報。初回オンボーディングで登録済みだが、ここから変更できる。
+          </>
+        }
+      >
 
       <Ms365CredentialsFields
         idPrefix="system-settings-m365"
@@ -232,12 +242,19 @@ export function SystemSettingsPage() {
         clientSecretConfigured={data?.m365_client_secret_configured}
       />
 
-      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">メール通知設定</h3>
-      <p className="mb-4 text-sm text-muted-foreground">
-        通知はMicrosoft Graph API(<code>sendMail</code>)経由で送信する。上記のMicrosoft 365
-        連携設定が未設定、または「メール通知を有効にする」がオフの場合、通知メールは送信されない
-        (ログにのみ記録される)。
-      </p>
+      </FormSection>
+
+      <FormSection
+        title="メール通知設定"
+        headingLevel={2}
+        description={
+          <>
+            通知はMicrosoft Graph API(<code>sendMail</code>)経由で送信する。上記のMicrosoft 365
+            連携設定が未設定、または「メール通知を有効にする」がオフの場合、通知メールは送信されない
+            (ログにのみ記録される)。
+          </>
+        }
+      >
 
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
@@ -264,19 +281,24 @@ export function SystemSettingsPage() {
         />
       </FormField>
 
-      <Button
-        isLoading={updateSettings.isPending}
-        disabled={!defaultTimezone || !submissionDeadlineDay || !monthCloseDeadlineDay}
-        onClick={handleSave}
-      >
-        保存する
-      </Button>
-      {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
+      </FormSection>
+
       {(!defaultTimezone || !submissionDeadlineDay || !monthCloseDeadlineDay) && (
-        <p className="mt-1.5 text-xs text-muted-foreground">
+        <p className="mb-2 mt-4 text-xs text-muted-foreground">
           既定タイムゾーン・勤怠未提出の警告基準日・月次締め前警告の基準日をすべて入力してください。
         </p>
       )}
+      {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
+      <FormActions>
+        <Button
+          isLoading={updateSettings.isPending}
+          disabled={!defaultTimezone || !submissionDeadlineDay || !monthCloseDeadlineDay}
+          onClick={handleSave}
+        >
+          保存
+        </Button>
+      </FormActions>
+      </FormLayout>
     </Card>
     </div>
   )

@@ -47,7 +47,7 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
     .getByRole("link", { name: "新規作成" })
     .click();
   await page.getByLabel("カレンダー名").fill(calendarName);
-  await page.getByRole("button", { name: "作成する" }).click();
+  await page.getByRole("button", { name: "作成", exact: true }).click();
 
   await expect(
     page.getByRole("heading", { name: calendarName, level: 2 }),
@@ -69,7 +69,7 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await page.getByLabel("年度", { exact: true }).fill(String(fiscalYear));
   await pickDate(page, "開始日", `${fiscalYear}-04-01`, { exact: true });
   await pickDate(page, "終了日", `${fiscalYear + 1}-03-31`, { exact: true });
-  await page.getByRole("button", { name: "年度を作成する" }).click();
+  await page.getByRole("button", { name: "作成", exact: true }).click();
 
   const yearRow = page.locator("li", {
     has: page.getByRole("link", { name: `${fiscalYear}年度` }),
@@ -96,9 +96,9 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await page.getByLabel(`${holidayDate}の休日名`).fill("E2Eテスト祝日");
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "保存する" }).click();
+  await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "保存する" }),
+    page.getByRole("button", { name: "保存", exact: true }),
   ).not.toBeDisabled();
 
   // --- UC-C009 手順3: 公開する(年度自身のページから) ---

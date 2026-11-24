@@ -157,8 +157,8 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
       { value: 'completed', label: '完了' },
     ]
     for (const step of statusSteps) {
-      await accountingPage.getByLabel('状態').selectOption(step.value)
-      await accountingPage.getByRole('button', { name: '更新する' }).click()
+      await accountingPage.getByLabel('状態', { exact: true }).selectOption(step.value)
+      await accountingPage.getByRole('button', { name: '状態を変更', exact: true }).click()
       await expect(accountingPage.getByRole('status', { name: step.label })).toBeVisible()
     }
 
@@ -347,7 +347,7 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     await applicantPage.getByLabel('2行目の到着地').fill('客先')
     // 表形式入力でも、保存前に行ごとに領収書を選択できることを確認する(1行目のみ添付)。
     await selectReceiptOnBatchRow(applicantPage, 1)
-    await applicantPage.getByRole('button', { name: /明細を保存する\(2件\)/ }).click()
+    await applicantPage.getByRole('button', { name: /明細を保存\(2件\)/ }).click()
 
     await expect(applicantPage.getByText(/保存済みの明細\(2件/)).toBeVisible()
     await expect(applicantPage.getByRole('main').getByText('dummy-receipt.png')).toBeVisible()

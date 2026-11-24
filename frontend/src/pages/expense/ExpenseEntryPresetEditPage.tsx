@@ -5,7 +5,9 @@ import { useBackTarget } from '../../navigation/backState'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { notify } from '../../lib/notify'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -174,15 +176,8 @@ function ExpenseEntryPresetEditContent() {
   }
 
   return (
-    <Card
-      title={isCreate ? 'プリセットの新規作成' : 'プリセットの編集'}
-      actions={
-        <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/expenses/presets', { state: backTarget?.state, replace: true })}>
-          キャンセル
-        </Button>
-      }
-    >
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <Card title={isCreate ? 'プリセットを作成' : 'プリセットを編集'}>
+      <FormLayout>
         <FormField label="名称" htmlFor="preset-name" required>
           <Input id="preset-name" value={name} onChange={(e) => setName(e.target.value)} />
         </FormField>
@@ -200,25 +195,25 @@ function ExpenseEntryPresetEditContent() {
             ))}
           </NativeSelect>
         </FormField>
-      </div>
 
-      <FormField label="説明(任意)" htmlFor="preset-description">
-        <Textarea id="preset-description" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </FormField>
+        <FormField label="説明(任意)" htmlFor="preset-description">
+          <Textarea id="preset-description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </FormField>
 
-      <FormField label="種類" htmlFor="preset-type" required>
-        <NativeSelect
-          id="preset-type"
-          value={presetType}
-          onChange={(e) => setPresetType(e.target.value as ExpenseEntryPresetType)}
-        >
-          {presetTypeOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </NativeSelect>
-      </FormField>
+        <FormField label="種類" htmlFor="preset-type" required>
+          <NativeSelect
+            id="preset-type"
+            value={presetType}
+            onChange={(e) => setPresetType(e.target.value as ExpenseEntryPresetType)}
+          >
+            {presetTypeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+      </FormLayout>
 
       <div className="mb-4 flex flex-col gap-2">
         <div className="flex items-center justify-between">
@@ -244,26 +239,29 @@ function ExpenseEntryPresetEditContent() {
         ))}
       </div>
 
-      <label className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
-        <Checkbox id="preset-is-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
-        有効
-      </label>
+      <FormLayout>
+        <label className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
+          <Checkbox id="preset-is-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
+          有効
+        </label>
 
-      <div className="mt-5 flex flex-col gap-1">
-        <div>
-          <Button isLoading={isBusy} disabled={!canSave} onClick={() => void handleSave()}>
-            {isCreate ? '作成する' : '保存する'}
-          </Button>
-        </div>
-        {error && <ErrorMessage error={error} />}
         {!canSave && (
-          <p className="text-xs text-muted-foreground">
+          <p className="mb-2 text-xs text-muted-foreground">
             {name.trim() === ''
               ? '名称を入力してください。'
               : '各明細の経費区分を選択してください。'}
           </p>
         )}
-      </div>
+        {error && <ErrorMessage error={error} />}
+        <FormActions>
+          <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/expenses/presets', { state: backTarget?.state, replace: true })}>
+            キャンセル
+          </Button>
+          <Button isLoading={isBusy} disabled={!canSave} onClick={() => void handleSave()}>
+            {isCreate ? '作成' : '保存'}
+          </Button>
+        </FormActions>
+      </FormLayout>
     </Card>
   )
 }
@@ -290,8 +288,8 @@ function PresetDefinitionRowFields({
   const label = `${index + 1}番目の明細`
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border p-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="@container flex flex-col gap-3 rounded-md border border-border p-3">
+      <div className="grid grid-cols-1 gap-x-3 @2xl:grid-cols-3">
         <FormField label="経費区分" htmlFor={`preset-item-${row.rowId}-category`} required>
           <NativeSelect
             id={`preset-item-${row.rowId}-category`}
@@ -339,7 +337,7 @@ function PresetDefinitionRowFields({
       </div>
 
       {fieldSet === 'transport' && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <>
           <FormField label="出発地(初期値・任意)" htmlFor={`preset-item-${row.rowId}-departure`}>
             <Input
               id={`preset-item-${row.rowId}-departure`}
@@ -356,11 +354,11 @@ function PresetDefinitionRowFields({
               onChange={(e) => onChange({ destination: e.target.value })}
             />
           </FormField>
-        </div>
+        </>
       )}
 
       {fieldSet && fieldSet !== 'transport' && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <>
           <FormField
             label={fieldSet === 'lodging' ? '宿泊先名(初期値・任意)' : '取引先(初期値・任意)'}
             htmlFor={`preset-item-${row.rowId}-payee`}
@@ -380,11 +378,11 @@ function PresetDefinitionRowFields({
               onChange={(e) => onChange({ content: e.target.value })}
             />
           </FormField>
-        </div>
+        </>
       )}
 
       {fieldSet === 'meal' && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <>
           <FormField label="参加者氏名(初期値・任意)" htmlFor={`preset-item-${row.rowId}-participants`}>
             <Input
               id={`preset-item-${row.rowId}-participants`}
@@ -403,7 +401,7 @@ function PresetDefinitionRowFields({
               onChange={(e) => onChange({ participant_count: e.target.value ? Number(e.target.value) : null })}
             />
           </FormField>
-        </div>
+        </>
       )}
 
       <div>

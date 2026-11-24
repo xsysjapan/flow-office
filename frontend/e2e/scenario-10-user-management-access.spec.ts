@@ -228,7 +228,7 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
     .getByLabel("グループ種別", { exact: true })
     .selectOption({ label: groupTypeName });
   await page.getByLabel("名称", { exact: true }).fill(groupName);
-  await page.getByRole("button", { name: "作成する" }).click();
+  await page.getByRole("button", { name: "作成", exact: true }).click();
   // 作成後は一覧ではなく作成されたグループ自身の詳細画面へ遷移する(更新時に同ページへ
   // 留まる挙動と揃える)。
   await expect(

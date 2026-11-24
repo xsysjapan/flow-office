@@ -527,7 +527,7 @@ describe('ExpenseClaimNewPage', () => {
     expect(screen.getByLabelText('金額')).toHaveValue(420)
   })
 
-  it('defers creating items via addExpenseItemsBulk until 明細を保存する is clicked, and reuses the claim created at the title step (batch category)', async () => {
+  it('defers creating items via addExpenseItemsBulk until 明細を保存 is clicked, and reuses the claim created at the title step (batch category)', async () => {
     const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
     const addItemsBulk = vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockResolvedValue([])
@@ -543,7 +543,7 @@ describe('ExpenseClaimNewPage', () => {
     await pickDate(userEvent.setup(), '1行目の日付', '2026-07-04')
     await userEvent.type(screen.getByLabelText('1行目の金額'), '420')
 
-    await userEvent.click(screen.getByRole('button', { name: /明細を保存する/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^明細を保存\(\d+件\)/ }))
 
     await waitFor(() =>
       expect(addItemsBulk).toHaveBeenCalledWith('claim-1', [
@@ -708,7 +708,7 @@ describe('ExpenseClaimNewPage', () => {
     await userEvent.type(screen.getByLabelText('2行目の金額'), '800')
     // 2行目は領収書を選択しない(全行に必須ではないことの確認を兼ねる)。
 
-    await userEvent.click(screen.getByRole('button', { name: /明細を保存する/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^明細を保存\(\d+件\)/ }))
 
     await waitFor(() => expect(expenseClaimsApi.addExpenseItemsBulk).toHaveBeenCalled())
     await waitFor(() => expect(uploadAttachment).toHaveBeenCalledWith('expense_item', 'item-1', file1))

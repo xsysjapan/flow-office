@@ -11,6 +11,8 @@ import { Button } from '../../../components/Button/Button'
 import { Card } from '../../../components/Card/Card'
 import { ErrorMessage } from '../../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../../lib/notify'
+import { FormActions } from '../../../components/FormActions/FormActions'
+import { FormLayout } from '../../../components/FormLayout/FormLayout'
 import { FormField } from '../../../components/FormField/FormField'
 import { PermissionDenied } from '../../../components/PermissionDenied/PermissionDenied'
 import { Input } from '../../../components/ui/input'
@@ -81,7 +83,7 @@ export function BulkRelocatePage() {
       <BackLink />
       <Card title="備品の一括移設">
         <div className="flex flex-col gap-6">
-          <div className="w-full max-w-sm">
+          <FormLayout>
             <FormField label="移設先" htmlFor="bulk-relocate-location" required>
               <Input
                 id="bulk-relocate-location"
@@ -93,17 +95,17 @@ export function BulkRelocatePage() {
                 placeholder="例: 3階会議室B"
               />
             </FormField>
-          </div>
 
-          <AssetPicker
-            id="bulk-relocate-scan"
-            label="移設対象に追加する備品"
-            onSubmit={handleScan}
-            isPending={resolveAsset.isPending}
-            disabled={!locationText.trim()}
-            disabledReason="先に移設先を入力してください。"
-          />
-          {scanError && <ErrorMessage error={new Error(scanError)} />}
+            <AssetPicker
+              id="bulk-relocate-scan"
+              label="移設対象に追加する備品"
+              onSubmit={handleScan}
+              isPending={resolveAsset.isPending}
+              disabled={!locationText.trim()}
+              disabledReason="先に移設先を入力してください。"
+            />
+            {scanError && <ErrorMessage error={new Error(scanError)} />}
+          </FormLayout>
 
           {targets.length === 0 ? (
             <p className="text-sm text-muted-foreground">まだ対象がありません。</p>
@@ -134,36 +136,36 @@ export function BulkRelocatePage() {
             </Table>
           )}
 
-          {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括移設に失敗しました。" />}
-
-          {result && (
-            <div className="flex flex-col gap-2 rounded-md border border-border p-4">
-              <p className="text-sm font-medium text-foreground">
-                成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
-              </p>
-              <ul className="flex flex-col gap-1 text-sm">
-                {result.results.map((r) => (
-                  <li key={r.asset_id} className="flex items-center gap-2">
-                    <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
-                    <span className="text-muted-foreground">{r.success ? '移設しました。' : r.error}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
-              キャンセル
-            </Button>
-            <Button
-              onClick={handleConfirm}
-              disabled={targets.length === 0 || !locationText.trim()}
-              isLoading={bulkOperation.isPending}
-            >
-              {targets.length}件を確定
-            </Button>
-          </div>
+          <FormLayout>
+            {result && (
+              <div className="mb-4 flex flex-col gap-2 rounded-md border border-border p-4">
+                <p className="text-sm font-medium text-foreground">
+                  成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
+                </p>
+                <ul className="flex flex-col gap-1 text-sm">
+                  {result.results.map((r) => (
+                    <li key={r.asset_id} className="flex items-center gap-2">
+                      <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
+                      <span className="text-muted-foreground">{r.success ? '移設しました。' : r.error}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括移設に失敗しました。" />}
+            <FormActions>
+              <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
+                キャンセル
+              </Button>
+              <Button
+                onClick={handleConfirm}
+                disabled={targets.length === 0 || !locationText.trim()}
+                isLoading={bulkOperation.isPending}
+              >
+                {targets.length}件を確定
+              </Button>
+            </FormActions>
+          </FormLayout>
         </div>
       </Card>
     </>

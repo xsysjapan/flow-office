@@ -108,12 +108,12 @@ describe('resolvePage', () => {
   })
 
   it('switches titles on id === "new"', () => {
-    expect(resolvePage('/admin/groups/new')?.title).toBe('グループを新規作成')
+    expect(resolvePage('/admin/groups/new')?.title).toBe('グループを作成')
     expect(resolvePage('/admin/groups/g1')?.title).toBe('グループ詳細')
-    expect(resolvePage('/admin/request-types/new')?.title).toBe('申請種別の新規作成')
-    expect(resolvePage('/admin/request-types/r1')?.title).toBe('申請種別の編集')
-    expect(resolvePage('/admin/expense-categories/new')?.title).toBe('経費区分の新規作成')
-    expect(resolvePage('/admin/expense-categories/c1')?.title).toBe('経費区分の編集')
+    expect(resolvePage('/admin/request-types/new')?.title).toBe('申請種別を作成')
+    expect(resolvePage('/admin/request-types/r1')?.title).toBe('申請種別を編集')
+    expect(resolvePage('/admin/expense-categories/new')?.title).toBe('経費区分を作成')
+    expect(resolvePage('/admin/expense-categories/c1')?.title).toBe('経費区分を編集')
   })
 
   it('uses the admin nav label for admin list pages with no parent', () => {

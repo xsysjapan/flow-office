@@ -7,7 +7,10 @@ import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
+import { FormRow } from '../../components/FormRow/FormRow'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -140,7 +143,7 @@ export function CalendarBulkOperationsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader description="複数従業員の勤務予定を一括で適用・取消します。プレビューで確認してから確定します。" />
       <Card title="一括操作を作成">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormLayout>
           <FormField label="操作種別" htmlFor="bulk-op-type" required>
             <NativeSelect
               id="bulk-op-type"
@@ -171,7 +174,6 @@ export function CalendarBulkOperationsPage() {
               ))}
             </NativeSelect>
           </FormField>
-        </div>
 
         <FormField label="理由" htmlFor="bulk-op-reason" required>
           <Textarea id="bulk-op-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -179,14 +181,14 @@ export function CalendarBulkOperationsPage() {
 
         {!isEntryBased && (
           <>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormRow>
               <FormField label="対象期間(開始)" htmlFor="bulk-op-from" required>
                 <DatePicker id="bulk-op-from" value={from || undefined} onChange={(date) => setFrom(date ?? '')} />
               </FormField>
               <FormField label="対象期間(終了)" htmlFor="bulk-op-to" required>
                 <DatePicker id="bulk-op-to" value={to || undefined} onChange={(date) => setTo(date ?? '')} />
               </FormField>
-            </div>
+            </FormRow>
 
             {operationType === 'calendar_apply' && (
               <FormField label="勤務形態" htmlFor="bulk-op-work-style" required>
@@ -223,6 +225,7 @@ export function CalendarBulkOperationsPage() {
             </div>
           </>
         )}
+        </FormLayout>
 
         {isEntryBased && (
           <div className="mb-4">
@@ -285,17 +288,21 @@ export function CalendarBulkOperationsPage() {
           </div>
         )}
 
-        <Button isLoading={preview.isPending} disabled={!canPreview} onClick={handlePreview}>
-          プレビューする
-        </Button>
-        {preview.error && <ErrorMessage error={preview.error} />}
-        {!canPreview && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isEntryBased
-              ? '対象社員・対象日を1件以上入力してください。'
-              : `対象社員を1名以上、対象期間(開始・終了)を入力してください${operationType === 'calendar_apply' ? '(会社カレンダー適用は勤務形態も必須)' : ''}。`}
-          </p>
-        )}
+        <FormLayout>
+          {!canPreview && (
+            <p className="mb-2 text-xs text-muted-foreground">
+              {isEntryBased
+                ? '対象社員・対象日を1件以上入力してください。'
+                : `対象社員を1名以上、対象期間(開始・終了)を入力してください${operationType === 'calendar_apply' ? '(会社カレンダー適用は勤務形態も必須)' : ''}。`}
+            </p>
+          )}
+          {preview.error && <ErrorMessage error={preview.error} />}
+          <FormActions>
+            <Button isLoading={preview.isPending} disabled={!canPreview} onClick={handlePreview}>
+              プレビューする
+            </Button>
+          </FormActions>
+        </FormLayout>
       </Card>
 
       {preview.data && (
@@ -342,9 +349,22 @@ export function CalendarBulkOperationsPage() {
             </div>
           )}
 
-          <Button disabled={!preview.data.executable || !reason} onClick={() => setIsApplyConfirmOpen(true)}>
-            この内容で確定適用する
-          </Button>
+          <FormLayout>
+          {(!preview.data.executable || !reason) && (
+            <p className="mb-2 text-xs text-muted-foreground">
+              {!preview.data.executable && !reason
+                ? '競合があり実行不可のため確定適用できません。理由を入力してください。'
+                : !preview.data.executable
+                  ? '競合があり実行不可のため確定適用できません。競合ポリシーを見直すか対象を変更してください。'
+                  : '理由を入力してください。'}
+            </p>
+          )}
+          <FormActions>
+            <Button disabled={!preview.data.executable || !reason} onClick={() => setIsApplyConfirmOpen(true)}>
+              この内容で確定適用する
+            </Button>
+          </FormActions>
+          </FormLayout>
           <ConfirmActionDialog
             open={isApplyConfirmOpen}
             onOpenChange={(open) => {
@@ -359,15 +379,6 @@ export function CalendarBulkOperationsPage() {
             error={apply.error}
             onConfirm={handleApply}
           />
-          {(!preview.data.executable || !reason) && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {!preview.data.executable && !reason
-                ? '競合があり実行不可のため確定適用できません。理由を入力してください。'
-                : !preview.data.executable
-                  ? '競合があり実行不可のため確定適用できません。競合ポリシーを見直すか対象を変更してください。'
-                  : '理由を入力してください。'}
-            </p>
-          )}
         </Card>
       )}
 

@@ -6,7 +6,9 @@ import { BackLink } from '../../components/BackLink/BackLink'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PaidLeaveGrantCycleTypeField } from '../../components/PaidLeaveGrantCycleTypeField/PaidLeaveGrantCycleTypeField'
@@ -125,9 +127,8 @@ export function PaidLeaveGrantRuleEditPage() {
     <div className="flex flex-col gap-6">
       {top}
       <Card title={rule.name}>
-        {updateRule.error && <ErrorMessage error={updateRule.error} />}
-
-        <div className="mb-4 rounded-md border border-border bg-muted/30 p-3">
+        <FormLayout>
+        <div className="mb-4">
           <PaidLeaveGrantRulePreview
             grantCycleType={grantCycleType}
             fiscalYearStart={previewFiscalYearStart}
@@ -138,7 +139,6 @@ export function PaidLeaveGrantRuleEditPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="ルール名" htmlFor="edit-rule-name" required>
             <Input id="edit-rule-name" value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
@@ -169,7 +169,6 @@ export function PaidLeaveGrantRuleEditPage() {
               onChange={(e) => setGrantCycleMonths(e.target.value)}
             />
           </FormField>
-        </div>
 
         <PaidLeaveGrantCycleTypeField
           value={grantCycleType}
@@ -181,11 +180,14 @@ export function PaidLeaveGrantRuleEditPage() {
           <Checkbox checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
           有効
         </label>
+        </FormLayout>
 
         <PaidLeaveGrantStepsEditor steps={steps} onChange={setSteps} statutory={policies} fieldErrors={fieldErrors} />
-        <p className="mb-4 text-xs text-muted-foreground">法定最低日数以上であれば自由に設定できます。</p>
 
-        <div className="flex gap-3">
+        <FormLayout>
+        <p className="mb-4 text-xs text-muted-foreground">法定最低日数以上であれば自由に設定できます。</p>
+        {updateRule.error && <ErrorMessage error={updateRule.error} />}
+        <FormActions>
           <Button variant="secondary" onClick={() =>
             backTarget
               ? navigate(backTarget.to, { state: backTarget.state, replace: true })
@@ -196,7 +198,8 @@ export function PaidLeaveGrantRuleEditPage() {
           <Button isLoading={updateRule.isPending} disabled={!name} onClick={handleSave}>
             保存
           </Button>
-        </div>
+        </FormActions>
+        </FormLayout>
       </Card>
     </div>
   )

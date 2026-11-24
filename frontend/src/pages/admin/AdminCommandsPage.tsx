@@ -4,7 +4,9 @@ import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
@@ -84,22 +86,25 @@ export function AdminCommandsPage() {
       <PageHeader description={PAGE_DESCRIPTION} />
       <Card title="コマンドの実行">
         {(commands.data?.data.length ?? 0) === 0 ? <EmptyState title="実行可能なコマンドはありません。" description="AdminExecutableが設定されたコマンドがここに表示されます。" /> : <>
+          <FormLayout>
           <FormField label="コマンド" htmlFor="admin-command-select">
             <NativeSelect id="admin-command-select" value={commandName} onChange={(event) => setCommandName(event.target.value)}>
               {commands.data?.data.map((item) => <option key={item.name} value={item.name}>{item.label}</option>)}
             </NativeSelect>
           </FormField>
-          {command && <div className="space-y-4">
-            <div><p className="text-sm text-foreground">{command.description}</p><code className="text-sm text-muted-foreground">{command.name}</code></div>
-            {command.parameters.map((parameter) => <FormField key={parameter.name} label={parameter.name} htmlFor={`command-${parameter.name}`} required={parameter.required}>
+          {command && <>
+            <div className="mb-4"><p className="text-sm text-foreground">{command.description}</p><code className="text-sm text-muted-foreground">{command.name}</code></div>
+            {command.parameters.map((parameter) => <FormField key={parameter.name} label={parameter.name} htmlFor={`command-${parameter.name}`} required={parameter.required} description={parameter.description || undefined}>
               {parameterControl(parameter)}
-              {parameter.description && <p className="text-xs text-muted-foreground">{parameter.description}</p>}
             </FormField>)}
+            <FormActions>
             <ConfirmActionDialog triggerLabel="実行" triggerVariant="primary" title={`${command.label}を実行`} description="実行は約1分以内に始まり、実行結果は履歴に記録されます。" confirmLabel="実行" isPending={execute.isPending} error={execute.error} onConfirm={async () => {
               await execute.mutateAsync({ command: command.name, parameters: Object.fromEntries(Object.entries(parameters).filter(([, value]) => value !== undefined && value !== '')) })
               notify.success(`${command.label}の実行を依頼しました`, { description: '実行は約1分以内に始まります。結果は実行履歴に表示されます。' })
             }} />
-          </div>}
+            </FormActions>
+          </>}
+          </FormLayout>
         </>}
       </Card>
       <Card title="実行履歴">

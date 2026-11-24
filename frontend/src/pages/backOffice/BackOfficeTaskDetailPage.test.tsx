@@ -143,7 +143,7 @@ describe('BackOfficeTaskDetailPage', () => {
     expect(screen.getByText('expense_reimbursement')).toBeInTheDocument()
     expect(screen.getByText('workflow_request #10')).toBeInTheDocument()
     expect(screen.getByText('未着手', { selector: 'span' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '更新する' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '状態を変更' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'タスク一覧に戻る' })).toHaveAttribute('href', '/backoffice-tasks')
   })
 
@@ -253,13 +253,13 @@ describe('BackOfficeTaskDetailPage', () => {
 
     await screen.findByText('タクシー代の経理処理')
     // 現在の状態のままでは更新できない
-    expect(screen.getByRole('button', { name: '更新する' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '状態を変更' })).toBeDisabled()
     expect(screen.getByText('変更後のステータスを選択してください')).toBeInTheDocument()
 
     await userEvent.selectOptions(screen.getByLabelText('状態'), '処理中')
     await userEvent.type(screen.getByLabelText('コメント(任意)'), '発注しました')
-    expect(screen.getByRole('button', { name: '更新する' })).toBeEnabled()
-    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+    expect(screen.getByRole('button', { name: '状態を変更' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: '状態を変更' }))
 
     await waitFor(() =>
       expect(backOfficeTasksApi.changeBackOfficeTaskStatus).toHaveBeenCalledWith('backoffice-task-1', 'processing', '発注しました'),
@@ -280,7 +280,7 @@ describe('BackOfficeTaskDetailPage', () => {
     renderPage({ ...baseTask, status: 'completed', completed_at: '2026-07-10T09:00:00+09:00', allowed_next_statuses: [] })
 
     expect(await screen.findByText('この状態から変更できるステータスはありません')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '更新する' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '状態を変更' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('状態')).not.toBeInTheDocument()
   })
 
@@ -293,7 +293,7 @@ describe('BackOfficeTaskDetailPage', () => {
 
     await screen.findByText('タクシー代の経理処理')
     await userEvent.selectOptions(screen.getByLabelText('状態'), '完了')
-    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+    await userEvent.click(screen.getByRole('button', { name: '状態を変更' }))
 
     const error = await screen.findByText('「未着手」から「完了」へは変更できません。')
     const statusSection = screen.getByRole('heading', { name: '状態を変更する' }).parentElement

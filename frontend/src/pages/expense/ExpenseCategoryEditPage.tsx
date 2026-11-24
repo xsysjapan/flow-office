@@ -4,7 +4,9 @@ import { BackLink } from '../../components/BackLink/BackLink'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { notify } from '../../lib/notify'
@@ -169,7 +171,7 @@ export function ExpenseCategoryEditPage() {
     <div className="flex flex-col gap-6">
       {top}
       <Card>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormLayout>
           <FormField label="コード" htmlFor="code" required>
             <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
           </FormField>
@@ -177,7 +179,6 @@ export function ExpenseCategoryEditPage() {
           <FormField label="名称" htmlFor="name" required>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-        </div>
 
         <FormField label="説明" htmlFor="description">
           <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -222,7 +223,7 @@ export function ExpenseCategoryEditPage() {
             この区分で明細に追加入力させたい項目を定義します。ここで定義したキーだけが保存できます。
           </p>
           {fieldDefinitions.map((row, index) => (
-            <div key={row.rowId} className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-5">
+            <div key={row.rowId} className="grid grid-cols-1 gap-2 rounded-md border border-border p-3">
               <Input
                 aria-label={`${index + 1}番目の項目のキー`}
                 placeholder="キー(例: origin)"
@@ -262,7 +263,6 @@ export function ExpenseCategoryEditPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="レシート必須しきい値(円・任意)" htmlFor="receipt-required-threshold">
             <Input
               id="receipt-required-threshold"
@@ -273,7 +273,11 @@ export function ExpenseCategoryEditPage() {
             />
           </FormField>
 
-          <FormField label="承認省略しきい値(円・任意)" htmlFor="approval-skip-threshold">
+          <FormField
+            label="承認省略しきい値(円・任意)"
+            htmlFor="approval-skip-threshold"
+            description="この金額以下の明細は承認を1段階省略できます"
+          >
             <Input
               id="approval-skip-threshold"
               type="number"
@@ -281,31 +285,26 @@ export function ExpenseCategoryEditPage() {
               value={approvalSkipThreshold}
               onChange={(e) => setApprovalSkipThreshold(e.target.value)}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              この金額以下の明細は承認を1段階省略できます
-            </p>
           </FormField>
-        </div>
 
         <label className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
           <Checkbox id="is-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
           有効
         </label>
 
-        <div className="mt-5 flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={handleCancel}>
-              キャンセル
-            </Button>
-            <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
-              {isCreate ? '作成' : '保存'}
-            </Button>
-          </div>
-          {error && <ErrorMessage error={error} />}
-          {(!code || !name) && (
-            <p className="text-xs text-muted-foreground">コードと名称を入力してください</p>
-          )}
-        </div>
+        {(!code || !name) && (
+          <p className="mb-2 text-xs text-muted-foreground">コードと名称を入力してください</p>
+        )}
+        {error && <ErrorMessage error={error} />}
+        <FormActions>
+          <Button variant="secondary" onClick={handleCancel}>
+            キャンセル
+          </Button>
+          <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
+            {isCreate ? '作成' : '保存'}
+          </Button>
+        </FormActions>
+        </FormLayout>
       </Card>
     </div>
   )

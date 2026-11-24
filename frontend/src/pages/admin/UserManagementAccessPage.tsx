@@ -11,7 +11,9 @@ import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { notify } from "../../lib/notify";
+import { FormActions } from "../../components/FormActions/FormActions";
 import { FormField } from "../../components/FormField/FormField";
+import { FormLayout } from "../../components/FormLayout/FormLayout";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { ListFilterBar } from "../../components/ListFilterBar/ListFilterBar";
 import { filterWidth } from "../../components/ListFilterBar/filterWidth";
@@ -350,96 +352,112 @@ export function UserManagementAccessPage({
       {section === "identities" && (
         <>
           <Card title="外部ID・項目管理責任">
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-              <UserSelect
-                value={identityForm.user_id}
-                onChange={(v) =>
-                  setIdentityForm({ ...identityForm, user_id: v })
-                }
-                users={users.data?.data}
-              />
-              <Input
-                placeholder="Provider"
-                value={identityForm.provider}
-                onChange={(e) =>
-                  setIdentityForm({ ...identityForm, provider: e.target.value })
-                }
-              />
-              <Input
-                placeholder="Tenant ID"
-                value={identityForm.external_tenant_id}
-                onChange={(e) =>
-                  setIdentityForm({
-                    ...identityForm,
-                    external_tenant_id: e.target.value,
-                  })
-                }
-              />
-              <Input
-                placeholder="Subject ID"
-                value={identityForm.external_subject_id}
-                onChange={(e) =>
-                  setIdentityForm({
-                    ...identityForm,
-                    external_subject_id: e.target.value,
-                  })
-                }
-              />
-              <Input
-                placeholder="外部コード"
-                value={identityForm.external_code}
-                onChange={(e) =>
-                  setIdentityForm({
-                    ...identityForm,
-                    external_code: e.target.value,
-                  })
-                }
-              />
-              <Input
-                type="email"
-                placeholder="外部メール"
-                value={identityForm.email}
-                onChange={(e) =>
-                  setIdentityForm({ ...identityForm, email: e.target.value })
-                }
-              />
-              <Button
-                disabled={
-                  !identityForm.user_id ||
-                  !identityForm.provider ||
-                  !identityForm.external_subject_id
-                }
-                onClick={() =>
-                  linkIdentity.mutate(
-                    {
-                      userId: identityForm.user_id,
-                      input: {
-                        ...identityForm,
-                        external_tenant_id:
-                          identityForm.external_tenant_id || null,
-                        external_code: identityForm.external_code || null,
-                        email: identityForm.email || null,
-                      },
-                    },
-                    { onSuccess: () => notify.success("外部IDを連携しました") },
-                  )
-                }
-              >
-                リンク
-              </Button>
+            <FormLayout>
+              <FormField label="ユーザー" htmlFor="identity-form-user">
+                <UserSelect
+                  id="identity-form-user"
+                  value={identityForm.user_id}
+                  onChange={(v) =>
+                    setIdentityForm({ ...identityForm, user_id: v })
+                  }
+                  users={users.data?.data}
+                />
+              </FormField>
+              <FormField label="Provider" htmlFor="identity-form-provider">
+                <Input
+                  id="identity-form-provider"
+                  placeholder="Provider"
+                  value={identityForm.provider}
+                  onChange={(e) =>
+                    setIdentityForm({ ...identityForm, provider: e.target.value })
+                  }
+                />
+              </FormField>
+              <FormField label="Tenant ID" htmlFor="identity-form-tenant-id">
+                <Input
+                  id="identity-form-tenant-id"
+                  placeholder="Tenant ID"
+                  value={identityForm.external_tenant_id}
+                  onChange={(e) =>
+                    setIdentityForm({
+                      ...identityForm,
+                      external_tenant_id: e.target.value,
+                    })
+                  }
+                />
+              </FormField>
+              <FormField label="Subject ID" htmlFor="identity-form-subject-id">
+                <Input
+                  id="identity-form-subject-id"
+                  placeholder="Subject ID"
+                  value={identityForm.external_subject_id}
+                  onChange={(e) =>
+                    setIdentityForm({
+                      ...identityForm,
+                      external_subject_id: e.target.value,
+                    })
+                  }
+                />
+              </FormField>
+              <FormField label="外部コード" htmlFor="identity-form-external-code">
+                <Input
+                  id="identity-form-external-code"
+                  placeholder="外部コード"
+                  value={identityForm.external_code}
+                  onChange={(e) =>
+                    setIdentityForm({
+                      ...identityForm,
+                      external_code: e.target.value,
+                    })
+                  }
+                />
+              </FormField>
+              <FormField label="外部メール" htmlFor="identity-form-email">
+                <Input
+                  id="identity-form-email"
+                  type="email"
+                  placeholder="外部メール"
+                  value={identityForm.email}
+                  onChange={(e) =>
+                    setIdentityForm({ ...identityForm, email: e.target.value })
+                  }
+                />
+              </FormField>
               {(!identityForm.user_id ||
                 !identityForm.provider ||
                 !identityForm.external_subject_id) && (
-                <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4 2xl:col-span-7">
+                <p className="mb-2 text-xs text-muted-foreground">
                   対象ユーザー・Provider・Subject IDを入力してください。
                 </p>
               )}
-              {linkIdentity.error && (
-                <div className="md:col-span-2 xl:col-span-4 2xl:col-span-7">
-                  <ErrorMessage error={linkIdentity.error} />
-                </div>
-              )}
-            </div>
+              {linkIdentity.error && <ErrorMessage error={linkIdentity.error} />}
+              <FormActions>
+                <Button
+                  disabled={
+                    !identityForm.user_id ||
+                    !identityForm.provider ||
+                    !identityForm.external_subject_id
+                  }
+                  onClick={() =>
+                    linkIdentity.mutate(
+                      {
+                        userId: identityForm.user_id,
+                        input: {
+                          ...identityForm,
+                          external_tenant_id:
+                            identityForm.external_tenant_id || null,
+                          external_code: identityForm.external_code || null,
+                          email: identityForm.email || null,
+                        },
+                      },
+                      { onSuccess: () => notify.success("外部IDを連携しました") },
+                    )
+                  }
+                >
+                  リンク
+                </Button>
+              </FormActions>
+            </FormLayout>
             <div className="mt-3 flex flex-wrap gap-2">
               {(identities.data?.filter((i) => i.status === "active") ?? []).length === 0 && (
                 <EmptyState
@@ -910,7 +928,7 @@ export function UserManagementAccessPage({
       {section === "hr" && (
         <>
           <Card title="外部HR CSV差分取込">
-            <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <div className="mb-4 text-xs text-muted-foreground">
               <p className="mb-2">
                 取り込めるCSVの列構成は次のとおりです。1行目はヘッダー行として扱われ、文字コードはUTF-8(BOMあり・なしどちらも可)を想定しています。
               </p>
@@ -982,66 +1000,70 @@ export function UserManagementAccessPage({
                 の画面で対象項目を「外部HR管理」に設定してください。設定していない項目はCSVに列があっても反映されません。
               </p>
             </div>
-            <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
-              <Input
-                key={csvInputKey}
-                aria-label="外部HR CSVファイル"
-                className="min-w-0"
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => {
-                  setCsvFile(e.target.files?.[0] ?? null);
-                  previewCsv.reset();
-                  applyCsv.reset();
-                }}
-              />
-              <Button
-                disabled={!csvFile}
-                isLoading={previewCsv.isPending}
-                onClick={() => csvFile && previewCsv.mutate(csvFile)}
-              >
-                差分確認
-              </Button>
-              {previewCsv.data && (
-                <Button
-                  disabled={previewCsv.data.summary.changed === 0}
-                  isLoading={applyCsv.isPending}
-                  onClick={() => {
-                    const summary = previewCsv.data.summary;
-                    applyCsv.mutate(previewCsv.data.rows, {
-                      onSuccess: () => {
-                        notify.success(
-                          `外部HR CSVの差分を適用しました(新規${summary.new}件・変更${summary.changed}件)`,
-                          { description: "反映結果はユーザー一覧から確認できます。" },
-                        );
-                        setCsvFile(null);
-                        setCsvInputKey((key) => key + 1);
-                        previewCsv.reset();
-                      },
-                    });
+            <FormLayout>
+              <FormField label="外部HR CSVファイル" htmlFor="hr-csv-file">
+                <Input
+                  id="hr-csv-file"
+                  key={csvInputKey}
+                  className="min-w-0"
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => {
+                    setCsvFile(e.target.files?.[0] ?? null);
+                    previewCsv.reset();
+                    applyCsv.reset();
                   }}
-                >
-                  確認した差分を適用
-                </Button>
-              )}
+                />
+              </FormField>
               {!csvFile && (
-                <p className="text-xs text-muted-foreground">
+                <p className="mb-2 text-xs text-muted-foreground">
                   CSVファイルを選択してください。
                 </p>
               )}
               {previewCsv.data && previewCsv.data.summary.changed === 0 && (
-                <p className="text-xs text-muted-foreground">
+                <p className="mb-2 text-xs text-muted-foreground">
                   適用が必要な差分はありません。
                 </p>
               )}
-            </div>
-            {previewCsv.error && <ErrorMessage error={previewCsv.error} />}
-            {applyCsv.error && (
-              <ErrorMessage
-                error={applyCsv.error}
-                fallback="差分の適用に失敗しました。"
-              />
-            )}
+              {previewCsv.error && <ErrorMessage error={previewCsv.error} />}
+              {applyCsv.error && (
+                <ErrorMessage
+                  error={applyCsv.error}
+                  fallback="差分の適用に失敗しました。"
+                />
+              )}
+              <FormActions>
+                <Button
+                  disabled={!csvFile}
+                  isLoading={previewCsv.isPending}
+                  onClick={() => csvFile && previewCsv.mutate(csvFile)}
+                >
+                  差分確認
+                </Button>
+                {previewCsv.data && (
+                  <Button
+                    disabled={previewCsv.data.summary.changed === 0}
+                    isLoading={applyCsv.isPending}
+                    onClick={() => {
+                      const summary = previewCsv.data.summary;
+                      applyCsv.mutate(previewCsv.data.rows, {
+                        onSuccess: () => {
+                          notify.success(
+                            `外部HR CSVの差分を適用しました(新規${summary.new}件・変更${summary.changed}件)`,
+                            { description: "反映結果はユーザー一覧から確認できます。" },
+                          );
+                          setCsvFile(null);
+                          setCsvInputKey((key) => key + 1);
+                          previewCsv.reset();
+                        },
+                      });
+                    }}
+                  >
+                    確認した差分を適用
+                  </Button>
+                )}
+              </FormActions>
+            </FormLayout>
             {previewCsv.data && (
               <div className="mt-4 min-w-0">
                 <p className="mb-3 text-sm">

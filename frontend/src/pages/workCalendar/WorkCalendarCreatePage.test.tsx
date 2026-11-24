@@ -73,7 +73,7 @@ describe('WorkCalendarCreatePage', () => {
     renderPage()
 
     await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
-    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
@@ -106,7 +106,7 @@ describe('WorkCalendarCreatePage', () => {
 
     await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
     await userEvent.selectOptions(screen.getByLabelText('月曜日'), 'company_holiday')
-    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
@@ -165,7 +165,7 @@ describe('WorkCalendarCreatePage', () => {
 
     await waitFor(() => expect(screen.getByLabelText('休日iCalendarソース')).toHaveValue(createdSource.id))
 
-    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
@@ -194,12 +194,12 @@ describe('WorkCalendarCreatePage', () => {
     renderPage()
 
     expect(await screen.findByText('カレンダー名を入力してください。')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '作成する' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '作成' })).toBeDisabled()
 
     await userEvent.type(screen.getByLabelText('カレンダー名'), '2027年度カレンダー')
 
     expect(screen.queryByText('カレンダー名を入力してください。')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '作成する' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '作成' })).toBeEnabled()
   })
 
   it('navigates to the list page when cancelled', async () => {

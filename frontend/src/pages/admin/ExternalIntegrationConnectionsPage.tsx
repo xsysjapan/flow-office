@@ -600,17 +600,17 @@ export function ExternalIntegrationConnectionsPage() {
           </DialogHeader>
           {editingConnection && (
             <>
-              {updateConnection.error && <ErrorMessage error={updateConnection.error} />}
-              <p className="mb-2 text-xs text-muted-foreground">
-                クライアントシークレット・APIキーは空欄のままにすると現在の値を変更しません。
-              </p>
               <ConnectionFormFields
                 idPrefix="connection-edit"
                 value={editValue}
                 onChange={setEditValue}
                 isCreate={false}
               />
-              {editValidationError && <p className="text-xs text-muted-foreground">{editValidationError}</p>}
+              <p className="mb-2 text-xs text-muted-foreground">
+                クライアントシークレット・APIキーは空欄のままにすると現在の値を変更しません。
+              </p>
+              {editValidationError && <p className="mb-2 text-xs text-muted-foreground">{editValidationError}</p>}
+              {updateConnection.error && <ErrorMessage error={updateConnection.error} />}
             </>
           )}
           <DialogFooter>

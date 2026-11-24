@@ -12,6 +12,7 @@ import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormField } from '../../components/FormField/FormField'
 import { notify } from '../../lib/notify'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { MonthlyAttendanceBulkEntryModal } from '../../components/MonthlyAttendanceBulkEntryModal/MonthlyAttendanceBulkEntryModal'
@@ -137,8 +138,12 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
               : '現在の設定では承認者の指定は不要です。提出すると同時に確定します。'}
           </DialogDescription>
         </DialogHeader>
+        {approvalRequired && (
+          <FormField label="承認者" htmlFor="approver" required>
+            <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
+          </FormField>
+        )}
         {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
-        {approvalRequired && <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />}
         <DialogFooter>
           <Button variant="secondary" onClick={() => setIsOpen(false)}>
             キャンセル

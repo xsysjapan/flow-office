@@ -9,11 +9,15 @@ import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
+import { FormRow } from '../../components/FormRow/FormRow'
+import { FormSection } from '../../components/FormSection/FormSection'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import type {
@@ -412,7 +416,8 @@ export function WorkCalendarDetailPage() {
       {setDefaultCalendar.error && <ErrorMessage error={setDefaultCalendar.error} />}
 
       <Card title={calendar.name}>
-        <div className="flex flex-col gap-4">
+        <FormLayout>
+          <FormSection title="基本設定">
           <FormField label="カレンダー名" htmlFor="company-calendar-name" required>
             <Input id="company-calendar-name" value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
@@ -428,7 +433,7 @@ export function WorkCalendarDetailPage() {
             />
           </FormField>
 
-          <div className="grid grid-cols-2 gap-4">
+          <FormRow>
             <FormField label="年度開始月" htmlFor="company-calendar-fiscal-year-start-month">
               <Input
                 id="company-calendar-fiscal-year-start-month"
@@ -450,13 +455,12 @@ export function WorkCalendarDetailPage() {
                 onChange={(e) => setFiscalYearStartDay(e.target.value)}
               />
             </FormField>
-          </div>
+          </FormRow>
 
-          <div className="flex flex-col gap-3 rounded-md border border-border p-4">
-            <p className="text-xs text-muted-foreground">
-              未変更の曜日は既定値のままです。ここで設定した内容がこのカレンダーの曜日ごとの休日区分になります。
-            </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <p className="mb-3 text-xs text-muted-foreground">
+            未変更の曜日は既定値のままです。ここで設定した内容がこのカレンダーの曜日ごとの休日区分になります。
+          </p>
+          <FormRow columns={4}>
               {WEEKDAY_KEYS.map((weekdayKey) => (
                 <FormField
                   key={weekdayKey}
@@ -481,7 +485,8 @@ export function WorkCalendarDetailPage() {
                   </NativeSelect>
                 </FormField>
               ))}
-            </div>
+          </FormRow>
+          <div className="mb-4">
             <label className="flex items-center gap-2 text-sm text-foreground">
               <Checkbox
                 aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
@@ -490,19 +495,20 @@ export function WorkCalendarDetailPage() {
               />
               曜日ごとの休日設定を日ごとに個別変更できるようにする
             </label>
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               この設定を有効にすると、会社カレンダーの各日ごとに休日区分を個別に変更できるようになります。
             </p>
           </div>
-        </div>
+          </FormSection>
 
-        <div className="mt-4 flex flex-col items-end gap-1">
-          <Button isLoading={updateCalendar.isPending} disabled={!name} onClick={handleSaveSettings}>
-            保存する
-          </Button>
-          {!name && <p className="text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
+          {!name && <p className="mb-2 text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
           {updateCalendar.error && calendarUpdateTarget === 'settings' && <ErrorMessage error={updateCalendar.error} />}
-        </div>
+          <FormActions>
+            <Button isLoading={updateCalendar.isPending} disabled={!name} onClick={handleSaveSettings}>
+              基本設定を保存
+            </Button>
+          </FormActions>
+        </FormLayout>
       </Card>
 
       <Card
@@ -515,9 +521,7 @@ export function WorkCalendarDetailPage() {
               <DialogTitle>カレンダー年度を作成</DialogTitle>
             </DialogHeader>
 
-            {createYear.error && <ErrorMessage error={createYear.error} />}
-
-            <div className="flex flex-col gap-4">
+            <div>
               <FormField label="年度" htmlFor="year-fiscal-year" required>
                 <Input
                   id="year-fiscal-year"
@@ -527,39 +531,43 @@ export function WorkCalendarDetailPage() {
                 />
               </FormField>
 
-              <FormField label="開始日" htmlFor="year-starts-on" required>
-                <DatePicker
-                  id="year-starts-on"
-                  value={yearStartsOn || undefined}
-                  onChange={(date) => setYearStartsOn(date ?? '')}
-                />
-              </FormField>
+              <FormRow>
+                <FormField label="開始日" htmlFor="year-starts-on" required>
+                  <DatePicker
+                    id="year-starts-on"
+                    value={yearStartsOn || undefined}
+                    onChange={(date) => setYearStartsOn(date ?? '')}
+                  />
+                </FormField>
 
-              <FormField label="終了日" htmlFor="year-ends-on" required>
-                <DatePicker
-                  id="year-ends-on"
-                  value={yearEndsOn || undefined}
-                  onChange={(date) => setYearEndsOn(date ?? '')}
-                />
-              </FormField>
+                <FormField label="終了日" htmlFor="year-ends-on" required>
+                  <DatePicker
+                    id="year-ends-on"
+                    value={yearEndsOn || undefined}
+                    onChange={(date) => setYearEndsOn(date ?? '')}
+                  />
+                </FormField>
+              </FormRow>
             </div>
 
             <p className="text-xs text-muted-foreground">
               年度を入力すると、このカレンダーの年度開始月日(設定は「基本設定」から変更できます)から開始日・終了日を自動計算します。開始日・終了日は個別に変更できます。
             </p>
 
-            <div className="flex flex-wrap gap-3">
+            {createYear.error && <ErrorMessage error={createYear.error} />}
+
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => handleYearModalOpenChange(false)}>
+                キャンセル
+              </Button>
               <Button
                 isLoading={createYear.isPending}
                 disabled={!fiscalYear || !yearStartsOn || !yearEndsOn}
                 onClick={handleCreateYear}
               >
-                年度を作成する
+                作成
               </Button>
-              <Button variant="secondary" onClick={() => handleYearModalOpenChange(false)}>
-                キャンセル
-              </Button>
-            </div>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -607,6 +615,7 @@ export function WorkCalendarDetailPage() {
           <ErrorMessage error={sourcesError} fallback="休日iCalendarソース一覧の取得に失敗しました。" />
         ) : (
           <div className="flex flex-col gap-4">
+            <FormLayout>
             <FormField label="使用する休日iCalendarソース" htmlFor="holiday-source-select">
               <NativeSelect
                 id="holiday-source-select"
@@ -623,12 +632,14 @@ export function WorkCalendarDetailPage() {
             </FormField>
 
             {!isRegisteringSource ? (
-              <Button variant="secondary" onClick={() => setIsRegisteringSource(true)}>
-                新しいiCalendarを登録する
-              </Button>
+              <div className="mb-4">
+                <Button variant="secondary" onClick={() => setIsRegisteringSource(true)}>
+                  新しいiCalendarを登録する
+                </Button>
+              </div>
             ) : (
-              <div className="flex flex-col gap-4 rounded-md border border-border p-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="mb-4">
+                <div>
                   <FormField label="名称" htmlFor="holiday-source-name" required>
                     <Input
                       id="holiday-source-name"
@@ -637,7 +648,7 @@ export function WorkCalendarDetailPage() {
                     />
                   </FormField>
 
-                  <div className="flex flex-col gap-2">
+                  <div className="mb-4 flex flex-col gap-2">
                     <span className="text-sm font-medium text-foreground">登録方法</span>
                     <div className="flex gap-4">
                       <label className="flex items-center gap-2 text-sm text-foreground">
@@ -682,7 +693,8 @@ export function WorkCalendarDetailPage() {
                   </FormField>
                 )}
 
-                <div className="flex justify-end gap-2">
+                {createSource.error && <ErrorMessage error={createSource.error} />}
+                <FormActions>
                   <Button variant="secondary" onClick={() => setIsRegisteringSource(false)}>
                     キャンセル
                   </Button>
@@ -693,21 +705,23 @@ export function WorkCalendarDetailPage() {
                   >
                     登録する
                   </Button>
-                </div>
-                {createSource.error && <ErrorMessage error={createSource.error} />}
+                </FormActions>
               </div>
             )}
 
             {selectedSourceId !== (calendar.holiday_calendar_source_id ?? NONE_OPTION_VALUE) && (
-              <div className="flex justify-end">
-                <Button isLoading={updateCalendar.isPending} onClick={handleAssignSource}>
-                  このカレンダーに設定する
-                </Button>
+              <>
                 {updateCalendar.error && calendarUpdateTarget === 'source' && (
                   <ErrorMessage error={updateCalendar.error} />
                 )}
-              </div>
+                <FormActions>
+                  <Button isLoading={updateCalendar.isPending} onClick={handleAssignSource}>
+                    このカレンダーに設定する
+                  </Button>
+                </FormActions>
+              </>
             )}
+            </FormLayout>
 
             {selectedSource && (
               <div className="flex flex-col gap-3 rounded-md border border-border p-4">
@@ -794,8 +808,8 @@ export function WorkCalendarDetailPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-4 rounded-md border border-border p-4">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormLayout>
+                    <div>
                       <FormField label="名称" htmlFor="holiday-source-edit-name" required>
                         <Input
                           id="holiday-source-edit-name"
@@ -804,7 +818,7 @@ export function WorkCalendarDetailPage() {
                         />
                       </FormField>
 
-                      <div className="flex flex-col gap-2">
+                      <div className="mb-4 flex flex-col gap-2">
                         <span className="text-sm font-medium text-foreground">登録方法</span>
                         <div className="flex gap-4">
                           <label className="flex items-center gap-2 text-sm text-foreground">
@@ -839,7 +853,7 @@ export function WorkCalendarDetailPage() {
                         />
                       </FormField>
                     ) : (
-                      <div className="flex flex-col gap-2">
+                      <div className="mb-4 flex flex-col gap-2">
                         <span className="text-xs text-muted-foreground">
                           現在のファイル: {selectedSource.uploaded_ics_filename ?? '未アップロード'}
                         </span>
@@ -854,7 +868,8 @@ export function WorkCalendarDetailPage() {
                       </div>
                     )}
 
-                    <div className="flex justify-end gap-2">
+                    {updateSource.error && <ErrorMessage error={updateSource.error} />}
+                    <FormActions>
                       <Button variant="secondary" onClick={() => setIsEditingSource(false)}>
                         キャンセル
                       </Button>
@@ -865,11 +880,10 @@ export function WorkCalendarDetailPage() {
                         }
                         onClick={handleUpdateSource}
                       >
-                        更新する
+                        ソースを保存
                       </Button>
-                    </div>
-                    {updateSource.error && <ErrorMessage error={updateSource.error} />}
-                  </div>
+                    </FormActions>
+                  </FormLayout>
                 )}
               </div>
             )}

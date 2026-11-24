@@ -4,7 +4,9 @@ import { useAuth } from '../../auth/useAuth'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { Ms365CredentialsFields, type Ms365CredentialsFieldsValue } from '../../components/Ms365CredentialsFields/Ms365CredentialsFields'
 import { Input } from '../../components/ui/input'
 import { useCompleteOnboardingLocal, useStartOnboardingSso } from '../../hooks/useOnboarding'
@@ -101,34 +103,28 @@ export function OnboardingPage() {
           </div>
 
           {mode === 'sso' && (
-            <>
-              {startSso.error != null && <ErrorMessage error={startSso.error} fallback="設定の保存に失敗しました。" />}
-              <p className="mb-4 text-sm text-muted-foreground">
+            <FormLayout>
+              <Ms365CredentialsFields idPrefix="onboarding-sso" value={ms365Value} onChange={setMs365Value} required />
+              <p className="mb-2 text-xs text-muted-foreground">
                 保存すると、そのままMicrosoftのログイン画面へ遷移します。ログインに成功した
                 アカウントがそのまま管理者になります(氏名・メールアドレスの事前入力は不要です)。
               </p>
-              <Ms365CredentialsFields idPrefix="onboarding-sso" value={ms365Value} onChange={setMs365Value} required />
-              <Button
-                className="w-full"
-                disabled={!isSsoValid}
-                isLoading={startSso.isPending}
-                onClick={handleSubmitSso}
-              >
-                保存してMicrosoftにログインする
-              </Button>
               {!isSsoValid && (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mb-2 text-xs text-muted-foreground">
                   テナントID・クライアントID・クライアントシークレットを入力してください。
                 </p>
               )}
-            </>
+              {startSso.error != null && <ErrorMessage error={startSso.error} fallback="設定の保存に失敗しました。" />}
+              <FormActions>
+                <Button disabled={!isSsoValid} isLoading={startSso.isPending} onClick={handleSubmitSso}>
+                  保存してMicrosoftにログインする
+                </Button>
+              </FormActions>
+            </FormLayout>
           )}
 
           {mode === 'local' && (
-            <>
-              {completeLocal.error != null && (
-                <ErrorMessage error={completeLocal.error} fallback="セットアップに失敗しました。" />
-              )}
+            <FormLayout>
               <FormField label="氏名" htmlFor="onboarding-local-name" required>
                 <Input id="onboarding-local-name" value={adminName} onChange={(e) => setAdminName(e.target.value)} />
               </FormField>
@@ -156,20 +152,20 @@ export function OnboardingPage() {
                   onChange={(e) => setAdminPasswordConfirmation(e.target.value)}
                 />
               </FormField>
-              <Button
-                className="w-full"
-                disabled={!isLocalValid}
-                isLoading={completeLocal.isPending}
-                onClick={handleSubmitLocal}
-              >
-                セットアップを完了する
-              </Button>
               {!isLocalValid && (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mb-2 text-xs text-muted-foreground">
                   氏名・メールアドレス・8文字以上のパスワード(確認と一致)を入力してください。
                 </p>
               )}
-            </>
+              {completeLocal.error != null && (
+                <ErrorMessage error={completeLocal.error} fallback="セットアップに失敗しました。" />
+              )}
+              <FormActions>
+                <Button disabled={!isLocalValid} isLoading={completeLocal.isPending} onClick={handleSubmitLocal}>
+                  セットアップを完了する
+                </Button>
+              </FormActions>
+            </FormLayout>
           )}
         </Card>
       </div>

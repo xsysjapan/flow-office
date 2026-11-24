@@ -6,7 +6,11 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
+import { FormRow } from '../../components/FormRow/FormRow'
+import { FormSection } from '../../components/FormSection/FormSection'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -152,8 +156,7 @@ export function WorkCalendarCreatePage() {
       <PageHeader description="会社カレンダーの名称などを入力して作成し、必要なら休日ソースも登録します。" />
 
       <Card>
-        {createCalendar.error && <ErrorMessage error={createCalendar.error} />}
-
+        <FormLayout>
         <FormField label="カレンダー名" htmlFor="create-calendar-name" required>
           <Input id="create-calendar-name" value={form.name} onChange={(e) => patch({ name: e.target.value })} />
         </FormField>
@@ -173,7 +176,7 @@ export function WorkCalendarCreatePage() {
           </NativeSelect>
         </FormField>
 
-        <div className="grid grid-cols-2 gap-4">
+        <FormRow>
           <FormField label="年度開始月" htmlFor="create-calendar-fiscal-year-start-month">
             <Input
               id="create-calendar-fiscal-year-start-month"
@@ -195,13 +198,14 @@ export function WorkCalendarCreatePage() {
               onChange={(e) => patch({ fiscalYearStartDay: e.target.value })}
             />
           </FormField>
-        </div>
+        </FormRow>
 
-        <div className="flex flex-col gap-3 rounded-md border border-border p-4">
-          <p className="text-xs text-muted-foreground">
-            ここで設定した内容がカレンダーの年度作成時の曜日ごとの休日区分になります。
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormSection
+          title="曜日ごとの休日区分"
+          headingLevel={2}
+          description="ここで設定した内容がカレンダーの年度作成時の曜日ごとの休日区分になります。"
+        >
+          <FormRow columns={4}>
             {WEEKDAY_KEYS.map((weekdayKey) => (
               <FormField
                 key={weekdayKey}
@@ -228,19 +232,23 @@ export function WorkCalendarCreatePage() {
                 </NativeSelect>
               </FormField>
             ))}
+          </FormRow>
+          <div className="mb-4">
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <Checkbox
+                aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
+                checked={form.allowDailyHolidayOverride}
+                onCheckedChange={(checked) => patch({ allowDailyHolidayOverride: checked === true })}
+              />
+              曜日ごとの休日設定を日ごとに個別変更できるようにする
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              この設定を有効にすると、会社カレンダーの各日ごとに休日区分を個別に変更できるようになります。
+            </p>
           </div>
-          <label className="flex items-center gap-2 text-sm text-foreground">
-            <Checkbox
-              aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
-              checked={form.allowDailyHolidayOverride}
-              onCheckedChange={(checked) => patch({ allowDailyHolidayOverride: checked === true })}
-            />
-            曜日ごとの休日設定を日ごとに個別変更できるようにする
-          </label>
-          <p className="text-xs text-muted-foreground">
-            この設定を有効にすると、会社カレンダーの各日ごとに休日区分を個別に変更できるようになります。
-          </p>
-        </div>
+        </FormSection>
+
+        <div className="mt-4" />
 
         <FormField label="休日iCalendarソース" htmlFor="create-calendar-holiday-source">
           <NativeSelect
@@ -260,12 +268,14 @@ export function WorkCalendarCreatePage() {
         {createSource.error && <ErrorMessage error={createSource.error} />}
 
         {!isRegisteringSource ? (
-          <Button variant="secondary" onClick={() => setIsRegisteringSource(true)}>
-            新しいiCalendarを登録する
-          </Button>
+          <div className="mb-4">
+            <Button variant="secondary" onClick={() => setIsRegisteringSource(true)}>
+              新しいiCalendarを登録する
+            </Button>
+          </div>
         ) : (
-          <div className="flex flex-col gap-4 rounded-md border border-border p-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="mb-4">
+            <div>
               <FormField label="名称" htmlFor="create-calendar-holiday-source-name" required>
                 <Input
                   id="create-calendar-holiday-source-name"
@@ -274,7 +284,7 @@ export function WorkCalendarCreatePage() {
                 />
               </FormField>
 
-              <div className="flex flex-col gap-2">
+              <div className="mb-4 flex flex-col gap-2">
                 <span className="text-sm font-medium text-foreground">登録方法</span>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 text-sm text-foreground">
@@ -319,7 +329,7 @@ export function WorkCalendarCreatePage() {
               </FormField>
             )}
 
-            <div className="flex justify-end gap-2">
+            <FormActions>
               <Button variant="secondary" onClick={() => setIsRegisteringSource(false)}>
                 キャンセル
               </Button>
@@ -330,25 +340,25 @@ export function WorkCalendarCreatePage() {
               >
                 登録する
               </Button>
-            </div>
+            </FormActions>
           </div>
         )}
 
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap gap-3">
-            <Button variant="secondary" onClick={() =>
-                backTarget
-                  ? navigate(backTarget.to, { state: backTarget.state, replace: true })
-                  : navigate('/admin/work-calendars')
-              }>
-              キャンセル
-            </Button>
-            <Button isLoading={createCalendar.isPending} disabled={!form.name} onClick={handleSubmit}>
-              作成する
-            </Button>
-          </div>
-          {!form.name && <p className="text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
-        </div>
+        {!form.name && <p className="mb-2 text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
+        {createCalendar.error && <ErrorMessage error={createCalendar.error} />}
+        <FormActions>
+          <Button variant="secondary" onClick={() =>
+              backTarget
+                ? navigate(backTarget.to, { state: backTarget.state, replace: true })
+                : navigate('/admin/work-calendars')
+            }>
+            キャンセル
+          </Button>
+          <Button isLoading={createCalendar.isPending} disabled={!form.name} onClick={handleSubmit}>
+            作成
+          </Button>
+        </FormActions>
+        </FormLayout>
       </Card>
     </div>
   )

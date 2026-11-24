@@ -6,7 +6,9 @@ import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Input } from '../../components/ui/input'
@@ -74,15 +76,13 @@ export function AssetEditPage() {
     <>
       <BackLink />
       <Card title="備品を編集">
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="名称" htmlFor="asset-edit-name" required>
-              <Input id="asset-edit-name" value={name} onChange={(e) => setName(e.target.value)} />
-            </FormField>
-            <FormField label="カテゴリ" htmlFor="asset-edit-category" required>
-              <Input id="asset-edit-category" value={category} onChange={(e) => setCategory(e.target.value)} />
-            </FormField>
-          </div>
+        <FormLayout>
+          <FormField label="名称" htmlFor="asset-edit-name" required>
+            <Input id="asset-edit-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </FormField>
+          <FormField label="カテゴリ" htmlFor="asset-edit-category" required>
+            <Input id="asset-edit-category" value={category} onChange={(e) => setCategory(e.target.value)} />
+          </FormField>
 
           <FormField label="シリアル番号" htmlFor="asset-edit-serial">
             <Input id="asset-edit-serial" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
@@ -92,18 +92,16 @@ export function AssetEditPage() {
             <Textarea id="asset-edit-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
 
-          <div className="mt-1 flex flex-col gap-1.5">
-            {updateAsset.error && <ErrorMessage error={updateAsset.error} />}
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? `/assets/${assetId}`, { state: backTarget?.state, replace: true })}>
-                キャンセル
-              </Button>
-              <Button isLoading={updateAsset.isPending} disabled={!isValid} onClick={() => void handleSave()}>
-                保存
-              </Button>
-            </div>
-          </div>
-        </div>
+          {updateAsset.error && <ErrorMessage error={updateAsset.error} />}
+          <FormActions>
+            <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? `/assets/${assetId}`, { state: backTarget?.state, replace: true })}>
+              キャンセル
+            </Button>
+            <Button isLoading={updateAsset.isPending} disabled={!isValid} onClick={() => void handleSave()}>
+              保存
+            </Button>
+          </FormActions>
+        </FormLayout>
       </Card>
     </>
   )

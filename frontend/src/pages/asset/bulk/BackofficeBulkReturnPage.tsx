@@ -9,6 +9,8 @@ import { AssetPicker } from '../../../components/AssetPicker/AssetPicker'
 import { Badge } from '../../../components/Badge/Badge'
 import { Button } from '../../../components/Button/Button'
 import { Card } from '../../../components/Card/Card'
+import { FormActions } from '../../../components/FormActions/FormActions'
+import { FormLayout } from '../../../components/FormLayout/FormLayout'
 import { ErrorMessage } from '../../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../../lib/notify'
 import { PermissionDenied } from '../../../components/PermissionDenied/PermissionDenied'
@@ -76,15 +78,17 @@ export function BackofficeBulkReturnPage() {
       <BackLink />
       <Card title="バックオフィス一括返却">
         <div className="flex flex-col gap-6">
-          <p className="text-sm text-muted-foreground">現在貸出中の備品を、借用者に関わらず一括で返却処理します。</p>
+          <FormLayout>
+            <p className="mb-4 text-sm text-muted-foreground">現在貸出中の備品を、借用者に関わらず一括で返却処理します。</p>
 
-          <AssetPicker
-            id="backoffice-bulk-return-scan"
-            label="返却対象に追加する備品"
-            onSubmit={handleScan}
-            isPending={resolveAsset.isPending}
-          />
-          {scanError && <ErrorMessage error={new Error(scanError)} />}
+            <AssetPicker
+              id="backoffice-bulk-return-scan"
+              label="返却対象に追加する備品"
+              onSubmit={handleScan}
+              isPending={resolveAsset.isPending}
+            />
+            {scanError && <ErrorMessage error={new Error(scanError)} />}
+          </FormLayout>
 
           {targets.length === 0 ? (
             <p className="text-sm text-muted-foreground">まだ対象がありません。</p>
@@ -115,32 +119,32 @@ export function BackofficeBulkReturnPage() {
             </Table>
           )}
 
-          {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括返却に失敗しました。" />}
-
-          {result && (
-            <div className="flex flex-col gap-2 rounded-md border border-border p-4">
-              <p className="text-sm font-medium text-foreground">
-                成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
-              </p>
-              <ul className="flex flex-col gap-1 text-sm">
-                {result.results.map((r) => (
-                  <li key={r.asset_id} className="flex items-center gap-2">
-                    <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
-                    <span className="text-muted-foreground">{r.success ? '返却しました。' : r.error}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
-              キャンセル
-            </Button>
-            <Button onClick={handleConfirm} disabled={targets.length === 0} isLoading={bulkOperation.isPending}>
-              {targets.length}件を確定
-            </Button>
-          </div>
+          <FormLayout>
+            {result && (
+              <div className="mb-4 flex flex-col gap-2 rounded-md border border-border p-4">
+                <p className="text-sm font-medium text-foreground">
+                  成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
+                </p>
+                <ul className="flex flex-col gap-1 text-sm">
+                  {result.results.map((r) => (
+                    <li key={r.asset_id} className="flex items-center gap-2">
+                      <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
+                      <span className="text-muted-foreground">{r.success ? '返却しました。' : r.error}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括返却に失敗しました。" />}
+            <FormActions>
+              <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
+                キャンセル
+              </Button>
+              <Button onClick={handleConfirm} disabled={targets.length === 0} isLoading={bulkOperation.isPending}>
+                {targets.length}件を確定
+              </Button>
+            </FormActions>
+          </FormLayout>
         </div>
       </Card>
     </>

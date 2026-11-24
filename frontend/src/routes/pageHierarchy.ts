@@ -77,12 +77,12 @@ export const pageNodes: PageNode[] = [
   { pattern: "/expenses/presets", title: "入力プリセット", parent: "/expenses" },
   {
     pattern: "/expenses/presets/new",
-    title: "プリセットの新規作成",
+    title: "プリセットを作成",
     parent: "/expenses/presets",
   },
   {
     pattern: "/expenses/presets/:id",
-    title: "プリセットの編集",
+    title: "プリセットを編集",
     parent: "/expenses/presets",
   },
   { pattern: "/paid-leave", title: "有給", parent: null },
@@ -101,7 +101,7 @@ export const pageNodes: PageNode[] = [
     parent: "/backoffice-tasks",
   },
   { pattern: "/assets", title: "備品管理", parent: null },
-  { pattern: "/assets/new", title: "備品を登録", parent: "/assets" },
+  { pattern: "/assets/new", title: "備品を作成", parent: "/assets" },
   { pattern: "/assets/bulk/self-loan", title: "セルフ一括貸出", parent: "/assets" },
   { pattern: "/assets/bulk/self-return", title: "セルフ一括返却", parent: "/assets" },
   {
@@ -129,17 +129,17 @@ export const pageNodes: PageNode[] = [
   { pattern: "/admin/users/:id", title: "利用者詳細", parent: "/admin/users" },
   {
     pattern: "/admin/groups/:id",
-    title: ({ id }) => (id === "new" ? "グループを新規作成" : "グループ詳細"),
+    title: ({ id }) => (id === "new" ? "グループを作成" : "グループ詳細"),
     parent: "/admin/groups",
   },
   {
     pattern: "/admin/request-types/:id",
-    title: ({ id }) => (id === "new" ? "申請種別の新規作成" : "申請種別の編集"),
+    title: ({ id }) => (id === "new" ? "申請種別を作成" : "申請種別を編集"),
     parent: "/admin/request-types",
   },
   {
     pattern: "/admin/expense-categories/:id",
-    title: ({ id }) => (id === "new" ? "経費区分の新規作成" : "経費区分の編集"),
+    title: ({ id }) => (id === "new" ? "経費区分を作成" : "経費区分を編集"),
     parent: "/admin/expense-categories",
   },
   {

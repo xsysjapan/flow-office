@@ -9,6 +9,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Input } from '../../components/ui/input'
@@ -247,12 +248,14 @@ export function ExpenseClaimDetailPage() {
                   notify.success('経費精算を取り消しました')
                 }}
               >
-                <Input
-                  aria-label="取消理由"
-                  placeholder="取消理由"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                />
+                <FormField label="取消理由" htmlFor="claim-cancel-reason" required>
+                  <Input
+                    id="claim-cancel-reason"
+                    placeholder="取消理由"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                </FormField>
               </ConfirmActionDialog>
             )}
 

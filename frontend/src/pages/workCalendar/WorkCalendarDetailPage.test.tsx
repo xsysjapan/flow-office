@@ -128,7 +128,7 @@ describe('WorkCalendarDetailPage', () => {
     await userEvent.clear(screen.getByLabelText('年度開始月'))
     await userEvent.type(screen.getByLabelText('年度開始月'), '1')
 
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '基本設定を保存' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalledWith('calendar-1', {
@@ -171,7 +171,7 @@ describe('WorkCalendarDetailPage', () => {
 
     // 保存後、一覧の再取得(invalidateQueries)で反映される値をここで差し替える。
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([{ ...calendar, fiscal_year_start_month: 1 }])
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '基本設定を保存' }))
     await waitFor(() => expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByLabelText('年度開始月')).toHaveValue(1))
 
@@ -187,7 +187,7 @@ describe('WorkCalendarDetailPage', () => {
 
     await screen.findByLabelText('カレンダー名')
     await userEvent.selectOptions(screen.getByLabelText('月曜日'), 'company_holiday')
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '基本設定を保存' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalledWith('calendar-1', {
@@ -222,7 +222,7 @@ describe('WorkCalendarDetailPage', () => {
 
     await screen.findByLabelText('カレンダー名')
     await userEvent.click(screen.getByLabelText('曜日ごとの休日設定を日ごとに個別変更できるようにする'))
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '基本設定を保存' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalledWith('calendar-1', {
@@ -375,7 +375,7 @@ describe('WorkCalendarDetailPage', () => {
     await userEvent.clear(screen.getByLabelText('iCalendar URL'))
     await userEvent.type(screen.getByLabelText('iCalendar URL'), 'https://example.com/updated.ics')
 
-    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+    await userEvent.click(screen.getByRole('button', { name: 'ソースを保存' }))
 
     await waitFor(() =>
       expect(holidayCalendarSourcesApi.updateHolidayCalendarSource).toHaveBeenCalledWith(source.id, {
@@ -405,7 +405,7 @@ describe('WorkCalendarDetailPage', () => {
     const file = new File(['BEGIN:VCALENDAR'], 'new-holidays.ics', { type: 'text/calendar' })
     await userEvent.upload(screen.getByLabelText('iCalendarファイル(置き換え)'), file)
 
-    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+    await userEvent.click(screen.getByRole('button', { name: 'ソースを保存' }))
 
     await waitFor(() =>
       expect(holidayCalendarSourcesApi.updateHolidayCalendarSource).toHaveBeenCalledWith(uploadSource.id, {
@@ -472,7 +472,7 @@ describe('WorkCalendarDetailPage', () => {
 
       await userEvent.click((await screen.findAllByRole('button', { name: '新規作成' }))[0])
       await userEvent.type(await screen.findByLabelText('年度'), '2026')
-      await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))
+      await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
       await waitFor(() =>
         expect(workCalendarsApi.createWorkCalendarYear).toHaveBeenCalledWith('calendar-1', {
@@ -493,7 +493,7 @@ describe('WorkCalendarDetailPage', () => {
       await userEvent.click((await screen.findAllByRole('button', { name: '新規作成' }))[0])
       await userEvent.type(await screen.findByLabelText('年度'), '2026')
       await pickDate(userEvent.setup(), '開始日', '2026-04-05')
-      await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))
+      await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
       await waitFor(() =>
         expect(workCalendarsApi.createWorkCalendarYear).toHaveBeenCalledWith('calendar-1', {

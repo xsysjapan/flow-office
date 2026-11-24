@@ -7,6 +7,8 @@ import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { CorrectFiscalYearDialog } from '../../components/CorrectFiscalYearDialog/CorrectFiscalYearDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormActions } from '../../components/FormActions/FormActions'
+import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { notify } from '../../lib/notify'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -730,12 +732,14 @@ export function WorkCalendarDaysPage() {
               <p className="text-sm text-muted-foreground">カレンダー年度の期間が確認できません。</p>
             )}
 
-            <div className="flex justify-end">
-              <Button isLoading={putDays.isPending} disabled={dates.length === 0} onClick={handleSave}>
-                保存する
-              </Button>
-            </div>
-            {putDays.error && <ErrorMessage error={putDays.error} />}
+            <FormLayout>
+              {putDays.error && <ErrorMessage error={putDays.error} />}
+              <FormActions>
+                <Button isLoading={putDays.isPending} disabled={dates.length === 0} onClick={handleSave}>
+                  保存
+                </Button>
+              </FormActions>
+            </FormLayout>
           </div>
         )}
       </Card>
