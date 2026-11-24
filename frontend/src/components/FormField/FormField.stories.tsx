@@ -36,3 +36,12 @@ export const WithError: Story = {
     children: <input id="title-error" name="title" />,
   },
 }
+
+export const WithDescription: Story = {
+  args: {
+    label: '名称',
+    htmlFor: 'name-description',
+    description: '一覧に表示される名前です。',
+    children: <input id="name-description" name="name" />,
+  },
+}
