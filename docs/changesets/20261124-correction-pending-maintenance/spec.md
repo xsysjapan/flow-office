@@ -1,6 +1,6 @@
 # correction-pending-maintenance(補正待ちの間のメンテナンス表示と、命名統一の管理画面からの実行)
 
-ステータス: 実装中(backend・docs実装済み。frontendは別担当)
+ステータス: 完了
 
 ## 変更要望(原文)
 > 今後は不整合データの移行スクリプトを必ず管理画面実行できるように開発ワークフローを整備してください。
@@ -76,6 +76,8 @@
   (`MaintenanceGate`/`MaintenanceNotice`)を出し、`GET /maintenance-status` が `maintenance:false` になると画面を再読込する。補正待ちは `maintenance-status` が false のため
   再読込を繰り返し、管理者が運用コマンドの画面を操作できなくなる。`maintenance-status` の応答は変えていない。
 - フロント側の対応(別担当): `ApiError` の `code === 'correction_pending'` を、全画面ではなく、管理者が運用コマンド画面へ進める案内(メッセージはAPIの`message`)として出す。
+- フロントの実装: `ApiError.isCorrectionPending` と小さなストア(`api/correctionPending.ts`)で状態を持つ。`apiFetch`が503 `correction_pending`で記録し、補正待ちでも通る経路(`auth/*`・`auth/me`等・運用コマンド)以外の成功で解除する(通る経路の成功では解除せず、案内の点滅を防ぐ)。
+- `CorrectionPendingBanner`を`AppLayout`の`<main>`上部に置く(`AdminLayout`は`AppLayout`の子なので管理画面にも出る。二重表示を避けるため`AdminLayout`には置かない)。APIの`message`+「管理メニュー > 運用コマンド」の案内、`admin_command.view`権限があるときだけ`/admin/commands`へのリンク。`MaintenanceGate`/`MaintenanceNotice`は`maintenance`のみで動き、`correction_pending`では全画面表示も再読込もしない。他画面のクエリエラーは`ErrorMessage`がAPIの`message`を出す。
 
 ### backend の実装
 - `CorrectionPendingService`(`app/Services/EventSourcing/`): 3つの検出器のどれかが陽性か。結果を60秒キャッシュ(`correction-pending`)。`forget()`でキャッシュを消す。
@@ -87,3 +89,4 @@
   - 作り直しなど補正のコマンドの実行中(`isRunning()`)は従来どおり(GETの一部だけ通す)。
 - cron(`routes/console.php`): `admin-commands:run-pending`以外の全スケジュールに、補正待ちの間は飛ばす条件を足した。
 - テスト: `tests/Feature/EventSourcing/CorrectionPendingMaintenanceTest.php`。
+- frontend の検証: tsc 成功、単体1600件成功(追加11件)。コミットは最終コミット。

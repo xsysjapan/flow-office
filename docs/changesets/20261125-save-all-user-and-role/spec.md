@@ -1,6 +1,6 @@
 # save-all-user-and-role(利用者詳細とロール詳細の「まとめて保存」)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 変更候補の判断 `docs/changesets/candidates-20261124.md` の #13: 利用者詳細とロール詳細の、項目ごとの保存を「まとめて保存」にする(ユーザー判断 2026-11-24)。変更セット`20261123-form-layout-standard`の論点8(項目・セクションごとの保存)の解決にあたる。
@@ -102,4 +102,10 @@
 - 変更セット`20261123-form-layout-standard`の論点8: 解決済みと追記する。
 
 ## 実装結果
-未着手
+コミット: `f8ab3936`(backend)、`7fc6b355`(frontend)、最終コミット(docs・スキル)。
+
+- backend: `UserController::updateDetails`(`PUT /users/{id}/details`)と `AccessControlController::updateRoleDefinition`(`PUT /admin/access-control/roles/{role}/definition`)。1つの `DB::transaction` で既存のコマンドを dispatch し、拒否は項目のキー付きの422。入社日・退社日は途中の状態が成り立つ順にする。
+- テスト: `UserDetailsBulkUpdateTest`(12件)・`RoleDefinitionBulkUpdateTest`(10件)。
+- frontend: `updateUserDetails`・`updateRoleDefinition` と hook、`utils/fieldErrors.ts`。両画面とも末尾の「保存」1つ、変更が無いと無効、変更した項目だけ送る、項目の下にエラー、離脱警告、外部人事の項目は無効。単体1592件成功。
+- E2E: scenario-10・scenario-99 の文言を追随し、この2 spec だけを流して17件成功(新しい E2E は足していない)。
+- docs: docs/15 UC-M001、`ui-interaction-patterns` §2.8、`api-design`「まとめて保存のエンドポイント」、`20261123-form-layout-standard` 論点4に解決済みを追記。
