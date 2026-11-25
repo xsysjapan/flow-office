@@ -1,6 +1,6 @@
 # list-display-fixes(一覧の表示の小さな不具合: 内部コードの表示・備品のナビ・空の選択列・横スクロールの手がかり)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 変更候補の判断 `docs/changesets/candidates-20261124.md`(2026-11-24 のユーザー判断)のうち、次の4件。
@@ -75,4 +75,16 @@
 - E2E は、ナビ・備品・申請一覧を通る spec だけを流す(scenario-14 など、grep で特定)。
 
 ## 実装結果
-未着手
+
+コミット: `758e58a3`、`af320725`、最終コミット(E2E の追随)。
+
+- 論点1: 表示名の関数8つ(タスクの種別・元データ、グループの状態、所属の区分、運用コマンドの実行の状態、シフトの日の区分、利用者の管理元、項目のキー)を足した。未知の値はそのまま出す。
+  - 列挙した値: 実行の状態は queued/running/succeeded/failed、元データは attendance_month/workflow_request/expense_claim、項目のキーは10種。管理元には microsoft_entra(「Microsoft 365」)、グループの状態には planned_inactive(「無効化予定」)も足した。
+- 論点2: 備品貸出は `/assets?management_type=lending&lending_status=available` を開く。ナビの選択状態は純関数 `selectActiveNavItems`(単体テスト7件)で決める。
+- 論点3: 申請一覧・承認一覧・付与予定で、選択できる行があるときだけ選択列を出す。
+- 論点4: `useOverflowEdges`(単体テスト6件)と、表の外枠の端の影。12列の story を足した。見た目は Storybook で未確認。
+- テスト: frontend の単体テスト全件 1582 件成功(委譲元で再実行)。
+- E2E 全件(1回、e2e-flaky-fixes の検証と兼ねる): 69/70 成功。
+  - 失敗の1件は本変更セットの退行だった。項目のキーを表示名にしたのに、E2E が画面の `display_name` の文字で行を探していた。
+  - E2E の絞り込みを表示名に直し、scenario-10 を単独で流して 7/7 成功を確かめた。
+

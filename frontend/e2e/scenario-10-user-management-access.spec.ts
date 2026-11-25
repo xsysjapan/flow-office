@@ -499,6 +499,12 @@ test("Role定義のFeature構成保存でグループへFeatureが自動同期�
   }
 });
 
+// 画面の項目名(userFieldKeyLabel)。APIのキーはそのまま使う。
+const FIELD_KEY_LABELS: Record<string, string> = {
+  display_name: "氏名",
+  email: "メールアドレス",
+};
+
 test("外部HR CSVの差分確認と取込を画面から実行できる", async ({ page }) => {
   test.setTimeout(180000);
   await loginAs(page, SCENARIO_USERS.admin);
@@ -508,7 +514,7 @@ test("外部HR CSVの差分確認と取込を画面から実行できる", async
   for (const field of ["display_name", "email"]) {
     const fieldRow = identityCard
       .locator("div.rounded.border.p-2")
-      .filter({ hasText: field });
+      .filter({ hasText: FIELD_KEY_LABELS[field] });
     await Promise.all([
       page.waitForResponse(
         (response) =>
@@ -553,7 +559,7 @@ test("外部HR CSVの差分確認と取込を画面から実行できる", async
   for (const field of ["display_name", "email"]) {
     const fieldRow = refreshedIdentityCard
       .locator("div.rounded.border.p-2")
-      .filter({ hasText: field });
+      .filter({ hasText: FIELD_KEY_LABELS[field] });
     await Promise.all([
       page.waitForResponse(
         (response) =>
