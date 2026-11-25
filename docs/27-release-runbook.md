@@ -223,12 +223,15 @@ ReadModelの作り直しが、ライブの内容と一致しない不具合(削�
 移行イベントは作らず、`stored_events`の行の`id`・集約ID・順序は変えない。書き換えの後に全ReadModelを作り直して検証する。
 本番の実行の前に、リハーサルと試し実行の結果をユーザーに示して許可を得る(`data-correction`)。
 
-止めるもの(配備から再開まで):
+止めるもの: 配備の後は、旧項目名のイベントが残る間、システムが「補正待ち」のメンテナンスに自動で入る
+(変更セット`20261124-correction-pending-maintenance`。`php artisan down`・SSH・cron/キューの手動停止は使わない)。
 
-- `php artisan down`(メンテナンスモード。APIと打刻端末も503になる)
-- cronの`schedule:run`(有給・警告・社員同期など、イベントを記録するスケジューラ)
-- キュー(空になるまで処理してから止める。旧項目名のイベントを読むジョブを残さない)
-- MCPサーバーの受付
+- API: ログイン・認証(`auth/*`)、`auth/me`・`access/me`・`maintenance-status`・`onboarding/status`、運用コマンドの一覧・実行記録のGETと実行の依頼のPOSTだけが通り、
+  他は503(`code=correction_pending`)になる。端末の打刻(`POST /device-punches`)も503になる(docs/23「補正待ちの間の端末」)。
+- cron: `admin-commands:run-pending`(運用コマンドの実行役)だけが動き、他の定期処理は飛ばす(飛ばされた日次バッチは後から追い付かない。日次バッチの時刻(1:00〜2:20)を避けて配備・実行する)。
+- 補正待ちの判定は、検出器(`LegacyBooleanPropertyDetector`・`LegacyUserSettingsDetector`・`LegacyCalendarBulkOperationTargetIdDetector`)のどれかが陽性か。
+  結果は60秒キャッシュし、補正のコマンドが終わる(成功・失敗とも)とキャッシュを消す。補正の実行中は、従来の作り直しのメンテナンス(全API 503、GETの一部のみ)になる。
+- MCPサーバーの受付は、`mcp/`が`backend/`のAPIを使う操作が503になるだけで足りる(別に止めない)。
 
 事前条件: 旧項目名のイベントを読む過去の移行(休暇の作り直し等。3.1・3.2・3.6)は本番で実施済みで、コマンドは削除済みのため、事前の実行は要らない(開発・ステージングの古いDBは`migrate:fresh --seed`で作り直す)。
 
@@ -240,21 +243,23 @@ ReadModelの作り直しが、ライブの内容と一致しない不具合(削�
    - `php artisan read-models:rebuild --dry-run`で、変更のあるテーブルが0件であることを確かめる(既存のずれが0であること)。
      0件でなければ、ずれの表(テーブルごとの差分)を確認し、原因を特定するまで手順2以降に進まない(ずれたまま改名の`--execute`を実行すると検証に失敗して戻る)。
    - 下の「基準値のSQL」(旧列名)を実行し、結果を控える(基準値)。
-2. 止める: `down`、cron(`schedule:run`)、キュー、端末・API・MCPの受付。
+2. 配備の前に、端末アプリの利用者(共有端末の利用者)へ、「配備から補正の完了まで(数分〜数十分の想定)は打刻できない。完了後に勤怠の編集で入力する」と案内する
+   (端末アプリがこの間の503を、オフラインの打刻としてためるかは未確認。docs/23「補正待ちの間の端末」)。
 3. frontendとbackendを同じ窓で配備する(管理画面の旧画面が旧名で送ると、新しいbackendは422を返す。論点10)。
    `php artisan migrate --force`を実行する。migrationは列の改名と`paid_leave_usages.confirmed`の削除を行う。削除の前に
    `is_confirmed <> confirmed`の件数をログ(`storage/logs`)に出すので控える(0件の想定。0件でなくても、ReadModelの作り直しで新しいProjectorの値に揃う)。
-4. 試し実行(SSH): `php artisan events:rename-boolean-properties`(`--execute`を付けない。何も変更しない)。
+   配備が済むと、旧項目名のイベントが残っているため、補正待ちのメンテナンスに自動で入る。
+4. 試し実行(管理画面): 管理者がログインし、運用コマンド画面で『真偽値のイベント項目名の書き換え』(`events:rename-boolean-properties`)を、`execute`を付けずに実行する(何も変更しない)。
    event_classごとの対象件数・補う件数(旧キーが無く既定値を補う行)・旧→新の例を確かめる。「補えない行」の表示があれば止めて人が確認する。
    件数と例をユーザーに示し、本実行の許可を得る。
-5. 本実行(SSH): `php artisan events:rename-boolean-properties --execute`。
+5. 本実行(管理画面): 同じコマンドを`execute`を付けて実行する。
    待ち時間(`READ_MODEL_REBUILD_CLAIM_WAIT_SECONDS`、既定60秒)の後、トランザクションの前にバックアップ表
    (`stored_events_backup_YYYYMMDDHHMMSS`。出力に出る表名を控える)を作り、1つのトランザクションで「書き換え → ReadModelの作り直し → 検証」を行う。
    検証(変更のあったテーブルが0件)に失敗すれば全て戻る(バックアップ表は残る)。
    実行中は全利用者がメンテナンス中になる。
-6. 受付を再開する: `php artisan up`、cron・キュー・端末・API・MCPの受付。
+6. 検出器が0になると、補正待ちのメンテナンスが自動で解ける(補正のコマンドが終わるとキャッシュを消す。残っていれば最大60秒)。cron・キューも自動で再開する。
 7. 検証(次の3つが揃うこと)。
-   - 旧項目名のイベントが残っていない: `php artisan read-models:rebuild --dry-run`が「旧項目名の真偽値のイベント」で拒否されない(残っていれば拒否される)。
+   - 旧項目名のイベントが残っていない: 管理画面の運用コマンドで『ReadModelの作り直し』(`read-models:rebuild`)を試し実行(dry-run)し、「旧項目名の真偽値のイベント」で拒否されず、変更のあるテーブルが0件(差分0)であること。
    - 基準値と一致: 「基準値のSQL」を新しいコードで、列名を下の対応表で読み替えて実行し、手順1の基準値と件数が一致する。
      `paid_leave_usages`は旧`is_confirmed`が新`is_confirmed`、旧`cancelled`が新`is_cancelled`と一致すること。
    - 画面: 有給の指定・承認・取消、年5日取得義務の警告、勤怠Excelの有給残日数を1件ずつ確かめる(従来と同じ値になる)。

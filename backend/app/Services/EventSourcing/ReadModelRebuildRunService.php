@@ -75,6 +75,7 @@ class ReadModelRebuildRunService
             'error_message' => null,
         ]);
         ReadModelRebuilder::clearHeartbeat();
+        app(CorrectionPendingService::class)->forget();
     }
 
     public function markFailed(AdminCommandRun $run, string $message): void
@@ -86,6 +87,7 @@ class ReadModelRebuildRunService
             'error_message' => mb_substr($message, 0, 2000),
         ]);
         ReadModelRebuilder::clearHeartbeat();
+        app(CorrectionPendingService::class)->forget();
     }
 
     /** 有給付与予定の判定が`queued`/`running`か(作り直しを`running`にするとメンテナンスで判定が止まるため、その間は始めない)。 */

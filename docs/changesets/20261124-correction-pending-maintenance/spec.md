@@ -1,6 +1,6 @@
 # correction-pending-maintenance(補正待ちの間のメンテナンス表示と、命名統一の管理画面からの実行)
 
-ステータス: 実装中
+ステータス: 実装中(backend・docs実装済み。frontendは別担当)
 
 ## 変更要望(原文)
 > 今後は不整合データの移行スクリプトを必ず管理画面実行できるように開発ワークフローを整備してください。
@@ -60,4 +60,30 @@
 - `.claude/skills/data-correction` の「実行の経路」に、補正待ちのメンテナンスを1行
 
 ## 実装結果
-未着手
+
+### 未確定事項の決定: 端末アプリは 503 でオフラインの打刻としてためるか
+- 確認できなかった。端末アプリ(共有Android打刻リーダー)はリポジトリ外にあり、仕様書・backendのコードに「503を受けたときの動き」の定めが無い。
+  - docs/23-usecases-devices.md:17 `allows_offline`(オフライン利用可否の設定)、:277 `is_offline`(打刻の入力)、:278 `allows_offline`(ペアリング・心拍の応答)は、設定項目と項目名の定義だけ。
+  - docs/07-usecases-attendance.md:354-357 は、`is_offline` の記録と `idempotency_key` による「端末のオフラインキューからの再送の吸収」を述べるが、ネットワーク断が前提で、503は扱わない。
+  - docs/16-database-schema.md:655-656・:707 は「docs/23『オフライン対応』参照」と書くが、docs/23にその節は無い(参照切れ)。
+  - backend: `DevicePunchController`(`routes/api.php:597`)は`is_offline`と`idempotency_key`を受けるだけで、端末の再送の挙動は決めない。
+- 決定: 「503でためて再送する」とは仮定しない。窓の間の打刻は失われるものとして扱い、配備の前に利用者へ案内する
+  (窓の後に勤怠の編集で入力)。手順は docs/27 §3.8 手順2、端末の扱いは docs/23「補正待ちの間の端末」に書いた。
+  端末アプリの実装でためて再送することを確認できたら、docs/23の節を更新する。
+
+### フロントとの関係(決定)
+- 補正待ちの 503 の `code` は `maintenance` ではなく `correction_pending` にした。理由: フロントは `code === 'maintenance'` で全画面のメンテナンス表示
+  (`MaintenanceGate`/`MaintenanceNotice`)を出し、`GET /maintenance-status` が `maintenance:false` になると画面を再読込する。補正待ちは `maintenance-status` が false のため
+  再読込を繰り返し、管理者が運用コマンドの画面を操作できなくなる。`maintenance-status` の応答は変えていない。
+- フロント側の対応(別担当): `ApiError` の `code === 'correction_pending'` を、全画面ではなく、管理者が運用コマンド画面へ進める案内(メッセージはAPIの`message`)として出す。
+
+### backend の実装
+- `CorrectionPendingService`(`app/Services/EventSourcing/`): 3つの検出器のどれかが陽性か。結果を60秒キャッシュ(`correction-pending`)。`forget()`でキャッシュを消す。
+  補正のコマンドが終わるとき(成功・失敗とも)に消す: `AdminCommandRunner::execute`の`finally`(管理画面の経路)、`ReadModelRebuildRunService::markSucceeded/markFailed`(CLIの直接実行)。
+- `BlockDuringReadModelRebuild`を拡張(新しいミドルウェアは足さない)。補正待ちの間、次以外は503(`code=correction_pending`、本文は`CorrectionPendingService::MESSAGE`)。
+  - 作り直しの実行中に通すGET: `maintenance-status`・`auth/me`・`access/me`・`onboarding/status`・`admin/commands`・`admin/command-runs`
+  - `auth/*`(メソッド問わず。`auth/local-login`・`auth/token`・`auth/logout`・`auth/microsoft/*`)
+  - POST `admin/commands/{command}/runs`(運用コマンドの実行の依頼。権限`admin_command.execute`は従来どおり)
+  - 作り直しなど補正のコマンドの実行中(`isRunning()`)は従来どおり(GETの一部だけ通す)。
+- cron(`routes/console.php`): `admin-commands:run-pending`以外の全スケジュールに、補正待ちの間は飛ばす条件を足した。
+- テスト: `tests/Feature/EventSourcing/CorrectionPendingMaintenanceTest.php`。

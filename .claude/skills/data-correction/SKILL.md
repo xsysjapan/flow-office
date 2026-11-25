@@ -123,6 +123,7 @@ ReadModel(Projection)だけを書き換える補正は、どんな場合も行�
    - `stored_events`を書き換える・作り直しを伴うコマンドは、`ReadModelRebuildRunService::MAINTENANCE_COMMANDS`に登録する
      (実行中は他の操作をメンテナンス表示で止める)。
    - `AdminCommandTest`の一覧の期待値と、コマンドのテスト(試し実行・実行・冪等・止める条件)を足す。
+   - 旧形式のイベントが残る間(検出器が陽性)は「補正待ちのメンテナンス」(`CorrectionPendingService`)で、ログイン・`auth/*`・運用コマンドの一覧・実行の依頼以外のAPIと`admin-commands:run-pending`以外の定期処理が自動で止まる。新しい補正に検出器を足すときは`CorrectionPendingService::detect()`にも足す。
 2. **補正の前でも、管理者がログインして管理画面を使えるようにする**:
    - イベントに項目を足すときは、null許容・既定値付きにして旧イベントを読めるようにする(必須の引数にしない)。
    - 未補正の状態で止めるのは作り直し(`read-models:rebuild`等)だけにする(検出器で拒否)。ログイン・認証・管理画面の運用コマンドの

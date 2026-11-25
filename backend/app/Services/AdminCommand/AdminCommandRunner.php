@@ -5,6 +5,7 @@ namespace App\Services\AdminCommand;
 use App\Console\AdminCommandRegistry;
 use App\Console\CurrentAdminCommandRun;
 use App\Models\AdminCommandRun;
+use App\Services\EventSourcing\CorrectionPendingService;
 use App\Services\EventSourcing\ReadModelRebuildRunService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Artisan;
@@ -89,6 +90,9 @@ class AdminCommandRunner
         } catch (Throwable $exception) {
             report($exception);
             $this->fail($run, $exception->getMessage());
+        } finally {
+            // 補正のコマンドが終わったら(成功・失敗とも)、補正待ちの判定のキャッシュを消す(docs/changesets/20261124-correction-pending-maintenance/spec.md 論点1)。
+            app(CorrectionPendingService::class)->forget();
         }
     }
 
