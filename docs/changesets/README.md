@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261125-save-all-user-and-role](./20261125-save-all-user-and-role/spec.md) | 利用者詳細とロール詳細の「まとめて保存」(全て成功か全て戻す) | レビュー中 |
 | [20261124-correction-pending-maintenance](./20261124-correction-pending-maintenance/spec.md) | 補正待ちの間のメンテナンス表示(管理者のログインと運用コマンドだけ通す)と、命名統一の管理画面からの実行 | レビュー中 |
 | [20261124-e2e-flaky-fixes](./20261124-e2e-flaky-fixes/spec.md) | E2Eの不安定な失敗2件(グループの新規作成、0時をまたぐ打刻)の修正 | 完了 |
 | [20261124-list-display-fixes](./20261124-list-display-fixes/spec.md) | 一覧の表示の小さな不具合(内部コード・備品のナビ・空の選択列・横スクロールの影) | 完了 |
