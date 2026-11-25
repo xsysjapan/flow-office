@@ -13,6 +13,7 @@ use App\Domain\AccessControl\Commands\UpdateRole;
 use App\Domain\AccessControl\Commands\UpdateRoleAssignment;
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Http\Controllers\Controller;
 use App\Models\Feature;
 use App\Models\Permission;
@@ -25,6 +26,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OA;
 
 class AccessControlController extends Controller
 {
@@ -95,6 +98,78 @@ class AccessControlController extends Controller
         $bus->dispatch(new UpdateRole($role, $d['name'] ?? $current->name, array_key_exists('description', $d) ? $d['description'] : $current->description, $d['status'] ?? $current->status, $r->user()->id));
 
         return response()->json([]);
+    }
+
+    /**
+     * ロール詳細のまとめて保存。基本情報 → Permission → Featureの順に、既存のコマンドを1トランザクションで
+     * dispatchする(すべて成功するか、すべて戻す)。拒否は項目のキーを付けた422で返す
+     * (docs/changesets/20261125-save-all-user-and-role/spec.md 論点3)。
+     */
+    #[OA\Put(
+        path: '/admin/access-control/roles/{role}/definition',
+        operationId: 'accessControl.updateRoleDefinition',
+        summary: 'ロール詳細をまとめて保存する(変更した項目だけを送る。すべて成功するか、すべて戻す)',
+        tags: ['ユーザー'],
+        parameters: [new OA\Parameter(name: 'role', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [
+            new OA\Property(property: 'name', type: 'string'),
+            new OA\Property(property: 'description', type: 'string', nullable: true),
+            new OA\Property(property: 'status', type: 'string', enum: ['active', 'inactive']),
+            new OA\Property(property: 'permission_ids', type: 'array', items: new OA\Items(type: 'integer')),
+            new OA\Property(property: 'feature_ids', type: 'array', items: new OA\Items(type: 'integer')),
+        ])),
+        responses: [
+            new OA\Response(response: 200, description: 'Successful response'),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
+            new OA\Response(response: 403, description: 'Forbidden'),
+            new OA\Response(response: 422, description: 'Validation error(errors.{項目キー})'),
+        ],
+    )]
+    public function updateRoleDefinition(Request $r, int $role, CommandBus $bus): JsonResponse
+    {
+        $this->assertGlobal($r);
+        $current = Role::query()->findOrFail($role);
+        $d = $r->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'status' => ['sometimes', Rule::in(['active', 'inactive'])],
+            'permission_ids' => ['sometimes', 'array'],
+            'permission_ids.*' => ['integer', 'distinct'],
+            'feature_ids' => ['sometimes', 'array'],
+            'feature_ids.*' => ['integer', 'distinct'],
+        ]);
+        $actorId = $r->user()->id;
+
+        $dispatch = function (object $command, array $keys) use ($bus): void {
+            try {
+                $bus->dispatch($command);
+            } catch (DomainRuleException $e) {
+                throw ValidationException::withMessages([$keys[0] => [$e->getMessage()]]);
+            }
+        };
+
+        DB::transaction(function () use ($d, $current, $role, $actorId, $dispatch) {
+            if (array_key_exists('name', $d) || array_key_exists('description', $d) || array_key_exists('status', $d)) {
+                $dispatch(new UpdateRole(
+                    $role,
+                    $d['name'] ?? $current->name,
+                    array_key_exists('description', $d) ? $d['description'] : $current->description,
+                    $d['status'] ?? $current->status,
+                    $actorId,
+                ), array_key_exists('status', $d) ? ['status'] : (array_key_exists('name', $d) ? ['name'] : ['description']));
+            }
+            if (array_key_exists('permission_ids', $d)) {
+                $dispatch(new ChangeRolePermissions($role, $d['permission_ids'], $actorId), ['permission_ids']);
+            }
+            if (array_key_exists('feature_ids', $d)) {
+                $dispatch(new ChangeRoleFeatures($role, $d['feature_ids'], $actorId), ['feature_ids']);
+            }
+        });
+
+        $updated = Role::query()->with('permissions', 'features')->findOrFail($role);
+        $updated->permissions->each(fn (Permission $permission) => $permission->setAttribute('allowed_scope_types', $permission->allowedScopeTypes()));
+
+        return response()->json($updated);
     }
 
     public function cloneRole(Request $r, int $role, CommandBus $bus): JsonResponse

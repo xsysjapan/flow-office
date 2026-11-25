@@ -147,6 +147,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/role-assignments', [AccessControlController::class, 'storeRoleAssignment'])->middleware('permission:role.assign,any');
         Route::delete('/role-assignments/{assignment}', [AccessControlController::class, 'destroyRoleAssignment'])->middleware('permission:role.assign,any');
         Route::patch('/role-assignments/{assignment}', [AccessControlController::class, 'updateRoleAssignment'])->middleware('permission:role.assign,any');
+        Route::put('/roles/{role}/definition', [AccessControlController::class, 'updateRoleDefinition'])->middleware('permission:role.update,any');
         Route::put('/roles/{role}/permissions', [AccessControlController::class, 'updateRolePermissions'])->middleware('permission:role.update,any');
         Route::put('/roles/{role}/features', [AccessControlController::class, 'updateRoleFeatures'])->middleware('permission:role.update,any');
     });
@@ -159,6 +160,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/users/search', [UserController::class, 'search']);
     Route::get('/users/{user}', [UserController::class, 'show'])->middleware('permission:user.view');
     Route::patch('/users/{user}', [UserController::class, 'update'])->middleware(['feature:administration.users', 'permission:user.update']);
+    Route::put('/users/{user}/details', [UserController::class, 'updateDetails'])->middleware(['feature:administration.users', 'permission:user.update']);
     Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware('permission:user.update');
     Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware('permission:user.update');
     Route::put('/users/{user}/usage-start-date', [UserController::class, 'updateUsageStartDate'])->middleware('permission:user.update');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Commands\AddMembership;
 use App\Domain\UserManagement\Commands\CreateUser;
 use App\Domain\UserManagement\Commands\SetPaidLeaveAutoGrantEnabled;
@@ -21,7 +22,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 /**
@@ -77,6 +80,143 @@ class UserController extends Controller
         $commandBus->dispatch(new UpdateUserProfile($user->id, $changes, $request->user()->id));
 
         return new UserResource($user->refresh()->load(['externalIdentities', 'memberships.group.type']));
+    }
+
+    /**
+     * 利用者詳細のまとめて保存。変更した項目だけを受け取り、既存のコマンドを1トランザクションで
+     * dispatchする(すべて成功するか、すべて戻す)。拒否は項目のキーを付けた422で返す
+     * (docs/changesets/20261125-save-all-user-and-role/spec.md 論点2)。
+     */
+    #[OA\Put(
+        path: '/users/{user}/details',
+        operationId: 'users.updateDetails',
+        summary: '利用者詳細をまとめて保存する(変更した項目だけを送る。すべて成功するか、すべて戻す)',
+        tags: ['ユーザー'],
+        parameters: [new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'profile', type: 'object', description: 'name(display_nameも可)・email・employee_number・department・job_title・employment_status・account_statusのうち変更したもの'),
+                new OA\Property(property: 'hire_date', type: 'string', format: 'date', nullable: true),
+                new OA\Property(property: 'termination_date', type: 'string', format: 'date', nullable: true),
+                new OA\Property(property: 'usage_start_date', type: 'string', format: 'date', nullable: true),
+                new OA\Property(property: 'paid_leave_auto_grant_enabled', type: 'boolean'),
+                new OA\Property(property: 'special_leave_auto_grant_enabled', type: 'boolean'),
+            ]),
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Successful response'),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
+            new OA\Response(response: 403, description: 'Forbidden'),
+            new OA\Response(response: 422, description: 'Validation error(errors.{項目キー})'),
+        ],
+    )]
+    public function updateDetails(Request $request, User $user, CommandBus $commandBus, EffectiveAccessResolver $resolver): UserResource
+    {
+        // display_nameはPATCHのキー名(name)の別名として受け付ける。
+        if (is_array($request->input('profile')) && $request->input('profile.display_name') !== null && ! $request->has('profile.name')) {
+            $profile = $request->input('profile');
+            $profile['name'] = $profile['display_name'];
+            unset($profile['display_name']);
+            $request->merge(['profile' => $profile]);
+        }
+
+        $data = $request->validate([
+            'profile' => ['sometimes', 'array'],
+            'profile.name' => ['sometimes', 'string', 'max:255'],
+            'profile.email' => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email,'.$user->id],
+            'profile.employee_number' => ['sometimes', 'nullable', 'string', 'max:100', 'unique:users,employee_number,'.$user->id],
+            'profile.department' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'profile.job_title' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'profile.employment_status' => ['sometimes', 'string', 'max:100'],
+            'profile.account_status' => ['sometimes', 'in:pending,active,suspended,leave,retired,disabled'],
+            'hire_date' => ['sometimes', 'nullable', 'date'],
+            'termination_date' => ['sometimes', 'nullable', 'date'],
+            'usage_start_date' => ['sometimes', 'nullable', 'date'],
+            'paid_leave_auto_grant_enabled' => ['sometimes', 'boolean'],
+            'special_leave_auto_grant_enabled' => ['sometimes', 'boolean'],
+        ]);
+        $profile = $data['profile'] ?? [];
+        $dateKeys = array_values(array_filter(['hire_date', 'termination_date', 'usage_start_date'], fn (string $key) => array_key_exists($key, $data)));
+
+        // 外部人事が管理する項目は、項目ごとに確かめて、その項目のキーで拒否する。
+        $authority = app(FieldAuthorityService::class);
+        $errors = [];
+        foreach (array_keys($profile) as $key) {
+            try {
+                $authority->assertLocallyEditable([$key]);
+            } catch (DomainRuleException $e) {
+                $errors["profile.{$key}"] = [$e->getMessage()];
+            }
+        }
+        foreach ($dateKeys as $key) {
+            try {
+                $authority->assertLocallyEditable([$key]);
+            } catch (DomainRuleException $e) {
+                $errors[$key] = [$e->getMessage()];
+            }
+        }
+
+        // 最後の状態で入社日 ≤ 退社日になっているか。
+        $normalize = fn (mixed $value): ?string => $value === null ? null : Carbon::parse($value)->toDateString();
+        $hire = array_key_exists('hire_date', $data) ? $normalize($data['hire_date']) : $user->hire_date?->toDateString();
+        $termination = array_key_exists('termination_date', $data) ? $normalize($data['termination_date']) : $user->termination_date?->toDateString();
+        if ($hire !== null && $termination !== null && $hire > $termination && ! isset($errors['hire_date']) && ! isset($errors['termination_date'])) {
+            if (array_key_exists('termination_date', $data)) {
+                $errors['termination_date'] = ['退社日は入社日以降の日付を指定してください。'];
+            } else {
+                $errors['hire_date'] = ['入社日は退社日以前の日付を指定してください。'];
+            }
+        }
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        $actorId = $request->user()->id;
+        $dispatch = function (object $command, string $key) use ($commandBus): void {
+            try {
+                $commandBus->dispatch($command);
+            } catch (DomainRuleException $e) {
+                throw ValidationException::withMessages([$key => [$e->getMessage()]]);
+            }
+        };
+
+        DB::transaction(function () use ($data, $profile, $user, $actorId, $dispatch, $normalize) {
+            if ($profile !== []) {
+                $dispatch(
+                    new UpdateUserProfile($user->id, $profile, $actorId),
+                    array_key_exists('account_status', $profile) ? 'profile.account_status' : 'profile',
+                );
+            }
+
+            // 途中の状態が成り立つ順にする。新しい入社日が今の退社日より後なら、退社日を先に変える。
+            $dateOrder = ['hire_date', 'termination_date'];
+            if (array_key_exists('hire_date', $data) && array_key_exists('termination_date', $data)
+                && $data['hire_date'] !== null && $user->termination_date !== null
+                && $normalize($data['hire_date']) > $user->termination_date->toDateString()) {
+                $dateOrder = ['termination_date', 'hire_date'];
+            }
+            foreach ($dateOrder as $key) {
+                if (! array_key_exists($key, $data)) {
+                    continue;
+                }
+                $dispatch($key === 'hire_date'
+                    ? new SetUserHireDate($user->id, $data['hire_date'], $actorId)
+                    : new SetUserTerminationDate($user->id, $data['termination_date'], $actorId), $key);
+            }
+
+            if (array_key_exists('usage_start_date', $data)) {
+                $dispatch(new SetUserUsageStartDate($user->id, $data['usage_start_date'], $actorId), 'usage_start_date');
+            }
+            if (array_key_exists('paid_leave_auto_grant_enabled', $data)) {
+                $dispatch(new SetPaidLeaveAutoGrantEnabled($user->id, $data['paid_leave_auto_grant_enabled'], $actorId), 'paid_leave_auto_grant_enabled');
+            }
+            if (array_key_exists('special_leave_auto_grant_enabled', $data)) {
+                $dispatch(new SetSpecialLeaveAutoGrantEnabled($user->id, $data['special_leave_auto_grant_enabled'], $actorId), 'special_leave_auto_grant_enabled');
+            }
+        });
+
+        return $this->show($user->refresh(), $resolver);
     }
 
     #[OA\Get(
