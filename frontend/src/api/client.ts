@@ -1,3 +1,5 @@
+import { clearCorrectionPending, isAllowedDuringCorrectionPending, setCorrectionPending } from './correctionPending'
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
 const TOKEN_STORAGE_KEY = 'flow-office.token'
 
@@ -18,6 +20,11 @@ export class ApiError extends Error {
   /** データの作り直し中のメンテナンス(503 かつ code === 'maintenance')。 */
   get isMaintenance(): boolean {
     return this.status === 503 && this.code === 'maintenance'
+  }
+
+  /** 旧い形式のイベントの補正待ち(503 かつ code === 'correction_pending')。全画面のメンテナンス表示は出さない。 */
+  get isCorrectionPending(): boolean {
+    return this.status === 503 && this.code === 'correction_pending'
   }
 }
 
@@ -106,7 +113,14 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     if (error.isMaintenance) {
       window.dispatchEvent(new CustomEvent<string>(MAINTENANCE_EVENT, { detail: message }))
     }
+    if (error.isCorrectionPending) {
+      setCorrectionPending(message)
+    }
     throw error
+  }
+
+  if (!isAllowedDuringCorrectionPending(path, rest.method)) {
+    clearCorrectionPending()
   }
 
   return payload as T

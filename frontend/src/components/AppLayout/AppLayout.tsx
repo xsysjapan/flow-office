@@ -20,6 +20,7 @@ import {
 } from "../../routes/routeManifest";
 import { resolvePage } from "../../routes/pageHierarchy";
 import { Button } from "../Button/Button";
+import { CorrectionPendingBanner } from "../CorrectionPendingBanner/CorrectionPendingBanner";
 import { NotificationBell } from "../NotificationBell/NotificationBell";
 import {
   Sheet,
@@ -239,6 +240,7 @@ export function AppLayout() {
           </div>
         </header>
         <main className="w-full flex-1 p-4 sm:p-6 lg:p-8">
+          <CorrectionPendingBanner />
           <Outlet />
         </main>
       </div>
