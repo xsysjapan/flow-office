@@ -82,3 +82,13 @@ export const useUpdateRoleFeatures = () =>
     ({ roleId, featureIds }: { roleId: number; featureIds: number[] }) =>
       api.updateRoleFeatures(roleId, featureIds),
   );
+export const useUpdateRoleDefinition = () =>
+  useAccessMutation(
+    ({
+      roleId,
+      input,
+    }: {
+      roleId: number;
+      input: api.RoleDefinitionInput;
+    }) => api.updateRoleDefinition(roleId, input),
+  );

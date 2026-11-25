@@ -436,27 +436,17 @@ test("Role定義のFeature構成保存でグループへFeatureが自動同期�
       .filter({ hasText: "system_settings" })
       .getByRole("checkbox", { name: "read" })
       .check();
-    await Promise.all([
-      adminPage.waitForResponse(
-        (response) =>
-          /\/access-control\/roles\/\d+\/permissions$/.test(response.url()) &&
-          response.request().method() === "PUT" &&
-          response.ok(),
-      ),
-      roleCard.getByRole("button", { name: "Permissionを保存" }).click(),
-    ]);
-
     await roleCard
       .getByRole("checkbox", { name: "管理", exact: true })
       .check();
     await Promise.all([
       adminPage.waitForResponse(
         (response) =>
-          /\/access-control\/roles\/\d+\/features$/.test(response.url()) &&
+          /\/access-control\/roles\/\d+\/definition$/.test(response.url()) &&
           response.request().method() === "PUT" &&
           response.ok(),
       ),
-      roleCard.getByRole("button", { name: "Feature構成を保存" }).click(),
+      roleCard.getByRole("button", { name: "保存", exact: true }).click(),
     ]);
 
     // ロール管理ページの「割当グループ」セクション(同じ画面内)で、対象グループにこの

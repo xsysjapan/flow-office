@@ -121,3 +121,20 @@ export const updateRoleFeatures = (
     method: "PUT",
     body: { feature_ids: featureIds },
   });
+
+/** ロール定義のまとめて保存(`PUT .../roles/{role}/definition`)。変更した項目のキーだけを送る。 */
+export interface RoleDefinitionInput {
+  name?: string;
+  description?: string | null;
+  status?: string;
+  permission_ids?: number[];
+  feature_ids?: number[];
+}
+export const updateRoleDefinition = (
+  roleId: number,
+  input: RoleDefinitionInput,
+): Promise<AccessRole> =>
+  apiFetch(`/admin/access-control/roles/${roleId}/definition`, {
+    method: "PUT",
+    body: input,
+  });

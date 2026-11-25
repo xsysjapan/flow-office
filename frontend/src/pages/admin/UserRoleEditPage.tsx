@@ -29,22 +29,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog";
-import type { UserProfileInput } from "../../api/users";
+import type { UserDetailsInput, UserProfileInput } from "../../api/users";
+import type { User } from "../../api/types";
 import type { ChangeItem } from "../../api/userManagement";
 import {
   useAssignUserWorkStyleForMonth,
   useRemoveUserWorkStyleMonthlyAssignment,
   useUserWorkStyleMonthlyAssignments,
 } from "../../hooks/useUserWorkStyleMonthlyAssignments";
-import {
-  useUpdatePaidLeaveAutoGrantEnabled,
-  useUpdateSpecialLeaveAutoGrantEnabled,
-  useUpdateUserHireDate,
-  useUpdateUserTerminationDate,
-  useUpdateUserUsageStartDate,
-  useUpdateUser,
-  useUser,
-} from "../../hooks/useUsers";
+import { useUpdateUserDetails, useUser } from "../../hooks/useUsers";
+import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
+import { fieldErrorOf, nonFieldError } from "../../utils/fieldErrors";
 import { useWorkStyles } from "../../hooks/useWorkStyles";
 import {
   useApplyMembershipChangeNow,
@@ -59,6 +54,115 @@ import {
   membershipChangeDescription,
   membershipChangeStatusLabel,
 } from "../../utils/membershipChangeLabels";
+
+const EXTERNAL_HR_REASON = "外部人事システムが管理する項目のため、ここでは変更できません。";
+
+const DETAILS_ERROR_KEYS = [
+  "profile.name",
+  "profile.email",
+  "profile.employee_number",
+  "profile.department",
+  "profile.job_title",
+  "profile.employment_status",
+  "profile.account_status",
+  "hire_date",
+  "termination_date",
+  "usage_start_date",
+  "paid_leave_auto_grant_enabled",
+  "special_leave_auto_grant_enabled",
+];
+
+interface UserDetailsForm {
+  profile: {
+    name: string;
+    email: string;
+    employee_number: string;
+    department: string;
+    job_title: string;
+    employment_status: string;
+    account_status: string;
+  };
+  hireDate: string;
+  terminationDate: string;
+  usageStartDate: string;
+  paidLeaveAutoGrantEnabled: boolean;
+  specialLeaveAutoGrantEnabled: boolean;
+}
+
+function isExternalHr(user: User, field: string): boolean {
+  return (
+    user.field_authorities?.some(
+      (authority) =>
+        authority.field_key === (field === "name" ? "display_name" : field) &&
+        authority.authority_type === "EXTERNAL_HR",
+    ) ?? false
+  );
+}
+
+/** 読み込んだ値と画面の値を比べ、変更した項目だけの本文と、保存できない理由を作る。 */
+function buildUserDetailsChanges(user: User, form: UserDetailsForm) {
+  const input: UserDetailsInput = {};
+  let dirty = false;
+  const blockers: string[] = [];
+
+  const loadedProfile: Record<string, string> = {
+    name: user.name,
+    email: user.email ?? "",
+    employee_number: user.employee_number ?? "",
+    department: user.department ?? "",
+    job_title: user.job_title ?? "",
+    employment_status: user.employment_status,
+    account_status: user.account_status ?? "active",
+  };
+  const profile: Partial<UserProfileInput> = {};
+  for (const [key, value] of Object.entries(form.profile)) {
+    if (isExternalHr(user, key) || value === loadedProfile[key]) continue;
+    dirty = true;
+    if ((key === "name" || key === "email") && !value) {
+      blockers.push("氏名とメールアドレスを入力してください。");
+      continue;
+    }
+    const nullable = ["employee_number", "department", "job_title"].includes(key);
+    (profile as Record<string, string | null>)[key] =
+      nullable && !value ? null : value;
+  }
+  if (Object.keys(profile).length > 0) input.profile = profile;
+
+  if (!isExternalHr(user, "hire_date") && form.hireDate !== (user.hire_date ?? "")) {
+    dirty = true;
+    if (form.hireDate) input.hire_date = form.hireDate;
+    else blockers.push("入社日を入力してください。");
+  }
+  if (
+    !isExternalHr(user, "termination_date") &&
+    form.terminationDate !== (user.termination_date ?? "")
+  ) {
+    dirty = true;
+    input.termination_date = form.terminationDate || null;
+  }
+  if (
+    !isExternalHr(user, "usage_start_date") &&
+    form.usageStartDate !== (user.usage_start_date ?? "")
+  ) {
+    dirty = true;
+    if (form.usageStartDate) input.usage_start_date = form.usageStartDate;
+    else blockers.push("利用開始日を入力してください。");
+  }
+  if (
+    form.paidLeaveAutoGrantEnabled !== (user.paid_leave_auto_grant_enabled ?? true)
+  ) {
+    dirty = true;
+    input.paid_leave_auto_grant_enabled = form.paidLeaveAutoGrantEnabled;
+  }
+  if (
+    form.specialLeaveAutoGrantEnabled !==
+    (user.special_leave_auto_grant_enabled ?? true)
+  ) {
+    dirty = true;
+    input.special_leave_auto_grant_enabled = form.specialLeaveAutoGrantEnabled;
+  }
+  return { input, dirty, blockers: [...new Set(blockers)] };
+}
 
 type WorkStyleMode = "default" | "specify";
 type MembershipOperation = "add" | "remove" | "replace" | "set_primary";
@@ -82,12 +186,7 @@ export function UserRoleEditPage() {
   const { data: workStyleHistory } = useUserWorkStyleMonthlyAssignments(userId);
   const { data: groups } = useManagedGroups();
 
-  const updateHireDate = useUpdateUserHireDate();
-  const updateTerminationDate = useUpdateUserTerminationDate();
-  const updateUsageStartDate = useUpdateUserUsageStartDate();
-  const updatePaidLeaveAutoGrantEnabled = useUpdatePaidLeaveAutoGrantEnabled();
-  const updateSpecialLeaveAutoGrantEnabled = useUpdateSpecialLeaveAutoGrantEnabled();
-  const updateUser = useUpdateUser();
+  const updateDetails = useUpdateUserDetails();
   const assignWorkStyleForMonth = useAssignUserWorkStyleForMonth();
   const removeWorkStyleAssignment = useRemoveUserWorkStyleMonthlyAssignment();
   const applyMembershipChangeNow = useApplyMembershipChangeNow();
@@ -120,6 +219,19 @@ export function UserRoleEditPage() {
     employment_status: "active",
     account_status: "active",
   });
+
+  const changes = user
+    ? buildUserDetailsChanges(user, {
+        profile,
+        hireDate,
+        terminationDate,
+        usageStartDate,
+        paidLeaveAutoGrantEnabled,
+        specialLeaveAutoGrantEnabled,
+      })
+    : null;
+  const dirty = isInitialized && (changes?.dirty ?? false);
+  useUnsavedChangesGuard(dirty);
 
   const currentYearMonth = formatDate(new Date()).slice(0, 7);
   const currentAssignment = workStyleHistory?.find(
@@ -208,12 +320,22 @@ export function UserRoleEditPage() {
     );
   };
 
-  const isExternalHrField = (field: string) =>
-    user.field_authorities?.some(
-      (authority) =>
-        authority.field_key === (field === "name" ? "display_name" : field) &&
-        authority.authority_type === "EXTERNAL_HR",
-    ) ?? false;
+  const isExternalHrField = (field: string) => isExternalHr(user, field);
+  const detailsError = (key: string) => fieldErrorOf(updateDetails.error, key);
+  const externalDescription = (field: string) =>
+    isExternalHrField(field) ? EXTERNAL_HR_REASON : undefined;
+  const detailsSubmitError = nonFieldError(
+    updateDetails.error,
+    DETAILS_ERROR_KEYS,
+  );
+
+  const handleSaveDetails = () => {
+    if (!changes) return;
+    updateDetails.mutate(
+      { id: userId, input: changes.input },
+      { onSuccess: () => notify.success("利用者の情報を保存しました") },
+    );
+  };
 
   const openMembershipChange = (
     operation: MembershipOperation,
@@ -339,6 +461,8 @@ export function UserRoleEditPage() {
             <FormField
               label={`氏名${isExternalHrField("name") ? "（外部HR管理）" : ""}`}
               htmlFor="user-profile-name"
+              description={externalDescription("name")}
+              error={detailsError("profile.name")}
             >
               <Input
                 id="user-profile-name"
@@ -350,6 +474,8 @@ export function UserRoleEditPage() {
             <FormField
               label={`メール${isExternalHrField("email") ? "（外部HR管理）" : ""}`}
               htmlFor="user-profile-email"
+              description={externalDescription("email")}
+              error={detailsError("profile.email")}
             >
               <Input
                 id="user-profile-email"
@@ -364,6 +490,8 @@ export function UserRoleEditPage() {
             <FormField
               label={`社員番号${isExternalHrField("employee_number") ? "（外部HR管理）" : ""}`}
               htmlFor="user-profile-number"
+              description={externalDescription("employee_number")}
+              error={detailsError("profile.employee_number")}
             >
               <Input
                 id="user-profile-number"
@@ -377,6 +505,8 @@ export function UserRoleEditPage() {
             <FormField
               label={`部署${isExternalHrField("department") ? "（外部HR管理）" : ""}`}
               htmlFor="user-profile-department"
+              description={externalDescription("department")}
+              error={detailsError("profile.department")}
             >
               <Input
                 id="user-profile-department"
@@ -390,6 +520,8 @@ export function UserRoleEditPage() {
             <FormField
               label={`役職${isExternalHrField("job_title") ? "（外部HR管理）" : ""}`}
               htmlFor="user-profile-job"
+              description={externalDescription("job_title")}
+              error={detailsError("profile.job_title")}
             >
               <Input
                 id="user-profile-job"
@@ -403,6 +535,8 @@ export function UserRoleEditPage() {
             <FormField
               label={`アカウント状態${isExternalHrField("account_status") ? "（外部HR管理）" : ""}`}
               htmlFor="user-profile-status"
+              description={externalDescription("account_status")}
+              error={detailsError("profile.account_status")}
             >
               <NativeSelect
                 id="user-profile-status"
@@ -419,35 +553,6 @@ export function UserRoleEditPage() {
                 ))}
               </NativeSelect>
             </FormField>
-          {(!profile.name || !profile.email) && (
-            <p className="mb-2 text-xs text-muted-foreground">
-              氏名とメールアドレスを入力してください。
-            </p>
-          )}
-          {updateUser.error && <ErrorMessage error={updateUser.error} />}
-          <FormActions>
-            <Button
-              variant="secondary"
-              isLoading={updateUser.isPending}
-              disabled={!profile.name || !profile.email}
-              onClick={() => {
-                const input = Object.fromEntries(
-                  Object.entries({
-                    ...profile,
-                    employee_number: profile.employee_number || null,
-                    department: profile.department || null,
-                    job_title: profile.job_title || null,
-                  }).filter(([key]) => !isExternalHrField(key)),
-                ) as Partial<UserProfileInput>;
-                updateUser.mutate(
-                  { id: userId, input },
-                  { onSuccess: () => notify.success("基本情報を保存しました") },
-                );
-              }}
-            >
-              基本情報を保存
-            </Button>
-          </FormActions>
           </FormSection>
         </FormLayout>
         <div className="mb-6 rounded border p-3">
@@ -759,9 +864,12 @@ export function UserRoleEditPage() {
               <FormField
                 label="入社日(有給の自動付与に使用)"
                 htmlFor="user-role-edit-hire-date"
+                description={externalDescription("hire_date")}
+                error={detailsError("hire_date")}
               >
                 <DatePicker
                   id="user-role-edit-hire-date"
+                  disabled={isExternalHrField("hire_date")}
                   value={hireDate || undefined}
                   onChange={(date) => setHireDate(date ?? "")}
                 />
@@ -769,86 +877,32 @@ export function UserRoleEditPage() {
               <FormField
                 label="退社日(未設定なら在籍中)"
                 htmlFor="user-role-edit-termination-date"
+                description={externalDescription("termination_date")}
+                error={detailsError("termination_date")}
               >
                 <DatePicker
                   id="user-role-edit-termination-date"
+                  disabled={isExternalHrField("termination_date")}
                   min={hireDate || undefined}
                   value={terminationDate || undefined}
                   onChange={(date) => setTerminationDate(date ?? "")}
                 />
               </FormField>
             </FormRow>
-            {!hireDate && (
-              <p className="mb-2 text-xs text-muted-foreground">
-                入社日を入力してください。
-              </p>
-            )}
-            {updateHireDate.error && (
-              <ErrorMessage error={updateHireDate.error} />
-            )}
-            {updateTerminationDate.error && (
-              <ErrorMessage error={updateTerminationDate.error} />
-            )}
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                variant="secondary"
-                isLoading={updateHireDate.isPending}
-                disabled={!hireDate}
-                onClick={() =>
-                  updateHireDate.mutate(
-                    { id: userId, hireDate },
-                    { onSuccess: () => notify.success("入社日を保存しました") },
-                  )
-                }
-              >
-                入社日を保存
-              </Button>
-              <Button
-                variant="secondary"
-                isLoading={updateTerminationDate.isPending}
-                onClick={() =>
-                  updateTerminationDate.mutate(
-                    {
-                      id: userId,
-                      terminationDate: terminationDate || null,
-                    },
-                    { onSuccess: () => notify.success("退社日を保存しました") },
-                  )
-                }
-              >
-                退社日を保存
-              </Button>
-            </div>
-
             <div className="mt-4">
               <FormField
                 label="利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)"
                 htmlFor="user-role-edit-usage-start-date"
+                description={externalDescription("usage_start_date")}
+                error={detailsError("usage_start_date")}
               >
                 <DatePicker
                   id="user-role-edit-usage-start-date"
+                  disabled={isExternalHrField("usage_start_date")}
                   value={usageStartDate || undefined}
                   onChange={(date) => setUsageStartDate(date ?? "")}
                 />
               </FormField>
-              {updateUsageStartDate.error && (
-                <ErrorMessage error={updateUsageStartDate.error} />
-              )}
-              <FormActions>
-                <Button
-                  variant="secondary"
-                  isLoading={updateUsageStartDate.isPending}
-                  disabled={!usageStartDate}
-                  onClick={() =>
-                    updateUsageStartDate.mutate(
-                      { id: userId, usageStartDate },
-                      { onSuccess: () => notify.success("利用開始日を保存しました") },
-                    )
-                  }
-                >
-                  利用開始日を保存
-                </Button>
-              </FormActions>
             </div>
           </FormSection>
         </FormLayout>
@@ -887,37 +941,26 @@ export function UserRoleEditPage() {
                 )}
               </div>
             </div>
-            {updatePaidLeaveAutoGrantEnabled.error && (
-              <ErrorMessage error={updatePaidLeaveAutoGrantEnabled.error} />
+            {(detailsError("paid_leave_auto_grant_enabled") ||
+              detailsError("special_leave_auto_grant_enabled")) && (
+              <p className="mb-4 text-xs text-destructive">
+                {detailsError("paid_leave_auto_grant_enabled") ??
+                  detailsError("special_leave_auto_grant_enabled")}
+              </p>
             )}
-            {updateSpecialLeaveAutoGrantEnabled.error && (
-              <ErrorMessage error={updateSpecialLeaveAutoGrantEnabled.error} />
+            {changes && changes.blockers.length > 0 && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                {changes.blockers.join("")}
+              </p>
             )}
+            {detailsSubmitError && <ErrorMessage error={detailsSubmitError} />}
             <FormActions>
               <Button
-                variant="secondary"
-                isLoading={
-                  updatePaidLeaveAutoGrantEnabled.isPending ||
-                  updateSpecialLeaveAutoGrantEnabled.isPending
-                }
-                onClick={() => {
-                  updatePaidLeaveAutoGrantEnabled.mutate(
-                    {
-                      id: userId,
-                      enabled: paidLeaveAutoGrantEnabled,
-                    },
-                    { onSuccess: () => notify.success("有給の自動付与設定を保存しました") },
-                  );
-                  updateSpecialLeaveAutoGrantEnabled.mutate(
-                    {
-                      id: userId,
-                      enabled: specialLeaveAutoGrantEnabled,
-                    },
-                    { onSuccess: () => notify.success("特別休暇の自動付与設定を保存しました") },
-                  );
-                }}
+                isLoading={updateDetails.isPending}
+                disabled={!dirty || (changes?.blockers.length ?? 0) > 0}
+                onClick={handleSaveDetails}
               >
-                自動付与設定を保存
+                保存
               </Button>
             </FormActions>
           </FormSection>

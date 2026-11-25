@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as userWorkStyleMonthlyAssignmentsApi from "../../api/userWorkStyleMonthlyAssignments";
+import { ApiError } from "../../api/client";
 import * as usersApi from "../../api/users";
 import * as userManagementApi from "../../api/userManagement";
 import * as workStylesApi from "../../api/workStyles";
@@ -393,8 +394,8 @@ describe("UserRoleEditPage", () => {
     ).toHaveTextContent("2024-04-01");
   });
 
-  it("saves the entered hire date", async () => {
-    vi.spyOn(usersApi, "updateUserHireDate").mockResolvedValue({
+  it("saves the entered hire date with the single save button", async () => {
+    vi.spyOn(usersApi, "updateUserDetails").mockResolvedValue({
       ...targetUser,
       hire_date: "2024-04-01",
     });
@@ -407,25 +408,22 @@ describe("UserRoleEditPage", () => {
       "入社日(有給の自動付与に使用)",
       "2024-04-01",
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "入社日を保存" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() =>
-      expect(usersApi.updateUserHireDate).toHaveBeenCalledWith(
-        "user-1",
-        "2024-04-01",
-      ),
+      expect(usersApi.updateUserDetails).toHaveBeenCalledWith("user-1", {
+        hire_date: "2024-04-01",
+      }),
     );
     await waitFor(() =>
-      expect(notify.success).toHaveBeenCalledWith("入社日を保存しました"),
+      expect(notify.success).toHaveBeenCalledWith("利用者の情報を保存しました"),
     );
   });
 
-  it("prefills and saves the termination date", async () => {
-    vi.spyOn(usersApi, "updateUserTerminationDate").mockResolvedValue({
+  it("prefills and clears the termination date", async () => {
+    vi.spyOn(usersApi, "updateUserDetails").mockResolvedValue({
       ...targetUser,
-      termination_date: "2026-03-31",
+      termination_date: null,
     });
     renderPage({ ...targetUser, termination_date: "2026-03-31" });
 
@@ -435,15 +433,12 @@ describe("UserRoleEditPage", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: "クリア" }),
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "退社日を保存" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() =>
-      expect(usersApi.updateUserTerminationDate).toHaveBeenCalledWith(
-        "user-1",
-        null,
-      ),
+      expect(usersApi.updateUserDetails).toHaveBeenCalledWith("user-1", {
+        termination_date: null,
+      }),
     );
   });
 
@@ -458,7 +453,7 @@ describe("UserRoleEditPage", () => {
   });
 
   it("saves the entered usage start date", async () => {
-    vi.spyOn(usersApi, "updateUserUsageStartDate").mockResolvedValue({
+    vi.spyOn(usersApi, "updateUserDetails").mockResolvedValue({
       ...targetUser,
       usage_start_date: "2026-07-01",
     });
@@ -473,26 +468,19 @@ describe("UserRoleEditPage", () => {
       "利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)",
       "2026-07-01",
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "利用開始日を保存" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() =>
-      expect(usersApi.updateUserUsageStartDate).toHaveBeenCalledWith(
-        "user-1",
-        "2026-07-01",
-      ),
+      expect(usersApi.updateUserDetails).toHaveBeenCalledWith("user-1", {
+        usage_start_date: "2026-07-01",
+      }),
     );
   });
 
-  it("shows the disabled auto-grant badge and saves the toggled checkboxes", async () => {
-    vi.spyOn(usersApi, "updatePaidLeaveAutoGrantEnabled").mockResolvedValue({
+  it("shows the disabled auto-grant badge and saves the toggled checkbox", async () => {
+    vi.spyOn(usersApi, "updateUserDetails").mockResolvedValue({
       ...targetUser,
-      paid_leave_auto_grant_enabled: false,
-    });
-    vi.spyOn(usersApi, "updateSpecialLeaveAutoGrantEnabled").mockResolvedValue({
-      ...targetUser,
-      special_leave_auto_grant_enabled: true,
+      paid_leave_auto_grant_enabled: true,
     });
     renderPage({
       ...targetUser,
@@ -507,20 +495,118 @@ describe("UserRoleEditPage", () => {
     expect(screen.getAllByText("自動付与:無効")).toHaveLength(1);
 
     await userEvent.click(paidLeaveCheckbox);
-    await userEvent.click(
-      screen.getByRole("button", { name: "自動付与設定を保存" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() =>
-      expect(usersApi.updatePaidLeaveAutoGrantEnabled).toHaveBeenCalledWith(
-        "user-1",
-        true,
-      ),
+      expect(usersApi.updateUserDetails).toHaveBeenCalledWith("user-1", {
+        paid_leave_auto_grant_enabled: true,
+      }),
     );
-    expect(usersApi.updateSpecialLeaveAutoGrantEnabled).toHaveBeenCalledWith(
-      "user-1",
-      true,
-    );
+  });
+
+  describe("save all", () => {
+    it("has one save button that is disabled until something changes", async () => {
+      renderPage({ ...targetUser, hire_date: "2024-04-01" });
+      await screen.findByDisplayValue("山田太郎");
+
+      const saveButtons = screen.getAllByRole("button", { name: "保存" });
+      expect(saveButtons).toHaveLength(1);
+      expect(saveButtons[0]).toBeDisabled();
+      for (const old of [
+        "基本情報を保存",
+        "入社日を保存",
+        "退社日を保存",
+        "利用開始日を保存",
+        "自動付与設定を保存",
+      ]) {
+        expect(screen.queryByRole("button", { name: old })).toBeNull();
+      }
+      expect(
+        screen.getByRole("button", { name: "働き方を保存" }),
+      ).toBeInTheDocument();
+
+      await userEvent.type(screen.getByLabelText("氏名"), "2");
+      expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+      await userEvent.type(screen.getByLabelText("氏名"), "{Backspace}");
+      expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    });
+
+    it("sends only the changed keys in one request", async () => {
+      const spy = vi
+        .spyOn(usersApi, "updateUserDetails")
+        .mockResolvedValue(targetUser);
+      spy.mockClear();
+      renderPage({ ...targetUser, hire_date: "2024-04-01" });
+      await screen.findByDisplayValue("総務部");
+
+      await userEvent.clear(screen.getByLabelText("部署"));
+      await userEvent.click(
+        screen.getByRole("checkbox", { name: "特別休暇の自動付与を有効にする" }),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "保存" }));
+
+      await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+      expect(spy).toHaveBeenCalledWith("user-1", {
+        profile: { department: null },
+        special_leave_auto_grant_enabled: false,
+      });
+    });
+
+    it("shows keyed 422 errors under each field and others above the button", async () => {
+      vi.spyOn(usersApi, "updateUserDetails").mockRejectedValue(
+        new ApiError(422, "入力内容に誤りがあります。", {
+          "profile.email": ["このメールアドレスは既に使われています。"],
+          hire_date: ["入社日は退社日より前にしてください。"],
+          unknown_key: ["その他のエラーです。"],
+        }),
+      );
+      renderPage({ ...targetUser, hire_date: "2024-04-01" });
+      await screen.findByDisplayValue("yamada@example.com");
+
+      await userEvent.type(screen.getByLabelText("メール"), "x");
+      await userEvent.click(screen.getByRole("button", { name: "保存" }));
+
+      const email = await screen.findByText(
+        "このメールアドレスは既に使われています。",
+      );
+      expect(email.previousElementSibling).toBe(screen.getByLabelText("メール"));
+      const hire = screen.getByText("入社日は退社日より前にしてください。");
+      expect(hire.previousElementSibling).toBe(
+        screen.getByRole("button", { name: "入社日(有給の自動付与に使用)" }),
+      );
+      expect(screen.getByText("その他のエラーです。")).toBeInTheDocument();
+      expect(screen.getAllByText("入力内容に誤りがあります。")).toHaveLength(1);
+    });
+
+    it("disables the fields managed by EXTERNAL_HR and shows the reason", async () => {
+      renderPage({
+        ...targetUser,
+        field_authorities: [
+          { field_key: "display_name", authority_type: "EXTERNAL_HR", provider: "hr" },
+          { field_key: "hire_date", authority_type: "EXTERNAL_HR", provider: "hr" },
+          { field_key: "termination_date", authority_type: "EXTERNAL_HR", provider: "hr" },
+          { field_key: "usage_start_date", authority_type: "EXTERNAL_HR", provider: "hr" },
+        ],
+      });
+      await screen.findByLabelText("氏名（外部HR管理）");
+
+      expect(screen.getByLabelText("氏名（外部HR管理）")).toBeDisabled();
+      expect(screen.getByLabelText("メール")).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "入社日(有給の自動付与に使用)" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "退社日(未設定なら在籍中)" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", {
+          name: "利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)",
+        }),
+      ).toBeDisabled();
+      expect(
+        screen.getAllByText(/外部人事システムが管理する項目/),
+      ).toHaveLength(4);
+    });
   });
 
   it("defaults to using the company default work style when no monthly assignment exists", async () => {

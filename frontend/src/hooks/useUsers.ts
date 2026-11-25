@@ -10,6 +10,7 @@ import {
   searchUsers,
   updatePaidLeaveAutoGrantEnabled,
   updateSpecialLeaveAutoGrantEnabled,
+  updateUserDetails,
   updateUserHireDate,
   updateUserTerminationDate,
   updateUserUsageStartDate,
@@ -17,6 +18,7 @@ import {
   createUser,
   updateUser,
   type UserProfileInput,
+  type UserDetailsInput,
 } from "../api/users";
 
 export function useUsers(
@@ -168,6 +170,19 @@ export function useUpdateSpecialLeaveAutoGrantEnabled() {
   return useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       updateSpecialLeaveAutoGrantEnabled(id, enabled),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+      void queryClient.invalidateQueries({ queryKey: ["users", "detail", id] });
+    },
+  });
+}
+
+export function useUpdateUserDetails() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UserDetailsInput }) =>
+      updateUserDetails(id, input),
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ["users"] });
       void queryClient.invalidateQueries({ queryKey: ["users", "detail", id] });

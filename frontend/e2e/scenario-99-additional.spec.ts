@@ -445,8 +445,8 @@ test("§5-9: Entra ID初回ログイン(新入社員オンボーディング)", 
     await adminPage.goto(`/admin/users/${userId}`);
 
     await pickDate(adminPage, "入社日(有給の自動付与に使用)", "2026-04-01");
-    await adminPage.getByRole("button", { name: "入社日を保存", exact: true }).click();
-    await expect(adminPage.getByText("入社日を保存しました")).toBeVisible();
+    await adminPage.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(adminPage.getByText("利用者の情報を保存しました")).toBeVisible();
 
     // ユーザー個人への直接Role付与UIは廃止された(PR#102、UI上はグループへの割当のみ)ため、
     // hr_staffロールの付与はAPIで行う。

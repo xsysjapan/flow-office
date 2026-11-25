@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
@@ -34,8 +34,15 @@ import {
 } from "../../components/ui/table";
 import { RoleAssignmentSection } from "../../components/RoleAssignmentSection/RoleAssignmentSection";
 import * as access from "../../hooks/useAccessControl";
+import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
+import { fieldErrorOf, nonFieldError } from "../../utils/fieldErrors";
 import * as userManagement from "../../hooks/useUserManagement";
-import type { AccessRole, Feature, RoleAssignment } from "../../api/accessControl";
+import type {
+  AccessRole,
+  Feature,
+  RoleAssignment,
+  RoleDefinitionInput,
+} from "../../api/accessControl";
 import type { ManagedGroup } from "../../api/userManagement";
 
 /**
@@ -57,9 +64,7 @@ export function RoleDefinitionPage() {
 
   const createRole = access.useCreateRole();
   const cloneRole = access.useCloneRole();
-  const updateRole = access.useUpdateRole();
-  const updateRolePermissions = access.useUpdateRolePermissions();
-  const updateRoleFeatures = access.useUpdateRoleFeatures();
+  const updateRoleDefinition = access.useUpdateRoleDefinition();
   const createAssignment = access.useCreateRoleAssignment();
   const updateAssignment = access.useUpdateRoleAssignment();
   const removeAssignment = access.useRemoveRoleAssignment();
@@ -283,9 +288,7 @@ export function RoleDefinitionPage() {
                 assignment.status === "active",
             ) ?? []
           }
-          updateRole={updateRole}
-          updateRolePermissions={updateRolePermissions}
-          updateRoleFeatures={updateRoleFeatures}
+          updateRoleDefinition={updateRoleDefinition}
           createAssignment={createAssignment}
           updateAssignment={updateAssignment}
           removeAssignment={removeAssignment}
@@ -296,6 +299,46 @@ export function RoleDefinitionPage() {
   );
 }
 
+const DEFINITION_ERROR_KEYS = [
+  "name",
+  "description",
+  "status",
+  "permission_ids",
+  "feature_ids",
+];
+
+const sameIds = (a: number[], b: number[]) =>
+  a.length === b.length && [...a].sort().join(",") === [...b].sort().join(",");
+
+/** 読み込んだ値と画面の値を比べ、変更した項目だけの本文を作る。 */
+function buildRoleDefinitionChanges(
+  role: AccessRole,
+  basic: { name: string; description: string; status: string },
+  permissionIds: number[],
+  featureIds: number[],
+) {
+  const input: RoleDefinitionInput = {};
+  if (basic.name !== role.name) input.name = basic.name;
+  if (basic.description !== (role.description ?? ""))
+    input.description = basic.description || null;
+  if (basic.status !== role.status) input.status = basic.status;
+  if (
+    !sameIds(
+      permissionIds,
+      role.permissions.map((permission) => permission.id),
+    )
+  )
+    input.permission_ids = permissionIds;
+  if (
+    !sameIds(
+      featureIds,
+      role.features.map((feature) => feature.id),
+    )
+  )
+    input.feature_ids = featureIds;
+  return { input, dirty: Object.keys(input).length > 0 };
+}
+
 function RoleDetail({
   role,
   permissions,
@@ -303,9 +346,7 @@ function RoleDetail({
   roles,
   groups,
   roleGroupAssignments,
-  updateRole,
-  updateRolePermissions,
-  updateRoleFeatures,
+  updateRoleDefinition,
   createAssignment,
   updateAssignment,
   removeAssignment,
@@ -322,9 +363,7 @@ function RoleDetail({
   roles: AccessRole[];
   groups: ManagedGroup[];
   roleGroupAssignments: RoleAssignment[];
-  updateRole: ReturnType<typeof access.useUpdateRole>;
-  updateRolePermissions: ReturnType<typeof access.useUpdateRolePermissions>;
-  updateRoleFeatures: ReturnType<typeof access.useUpdateRoleFeatures>;
+  updateRoleDefinition: ReturnType<typeof access.useUpdateRoleDefinition>;
   createAssignment: ReturnType<typeof access.useCreateRoleAssignment>;
   updateAssignment: ReturnType<typeof access.useUpdateRoleAssignment>;
   removeAssignment: ReturnType<typeof access.useRemoveRoleAssignment>;
@@ -353,6 +392,22 @@ function RoleDetail({
     setSelectedPermissions(role.permissions.map((permission) => permission.id));
     setSelectedFeatureIds(role.features.map((feature) => feature.id));
   }
+
+  const { reset: resetDefinitionError } = updateRoleDefinition;
+  useEffect(() => {
+    resetDefinitionError();
+  }, [role.id, resetDefinitionError]);
+
+  const changes = buildRoleDefinitionChanges(
+    role,
+    basicForm,
+    selectedPermissions,
+    selectedFeatureIds,
+  );
+  const dirty = basicForm.id === role.id && changes.dirty;
+  useUnsavedChangesGuard(dirty);
+  const definitionError = updateRoleDefinition.error;
+  const submitError = nonFieldError(definitionError, DEFINITION_ERROR_KEYS);
 
   const permissionGroups = useMemo(
     () =>
@@ -387,7 +442,11 @@ function RoleDetail({
     >
       <FormLayout>
         <FormSection title="基本情報">
-          <FormField label="ロール名" htmlFor="role-basic-name">
+          <FormField
+            label="ロール名"
+            htmlFor="role-basic-name"
+            error={fieldErrorOf(definitionError, "name")}
+          >
             <Input
               id="role-basic-name"
               value={basicForm.name}
@@ -396,7 +455,11 @@ function RoleDetail({
               }
             />
           </FormField>
-          <FormField label="説明" htmlFor="role-basic-description">
+          <FormField
+            label="説明"
+            htmlFor="role-basic-description"
+            error={fieldErrorOf(definitionError, "description")}
+          >
             <Input
               id="role-basic-description"
               value={basicForm.description}
@@ -408,6 +471,7 @@ function RoleDetail({
           <FormField
             label="状態"
             htmlFor="role-basic-status"
+            error={fieldErrorOf(definitionError, "status")}
             description={
               role.is_system
                 ? "システム標準ロールのため状態は変更できません。"
@@ -426,34 +490,6 @@ function RoleDetail({
               <option value="inactive">廃止</option>
             </NativeSelect>
           </FormField>
-          {!basicForm.name && (
-            <p className="mb-2 text-xs text-muted-foreground">
-              ロール名を入力してください。
-            </p>
-          )}
-          {updateRole.error && <ErrorMessage error={updateRole.error} />}
-          <FormActions>
-            <Button
-              variant="secondary"
-              isLoading={updateRole.isPending}
-              disabled={!basicForm.name}
-              onClick={() =>
-                updateRole.mutate(
-                  {
-                    id: role.id,
-                    input: {
-                      name: basicForm.name,
-                      description: basicForm.description || null,
-                      status: basicForm.status,
-                    },
-                  },
-                  { onSuccess: () => notify.success("ロールの基本情報を保存しました") },
-                )
-              }
-            >
-              基本情報を保存
-            </Button>
-          </FormActions>
         </FormSection>
 
         <FormSection title="Permission">
@@ -489,26 +525,11 @@ function RoleDetail({
               <EmptyState title="Permissionはまだありません。" />
             )}
           </div>
-          {updateRolePermissions.error && (
-            <ErrorMessage error={updateRolePermissions.error} />
+          {fieldErrorOf(definitionError, "permission_ids") && (
+            <p className="mb-4 text-xs text-destructive">
+              {fieldErrorOf(definitionError, "permission_ids")}
+            </p>
           )}
-          <FormActions>
-            <Button
-              variant="secondary"
-              isLoading={updateRolePermissions.isPending}
-              onClick={() =>
-                updateRolePermissions.mutate(
-                  {
-                    roleId: role.id,
-                    permissionIds: selectedPermissions,
-                  },
-                  { onSuccess: () => notify.success("Permissionを保存しました") },
-                )
-              }
-            >
-              Permissionを保存
-            </Button>
-          </FormActions>
         </FormSection>
 
         <FormSection title="Feature構成">
@@ -549,24 +570,29 @@ function RoleDetail({
               ))}
             </div>
           )}
-          {updateRoleFeatures.error && (
-            <ErrorMessage error={updateRoleFeatures.error} />
+          {fieldErrorOf(definitionError, "feature_ids") && (
+            <p className="mb-4 text-xs text-destructive">
+              {fieldErrorOf(definitionError, "feature_ids")}
+            </p>
           )}
+          {!basicForm.name && (
+            <p className="mb-2 text-xs text-muted-foreground">
+              ロール名を入力してください。
+            </p>
+          )}
+          {submitError && <ErrorMessage error={submitError} />}
           <FormActions>
             <Button
-              variant="secondary"
-              isLoading={updateRoleFeatures.isPending}
+              isLoading={updateRoleDefinition.isPending}
+              disabled={!dirty || !basicForm.name}
               onClick={() =>
-                updateRoleFeatures.mutate(
-                  {
-                    roleId: role.id,
-                    featureIds: selectedFeatureIds,
-                  },
-                  { onSuccess: () => notify.success("Feature構成を保存しました") },
+                updateRoleDefinition.mutate(
+                  { roleId: role.id, input: changes.input },
+                  { onSuccess: () => notify.success("ロールの定義を保存しました") },
                 )
               }
             >
-              Feature構成を保存
+              保存
             </Button>
           </FormActions>
         </FormSection>

@@ -115,3 +115,20 @@ export function updateSpecialLeaveAutoGrantEnabled(
     body: { enabled },
   });
 }
+
+/** 利用者詳細のまとめて保存(`PUT /users/{id}/details`)。変更した項目のキーだけを送る。 */
+export interface UserDetailsInput {
+  profile?: Partial<UserProfileInput>;
+  hire_date?: string;
+  termination_date?: string | null;
+  usage_start_date?: string;
+  paid_leave_auto_grant_enabled?: boolean;
+  special_leave_auto_grant_enabled?: boolean;
+}
+
+export function updateUserDetails(
+  id: string,
+  input: UserDetailsInput,
+): Promise<User> {
+  return apiFetch(`/users/${id}/details`, { method: "PUT", body: input });
+}

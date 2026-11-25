@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../api/client";
 import * as accessControlApi from "../../api/accessControl";
 import type {
   AccessRole,
@@ -160,28 +161,82 @@ describe("RoleDefinitionPage", () => {
     expect(screen.getByText("Feature構成")).toBeInTheDocument();
   });
 
-  it("saves the feature configuration with the correct feature ids", async () => {
-    vi.spyOn(accessControlApi, "updateRoleFeatures").mockResolvedValue(
-      undefined,
+  it("has one save button that is disabled until something changes", async () => {
+    renderPage({ initialPath: "/admin/access/roles?roleId=2" });
+    await screen.findByDisplayValue("バックオフィス担当者");
+
+    const buttons = screen.getAllByRole("button", { name: "保存" });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toBeDisabled();
+    for (const old of ["基本情報を保存", "Permissionを保存", "Feature構成を保存"]) {
+      expect(screen.queryByRole("button", { name: old })).toBeNull();
+    }
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "勤怠承認" }));
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: "勤怠承認" }));
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+  });
+
+  it("sends only the changed keys in one request", async () => {
+    const spy = vi
+      .spyOn(accessControlApi, "updateRoleDefinition")
+      .mockResolvedValue(makeRoles()[1]);
+    spy.mockClear();
+    renderPage({ initialPath: "/admin/access/roles?roleId=2" });
+    await screen.findByDisplayValue("バックオフィス担当者");
+
+    await userEvent.type(screen.getByLabelText("説明"), "備考");
+    await userEvent.click(screen.getByRole("checkbox", { name: "勤怠承認" }));
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(spy).toHaveBeenCalledWith(2, {
+      description: "備考",
+      feature_ids: expect.arrayContaining([1, 11]),
+    });
+    expect(Object.keys(spy.mock.calls[0][1]).sort()).toEqual([
+      "description",
+      "feature_ids",
+    ]);
+    await waitFor(() =>
+      expect(notify.success).toHaveBeenCalledWith("ロールの定義を保存しました"),
+    );
+  });
+
+  it("shows keyed 422 errors under each field and others above the button", async () => {
+    vi.spyOn(accessControlApi, "updateRoleDefinition").mockRejectedValue(
+      new ApiError(422, "入力内容に誤りがあります。", {
+        name: ["ロール名は既に使われています。"],
+        feature_ids: ["Feature構成が正しくありません。"],
+        other: ["その他のエラーです。"],
+      }),
     );
     renderPage({ initialPath: "/admin/access/roles?roleId=2" });
+    await screen.findByDisplayValue("バックオフィス担当者");
 
-    await userEvent.click(
-      await screen.findByRole("checkbox", { name: "勤怠承認" }),
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Feature構成を保存" }),
-    );
+    await userEvent.type(screen.getByLabelText("ロール名"), "2");
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
-    await waitFor(() =>
-      expect(accessControlApi.updateRoleFeatures).toHaveBeenCalledWith(
-        2,
-        expect.arrayContaining([1, 11]),
-      ),
+    const nameError = await screen.findByText("ロール名は既に使われています。");
+    expect(nameError.previousElementSibling).toBe(
+      screen.getByLabelText("ロール名"),
     );
-    await waitFor(() =>
-      expect(notify.success).toHaveBeenCalledWith("Feature構成を保存しました"),
-    );
+    expect(
+      screen.getByText("Feature構成が正しくありません。"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("その他のエラーです。")).toBeInTheDocument();
+    expect(screen.getAllByText("入力内容に誤りがあります。")).toHaveLength(1);
+  });
+
+  it("disables the status of a system role", async () => {
+    renderPage({ initialPath: "/admin/access/roles?roleId=1" });
+    await screen.findByDisplayValue("一般社員");
+
+    expect(screen.getByLabelText("状態")).toBeDisabled();
+    expect(
+      screen.getByText("システム標準ロールのため状態は変更できません。"),
+    ).toBeInTheDocument();
   });
 
   it("shows only active group assignments for the selected role in the 割当グループ section", async () => {
