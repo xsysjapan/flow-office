@@ -27,6 +27,12 @@ import {
   useExpenseEntryPreset,
   useUpdateExpenseEntryPreset,
 } from '../../hooks/useExpenseEntryPresets'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import {
+  EXPENSE_ENTRY_PRESET_INITIAL,
+  isExpenseEntryPresetDirty,
+  type ExpenseEntryPresetFormValues,
+} from './expenseEntryPresetDirty'
 import { paymentBearerLabel } from '../../utils/statusLabels'
 import {
   buildExpenseItemDescription,
@@ -66,10 +72,12 @@ function newDefinitionRow(): DefinitionRow {
  * 入力(表形式)用にdescriptionも同じ整形ルールで自動生成して一緒に保存する。
  */
 export function ExpenseEntryPresetEditPage() {
+  const { id } = useParams<{ id: string }>()
   return (
     <>
       <BackLink />
-      <ExpenseEntryPresetEditContent />
+      {/* パスの変数(プリセットID・new)が変わったら入力を作り直す。 */}
+      <ExpenseEntryPresetEditContent key={id ?? 'new'} />
     </>
   )
 }
@@ -106,6 +114,33 @@ function ExpenseEntryPresetEditContent() {
     )
     setIsActive(existing.is_active)
   }, [existing])
+
+  const base: ExpenseEntryPresetFormValues | null = isCreate
+    ? EXPENSE_ENTRY_PRESET_INITIAL
+    : existing
+      ? {
+          visibility: existing.visibility,
+          name: existing.name,
+          description: existing.description ?? '',
+          presetType: existing.preset_type,
+          items:
+            existing.definition.length > 0
+              ? (existing.definition as unknown as Array<Record<string, unknown>>)
+              : EXPENSE_ENTRY_PRESET_INITIAL.items,
+          isActive: existing.is_active,
+        }
+      : null
+  const isDirty = base
+    ? isExpenseEntryPresetDirty(base, {
+        visibility,
+        name,
+        description,
+        presetType,
+        items: items as unknown as Array<Record<string, unknown>>,
+        isActive,
+      })
+    : false
+  const { navigateAfterSave } = useUnsavedChangesGuard(isDirty)
 
   if (!isCreate && isLoading) return <LoadingState />
   if (!isCreate && loadError) return <ErrorMessage error={loadError} fallback="プリセットの取得に失敗しました。" />
@@ -169,9 +204,9 @@ function ExpenseEntryPresetEditContent() {
 
     // 保存後は一覧へ戻る(遷移先が戻り先と同じ画面なので、絞り込み付きの戻り先とその遷移元を引き継ぐ)。
     if (backTarget && backTarget.to.split(/[?#]/)[0] === '/expenses/presets') {
-      navigate(backTarget.to, { state: backTarget.state })
+      navigateAfterSave(backTarget.to, { state: backTarget.state })
     } else {
-      navigate('/expenses/presets')
+      navigateAfterSave('/expenses/presets')
     }
   }
 

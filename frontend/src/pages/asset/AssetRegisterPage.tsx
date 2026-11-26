@@ -16,6 +16,8 @@ import type { AssetLendingMethod, AssetManagementType } from '../../api/types'
 import type { AssetNumberRule } from '../../api/assetNumberRules'
 import { notify } from '../../lib/notify'
 import { useRegisterAsset } from '../../hooks/useAsset'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { ASSET_REGISTER_INITIAL, isAssetRegisterDirty } from './assetDirty'
 import { useAssetNumberRuleCategories, useAssetNumberRules } from '../../hooks/useAssetNumberRules'
 import { assetLendingMethodLabel, assetManagementTypeLabel } from '../../utils/statusLabels'
 
@@ -57,6 +59,18 @@ export function AssetRegisterPage() {
   const [defaultLocationText, setDefaultLocationText] = useState('')
   const [notes, setNotes] = useState('')
 
+  const isDirty = isAssetRegisterDirty(ASSET_REGISTER_INITIAL, {
+    assetNo,
+    name,
+    category,
+    serialNumber,
+    managementType,
+    lendingMethod,
+    defaultLocationText,
+    notes,
+  })
+  const { navigateAfterSave } = useUnsavedChangesGuard(isDirty)
+
   const isLending = managementType === 'lending'
   const requiresDefaultLocation = isLending && lendingMethod === 'self_service'
   const autoNumberingRule = resolveAutoNumberingRule(category, numberRules.data ?? [])
@@ -79,7 +93,7 @@ export function AssetRegisterPage() {
       notes: notes || null,
     })
     notify.success(`${name}を登録しました`)
-    navigate(`/assets/${asset.id}`, { state: keepBackState })
+    navigateAfterSave(`/assets/${asset.id}`, { state: keepBackState })
   }
 
   return (

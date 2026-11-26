@@ -15,6 +15,8 @@ import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 import { notify } from '../../lib/notify'
 import { useAsset, useUpdateAssetDetails } from '../../hooks/useAsset'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isAssetEditDirty } from './assetDirty'
 
 /**
  * 備品の詳細編集(spec「実装対象」)。名称・カテゴリ・シリアル番号・備考のみを扱う。
@@ -22,6 +24,12 @@ import { useAsset, useUpdateAssetDetails } from '../../hooks/useAsset'
  * この編集フォームには含めない(タスク指示参照)。
  */
 export function AssetEditPage() {
+  const { id } = useParams<{ id: string }>()
+  // パスの変数(備品ID)が変わったら入力を作り直す。
+  return <AssetEditForm key={id} />
+}
+
+function AssetEditForm() {
   const { id } = useParams<{ id: string }>()
   const assetId = id ?? ''
   const navigate = useNavigate()
@@ -42,6 +50,14 @@ export function AssetEditPage() {
     setSerialNumber(asset.serial_number ?? '')
     setNotes(asset.notes ?? '')
   }, [asset])
+
+  const isDirty = asset
+    ? isAssetEditDirty(
+        { name: asset.name, category: asset.category, serialNumber: asset.serial_number ?? '', notes: asset.notes ?? '' },
+        { name, category, serialNumber, notes },
+      )
+    : false
+  const { navigateAfterSave } = useUnsavedChangesGuard(isDirty)
 
   if (isLoading) return <LoadingState />
   if (error) {
@@ -66,9 +82,9 @@ export function AssetEditPage() {
     // 遷移先(詳細)が戻り先と同じ画面なら戻り先とその遷移元を引き継ぎ、違えば現在の遷移元を引き継ぐ。
     const detailPath = `/assets/${assetId}`
     if (backTarget && backTarget.to.split(/[?#]/)[0] === detailPath) {
-      navigate(backTarget.to, { state: backTarget.state })
+      navigateAfterSave(backTarget.to, { state: backTarget.state })
     } else {
-      navigate(detailPath, { state: keepBackState })
+      navigateAfterSave(detailPath, { state: keepBackState })
     }
   }
 

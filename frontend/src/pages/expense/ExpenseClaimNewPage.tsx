@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { BackLink } from '../../components/BackLink/BackLink'
 import {
   useBackTarget,
@@ -43,6 +43,8 @@ import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useApplyExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/useExpenseEntryPresets'
 import { useUploadAttachment } from '../../hooks/useAttachments'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { EXPENSE_CLAIM_NEW_INITIAL, isExpenseClaimNewDirty } from './expenseClaimNewDirty'
 import { notify } from '../../lib/notify'
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import { isExpenseClaimEditable, workLocationTypeLabel } from '../../utils/statusLabels'
@@ -335,7 +337,9 @@ function BulkTitleStep({
   onBack,
   isSubmitting,
   error,
+  onDraftChange,
 }: {
+  onDraftChange: (title: string) => void
   onSubmit: (title: string) => void
   onBack: () => void
   isSubmitting: boolean
@@ -343,6 +347,12 @@ function BulkTitleStep({
 }) {
   const [title, setTitle] = useState('')
   const suggestions = suggestedBulkTitles()
+
+  // 未確定のタイトル入力を離脱警告の判定へ伝える。この手順が閉じたら空に戻す。
+  useEffect(() => {
+    onDraftChange(title)
+  }, [title, onDraftChange])
+  useEffect(() => () => onDraftChange(''), [onDraftChange])
 
   return (
     <Card
@@ -417,10 +427,12 @@ function suggestIndividualTitle(categoryName: string | undefined, usageDate: str
  * 今回は見送っている(`known-gaps.md`参照)。
  */
 export function ExpenseClaimNewPage() {
+  const { id } = useParams<{ id?: string }>()
   return (
     <>
       <BackLink />
-      <ExpenseClaimNewContent />
+      {/* パスの変数(下書きID・新規)が変わったら入力を作り直す。 */}
+      <ExpenseClaimNewContent key={id ?? 'new'} />
     </>
   )
 }
@@ -428,9 +440,8 @@ export function ExpenseClaimNewPage() {
 function ExpenseClaimNewContent() {
   const { systemSettings } = useAppSettings()
   const approvalRequired = systemSettings.expense_claim_requires_approval
-  const navigate = useNavigate()
   const { id: routeClaimId } = useParams<{ id?: string }>()
-  const [searchParams, setSearchParams] = useSearchParamsKeepingBackState()
+  const [searchParams] = useSearchParamsKeepingBackState()
   const backTarget = useBackTarget()
   const keepBackState = useKeepBackState()
   const categoryCodeParam = searchParams.get('category')
@@ -445,6 +456,8 @@ function ExpenseClaimNewContent() {
   // トークンをインクリメントして渡し、区分を切り替えたら次の区分に持ち越さないよう破棄する。
   const [singlePresetItem, setSinglePresetItem] = useState<ExpenseEntryPresetDefinitionItem | null>(null)
   const [singlePresetToken, setSinglePresetToken] = useState(0)
+  const [bulkTitleDraft, setBulkTitleDraft] = useState('')
+  const [singleFormDirty, setSingleFormDirty] = useState(false)
 
   const createClaim = useCreateExpenseClaim()
   const startClaimTitle = useUpdateExpenseClaimTitle()
@@ -481,30 +494,26 @@ function ExpenseClaimNewContent() {
    *  そもそも読み取り側もこのショートカットを使わないため、URLも書き換えない。claimIdが
    *  一度作成された後(保存済み明細がある状態)のURL化は、状態構造の見直しが必要になるため
    *  見送っている(`known-gaps.md`参照)。 */
-  function setCategoryParam(code: string | null) {
+  function writeStepParams(mutate: (params: URLSearchParams) => void) {
     if (routeClaimId) return
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (code) next.set('category', code)
-        else next.delete('category')
-        return next
-      },
-      { replace: true },
-    )
+    const next = new URLSearchParams(searchParams)
+    mutate(next)
+    // blockerを通さず(確認済み・または入力を失わない移動)、同じパスのクエリだけを置き換える。
+    guardedNavigate({ search: next.toString() }, { replace: true, state: keepBackState })
+  }
+
+  function setCategoryParam(code: string | null) {
+    writeStepParams((params) => {
+      if (code) params.set('category', code)
+      else params.delete('category')
+    })
   }
 
   function setModeParam(mode: ExpenseClaimEntryMode | null) {
-    if (routeClaimId) return
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (mode) next.set('mode', mode)
-        else next.delete('mode')
-        return next
-      },
-      { replace: true },
-    )
+    writeStepParams((params) => {
+      if (mode) params.set('mode', mode)
+      else params.delete('mode')
+    })
   }
 
   const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, reset } =
@@ -521,6 +530,16 @@ function ExpenseClaimNewContent() {
   const submitClaim = useSubmitExpenseClaim(claimId ?? '')
   const uploadAttachment = useUploadAttachment()
 
+  // まだ保存されていない入力だけを比べる(保存済みの明細の追加・削除は即時にAPIへ保存される)。
+  const isDirty = isExpenseClaimNewDirty(EXPENSE_CLAIM_NEW_INITIAL, {
+    rows,
+    selectedFileCount: Object.values(rowFiles).filter((file) => file !== null).length,
+    bulkTitle: bulkTitleDraft,
+    approverUserId,
+  }) || singleFormDirty
+  // 手順を`?mode=`・`?category=`で持つので、クエリだけの移動も止める。
+  const { navigateAfterSave: guardedNavigate, confirmDiscard } = useUnsavedChangesGuard(isDirty, { blockOn: 'location' })
+
   if (isLoadingCategories) return <LoadingState />
   if (categoriesError) return <ErrorMessage error={categoriesError} fallback="経費区分の取得に失敗しました。" />
 
@@ -535,13 +554,23 @@ function ExpenseClaimNewContent() {
     return created.id
   }
 
+  /** 手順を戻す操作の前に、保存していない入力があれば確認する。やめる場合は入力を破棄する。 */
+  const confirmDiscardStep = async (): Promise<boolean> => {
+    if (!(await confirmDiscard())) return false
+    reset([])
+    setRowFiles({})
+    setApproverUserId(undefined)
+    return true
+  }
+
   const handleSelectEntryMode = (mode: ExpenseClaimEntryMode) => {
     setEntryMode(mode)
     setModeParam(mode)
   }
 
   /** 登録方法選択ステップへ戻る(まだ何も保存していない新規作成のみ)。 */
-  const handleClearEntryMode = () => {
+  const handleClearEntryMode = async () => {
+    if (!(await confirmDiscardStep())) return
     setEntryMode(undefined)
     setModeParam(null)
   }
@@ -560,7 +589,8 @@ function ExpenseClaimNewContent() {
 
   /** 区分選択ステップへ戻る(区分を変更する/別の区分の明細を追加する)。URLの`?category=`も
    *  合わせてクリアし、リロード・URL共有時に古い区分へ戻らないようにする。 */
-  const handleClearSelectedCategory = () => {
+  const handleClearSelectedCategory = async () => {
+    if (!(await confirmDiscardStep())) return
     setSelectedCategoryId(undefined)
     setCategoryParam(null)
   }
@@ -609,9 +639,9 @@ function ExpenseClaimNewContent() {
   // 保存後の遷移: 遷移先が戻り先と同じ画面なら戻り先(絞り込み付き)へ、違えば現在の遷移元を引き継ぐ。
   function navigateAfterSave(path: string) {
     if (backTarget && backTarget.to.split(/[?#]/)[0] === path) {
-      navigate(backTarget.to, { state: backTarget.state })
+      guardedNavigate(backTarget.to, { state: backTarget.state })
     } else {
-      navigate(path, { state: keepBackState })
+      guardedNavigate(path, { state: keepBackState })
     }
   }
 
@@ -621,15 +651,15 @@ function ExpenseClaimNewContent() {
     notify.success(`${claim?.title ?? '無題の下書き'}を削除しました`)
     const deletedDetailPath = claimId ? `/expenses/${claimId}` : undefined
     if (backTarget && backTarget.to.split(/[?#]/)[0] !== deletedDetailPath) {
-      navigate(backTarget.to, { state: backTarget.state, replace: true })
+      guardedNavigate(backTarget.to, { state: backTarget.state, replace: true })
     } else if (backTarget?.state?.backTo) {
       const backTo = backTarget.state.backTo
-      navigate(backTo.pathname + backTo.search + backTo.hash, {
+      guardedNavigate(backTo.pathname + backTo.search + backTo.hash, {
         state: backTo.backTo ? { backTo: backTo.backTo } : undefined,
         replace: true,
       })
     } else {
-      navigate('/expenses', { replace: true })
+      guardedNavigate('/expenses', { replace: true })
     }
   }
 
@@ -665,7 +695,8 @@ function ExpenseClaimNewContent() {
   if (!claimId && entryMode === 'bulk') {
     return (
       <BulkTitleStep
-        onBack={handleClearEntryMode}
+        onDraftChange={setBulkTitleDraft}
+        onBack={() => void handleClearEntryMode()}
         onSubmit={(title) => void handleStartBulkClaim(title)}
         isSubmitting={createClaim.isPending || startClaimTitle.isPending}
         error={createClaim.error ?? startClaimTitle.error}
@@ -681,7 +712,7 @@ function ExpenseClaimNewContent() {
         <CategorySelectionStep
           categories={categories ?? []}
           onSelect={handleSelectCategory}
-          onBack={!claimId ? handleClearEntryMode : undefined}
+          onBack={!claimId ? () => void handleClearEntryMode() : undefined}
         />
 
         {claim && (
@@ -715,7 +746,7 @@ function ExpenseClaimNewContent() {
       <Card
         title={`${selectedCategory.name}の明細を入力`}
         actions={
-          <Button variant="secondary" size="sm" onClick={handleClearSelectedCategory}>
+          <Button variant="secondary" size="sm" onClick={() => void handleClearSelectedCategory()}>
             {(claim?.items.length ?? 0) > 0 ? '別の区分の明細を追加する' : '区分を変更する'}
           </Button>
         }
@@ -787,6 +818,7 @@ function ExpenseClaimNewContent() {
               isSubmitting={createClaim.isPending || addItem.isPending || uploadAttachment.isPending}
               presetItem={singlePresetItem}
               presetApplyToken={singlePresetToken}
+              onDirtyChange={setSingleFormDirty}
             />
           </>
         )}

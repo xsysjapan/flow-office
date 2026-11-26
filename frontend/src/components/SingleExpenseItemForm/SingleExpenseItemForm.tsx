@@ -8,6 +8,10 @@ import { Checkbox } from '../ui/checkbox'
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
 import { Textarea } from '../ui/textarea'
+import {
+  isSingleExpenseItemFormDirty,
+  SINGLE_EXPENSE_ITEM_FORM_INITIAL,
+} from './singleExpenseItemFormDirty'
 import { paymentBearerLabel } from '../../utils/statusLabels'
 import { buildExpenseItemDescription, composeRouteDescription, type SingleExpenseItemFieldSet } from '../../utils/expenseItemFieldSet'
 
@@ -28,6 +32,8 @@ export interface SingleExpenseItemFormProps {
    *  クリックのたびにインクリメントして渡す。 */
   presetItem?: ExpenseEntryPresetDefinitionItem | null
   presetApplyToken?: number
+  /** 保存していない入力があるかを通知する(離脱警告用)。保存後・アンマウント時は`false`。 */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 /** プリセットのattributes(保存用の値)を、このフォームが保持するattributeValuesの
@@ -84,6 +90,7 @@ export function SingleExpenseItemForm({
   isSubmitting,
   presetItem,
   presetApplyToken,
+  onDirtyChange,
 }: SingleExpenseItemFormProps) {
   const [usageDate, setUsageDate] = useState('')
   const [amount, setAmount] = useState('')
@@ -97,6 +104,24 @@ export function SingleExpenseItemForm({
   const [attributeValues, setAttributeValues] = useState<Record<string, string | boolean>>({})
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [receiptInputKey, setReceiptInputKey] = useState(0)
+
+  const isDirty = isSingleExpenseItemFormDirty(SINGLE_EXPENSE_ITEM_FORM_INITIAL, {
+    usageDate,
+    amount,
+    payee,
+    content,
+    participants,
+    participantCount,
+    departure,
+    destination,
+    paymentBearer,
+    attributeValues,
+    hasReceiptFile: receiptFile !== null,
+  })
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
 
   const reset = () => {
     setUsageDate('')

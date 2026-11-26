@@ -18,6 +18,8 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { useWorkCalendars } from '../../hooks/useWorkCalendars'
 import { usePaidLeaveGrantPolicies, usePaidLeaveGrantRules, useUpdatePaidLeaveGrantRule } from '../../hooks/usePaidLeave'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isPaidLeaveGrantRuleDirty } from './paidLeaveGrantRuleDirty'
 import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { DEFAULT_FISCAL_YEAR_START, pickDefaultFiscalYearStart } from '../../lib/paidLeaveGrantRule'
 import { notify } from '../../lib/notify'
@@ -31,6 +33,12 @@ const LIST_PATH = '/admin/paid-leave'
  * 保存成功後は一覧(`PaidLeavePolicyPage`)へ戻る。
  */
 export function PaidLeaveGrantRuleEditPage() {
+  const { ruleId } = useParams<{ ruleId: string }>()
+  // パスの変数(ルールID)が変わったら入力を作り直す。
+  return <PaidLeaveGrantRuleEditForm key={ruleId} />
+}
+
+function PaidLeaveGrantRuleEditForm() {
   const { ruleId } = useParams<{ ruleId: string }>()
   const navigate = useNavigate()
   const backTarget = useBackTarget()
@@ -65,6 +73,23 @@ export function PaidLeaveGrantRuleEditPage() {
     setInitialized(true)
   }, [rule, initialized])
 
+  const isDirty =
+    rule && initialized
+      ? isPaidLeaveGrantRuleDirty(
+          {
+            name: rule.name,
+            minAttendanceRate: String(rule.min_attendance_rate),
+            firstGrantAfterMonths: String(rule.first_grant_after_months),
+            grantCycleMonths: String(rule.grant_cycle_months),
+            grantCycleType: rule.grant_cycle_type,
+            isActive: rule.is_active,
+            steps: rule.steps ?? [],
+          },
+          { name, minAttendanceRate, firstGrantAfterMonths, grantCycleMonths, grantCycleType, isActive, steps },
+        )
+      : false
+  const { navigateAfterSave } = useUnsavedChangesGuard(isDirty)
+
   const handleSave = () => {
     if (!rule) return
     updateRule.mutate(
@@ -84,9 +109,9 @@ export function PaidLeaveGrantRuleEditPage() {
         onSuccess: () => {
           notify.success(`${name}を保存しました`)
           if (backTarget && backTarget.to.split(/[?#]/)[0] === LIST_PATH) {
-            navigate(backTarget.to, { state: backTarget.state })
+            navigateAfterSave(backTarget.to, { state: backTarget.state })
           } else {
-            navigate(LIST_PATH, { state: keepBackState })
+            navigateAfterSave(LIST_PATH, { state: keepBackState })
           }
         },
       },

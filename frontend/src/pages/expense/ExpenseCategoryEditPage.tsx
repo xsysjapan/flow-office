@@ -21,6 +21,12 @@ import {
   useExpenseCategories,
   useUpdateExpenseCategory,
 } from '../../hooks/useExpenseCategories'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import {
+  EXPENSE_CATEGORY_INITIAL,
+  isExpenseCategoryDirty,
+  type ExpenseCategoryFormValues,
+} from './expenseCategoryDirty'
 
 const LIST_PATH = '/admin/expense-categories'
 
@@ -53,6 +59,12 @@ function newFieldRow(): ExpenseCategoryFieldDefinition & { rowId: number } {
  * UC-X001: 管理者が経費区分マスタを作成・編集する。
  */
 export function ExpenseCategoryEditPage() {
+  const { id } = useParams<{ id: string }>()
+  // パスの変数(区分ID・new)が変わったら入力を作り直す。
+  return <ExpenseCategoryEditForm key={id ?? 'new'} />
+}
+
+function ExpenseCategoryEditForm() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const backTarget = useBackTarget()
@@ -96,6 +108,38 @@ export function ExpenseCategoryEditPage() {
     )
     setIsActive(existing.is_active)
   }, [existing])
+
+  const base: ExpenseCategoryFormValues | null = isCreate
+    ? EXPENSE_CATEGORY_INITIAL
+    : existing
+      ? {
+          code: existing.code,
+          name: existing.name,
+          description: existing.description ?? '',
+          evidenceTypeDefault: existing.evidence_type_default,
+          entryMode: existing.entry_mode,
+          fieldDefinitions: existing.field_definitions ?? [],
+          receiptRequiredThreshold:
+            existing.receipt_required_threshold != null ? String(existing.receipt_required_threshold) : '',
+          approvalSkipThreshold:
+            existing.approval_skip_threshold != null ? String(existing.approval_skip_threshold) : '',
+          isActive: existing.is_active,
+        }
+      : null
+  const isDirty = base
+    ? isExpenseCategoryDirty(base, {
+        code,
+        name,
+        description,
+        evidenceTypeDefault,
+        entryMode,
+        fieldDefinitions,
+        receiptRequiredThreshold,
+        approvalSkipThreshold,
+        isActive,
+      })
+    : false
+  const { navigateAfterSave } = useUnsavedChangesGuard(isDirty)
 
   const top = (
     <>
@@ -153,9 +197,9 @@ export function ExpenseCategoryEditPage() {
     }
 
     if (backTarget && backTarget.to.split(/[?#]/)[0] === LIST_PATH) {
-      navigate(backTarget.to, { state: backTarget.state })
+      navigateAfterSave(backTarget.to, { state: backTarget.state })
     } else {
-      navigate(LIST_PATH, { state: keepBackState })
+      navigateAfterSave(LIST_PATH, { state: keepBackState })
     }
   }
 
