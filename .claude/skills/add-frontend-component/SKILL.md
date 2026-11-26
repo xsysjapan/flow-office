@@ -63,6 +63,8 @@ frontend/src/components/<ComponentName>/
    `<label>`の**兄弟要素**として配置し、Tailwindの`flex`/`gap`で隣接させる
    (`frontend/src/components/FormField/FormField.tsx`の実装を参考にする)。
 
+6. **入力部品は`FormField`の属性を受ける**: フォームの入力になる部品は、操作対象の要素に`useFormFieldControl(id, 'native' | 'button')`(`components/FormField/formFieldControl.ts`)の戻り値を`{...props}`の後ろで展開する(必須・説明文・エラーが`aria-*`で結ばれる。native=input等、button=Popoverのトリガー)。
+
 ## チェックリスト (実装後)
 
 - [ ] `.stories.tsx` があり、代表的なprops組み合わせごとにstoryがある

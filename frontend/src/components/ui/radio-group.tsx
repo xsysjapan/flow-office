@@ -1,12 +1,15 @@
 import * as React from 'react'
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
 import { cn } from '../../lib/utils'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 
 export function RadioGroup({ className, ...props }: React.ComponentProps<typeof RadioGroupPrimitive.Root>) {
+  const control = useFormFieldControl(props.id, 'native', props)
   return (
     <RadioGroupPrimitive.Root
       className={cn('grid gap-2', className)}
       {...props}
+      {...control}
     />
   )
 }

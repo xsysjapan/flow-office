@@ -22,6 +22,7 @@ import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGran
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
+import { NativeSelect } from '../../components/ui/native-select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet'
 import { useQueryClient } from '@tanstack/react-query'
 import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
@@ -262,9 +263,8 @@ function PaidLeaveProportionalGrantPolicyEditSheet({
           {rows.map((row, index) => (
             <li key={index} className="flex flex-wrap items-end gap-3">
               <FormField label="週所定労働日数" htmlFor={`proportional-policy-category-${index}`}>
-                <select
+                <NativeSelect
                   id={`proportional-policy-category-${index}`}
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
                   value={row.weekly_scheduled_days_category}
                   onChange={(e) =>
                     updateRow(index, { weekly_scheduled_days_category: e.target.value as '4' | '3' | '2' | '1' })
@@ -275,7 +275,7 @@ function PaidLeaveProportionalGrantPolicyEditSheet({
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </FormField>
               <FormField label="継続勤務(か月)" htmlFor={`proportional-policy-months-${index}`}>
                 <Input

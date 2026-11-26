@@ -5,6 +5,7 @@ import { ja } from 'react-day-picker/locale'
 import { YearMonthGrid } from '../YearMonthPicker/YearMonthGrid'
 import { formatDate } from '../../utils/weekDates'
 import { Button } from '../ui/button'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 import { Calendar } from '../ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 
@@ -113,6 +114,7 @@ export function DateRangePicker({
     setMode('day')
   }
 
+  const control = useFormFieldControl(id, 'button')
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
@@ -121,6 +123,7 @@ export function DateRangePicker({
           variant="outline"
           disabled={disabled}
           aria-label={ariaLabel}
+          {...control}
           className={`w-full justify-start px-3 font-normal ${value?.from ? 'text-foreground' : 'text-muted-foreground'}`}
         >
           <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />

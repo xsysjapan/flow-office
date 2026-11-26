@@ -433,6 +433,7 @@ Errorでは「何が失敗したか」と「次に何ができるか」を示す
 - 不要な必須項目を作らない
 - Errorは対象の入力項目の近くに表示する
 - Submit Error(全体)とField Error(項目)を区別する
+- 必須・説明文・エラーは`FormField`が入力に属性(`aria-required`・`aria-describedby`・`aria-invalid`)で結ぶ(`htmlFor`と入力の`id`を一致させる)。入力部品を新しく作るときは、操作対象の要素に`useFormFieldControl(id, 'native' | 'button')`の戻り値を展開する(native=input・select・combobox等、button=Popoverのトリガー等。変更セット`20261126-form-field-aria`)
 
 レイアウトの規則(変更セット`20261123-form-layout-standard`):
 - **横並びは次の4種(組で1つの値・範囲を表す2項目)と曜日の格子だけ**。`components/FormRow`を使う(`columns`は2または4。自分の幅のコンテナクエリで列を決めるので、ページ・Dialog・Sheetで同じに動く)。

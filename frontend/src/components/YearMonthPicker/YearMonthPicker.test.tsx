@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { YearMonthPicker } from './YearMonthPicker'
+import { FormField } from '../FormField/FormField'
 
 function ControlledPicker({ initialValue }: { initialValue?: string }) {
   const [value, setValue] = useState<string | undefined>(initialValue)
@@ -53,5 +54,20 @@ describe('YearMonthPicker', () => {
     await user.keyboard('{ArrowRight}{Enter}')
 
     expect(onChange).toHaveBeenCalledWith('2026-08')
+  })
+})
+
+describe('YearMonthPicker in a FormField', () => {
+  it('adds the required note to aria-describedby of the button', () => {
+    render(
+      <FormField label="対象" htmlFor="field" required description="説明です。" error="エラーです。">
+        <YearMonthPicker id="field" value={undefined} onChange={() => {}} />
+      </FormField>,
+    )
+    const button = screen.getByLabelText('対象')
+    expect(button).toHaveAttribute('aria-describedby', 'field-required field-description field-error')
+    expect(button).toHaveAccessibleDescription(/必須.*説明です。.*エラーです。/)
+    expect(button).toHaveAttribute('aria-invalid', 'true')
+    expect(button).not.toHaveAttribute('aria-required')
   })
 })

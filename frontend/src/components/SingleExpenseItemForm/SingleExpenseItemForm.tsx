@@ -365,7 +365,7 @@ export function SingleExpenseItemForm({
         htmlFor="single-item-receipt-file"
         description="この場で選択すると、明細の保存と同時に添付されます。後から追加・変更することもできます。"
       >
-        <input
+        <Input
           key={receiptInputKey}
           id="single-item-receipt-file"
           type="file"

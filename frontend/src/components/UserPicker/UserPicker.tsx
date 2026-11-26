@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import type { User } from '../../api/types'
 import { useUserSearch, useUsersByIds } from '../../hooks/useUsers'
@@ -47,6 +48,7 @@ export function UserPicker({
   else if (lookup.isPending) displayLabel = '読み込み中…'
   else displayLabel = '不明な社員'
 
+  const control = useFormFieldControl(id, 'native')
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -55,6 +57,7 @@ export function UserPicker({
           type="button"
           role="combobox"
           aria-expanded={open}
+          {...control}
           className={cn(
             'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40',
             !value && 'text-muted-foreground',

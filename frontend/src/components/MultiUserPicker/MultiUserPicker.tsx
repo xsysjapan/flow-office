@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 import { useQueries } from '@tanstack/react-query'
 import { Check, ChevronsUpDown, X } from 'lucide-react'
 import { searchUsers } from '../../api/users'
@@ -91,6 +92,7 @@ export function MultiUserPicker({
     onChange(value.filter((id) => id !== userId))
   }
 
+  const control = useFormFieldControl(id, 'native')
   return (
     <div className="flex flex-col gap-2">
       <Popover open={open} onOpenChange={setOpen}>
@@ -100,6 +102,7 @@ export function MultiUserPicker({
             type="button"
             role="combobox"
             aria-expanded={open}
+            {...control}
             className={cn(
               'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40',
               value.length === 0 && 'text-muted-foreground',

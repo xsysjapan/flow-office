@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import * as usersApi from '../../api/users'
 import type { Paginated, User, UserSearchResult } from '../../api/types'
 import { UserPicker } from './UserPicker'
+import { FormField } from '../FormField/FormField'
 
 function ControlledUserPicker({ onChange }: { onChange: (userId: string | undefined) => void }) {
   const [value, setValue] = useState<string | undefined>(undefined)
@@ -202,5 +203,25 @@ describe('UserPicker', () => {
 
       await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('鈴木次郎(suzuki@example.com)'))
     })
+  })
+})
+
+describe('UserPicker in a FormField', () => {
+  it('sets aria-required on the combobox and links description and error', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FormField label="承認者" htmlFor="approver" required description="説明です。" error="エラーです。">
+          <UserPicker id="approver" value={undefined} onChange={vi.fn()} />
+        </FormField>
+      </QueryClientProvider>,
+    )
+
+    const combobox = screen.getByRole('combobox', { name: '承認者' })
+    expect(combobox).toHaveAttribute('aria-required', 'true')
+    expect(combobox).toHaveAttribute('aria-invalid', 'true')
+    expect(combobox).toHaveAccessibleDescription('説明です。 エラーです。')
   })
 })

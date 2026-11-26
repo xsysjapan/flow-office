@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CalendarIcon } from 'lucide-react'
 import { Button } from '../ui/button'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { YearMonthGrid } from './YearMonthGrid'
 
@@ -52,6 +53,7 @@ export function YearMonthPicker({
     setOpen(false)
   }
 
+  const control = useFormFieldControl(id, 'button')
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -60,6 +62,7 @@ export function YearMonthPicker({
           variant="outline"
           disabled={disabled}
           aria-label={ariaLabel}
+          {...control}
           className={`w-full justify-start px-3 font-normal ${value ? 'text-foreground' : 'text-muted-foreground'}`}
         >
           <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import * as usersApi from '../../api/users'
 import type { Paginated, User } from '../../api/types'
 import { MultiUserPicker } from './MultiUserPicker'
+import { FormField } from '../FormField/FormField'
 
 function ControlledMultiUserPicker({
   onChange,
@@ -148,5 +149,25 @@ describe('MultiUserPicker', () => {
       const idCalls = spy.mock.calls.map((c) => c[3]).filter((x): x is string[] => Array.isArray(x))
       expect(idCalls.map((c) => c.length).sort()).toEqual([1, 100])
     })
+  })
+})
+
+describe('MultiUserPicker in a FormField', () => {
+  it('sets aria-required on the combobox and links description and error', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FormField label="対象者" htmlFor="targets" required description="説明です。" error="エラーです。">
+          <MultiUserPicker id="targets" value={[]} onChange={vi.fn()} />
+        </FormField>
+      </QueryClientProvider>,
+    )
+
+    const combobox = screen.getByRole('combobox', { name: '対象者' })
+    expect(combobox).toHaveAttribute('aria-required', 'true')
+    expect(combobox).toHaveAttribute('aria-invalid', 'true')
+    expect(combobox).toHaveAccessibleDescription('説明です。 エラーです。')
   })
 })

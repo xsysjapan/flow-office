@@ -6,6 +6,7 @@ import * as groupsApi from '../../api/groups'
 import * as usersApi from '../../api/users'
 import type { GroupMember, GroupOption, Paginated, User } from '../../api/types'
 import { GrantTargetPicker, type GrantTargetPickerProps } from './GrantTargetPicker'
+import { FormField } from '../FormField/FormField'
 
 const targetUser: User = {
   id: 'user-1',
@@ -123,5 +124,41 @@ describe('GrantTargetPicker', () => {
         'user-1': '対象太郎(taro@example.com)',
       }),
     )
+  })
+})
+
+describe('GrantTargetPicker in a FormField', () => {
+  function renderInFormField() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(groupsApi, 'fetchGroups').mockResolvedValue(groups)
+    vi.spyOn(groupsApi, 'fetchGroupMembers').mockResolvedValue(members)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FormField label="付与対象" htmlFor="grant-users" required error="エラーです。">
+          <GrantTargetPicker idPrefix="grant" onResolvedChange={vi.fn()} />
+        </FormField>
+      </QueryClientProvider>,
+    )
+  }
+
+  it('links the label, required and error to the individual-mode input', () => {
+    renderInFormField()
+    const combobox = screen.getByLabelText('付与対象')
+    expect(combobox).toHaveAttribute('id', 'grant-users')
+    expect(combobox).toHaveAttribute('aria-required', 'true')
+    expect(combobox).toHaveAttribute('aria-invalid', 'true')
+    expect(combobox).toHaveAccessibleDescription('エラーです。')
+  })
+
+  it('links the label, required and error to the group-mode input', async () => {
+    renderInFormField()
+    await userEvent.click(screen.getByRole('button', { name: 'グループを指定' }))
+    const select = screen.getByLabelText('付与対象')
+    expect(select.tagName).toBe('SELECT')
+    expect(select).toHaveAttribute('aria-required', 'true')
+    expect(select).toHaveAttribute('aria-invalid', 'true')
+    expect(select).toHaveAccessibleDescription('エラーです。')
   })
 })

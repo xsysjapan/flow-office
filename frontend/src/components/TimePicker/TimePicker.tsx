@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Clock } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 
 export interface TimePickerProps {
@@ -15,6 +16,9 @@ export interface TimePickerProps {
   minuteStep?: number
   /** ラベル要素を使わずアクセシブルネームを付ける場合に指定する(native input[type=time]のaria-labelと同じ用途)。 */
   'aria-label'?: string
+  /** `DateTimePicker`が時刻のボタンへ説明文・エラーを結ぶために渡す(`FormField`のidと一致するときは`FormField`の値の後ろに連結される)。 */
+  'aria-describedby'?: string
+  'aria-invalid'?: boolean | 'true' | 'false' | 'grammar' | 'spelling'
 }
 
 function pad(n: number): string {
@@ -63,6 +67,8 @@ export function TimePicker({
   disabled,
   minuteStep = 1,
   'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
+  'aria-invalid': ariaInvalid,
 }: TimePickerProps) {
   const [open, setOpen] = useState(false)
   const { hour, minute } = splitTime(value)
@@ -90,6 +96,7 @@ export function TimePicker({
     setOpen(false)
   }
 
+  const control = useFormFieldControl(id, 'button', { 'aria-describedby': ariaDescribedBy, 'aria-invalid': ariaInvalid })
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -98,6 +105,9 @@ export function TimePicker({
           type="button"
           disabled={disabled}
           aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
+          {...control}
           className={cn(
             'flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50',
             !value && 'text-muted-foreground',

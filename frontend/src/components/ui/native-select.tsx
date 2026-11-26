@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 
 /**
  * ネイティブ`<select>`(Radixの`Select`ではなく、キーボード操作やテストの
@@ -8,6 +9,7 @@ import { cn } from '../../lib/utils'
  * 単純な選択肢に使う)。検索可能なコンボボックスが必要な場合は`ui/select.tsx`を使う。
  */
 export function NativeSelect({ className, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const control = useFormFieldControl(props.id, 'native', props)
   return (
     <div className="relative">
       <select
@@ -16,6 +18,7 @@ export function NativeSelect({ className, children, ...props }: React.SelectHTML
           className,
         )}
         {...props}
+        {...control}
       >
         {children}
       </select>

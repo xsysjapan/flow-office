@@ -1,7 +1,9 @@
 import * as React from 'react'
 import { cn } from '../../lib/utils'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 
 export function Input({ className, type, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+  const control = useFormFieldControl(props.id, 'native', props)
   return (
     <input
       type={type}
@@ -10,6 +12,7 @@ export function Input({ className, type, ...props }: React.InputHTMLAttributes<H
         className,
       )}
       {...props}
+      {...control}
     />
   )
 }

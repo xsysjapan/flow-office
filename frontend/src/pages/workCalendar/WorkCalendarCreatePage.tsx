@@ -320,7 +320,7 @@ export function WorkCalendarCreatePage() {
               </FormField>
             ) : (
               <FormField label="iCalendarファイル" htmlFor="create-calendar-holiday-source-ics-file" required>
-                <input
+                <Input
                   id="create-calendar-holiday-source-ics-file"
                   type="file"
                   accept={ICS_FILE_ACCEPT}

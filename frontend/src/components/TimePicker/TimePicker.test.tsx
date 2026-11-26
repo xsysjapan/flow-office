@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { TimePicker } from './TimePicker'
+import { FormField } from '../FormField/FormField'
 
 function ControlledTimePicker({
   onChange,
@@ -148,5 +149,20 @@ describe('TimePicker', () => {
     const minuteList = screen.getByRole('listbox', { name: '分' })
     expect(within(hourList).getAllByRole('option')[0]).toHaveClass('shrink-0')
     expect(within(minuteList).getAllByRole('option')[0]).toHaveClass('shrink-0')
+  })
+})
+
+describe('TimePicker in a FormField', () => {
+  it('adds the required note to aria-describedby of the button', () => {
+    render(
+      <FormField label="対象" htmlFor="field" required description="説明です。" error="エラーです。">
+        <TimePicker id="field" value={undefined} onChange={() => {}} />
+      </FormField>,
+    )
+    const button = screen.getByLabelText('対象')
+    expect(button).toHaveAttribute('aria-describedby', 'field-required field-description field-error')
+    expect(button).toHaveAccessibleDescription(/必須.*説明です。.*エラーです。/)
+    expect(button).toHaveAttribute('aria-invalid', 'true')
+    expect(button).not.toHaveAttribute('aria-required')
   })
 })

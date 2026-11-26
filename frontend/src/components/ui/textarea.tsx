@@ -1,7 +1,9 @@
 import * as React from 'react'
 import { cn } from '../../lib/utils'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 
 export function Textarea({ className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const control = useFormFieldControl(props.id, 'native', props)
   return (
     <textarea
       className={cn(
@@ -9,6 +11,7 @@ export function Textarea({ className, ...props }: React.TextareaHTMLAttributes<H
         className,
       )}
       {...props}
+      {...control}
     />
   )
 }

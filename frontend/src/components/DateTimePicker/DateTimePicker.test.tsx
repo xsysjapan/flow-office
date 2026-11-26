@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { formatDate } from '../../utils/weekDates'
 import { DateTimePicker } from './DateTimePicker'
+import { FormField } from '../FormField/FormField'
 
 function ControlledDateTimePicker({ onChange }: { onChange: (value: string | undefined) => void }) {
   const [value, setValue] = useState<string | undefined>(undefined)
@@ -59,5 +60,29 @@ describe('DateTimePicker', () => {
     await userEvent.click(within(hourList).getByRole('option', { name: '14' }))
 
     expect(onChange).toHaveBeenLastCalledWith(`${formatDate(new Date())}T14:00`)
+  })
+})
+
+describe('DateTimePicker in a FormField', () => {
+  it('links required note, description and error to both the date and time buttons', () => {
+    render(
+      <FormField label="開始" htmlFor="field" required description="説明です。" error="エラーです。">
+        <DateTimePicker id="field" value={undefined} onChange={() => {}} />
+      </FormField>,
+    )
+    const dateButton = screen.getByLabelText('開始')
+    expect(dateButton).toHaveAttribute('aria-describedby', 'field-required field-description field-error')
+    expect(dateButton).toHaveAttribute('aria-invalid', 'true')
+    const timeButton = document.getElementById('field-time')!
+    expect(timeButton).toHaveAttribute('aria-describedby', 'field-required field-description field-error')
+    expect(timeButton).toHaveAccessibleDescription(/必須.*説明です。.*エラーです。/)
+    expect(timeButton).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('adds nothing to the time button outside a FormField', () => {
+    render(<DateTimePicker id="field" value={undefined} onChange={() => {}} />)
+    const timeButton = document.getElementById('field-time')!
+    expect(timeButton).not.toHaveAttribute('aria-describedby')
+    expect(timeButton).not.toHaveAttribute('aria-invalid')
   })
 })

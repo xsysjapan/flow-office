@@ -684,7 +684,7 @@ export function WorkCalendarDetailPage() {
                   </FormField>
                 ) : (
                   <FormField label="iCalendarファイル" htmlFor="holiday-source-ics-file" required>
-                    <input
+                    <Input
                       id="holiday-source-ics-file"
                       type="file"
                       accept={ICS_FILE_ACCEPT}
@@ -858,7 +858,7 @@ export function WorkCalendarDetailPage() {
                           現在のファイル: {selectedSource.uploaded_ics_filename ?? '未アップロード'}
                         </span>
                         <FormField label="iCalendarファイル(置き換え)" htmlFor="holiday-source-edit-ics-file">
-                          <input
+                          <Input
                             id="holiday-source-edit-ics-file"
                             type="file"
                             accept={ICS_FILE_ACCEPT}

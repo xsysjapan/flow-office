@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { useGroupMembers } from '../../hooks/useGroups'
+import { FormFieldContext } from '../FormField/formFieldControl'
 import { GroupPicker } from '../GroupPicker/GroupPicker'
 import { LoadingState } from '../LoadingState/LoadingState'
 import { MultiUserPicker } from '../MultiUserPicker/MultiUserPicker'
@@ -32,6 +33,8 @@ export function GrantTargetPicker({
   resetSignal,
   resetIndividualIds,
 }: GrantTargetPickerProps) {
+  // FormFieldの中では、表示中の入力にFormFieldのid(htmlFor)を当てる(グループのモードでも結ばれるように)。
+  const formFieldId = useContext(FormFieldContext)?.id
   const [mode, setMode] = useState<GrantTargetMode>('individual')
   const [individualIds, setIndividualIds] = useState<string[]>([])
   const [individualLabels, setIndividualLabels] = useState<Record<string, string>>({})
@@ -97,7 +100,7 @@ export function GrantTargetPicker({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          <GroupPicker id={`${idPrefix}-group`} value={groupId} onChange={setGroupId} />
+          <GroupPicker id={formFieldId ?? `${idPrefix}-group`} value={groupId} onChange={setGroupId} />
           {groupId !== undefined &&
             (isLoadingMembers ? (
               <LoadingState />

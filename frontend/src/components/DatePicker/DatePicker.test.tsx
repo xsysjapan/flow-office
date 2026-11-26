@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { formatDate } from '../../utils/weekDates'
 import { DatePicker } from './DatePicker'
+import { FormField } from '../FormField/FormField'
 
 function ControlledDatePicker({
   onChange,
@@ -208,5 +209,20 @@ describe('DatePicker', () => {
     expect(await screen.findByText('今日')).toBeInTheDocument()
     expect(screen.queryByText('明日')).not.toBeInTheDocument()
     expect(screen.queryByText('昨日')).not.toBeInTheDocument()
+  })
+})
+
+describe('DatePicker in a FormField', () => {
+  it('adds the required note to aria-describedby of the button', () => {
+    render(
+      <FormField label="対象" htmlFor="field" required description="説明です。" error="エラーです。">
+        <DatePicker id="field" value={undefined} onChange={() => {}} />
+      </FormField>,
+    )
+    const button = screen.getByLabelText('対象')
+    expect(button).toHaveAttribute('aria-describedby', 'field-required field-description field-error')
+    expect(button).toHaveAccessibleDescription(/必須.*説明です。.*エラーです。/)
+    expect(button).toHaveAttribute('aria-invalid', 'true')
+    expect(button).not.toHaveAttribute('aria-required')
   })
 })

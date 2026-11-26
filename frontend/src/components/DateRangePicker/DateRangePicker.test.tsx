@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { DateRangePicker, type DateRangeValue } from './DateRangePicker'
+import { FormField } from '../FormField/FormField'
 
 function ControlledDateRangePicker({
   onChange,
@@ -116,5 +117,20 @@ describe('DateRangePicker', () => {
 
     await userEvent.click(screen.getByRole('option', { name: '2026年3月' }))
     expect(await screen.findByText('2026年3月')).toBeInTheDocument()
+  })
+})
+
+describe('DateRangePicker in a FormField', () => {
+  it('adds the required note to aria-describedby of the button', () => {
+    render(
+      <FormField label="対象" htmlFor="field" required description="説明です。" error="エラーです。">
+        <DateRangePicker id="field" value={undefined} onChange={() => {}} />
+      </FormField>,
+    )
+    const button = screen.getByLabelText('対象')
+    expect(button).toHaveAttribute('aria-describedby', 'field-required field-description field-error')
+    expect(button).toHaveAccessibleDescription(/必須.*説明です。.*エラーです。/)
+    expect(button).toHaveAttribute('aria-invalid', 'true')
+    expect(button).not.toHaveAttribute('aria-required')
   })
 })

@@ -1,6 +1,7 @@
 import { formatDate } from '../../utils/weekDates'
 import { DatePicker } from '../DatePicker/DatePicker'
 import { TimePicker } from '../TimePicker/TimePicker'
+import { useFormFieldControl } from '../FormField/formFieldControl'
 
 export interface DateTimePickerProps {
   id?: string
@@ -48,6 +49,8 @@ export function DateTimePicker({
   'aria-label': ariaLabel,
 }: DateTimePickerProps) {
   const { date, time } = splitValue(value)
+  // 時刻のボタン(`{id}-time`)はFormFieldのidと一致しないので、日付側と同じ値をここで得て渡す。
+  const control = useFormFieldControl(id, 'button')
 
   const handleDateChange = (nextDate: string | undefined) => {
     if (!nextDate) {
@@ -86,6 +89,8 @@ export function DateTimePicker({
           disabled={disabled}
           minuteStep={minuteStep}
           aria-label={ariaLabel ? `${ariaLabel}(時刻)` : undefined}
+          aria-describedby={control['aria-describedby']}
+          aria-invalid={control['aria-invalid']}
         />
       </div>
     </div>

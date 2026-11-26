@@ -1,6 +1,6 @@
 # form-field-aria(必須・説明文・エラーを入力欄に属性で結ぶ)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 変更候補の判断 `docs/changesets/candidates-20261124.md` の #9:
@@ -132,4 +132,8 @@
   - sr-only は Label の外、読み上げの重複は許容、明示の `aria-describedby` は連結、context は別ファイル、`FormField.test.tsx` の差し替え。
 
 ## 実装結果
-未着手
+- `FormField/formFieldControl.ts`(`FormFieldContext`・`useFormFieldControl(id, 'native'|'button', explicit?)`)を新設。`FormField`は context を提供し、エラーに`id="{htmlFor}-error"`、必須のとき Label の外に sr-only「必須」(`{htmlFor}-required`)、開発時(DEV かつ test でない)の htmlFor 不一致の`console.warn`を追加。
+- 部品: `ui/input`・`textarea`・`native-select`・`radio-group`(root)・`checkbox`・`UserPicker`・`MultiUserPicker`は native、`DatePicker`・`DateRangePicker`・`TimePicker`・`YearMonthPicker`は button。`DateTimePicker`は時刻のボタンへ describedby・aria-invalid を渡す(`TimePicker`に`aria-describedby`・`aria-invalid`の props を追加)。`GrantTargetPicker`はグループのモードの`GroupPicker`の id を context の id にする(context が無ければ従来の`{prefix}-group`)。
+- 生の入力の置き換え: file 入力4か所を`ui/input`、`PaidLeavePolicyPage`の select を`ui/native-select`に。見た目の変化: file 入力は枠線・全幅・高さ36px(`SingleExpenseItemForm`は元の file: 用 className を維持)、select は全幅・右端に ChevronDown が付く。
+- テスト: 追加・更新 `FormField.test.tsx`(+7件、1件を差し替え)、各 Picker のテストに1件ずつ(DateTimePicker・GrantTargetPicker は2件)。`npx tsc -p tsconfig.app.json --noEmit` エラー0、`npx vitest run --project unit` 175ファイル・1631件通過(2件skip)。E2E は未実行。
+- 委譲元の検証: tsc 成功、単体1631件成功(離脱警告の土台と合わせた状態)。
