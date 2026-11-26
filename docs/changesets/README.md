@@ -16,7 +16,7 @@
 |---|---|---|
 | [20261126-form-field-aria](./20261126-form-field-aria/spec.md) | 必須・説明文・エラーを入力欄に属性で結ぶ(候補9) | 完了 |
 | [20261126-field-errors-near-fields](./20261126-field-errors-near-fields/spec.md) | 入力のエラーを項目の近くに出す(候補6) | 実装中 |
-| [20261126-unsaved-changes-guard-pages](./20261126-unsaved-changes-guard-pages/spec.md) | ページのフォームの離脱警告(アプリ内の移動も止める。候補7) | 実装中 |
+| [20261126-unsaved-changes-guard-pages](./20261126-unsaved-changes-guard-pages/spec.md) | ページのフォームの離脱警告(アプリ内の移動も止める。候補7) | 完了 |
 | [20261125-save-all-user-and-role](./20261125-save-all-user-and-role/spec.md) | 利用者詳細とロール詳細の「まとめて保存」(全て成功か全て戻す) | 完了 |
 | [20261124-correction-pending-maintenance](./20261124-correction-pending-maintenance/spec.md) | 補正待ちの間のメンテナンス表示(管理者のログインと運用コマンドだけ通す)と、命名統一の管理画面からの実行 | 完了 |
 | [20261124-e2e-flaky-fixes](./20261124-e2e-flaky-fixes/spec.md) | E2Eの不安定な失敗2件(グループの新規作成、0時をまたぐ打刻)の修正 | 完了 |

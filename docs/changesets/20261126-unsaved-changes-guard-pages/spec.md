@@ -1,6 +1,6 @@
 # unsaved-changes-guard-pages(ページのフォームの離脱警告)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 変更候補の判断 `docs/changesets/candidates-20261124.md` の #7:
@@ -205,3 +205,4 @@
 - 勤怠の日で前日・翌日へ移ると前の日の編集中の状態が残る不具合は、`key={date}` で解消した(テストで `key` を外すと失敗することを確認)。
 - 既存のテストの変更は `OnboardingPage.test.tsx` を `MemoryRouter` で包んだ1か所だけ(`navigateAfterSave` はルーターが要る)。
 - 単体テスト: 全件 1703 件成功(委譲元で再実行)。tsc 成功。
+- E2E(論点7の12本: scenario-00・02・04・05・06・08・09・10・11・12・14・99): 50件成功・1件失敗。失敗は scenario-00 のシフトの生成(`/admin/shifts`、本変更の対象外)の待ち時間切れで、単独の再実行で2回とも成功(不安定さ)。確認の Dialog・`beforeunload` で止まった spec は無く、spec の修正は無し。
