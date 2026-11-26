@@ -1,6 +1,6 @@
 # field-errors-near-fields(入力のエラーを項目の近くに出す)
 
-ステータス: 検討中
+ステータス: レビュー中
 
 ## 変更要望(原文)
 変更候補の判断 `docs/changesets/candidates-20261124.md` の #6:
@@ -39,16 +39,20 @@
 - 選択肢:
   - A. 画面ごとに `fieldErrorOf`・`nonFieldError` を呼ぶ(今の2画面の形)。
   - B. hook `useFieldErrors(error, fields)` を作る。`fields` は画面が項目に出すキーの一覧。返り値 `{ of(key), rest }`。`of` は項目のメッセージ、`rest` は項目に出さないキーだけを残したエラー(`ErrorMessage` に渡す)。
-- 決定: B(中身は今の2関数を使う)。
+- 決定: B。ただし React の hook にはせず、純粋な関数 `fieldErrors(error, fields)` にする(hook の規則を背負う理由が無いため。必要なら呼び出し側で `useMemo`)。
+- 型: `fieldErrors<K extends string>(error: unknown, fields: readonly K[])`。`of(key: K)` のキーは `fields` の中に限る(キーの食い違いを型で捕まえる)。
+- 条件で描く項目(新規のときだけの項目、モードで切り替わる項目、タブで隠れる項目)は、`fields` も同じ条件で組み立てる(描かれていない項目のキーを `fields` に入れると、エラーがどこにも出なくなるため)。
 - 理由: 項目に出したキーを `ErrorMessage` から外し忘れると二重に表示される(付与ルールで起きている)。キーの一覧を1か所で渡し、両方を同じ一覧から作れば外し忘れが起きない。
 - 未確定・要確認事項: なし
 
 ### 論点2: どのキーをどこに出すか
 - 決定:
+  0. キーの出どころ: backend の validate(FormRequest・Controller)に加えて、Handler 等の `ValidationException::withMessages`(例: `approver_user_id`・`company_calendar_id`・`core_time_start`・`work_style_id`)。
   1. キーが画面の1つの入力に対応する → その `FormField` の `error`。
   2. `{配列}.{i}.{項目}` で、画面に行ごとの入力がある → その行の項目の下(付与ルールの形)。行に項目の入力が無い・行が見えない(タブで隠れる等)場合は、行またはタブに「(エラーあり)」を付け、メッセージは行の下。
   3. `{配列}.*`(選択の一覧。ロールの Permission 等)→ 一覧の下。
   4. 画面に対応する入力が無いキー、キーの無いエラー(409・500 等)→ 今と同じまとめての表示(`ErrorMessage`)。Submit Error として送信ボタンの近く(§2.18 の位置)。
+  5. 422 で項目のエラーがあるときは、ボタンの近くのまとめての表示の見出しを「入力内容を確認してください。」にする(Laravel の 422 の message は最初の項目のエラーの文で、項目の下と二重になり、§2.18 の「API の生のメッセージを出さない」にも反するため)。すべてのキーを項目に出した場合も、この見出しだけを残す(長い画面でエラーの項目が画面の外にあると、保存を押しても何も起きないように見えるため)。
 - 理由: §2.19 の「Submit Error と Field Error を区別する」。対応が無いキーを捨てるとエラーが見えなくなるので、まとめての表示に残す。
 - 未確定・要確認事項: なし
 
@@ -64,19 +68,28 @@
 - 未確定・要確認事項: なし
 
 ### 論点5: エラーの読み上げ
-- 決定: 変更セット`20261126-form-field-aria`の `FormField` が、エラーの `<p>` に id を付け、入力に `aria-invalid`・`aria-describedby` を付ける。本変更は `FormField` の `error` に出すだけで、読み上げにも効く。そのため `form-field-aria` を先に実装する。
+- 決定: 変更セット`20261126-form-field-aria`の `FormField` が、エラーの `<p>` に id を付け、入力に `aria-invalid`・`aria-describedby` を付ける。本変更は `FormField` の `error` に出すだけで、読み上げにも効く。
+- 実装の順序: `20261126-form-field-aria` → `20261126-unsaved-changes-guard-pages` → 本変更。離脱警告の変更セットと同じ画面のファイル(state と JSX)と `ConfirmActionDialog` に触れるので並行させない。離脱警告で dirty の判定関数を外に出し state の形が変わることを前提に、その後のコードに当てる。
 - エラー時のフォーカス移動は対象外(全フォームの送信処理に手を入れることになるため。必要なら別の候補にする)。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
-- `frontend/src/utils/fieldErrors.ts` に `useFieldErrors(error: unknown, fields: readonly string[]): { of(key: string): string | undefined; rest: unknown }` を足す。`of` は完全一致のキー。`ofRow(prefix: string, index: number, key: string)` で `{prefix}.{index}.{key}` を引く。`rest` は `nonFieldError(error, fields)`。行のキーは `fields` に `{prefix}.*.{key}` の形で書けるようにし、`nonFieldError` がワイルドカードを解釈する。
-- 各フォーム: mutation の `error` を `useFieldErrors` に通し、項目は `FormField error={of('キー')}`、`ErrorMessage` には `rest` を渡す。1つの画面に mutation が複数あるときは mutation ごとに使う。
+- `frontend/src/utils/fieldErrors.ts` に `fieldErrors<K extends string>(error: unknown, fields: readonly K[])` を足す。返り値:
+  - `of(key: K): string | undefined`(完全一致)
+  - `ofRow(prefix, index, key?)`: `{prefix}.{index}.{key}`(key を省くと `{prefix}.{index}` そのもの)
+  - `ofAny(prefix): string[]`: `{prefix}.{数字}`(および `{prefix}` 自身)のメッセージを全部(選択の一覧の下に出す)
+  - `rest`: 項目に出さないキーだけを残し、見出しを「入力内容を確認してください。」にした ApiError。項目のエラーが無い 422 でない場合は元のエラーのまま。エラーが無ければ null。
+  - `fields` には `{prefix}.*.{key}`・`{prefix}.*` を書ける。`*` は数字1区切りだけに一致する。
+- 各フォーム: mutation の `error` を `fieldErrors` に通し、項目は `FormField error={of('キー')}`、`ErrorMessage` には `rest` を渡す。1つの画面に mutation が複数あるときは mutation ごとに使う。同じフォームの mutation で同時に1つしか失敗しないもの(例: 申請の作成 `createRequest.error ?? submitRequest.error`)は、まとめた1つのエラーに使ってよい。
 - キーの一覧は、backend の該当の validate(FormRequest または Controller の `validate`)を読んで決める。画面に入力の無いキーは入れない。
 - 実装者は、各フォームのキーと出し先の対応を `実装結果` の表に残す(フォーム・mutation・項目に出したキー・まとめての表示に残したキー)。
-- 既存の2画面(利用者詳細・ロール詳細)は `useFieldErrors` に置き換える。付与ルールの二重表示を直す。
+- 既存の2画面(利用者詳細・ロール詳細)は `fieldErrors` に置き換える(ロールの `permission_ids.N` は `ofAny` で一覧の下へ)。付与ルールの二重表示を直す。
 - 経費区分の項目定義(`field_definitions.{i}.*`)は行の下に出す。
-- テスト: 各画面のテストに「422 の項目エラーがその項目の下に出て、まとめての表示には出ない」を1件(代表の1キー)。`useFieldErrors` の単体テスト(完全一致・行・ワイルドカード・未知のキーが rest に残る・ApiError 以外)。
-- スキル: `ui-interaction-patterns` §2.19 に「422 の項目エラーは `useFieldErrors` で項目の下に出し、残りをまとめての表示に出す」と書く。`add-page` のフォームの手順に1行足す。
+- テスト:
+  - 各フォーム: 「`fields` の全キーと未知のキー1つを含む 422 を返すと、全メッセージが画面にちょうど1回ずつ出て、見出しは『入力内容を確認してください。』」を1件(条件で描く項目はその条件の状態で)。
+  - `fieldErrors` の単体テスト(完全一致・行・`ofAny`・ワイルドカードは数字1区切りだけ・未知のキーが rest に残る・見出しの置き換え・ApiError 以外・422 以外)。
+- 行(`ofRow`)・一覧(`ofAny`)に出すエラーは `FormField` を通らないため、変更セット`20261126-form-field-aria`の読み上げの属性は効かない(本変更の範囲外。表示だけを揃える)。
+- スキル: `ui-interaction-patterns` §2.19 に「422 の項目エラーは `fieldErrors` で項目の下に出し、残りをまとめての表示に出す。`fields` は描く項目と同じ条件で組み立てる」と書く。`add-page` のフォームの手順に1行足す。
 
 ## 受け入れ条件
 - 棚卸しのフォーム(論点4の対象外を除く)で、backend の 422 の項目エラーが、その項目の下に出る。まとめての表示には同じメッセージが出ない。
@@ -108,7 +121,12 @@
 - E2E: エラーの文言で絞り込んでいる spec を grep し、変えた画面を通る spec だけを流す。
 
 ## レビュー履歴
-初版
+- 2026-11-26 初版。
+- 2026-11-26 実装前の独立設計レビュー(general-purpose)の指摘を反映:
+  - `{配列}.*` を引く手段が無くエラーが見えなくなる → `ofAny` を追加、`ofRow` を拡張、`*` は数字1区切り。
+  - 項目に出したつもりで出ない漏れ → キーを型で `fields` に限る、条件で描く項目は `fields` も同じ条件、各フォームのテストを全キー+未知のキーで確かめる形に。
+  - まとめての表示に同じ文が出る(Laravel の message)・全部を項目に出すとボタンの近くに何も出ない → 見出しを「入力内容を確認してください。」にして常に残す。
+  - キーの出どころに Handler の `withMessages` を追加。hook ではなく純粋な関数に。mutation をまとめて扱う場合を明記。実装の順序と衝突を明記。
 
 ## 実装結果
 未着手

@@ -1,6 +1,6 @@
 # form-field-aria(必須・説明文・エラーを入力欄に属性で結ぶ)
 
-ステータス: 検討中
+ステータス: レビュー中
 
 ## 変更要望(原文)
 変更候補の判断 `docs/changesets/candidates-20261124.md` の #9:
@@ -53,7 +53,8 @@
 - 決定: B。
 - 理由: A は書き忘れが起き、今後の画面でも守られない。C は子が部品を包んだ要素(`div` 等)だと届かず、Picker の中の実際のボタンにも届かない。B なら部品の側の1か所の対応で全画面に効き、呼び出し側を変えない。
 - 結び付けの条件: 部品は、自分の `id` が context の `id`(=`htmlFor`)と一致するときだけ属性を付ける。1つの `FormField` の中に入力が複数ある場合(例: 範囲の2つ目、補助のボタン)に、関係の無い入力へ付けないため。
-- 呼び出し側が `aria-describedby` 等を明示的に渡した場合は、それを優先する(context の値と連結しない)。
+- 呼び出し側が `aria-describedby` を明示的に渡した場合は、context の値と連結する(エラーとの結び付きが外れないように。今、明示している箇所は0件)。`aria-required`・`aria-invalid` を明示した場合は、それを優先する。
+- 漏れの検出: 開発時(`import.meta.env.DEV` かつテストでないとき)だけ、`FormField` が `htmlFor` に一致する要素が DOM に無ければ `console.warn` を出す。
 - 未確定・要確認事項: なし
 
 ### 論点2: 付ける属性
@@ -61,9 +62,9 @@
   - 説明文: `aria-describedby` に `{id}-description` を入れる。
   - エラー: エラーの `<p>` に `id="{id}-error"` を付け、`aria-describedby` に入れる(説明文の後)。入力欄に `aria-invalid="true"` を付ける(エラーがあるときだけ)。
   - 必須:
-    - ネイティブの入力(`input`・`textarea`・`select`)と `role="combobox"`・`radiogroup` には `aria-required="true"`。
-    - ボタン(Popover のトリガー)は ARIA の仕様上 `aria-required` を持てない。`FormField` が視覚的に隠した `<span id="{id}-required" class="sr-only">必須</span>` を置き、ボタンの `aria-describedby` の先頭に入れる。
-  - `*` は今のまま `aria-hidden`(読み上げは上の属性で行う)。ラベルの文字は変えない。
+    - ネイティブの入力(`input`・`textarea`・`select`)と `role="combobox"`・`radiogroup`・`checkbox` には `aria-required="true"`。
+    - ボタン(Popover のトリガー)は ARIA の仕様上 `aria-required` を持てない。`FormField` が視覚的に隠した `<span id="{id}-required" class="sr-only">必須</span>` を **Label 要素の外**(アクセシブルネームを変えないため)に置き、ボタンの `aria-describedby` の先頭に入れる。
+  - `*` は今のまま `aria-hidden`(読み上げは上の属性で行う)。sr-only の「必須」は必須のとき常に描く。ネイティブの入力でも、読み上げの閲覧モードで「必須」が読まれる(属性と重なるが許容する)。ラベルの文字は変えない。
   - HTML の `required` 属性は付けない(ブラウザの標準の検証の吹き出しが出て、画面の検証と二重になるため)。
 - 理由: ラベル(アクセシブルネーム)を変えないので、`getByLabelText`(単体567行・E2E 143行)を壊さない。ボタンへの `aria-required` は不正な ARIA になり、読み上げも保証されない。
 - 未確定・要確認事項: なし
@@ -71,10 +72,13 @@
 ### 論点3: 対応する部品
 - 決定: 現状の表の部品のうち、`FormField` の子に来るものすべて。
   - `ui/input`・`ui/textarea`・`ui/native-select`(`GroupPicker`・`CategoryCombobox` はこれらを通じて効く)
-  - `DatePicker`・`DateRangePicker`・`TimePicker`・`YearMonthPicker`・`UserPicker`・`MultiUserPicker`: 操作対象のボタンに付ける。
+  - `DatePicker`・`DateRangePicker`・`TimePicker`・`YearMonthPicker`: 操作対象のボタンに付ける(ボタンの扱い)。
+  - `UserPicker`・`MultiUserPicker`: ボタンが `role="combobox"` のため、ネイティブと同じ扱い(`aria-required`)。
+  - `GrantTargetPicker`: 中の入力の id が `{prefix}-users`・`{prefix}-group` で、グループのモードでは `htmlFor` と一致しない。モードに関わらず、そのとき表示している入力に context の id を当てる(またはモードごとに部品が `useFormFieldControl` を表示中の入力に渡す)。
+  - `ui/checkbox`: `FormField` の中で使う場合(例: `SingleExpenseItemForm:327` の項目の型による切り替え)に効くよう、context を読む(外で使う場合は context が無いので何もしない)。
+  - 部品を通らない生の入力: `<input type="file">` 4か所(`SingleExpenseItemForm:363`・`WorkCalendarCreatePage:322`・`WorkCalendarDetailPage:686,860`)は `ui/input` に、生の `<select>`(`PaidLeavePolicyPage:264`)は `ui/native-select` に置き換える。見た目が変わる場合は実装結果に記録する。
   - `DateTimePicker`: 日付のボタンに付ける。時刻のボタン(`{id}-time`)には、説明文・エラーの `aria-describedby` と `aria-invalid` を付ける(必須の `sr-only` も入れる)。2つで1つの値のため。
   - `ui/radio-group`: root(radiogroup)に付ける。
-  - `ui/checkbox`: `FormField` の外で使うため対象外(context が無ければ何もしない)。
   - `AssetPicker`・`TextFilterInput`: 中の `FormField` で自動的に効く。
 - 未確定・要確認事項: なし
 
@@ -85,7 +89,7 @@
 
 ## 仕様確定事項(まとめ)
 - `components/FormField`:
-  - `FormFieldContext`(`{ id, required, describedBy, invalid, requiredNoteId }`)を提供する。`useFormFieldControl(id, explicit?)` hook を同じ場所に置き、部品はこれで「付ける属性のオブジェクト」を得る(id が一致しない・context が無いときは空)。hook は `kind: 'native' | 'button'` を受け、native は `aria-required`、button は `aria-describedby` の先頭に `{id}-required` を入れる。
+  - `FormFieldContext`(`{ id, required, describedBy, invalid, requiredNoteId }`)を提供する。context と `useFormFieldControl(id, explicit?)` hook は `FormField.tsx` とは別のファイル(`components/FormField/formFieldControl.ts`)に置く(`components/ui` → `FormField` → `ui/label` の循環を避けるため)。部品はこれで「付ける属性のオブジェクト」を得る(id が一致しない・context が無いときは空)。hook は `kind: 'native' | 'button'` を受け、native は `aria-required`、button は `aria-describedby` の先頭に `{id}-required` を入れる。
   - 説明文 `<p id="{id}-description">`(今のまま)、エラー `<p id="{id}-error">`、必須のとき `<span id="{id}-required" class="sr-only">必須</span>`(ラベルの後ろ。`*` は aria-hidden のまま)。
   - `aria-describedby` の順: 必須の注記(button のみ)→ 説明文 → エラー。
 - 部品は論点3のとおり。呼び出し側が明示した `aria-describedby`・`aria-required`・`aria-invalid` を優先する。
@@ -96,7 +100,7 @@
 - `FormField` の中の入力(論点3の部品すべて)で、`required` のとき読み上げの属性(native は `aria-required="true"`、ボタンは `aria-describedby` に「必須」)が付く。
 - 説明文があるとき `aria-describedby` が説明文を指し、エラーがあるとき `aria-invalid="true"` と `aria-describedby` がエラーを指す(`toHaveAccessibleDescription` で確かめられる)。
 - id が `htmlFor` と一致しない入力には付かない。
-- ラベルの文字・見た目は変わらない。既存の単体テスト全件が通る(`FormField.test.tsx:60` は新しい期待値に直す)。
+- ラベルの文字・見た目は変わらない。既存の単体テスト全件が通る(`FormField.test.tsx:50-60` は生の `<input>` を `ui/input` に差し替えて新しい期待値に直す)。
 
 ## 対象外
 - ラベルの無い入力(aria-label・placeholder だけの入力)の見直し
@@ -121,7 +125,11 @@
 - E2E は流さない(アクセシブルネームが変わらないため。`getByLabel` の143行は影響を受けない)。
 
 ## レビュー履歴
-初版
+- 2026-11-26 初版。
+- 2026-11-26 実装前の独立設計レビュー(general-purpose。FormField 415件を走査)の指摘を反映:
+  - 漏れる部品を追加(`GrantTargetPicker`、FormField の中の `ui/checkbox`、生の file 入力・select の置き換え)。開発時の漏れの警告を追加。
+  - `UserPicker`・`MultiUserPicker` は combobox なのでネイティブの扱いに統一(論点2と3の矛盾の解消)。
+  - sr-only は Label の外、読み上げの重複は許容、明示の `aria-describedby` は連結、context は別ファイル、`FormField.test.tsx` の差し替え。
 
 ## 実装結果
 未着手
