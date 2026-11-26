@@ -441,6 +441,11 @@ Errorでは「何が失敗したか」と「次に何ができるか」を示す
 - 不要な必須項目を作らない
 - Errorは対象の入力項目の近くに表示する
 - Submit Error(全体)とField Error(項目)を区別する
+- 422の項目エラーは`utils/fieldErrors.ts`の`fieldErrors(error, fields)`で振り分ける(変更セット`20261126-field-errors-near-fields`)。
+  - `fields`は画面に入力のあるキー(backendのvalidateとHandlerの`withMessages`から決める)。描く条件と同じ条件で組み立てる(描かない項目のキーを入れるとエラーが消え、描く項目のキーを入れないと二重に出る)。
+  - 1つの入力は`FormField error={of(key)}`、行は`ofRow`、選択の一覧は`ofAny`。残りは`ErrorMessage error={rest}`(見出しは「入力内容を確認してください。」)。
+  - 送信の本文が空の行を省くときは、本文の添字を画面の行に戻して出す。
+  - 理由の必須などのクライアントの検証も、送信を押した後にその項目の下に出す。
 - 必須・説明文・エラーは`FormField`が入力に属性(`aria-required`・`aria-describedby`・`aria-invalid`)で結ぶ(`htmlFor`と入力の`id`を一致させる)。入力部品を新しく作るときは、操作対象の要素に`useFormFieldControl(id, 'native' | 'button')`の戻り値を展開する(native=input・select・combobox等、button=Popoverのトリガー等。変更セット`20261126-form-field-aria`)
 
 レイアウトの規則(変更セット`20261123-form-layout-standard`):
