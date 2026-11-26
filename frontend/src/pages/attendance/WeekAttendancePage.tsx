@@ -18,6 +18,7 @@ import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { isValidDateParam } from '../../utils/searchParamValidators'
 import { attendanceDayOffBadges, type StatusMeta } from '../../utils/statusLabels'
 import { addDays, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
@@ -100,6 +101,8 @@ export function WeekAttendancePage() {
     data ?? [],
     specialLeaveTypeNames,
   )
+  // 振分の入力は日ごとの分数で、送信本文の `allocations.{i}.*` の添字と画面の行が1対1でないため、全てまとめての表示に残す。
+  const allocationErrors = fieldErrors(allocateWeeklyOvertime.error, [])
   const unallocatedWeeklyMinutes = weeklyOvertime?.unallocated_weekly_statutory_excess_overtime_minutes ?? 0
 
   function saveAllocations(allocations: Parameters<typeof allocateWeeklyOvertime.mutate>[0]) {
@@ -231,7 +234,7 @@ export function WeekAttendancePage() {
                 <Button className="mt-2" size="sm" disabled={draftedMinutes !== unallocatedWeeklyMinutes} onClick={applyManualAllocation}>
                   手動振分を適用（{draftedMinutes}/{unallocatedWeeklyMinutes}分）
                 </Button>
-                {allocateWeeklyOvertime.error && <ErrorMessage error={allocateWeeklyOvertime.error} />}
+                {allocateWeeklyOvertime.error && <ErrorMessage error={allocationErrors.rest} />}
               </div>
             )}
             <AttendanceCalculationSummary

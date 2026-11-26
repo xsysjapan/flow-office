@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from './client'
 import { downloadAttendanceCsv, downloadAttendanceExcel } from './exports'
 
 describe('downloadAttendanceExcel', () => {
@@ -89,5 +90,49 @@ describe('downloadAttendanceCsv', () => {
     await downloadAttendanceCsv({ year_month: ['2026-10'], include_submitted: false })
 
     expect(requestedUrl().searchParams.has('include_submitted')).toBe(false)
+  })
+})
+
+describe('download errors', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const unprocessable = () =>
+    new Response(JSON.stringify({ message: '最初のエラー', errors: { year_month: ['対象月が不正です。'] } }), {
+      status: 422,
+      headers: { 'content-type': 'application/json' },
+    })
+
+  it('throws an ApiError with the field errors when the CSV download returns a JSON 422', async () => {
+    vi.mocked(fetch).mockResolvedValue(unprocessable())
+
+    const error = await downloadAttendanceCsv({ year_month: ['2026-06'] }).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(422)
+    expect((error as ApiError).errors).toEqual({ year_month: ['対象月が不正です。'] })
+  })
+
+  it('throws an ApiError with the field errors when the Excel download returns a JSON 422', async () => {
+    vi.mocked(fetch).mockResolvedValue(unprocessable())
+
+    const error = await downloadAttendanceExcel({ year_month: ['2026-06'] }).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).errors).toEqual({ year_month: ['対象月が不正です。'] })
+  })
+
+  it('keeps a plain Error when the failure body is not JSON', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('boom', { status: 500, headers: { 'content-type': 'text/html' } }))
+
+    const error = await downloadAttendanceCsv({ year_month: ['2026-06'] }).catch((e: unknown) => e)
+
+    expect(error).not.toBeInstanceOf(ApiError)
+    expect((error as Error).message).toBe('勤怠CSVの取得に失敗しました。')
   })
 })

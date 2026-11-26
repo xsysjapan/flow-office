@@ -341,4 +341,35 @@ describe('WeekAttendancePage', () => {
       expect(notify.success).not.toHaveBeenCalled()
     })
   })
+
+  describe('422の項目エラー', () => {
+    it('keeps every allocation error in the summary, once, under the standard heading', async () => {
+      const day: AttendanceDay = {
+        ...mondayRecord,
+        calculation: {
+          ...mondayRecord.calculation!,
+          prescribed_statutory_within_work_minutes: 300,
+          non_prescribed_statutory_within_work_minutes: 180,
+        },
+      }
+      vi.spyOn(attendanceApi, 'allocateWeekOvertime').mockRejectedValue(
+        new ApiError(422, 'サーバーの最初のエラー文', {
+          'allocations.0.non_prescribed_minutes': ['msg:allocations.0.non_prescribed_minutes'],
+          allocations: ['msg:allocations'],
+        }),
+      )
+      renderPage([day], '/attendance/week', { unallocated_weekly_statutory_excess_overtime_minutes: 60 })
+
+      const table = (await screen.findByRole('columnheader', { name: '所定外から振替（分）' })).closest('table')!
+      const [input] = within(table).getAllByRole('spinbutton')
+      await userEvent.clear(input)
+      await userEvent.type(input, '60')
+      await userEvent.click(screen.getByRole('button', { name: '手動振分を適用（60/60分）' }))
+
+      await screen.findByText('入力内容を確認してください。')
+      expect(screen.getAllByText('msg:allocations.0.non_prescribed_minutes')).toHaveLength(1)
+      expect(screen.getAllByText('msg:allocations')).toHaveLength(1)
+      expect(screen.queryByText('サーバーの最初のエラー文')).not.toBeInTheDocument()
+    })
+  })
 })

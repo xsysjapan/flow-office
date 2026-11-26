@@ -9,6 +9,7 @@ import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { Duration } from '../../components/Duration/Duration'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../lib/notify'
 import { FormField } from '../../components/FormField/FormField'
@@ -138,6 +139,7 @@ function monthLabel(yearMonth: string): string {
 export function ReopenMonthDialog({ monthId, yearMonth }: { monthId: string; yearMonth: string }) {
   const [reason, setReason] = useState('')
   const reopenMonth = useReopenMonth()
+  const reopenErrors = fieldErrors(reopenMonth.error, ['reason'] as const)
 
   return (
     <ConfirmActionDialog
@@ -147,7 +149,7 @@ export function ReopenMonthDialog({ monthId, yearMonth }: { monthId: string; yea
       description={`${yearMonth}の月次勤怠の締めを取り消します。取消理由は必須です。締めを取り消しても、日次勤怠のロック状態(承認済み時点のロック)は変わりません。`}
       confirmLabel="締めを取り消す"
       isPending={reopenMonth.isPending}
-      error={reopenMonth.error}
+      error={reopenErrors.rest}
       onOpenChange={(open) => {
         if (open) {
           setReason('')
@@ -159,7 +161,7 @@ export function ReopenMonthDialog({ monthId, yearMonth }: { monthId: string; yea
         notify.success(`${monthLabel(yearMonth)}の勤怠の締めを取り消しました`)
       }}
     >
-      <FormField label="取消理由" htmlFor="reopen-month-reason">
+      <FormField label="取消理由" htmlFor="reopen-month-reason" error={reopenErrors.of('reason')}>
         <Textarea id="reopen-month-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
       </FormField>
     </ConfirmActionDialog>

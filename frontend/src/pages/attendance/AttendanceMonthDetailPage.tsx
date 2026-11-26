@@ -11,6 +11,7 @@ import { AttendanceSelectionActionBar } from '../../components/AttendanceSelecti
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { notify } from '../../lib/notify'
@@ -115,6 +116,8 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
   const [isOpen, setIsOpen] = useState(false)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const submitMonth = useSubmitMonth(yearMonth)
+  // 承認者の入力は承認が必要なときだけ描くので、fields も同じ条件で組み立てる。
+  const submitErrors = fieldErrors(submitMonth.error, approvalRequired ? (['approver_user_id'] as const) : [])
 
   return (
     <Dialog
@@ -140,12 +143,12 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
         </DialogHeader>
         {approvalRequired && (
           <div>
-            <FormField label="承認者" htmlFor="approver" required>
+            <FormField label="承認者" htmlFor="approver" required error={submitErrors.of('approver_user_id')}>
               <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
             </FormField>
           </div>
         )}
-        {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
+        {submitMonth.error && <ErrorMessage error={submitErrors.rest} />}
         <DialogFooter>
           <Button variant="secondary" onClick={() => setIsOpen(false)}>
             キャンセル

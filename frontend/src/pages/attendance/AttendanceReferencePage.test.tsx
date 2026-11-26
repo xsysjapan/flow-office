@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import { ApiError } from '../../api/client'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
 import type {
@@ -563,4 +564,48 @@ describe('AttendanceReferencePage', () => {
     })
   })
 
+  describe('422の項目エラー', () => {
+    const SERVER_MESSAGE = 'サーバーの最初のエラー文'
+    const HEADING = '入力内容を確認してください。'
+
+    function unprocessable(keys: string[]) {
+      return new ApiError(422, SERVER_MESSAGE, Object.fromEntries([...keys, 'unknown_key'].map((key) => [key, [`msg:${key}`]])))
+    }
+
+    it('shows the reopen reason error once under the reason field', async () => {
+      const closedMonth: AttendanceMonth = {
+        id: 'month-1',
+        user_id: targetUser.id,
+        year_month: formatDate(new Date()).slice(0, 7),
+        status: 'closed',
+        submitted_at: null,
+        approved_at: null,
+        returned_at: null,
+        return_comment: null,
+        revert_comment: null,
+        closed_at: `${formatDate(new Date())}T00:00:00+09:00`,
+        snapshot: null,
+        legal_holiday_warnings: [],
+      }
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+      vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+        days: [],
+        month: closedMonth,
+        flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      })
+      vi.spyOn(attendanceApi, 'reopenMonth').mockRejectedValue(unprocessable(['reason']))
+
+      renderPage()
+      await selectTargetUser()
+      await userEvent.click(await screen.findByRole('button', { name: '締めを取り消す' }))
+      await userEvent.type(await screen.findByLabelText('取消理由'), '取り違え')
+      await userEvent.click(screen.getByRole('button', { name: '締めを取り消す' }))
+
+      await screen.findByText(HEADING)
+      expect(screen.getAllByText('msg:reason')).toHaveLength(1)
+      expect(screen.getAllByText('msg:unknown_key')).toHaveLength(1)
+      expect(screen.queryByText(SERVER_MESSAGE)).not.toBeInTheDocument()
+    })
+  })
 })

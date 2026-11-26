@@ -69,17 +69,21 @@ export function WeekdayScheduleFields({
   state,
   onChange,
   rowBadges,
+  rowErrors,
 }: {
   state: Record<number, WeekdayRowState>
   onChange: (iso: number, patch: Partial<WeekdayRowState>) => void
   /** ISO曜日(1〜7)ごとの休みバッジ(休日・祝日名・休暇)。表示のみ。 */
   rowBadges?: Record<number, StatusMeta[]>
+  /** ISO曜日(1〜7)ごとの項目エラー(422)。行の下に出す。 */
+  rowErrors?: Record<number, string[]>
 }) {
   return (
     <div className="grid grid-cols-1 gap-2">
       {WEEKDAYS.map(({ iso, label }) => {
         const row = state[iso]
         const badges = rowBadges?.[iso] ?? []
+        const errors = rowErrors?.[iso] ?? []
         return (
           <div
             key={iso}
@@ -148,6 +152,11 @@ export function WeekdayScheduleFields({
                 />
               </div>
             </div>
+            {errors.map((message) => (
+              <p key={message} className="text-xs text-destructive md:order-last md:basis-full">
+                {message}
+              </p>
+            ))}
           </div>
         )
       })}

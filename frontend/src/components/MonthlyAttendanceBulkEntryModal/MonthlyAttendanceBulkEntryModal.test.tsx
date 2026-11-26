@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import { ApiError } from '../../api/client'
 import type { User } from '../../api/types'
 import { notify } from '../../lib/notify'
 import type { StatusMeta } from '../../utils/statusLabels'
@@ -195,4 +196,38 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
       expect(attendanceApi.generateAttendancePattern).toHaveBeenCalledWith(expect.objectContaining({ reason: '出張' })),
     )
   }, 15000)
+
+  describe('422の項目エラー', () => {
+    const SERVER_MESSAGE = 'サーバーの最初のエラー文'
+    const HEADING = '入力内容を確認してください。'
+
+    function unprocessable(keys: string[]) {
+      return new ApiError(422, SERVER_MESSAGE, Object.fromEntries([...keys, 'unknown_key'].map((key) => [key, [`msg:${key}`]])))
+    }
+
+    it('shows each error once under its field or date row on the detailed tab, leaving unknown keys in the summary', async () => {
+      const keys = [
+        'utc_offset',
+        'reason',
+        'overwrite_mode',
+        'day_overrides.2026-08-03.start_time',
+        'day_overrides.2026-08-03.end_time',
+        'day_overrides.2026-08-10.break_start_time',
+        'day_overrides.2026-08-31.break_end_time',
+        // 画面に入力の無いキーはまとめての表示に残る
+        'from',
+        'weekly_pattern',
+      ]
+      vi.spyOn(attendanceApi, 'generateAttendancePattern').mockRejectedValue(unprocessable(keys))
+      renderModal()
+
+      await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
+      await userEvent.click(await screen.findByRole('button', { name: '次へ(日にちごとの内容を確認)' }))
+      await userEvent.click(await screen.findByRole('button', { name: '確定する' }))
+
+      await screen.findByText(HEADING)
+      for (const key of [...keys, 'unknown_key']) expect(screen.getAllByText(`msg:${key}`)).toHaveLength(1)
+      expect(screen.queryByText(SERVER_MESSAGE)).not.toBeInTheDocument()
+    })
+  })
 })

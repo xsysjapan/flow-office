@@ -87,6 +87,7 @@ import {
   useSpecialLeaveTypeNames,
 } from '../../hooks/useSpecialLeave'
 import { notify } from '../../lib/notify'
+import { fieldErrors, type FieldErrors } from '../../utils/fieldErrors'
 import { breakShortfallWarning } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown } from '../../utils/attendanceWeeklyTotals'
 import {
@@ -173,9 +174,40 @@ function useBreakShortfallWarning(actualStartAt: string, actualEndAt: string, ro
   return breakShortfallWarning(workedMinutes, breakMinutes)
 }
 
+/** 送信本文は空の行を省くので、422の行の添字(本文側)を画面の行ごとのメッセージに戻す。 */
+function rowMessages<T>(
+  rows: T[],
+  included: (row: T) => boolean,
+  ofRow: FieldErrors<string>['ofRow'],
+  prefix: string,
+  keys: string[],
+): string[][] {
+  let payloadIndex = 0
+  return rows.map((row) => {
+    if (!included(row)) return []
+    const index = payloadIndex++
+    return keys.flatMap((key) => ofRow(prefix, index, key) ?? [])
+  })
+}
+
+function RowErrors({ messages }: { messages: (string | undefined)[] | undefined }) {
+  return (
+    <>
+      {messages
+        ?.filter((message): message is string => Boolean(message))
+        .map((message) => (
+          <p key={message} className="text-xs text-destructive">
+            {message}
+          </p>
+        ))}
+    </>
+  )
+}
+
 function BreakRowsEditor({
   date,
   rows,
+  rowErrors,
   onAdd,
   onUpdate,
   onRemove,
@@ -183,6 +215,8 @@ function BreakRowsEditor({
   /** 新規追加行の初期カレンダー表示に使う対象日("YYYY-MM-DD")。 */
   date: string
   rows: ReturnType<typeof useEditableRows<BreakRowData>>['rows']
+  /** 行ごとの項目エラー(rowsと同じ並び)。 */
+  rowErrors?: string[][]
   onAdd: () => void
   onUpdate: (rowId: number, patch: Partial<BreakRowData>) => void
   onRemove: (rowId: number) => void
@@ -190,23 +224,26 @@ function BreakRowsEditor({
   return (
     <div className="flex flex-col gap-2">
       <span className="text-sm font-medium text-foreground">休憩</span>
-      {rows.map((row) => (
-        <div key={row.rowId} className="flex flex-wrap items-center gap-2">
-          <DateTimePicker
-            aria-label="休憩開始"
-            value={row.start || undefined}
-            defaultDate={date}
-            onChange={(value) => onUpdate(row.rowId, { start: value ?? '' })}
-          />
-          <DateTimePicker
-            aria-label="休憩終了"
-            value={row.end || undefined}
-            defaultDate={date}
-            onChange={(value) => onUpdate(row.rowId, { end: value ?? '' })}
-          />
-          <Button variant="danger" onClick={() => onRemove(row.rowId)}>
-            削除
-          </Button>
+      {rows.map((row, i) => (
+        <div key={row.rowId} className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <DateTimePicker
+              aria-label="休憩開始"
+              value={row.start || undefined}
+              defaultDate={date}
+              onChange={(value) => onUpdate(row.rowId, { start: value ?? '' })}
+            />
+            <DateTimePicker
+              aria-label="休憩終了"
+              value={row.end || undefined}
+              defaultDate={date}
+              onChange={(value) => onUpdate(row.rowId, { end: value ?? '' })}
+            />
+            <Button variant="danger" onClick={() => onRemove(row.rowId)}>
+              削除
+            </Button>
+          </div>
+          <RowErrors messages={rowErrors?.[i]} />
         </div>
       ))}
       <Button variant="secondary" className="self-start" onClick={onAdd}>
@@ -240,6 +277,7 @@ function buildLeaveSegmentsPayload(rows: LeaveSegmentRowData[], offset: string) 
 function LeaveSegmentsEditor({
   date,
   rows,
+  rowErrors,
   onAdd,
   onUpdate,
   onRemove,
@@ -247,6 +285,8 @@ function LeaveSegmentsEditor({
   /** 新規追加行の初期カレンダー表示に使う対象日("YYYY-MM-DD")。 */
   date: string
   rows: ReturnType<typeof useEditableRows<LeaveSegmentRowData>>['rows']
+  /** 行ごとの項目エラー(rowsと同じ並び)。 */
+  rowErrors?: string[][]
   onAdd: () => void
   onUpdate: (rowId: number, patch: Partial<LeaveSegmentRowData>) => void
   onRemove: (rowId: number) => void
@@ -254,30 +294,33 @@ function LeaveSegmentsEditor({
   return (
     <div className="flex flex-col gap-2">
       <span className="text-sm font-medium text-foreground">遅刻・早退</span>
-      {rows.map((row) => (
-        <div key={row.rowId} className="flex flex-wrap items-center gap-2">
-          <DateTimePicker
-            aria-label="遅刻・早退開始"
-            value={row.start || undefined}
-            defaultDate={date}
-            onChange={(value) => onUpdate(row.rowId, { start: value ?? '' })}
-          />
-          <DateTimePicker
-            aria-label="遅刻・早退終了"
-            value={row.end || undefined}
-            defaultDate={date}
-            onChange={(value) => onUpdate(row.rowId, { end: value ?? '' })}
-          />
-          <Input
-            aria-label="遅刻・早退の備考"
-            placeholder="備考"
-            className="w-auto"
-            value={row.note}
-            onChange={(e) => onUpdate(row.rowId, { note: e.target.value })}
-          />
-          <Button variant="danger" onClick={() => onRemove(row.rowId)}>
-            削除
-          </Button>
+      {rows.map((row, i) => (
+        <div key={row.rowId} className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <DateTimePicker
+              aria-label="遅刻・早退開始"
+              value={row.start || undefined}
+              defaultDate={date}
+              onChange={(value) => onUpdate(row.rowId, { start: value ?? '' })}
+            />
+            <DateTimePicker
+              aria-label="遅刻・早退終了"
+              value={row.end || undefined}
+              defaultDate={date}
+              onChange={(value) => onUpdate(row.rowId, { end: value ?? '' })}
+            />
+            <Input
+              aria-label="遅刻・早退の備考"
+              placeholder="備考"
+              className="w-auto"
+              value={row.note}
+              onChange={(e) => onUpdate(row.rowId, { note: e.target.value })}
+            />
+            <Button variant="danger" onClick={() => onRemove(row.rowId)}>
+              削除
+            </Button>
+          </div>
+          <RowErrors messages={rowErrors?.[i]} />
         </div>
       ))}
       <Button variant="secondary" className="self-start" onClick={onAdd}>
@@ -296,6 +339,8 @@ function PunchLogRow({ punch, isEdited, isEditing }: { punch: AttendancePunch; i
   const [reason, setReason] = useState('')
   const correctPunch = useCorrectPunch()
   const deletePunch = useDeletePunch()
+  const correctErrors = fieldErrors(correctPunch.error, ['punch_type', 'punched_at', 'reason'] as const)
+  const deleteErrors = fieldErrors(deletePunch.error, ['reason'] as const)
   const { label, tone } = punchStatusLabel(punch.status)
 
   useEffect(() => {
@@ -359,7 +404,7 @@ function PunchLogRow({ punch, isEdited, isEditing }: { punch: AttendancePunch; i
 
       {mode === 'correct' && (
         <div className="flex flex-col gap-2 rounded-md border border-border p-2">
-          {correctPunch.error && <ErrorMessage error={correctPunch.error} />}
+          {correctPunch.error && <ErrorMessage error={correctErrors.rest} />}
           <div className="flex flex-wrap items-center gap-2">
             <NativeSelect
               aria-label="打刻種別"
@@ -382,12 +427,14 @@ function PunchLogRow({ punch, isEdited, isEditing }: { punch: AttendancePunch; i
               onChange={(e) => setOffset(e.target.value)}
             />
           </div>
+          <RowErrors messages={[correctErrors.of('punch_type'), correctErrors.of('punched_at')]} />
           <Input
             aria-label="訂正理由"
             placeholder="訂正理由(必須)"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
           />
+          <RowErrors messages={[correctErrors.of('reason')]} />
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setMode('view')}>
               キャンセル
@@ -409,7 +456,7 @@ function PunchLogRow({ punch, isEdited, isEditing }: { punch: AttendancePunch; i
         confirmLabel="削除する"
         confirmDisabled={!reason}
         isPending={deletePunch.isPending}
-        error={deletePunch.error}
+        error={deleteErrors.rest}
         onConfirm={handleDelete}
       >
         <Input
@@ -418,6 +465,7 @@ function PunchLogRow({ punch, isEdited, isEditing }: { punch: AttendancePunch; i
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
+        <RowErrors messages={[deleteErrors.of('reason')]} />
       </ConfirmActionDialog>
     </li>
   )
@@ -434,6 +482,7 @@ function PunchAddForm({ date }: { date: string }) {
   const [punchedAt, setPunchedAt] = useState('')
   const [offset, setOffset] = useState(browserOffsetString())
   const createPunch = useCreatePunch()
+  const createErrors = fieldErrors(createPunch.error, ['punch_type', 'punched_at'] as const)
 
   const handleSubmit = () => {
     const combined = combineDatetimeLocalWithOffset(punchedAt, offset)
@@ -451,7 +500,7 @@ function PunchAddForm({ date }: { date: string }) {
 
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-3">
-      {createPunch.error && <ErrorMessage error={createPunch.error} />}
+      {createPunch.error && <ErrorMessage error={createErrors.rest} />}
       <div className="flex flex-wrap items-center gap-2">
         <NativeSelect
           aria-label="追加する打刻種別"
@@ -482,6 +531,7 @@ function PunchAddForm({ date }: { date: string }) {
           打刻を追加
         </Button>
       </div>
+      <RowErrors messages={[createErrors.of('punch_type'), createErrors.of('punched_at')]} />
     </div>
   )
 }
@@ -533,8 +583,9 @@ function PunchLogCard({ date, locked }: { date: string; locked: boolean }) {
 function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: (punchLogAction: AttendanceDayPunchLogAction) => void }) {
   const [reason, setReason] = useState('')
   const [punchLogAction, setPunchLogAction] = useState<AttendanceDayPunchLogAction>('leave_punches')
-  const [validationError, setValidationError] = useState<Error | null>(null)
+  const [reasonMissing, setReasonMissing] = useState(false)
   const deleteDay = useDeleteAttendanceDay()
+  const deleteErrors = fieldErrors(deleteDay.error, ['reason', 'punch_log_action'] as const)
 
   return (
     <ConfirmActionDialog
@@ -544,27 +595,32 @@ function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: (p
       description={`${day.work_date} の日次勤怠を削除します。この操作は元に戻せません。承認済みの月次に含まれる場合は削除できません。`}
       confirmLabel="削除する"
       isPending={deleteDay.isPending}
-      error={deleteDay.error ?? validationError ?? undefined}
+      error={deleteDay.error ? deleteErrors.rest : undefined}
       onOpenChange={(open) => {
         if (open) {
           setReason('')
           setPunchLogAction('leave_punches')
-          setValidationError(null)
+          setReasonMissing(false)
           deleteDay.reset()
         }
       }}
       onConfirm={async () => {
         if (!reason) {
-          setValidationError(new Error('削除理由を入力してください。'))
+          setReasonMissing(true)
           throw new Error('削除理由を入力してください。')
         }
-        setValidationError(null)
+        setReasonMissing(false)
         await deleteDay.mutateAsync({ id: day.id, input: { reason, punch_log_action: punchLogAction } })
         notify.success(`${monthDayLabel(day.work_date)}の勤怠を削除しました`)
         onDeleted(punchLogAction)
       }}
     >
-      <FormField label="削除理由" htmlFor="delete-day-reason" required>
+      <FormField
+        label="削除理由"
+        htmlFor="delete-day-reason"
+        required
+        error={deleteErrors.of('reason') ?? (reasonMissing && !reason ? '削除理由を入力してください。' : undefined)}
+      >
         <Input
           id="delete-day-reason"
           placeholder="削除理由(必須)"
@@ -572,7 +628,7 @@ function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: (p
           onChange={(e) => setReason(e.target.value)}
         />
       </FormField>
-      <FormField label="打刻ログの扱い" htmlFor="delete-day-punch-log-action">
+      <FormField label="打刻ログの扱い" htmlFor="delete-day-punch-log-action" error={deleteErrors.of('punch_log_action')}>
         <NativeSelect
           id="delete-day-punch-log-action"
           value={punchLogAction}
@@ -722,6 +778,20 @@ function useLeaveDesignationController(date: string, initialLeaves: AttendanceDa
   }
 }
 
+const DAY_FORM_FIELDS = [
+  'actual_start_at',
+  'actual_end_at',
+  'work_type',
+  'work_location_type',
+  'note',
+  'reason',
+  'breaks.*.start',
+  'breaks.*.end',
+  'leave_segments.*.start',
+  'leave_segments.*.end',
+  'leave_segments.*.note',
+] as const
+
 function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: () => void; leaveLists: LeaveDesignationLists }) {
   const initialValues = {
     actualStartAt: toDatetimeLocal(day.actual_start_at),
@@ -763,6 +833,7 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
     })),
   )
   const updateDay = useUpdateAttendanceDay()
+  const dayErrors = fieldErrors(updateDay.error, DAY_FORM_FIELDS)
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
   const leaveController = useLeaveDesignationController(day.work_date, day.leaves, leaveLists)
   const [leaveError, setLeaveError] = useState<Error | null>(null)
@@ -822,7 +893,7 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
     <div className="flex flex-col gap-4">
       <FormLayout>
         <FormRow>
-          <FormField label="出勤" htmlFor="day-edit-actual-start">
+          <FormField label="出勤" htmlFor="day-edit-actual-start" error={dayErrors.of('actual_start_at')}>
             <DateTimePicker
               id="day-edit-actual-start"
               aria-label="出勤"
@@ -831,7 +902,7 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
               onChange={(value) => setActualStartAt(value ?? '')}
             />
           </FormField>
-          <FormField label="退勤" htmlFor="day-edit-actual-end">
+          <FormField label="退勤" htmlFor="day-edit-actual-end" error={dayErrors.of('actual_end_at')}>
             <DateTimePicker
               id="day-edit-actual-end"
               aria-label="退勤"
@@ -844,10 +915,10 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
         <FormField label="現地時刻オフセット(海外出張時などに変更)" htmlFor="day-edit-offset">
           <Input id="day-edit-offset" value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
         </FormField>
-        <FormField label="作業内容" htmlFor="day-edit-work-type">
+        <FormField label="作業内容" htmlFor="day-edit-work-type" error={dayErrors.of('work_type')}>
           <Input id="day-edit-work-type" value={workType} onChange={(e) => setWorkType(e.target.value)} />
         </FormField>
-        <FormField label="勤務形態区分" htmlFor="day-edit-work-location-type">
+        <FormField label="勤務形態区分" htmlFor="day-edit-work-location-type" error={dayErrors.of('work_location_type')}>
           <NativeSelect
             id="day-edit-work-location-type"
             value={workLocationType}
@@ -861,28 +932,33 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
             ))}
           </NativeSelect>
         </FormField>
-        <FormField label="備考" htmlFor="day-edit-note">
+        <FormField label="備考" htmlFor="day-edit-note" error={dayErrors.of('note')}>
           <Input id="day-edit-note" value={note} onChange={(e) => setNote(e.target.value)} />
         </FormField>
       </FormLayout>
 
-      <BreakRowsEditor date={day.work_date} rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
+      <BreakRowsEditor
+        date={day.work_date}
+        rows={rows}
+        rowErrors={rowMessages(rows, (r) => Boolean(r.start), dayErrors.ofRow, 'breaks', ['start', 'end'])}
+        onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
 
       <LeaveSegmentsEditor
         date={day.work_date}
         rows={leaveSegmentRows}
+        rowErrors={rowMessages(leaveSegmentRows, (r) => Boolean(r.start && r.end), dayErrors.ofRow, 'leave_segments', ['start', 'end', 'note'])}
         onAdd={() => addLeaveSegmentRow({ start: '', end: '', note: '' })}
         onUpdate={updateLeaveSegmentRow}
         onRemove={removeLeaveSegmentRow}
       />
 
       <FormLayout>
-        <FormField label="修正理由" htmlFor="day-edit-reason" required>
+        <FormField label="修正理由" htmlFor="day-edit-reason" required error={dayErrors.of('reason')}>
           <Input id="day-edit-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
         </FormField>
 
         {breakWarning && <p className="mb-2 text-sm text-warning">{breakWarning}</p>}
-        {updateDay.error && <ErrorMessage error={updateDay.error} />}
+        {updateDay.error && <ErrorMessage error={dayErrors.rest} />}
         {leaveError && <ErrorMessage error={leaveError} />}
         <FormActions>
           <Button variant="secondary" onClick={handleCancel}>
@@ -915,6 +991,7 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
     removeRow: removeLeaveSegmentRow,
   } = useEditableRows<LeaveSegmentRowData>([])
   const createDay = useCreateAttendanceDay()
+  const dayErrors = fieldErrors(createDay.error, DAY_FORM_FIELDS)
   const { data: defaults } = useAttendanceDayDefaults(user?.id, date)
   const appliedDefaultsDateRef = useRef<string | null>(null)
   // 離脱警告の比べる元。提案値が入ったら、入った値に更新する(提案値だけでは変更ありにしない)。
@@ -1025,7 +1102,7 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
     <div className="flex flex-col gap-4">
       <FormLayout>
         <FormRow>
-          <FormField label="出勤" htmlFor="day-create-actual-start">
+          <FormField label="出勤" htmlFor="day-create-actual-start" error={dayErrors.of('actual_start_at')}>
             <DateTimePicker
               id="day-create-actual-start"
               aria-label="出勤"
@@ -1034,7 +1111,7 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
               onChange={(value) => setActualStartAt(value ?? '')}
             />
           </FormField>
-          <FormField label="退勤" htmlFor="day-create-actual-end">
+          <FormField label="退勤" htmlFor="day-create-actual-end" error={dayErrors.of('actual_end_at')}>
             <DateTimePicker
               id="day-create-actual-end"
               aria-label="退勤"
@@ -1047,10 +1124,10 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
         <FormField label="現地時刻オフセット(海外出張時などに変更)" htmlFor="day-create-offset">
           <Input id="day-create-offset" value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
         </FormField>
-        <FormField label="作業内容" htmlFor="day-create-work-type">
+        <FormField label="作業内容" htmlFor="day-create-work-type" error={dayErrors.of('work_type')}>
           <Input id="day-create-work-type" value={workType} onChange={(e) => setWorkType(e.target.value)} />
         </FormField>
-        <FormField label="勤務形態区分" htmlFor="day-create-work-location-type">
+        <FormField label="勤務形態区分" htmlFor="day-create-work-location-type" error={dayErrors.of('work_location_type')}>
           <NativeSelect
             id="day-create-work-location-type"
             value={workLocationType}
@@ -1064,23 +1141,28 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
             ))}
           </NativeSelect>
         </FormField>
-        <FormField label="備考" htmlFor="day-create-note">
+        <FormField label="備考" htmlFor="day-create-note" error={dayErrors.of('note')}>
           <Input id="day-create-note" value={note} onChange={(e) => setNote(e.target.value)} />
         </FormField>
       </FormLayout>
 
-      <BreakRowsEditor date={date} rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
+      <BreakRowsEditor
+        date={date}
+        rows={rows}
+        rowErrors={rowMessages(rows, (r) => Boolean(r.start), dayErrors.ofRow, 'breaks', ['start', 'end'])}
+        onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
 
       <LeaveSegmentsEditor
         date={date}
         rows={leaveSegmentRows}
+        rowErrors={rowMessages(leaveSegmentRows, (r) => Boolean(r.start && r.end), dayErrors.ofRow, 'leave_segments', ['start', 'end', 'note'])}
         onAdd={() => addLeaveSegmentRow({ start: '', end: '', note: '' })}
         onUpdate={updateLeaveSegmentRow}
         onRemove={removeLeaveSegmentRow}
       />
 
       <FormLayout>
-        <FormField label="作成理由" htmlFor="day-create-reason" required>
+        <FormField label="作成理由" htmlFor="day-create-reason" required error={dayErrors.of('reason')}>
           <Input id="day-create-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
         </FormField>
 
@@ -1089,7 +1171,7 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
           <p className="mb-2 text-sm text-info">{DAY_DEFAULTS_SOURCE_LABEL[defaults.source]}</p>
         )}
         {breakWarning && <p className="mb-2 text-sm text-warning">{breakWarning}</p>}
-        {createDay.error && <ErrorMessage error={createDay.error} />}
+        {createDay.error && <ErrorMessage error={dayErrors.rest} />}
         {leaveError && <ErrorMessage error={leaveError} />}
         <FormActions>
           <Button
@@ -1136,6 +1218,21 @@ function adjustmentFieldsFrom(day: AttendanceDay): AdjustmentFields {
   }
 }
 
+const ADJUST_FIELDS = [
+  'prescribed_work_minutes',
+  'statutory_within_overtime_minutes',
+  'statutory_excess_overtime_minutes',
+  'legal_holiday_work_minutes',
+  'prescribed_holiday_work_minutes',
+  'payroll_work_minutes',
+  'late_night_prescribed_work_minutes',
+  'late_night_statutory_within_overtime_minutes',
+  'late_night_statutory_excess_overtime_minutes',
+  'late_night_legal_holiday_work_minutes',
+  'late_night_prescribed_holiday_work_minutes',
+  'reason',
+] as const
+
 /**
  * 日次登録後、区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正するフォーム。
  * 実績(出勤・退勤・休憩)が再編集され再計算されると、この補正は解除される。
@@ -1144,6 +1241,7 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
   const [fields, setFields] = useState<AdjustmentFields>(adjustmentFieldsFrom(day))
   const [reason, setReason] = useState('')
   const adjustCalculation = useAdjustAttendanceDailyCalculation()
+  const adjustErrors = fieldErrors(adjustCalculation.error, ADJUST_FIELDS)
   const [baseFields] = useState<AdjustmentFields>(() => adjustmentFieldsFrom(day))
   const { confirmDiscard } = useUnsavedChangesGuard(
     isCalculationAdjustDirty({ fields: { ...baseFields }, reason: '' }, { fields: { ...fields }, reason }),
@@ -1200,7 +1298,7 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
   return (
     <FormLayout>
       {fieldLabels.map(({ key, label }) => (
-        <FormField key={key} label={label} htmlFor={`day-adjust-${key}`}>
+        <FormField key={key} label={label} htmlFor={`day-adjust-${key}`} error={adjustErrors.of(key)}>
           <Input
             id={`day-adjust-${key}`}
             type="number"
@@ -1211,11 +1309,11 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
         </FormField>
       ))}
 
-      <FormField label="補正理由" htmlFor="day-adjust-reason" required>
+      <FormField label="補正理由" htmlFor="day-adjust-reason" required error={adjustErrors.of('reason')}>
         <Input id="day-adjust-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
       </FormField>
 
-      {adjustCalculation.error && <ErrorMessage error={adjustCalculation.error} />}
+      {adjustCalculation.error && <ErrorMessage error={adjustErrors.rest} />}
       <FormActions>
         <Button variant="secondary" onClick={handleCancel}>
           キャンセル
@@ -1251,6 +1349,12 @@ function ShiftSwapRequestDialog({
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
   const createRequest = useCreateShiftSwapRequest()
+  const swapErrors = fieldErrors(
+    createRequest.error,
+    approvalRequired
+      ? (['substitute_date', 'approver_user_id', 'reason'] as const)
+      : (['substitute_date', 'reason'] as const),
+  )
 
   const canSubmit = Boolean(substituteDate) && (!approvalRequired || Boolean(approverUserId))
 
@@ -1304,6 +1408,7 @@ function ShiftSwapRequestDialog({
             label={targetIsHoliday ? '振替先日(休みになる日)' : '振替先日(出勤する日)'}
             htmlFor="shift-swap-substitute-date"
             required
+            error={swapErrors.of('substitute_date')}
           >
             <DatePicker
               id="shift-swap-substitute-date"
@@ -1314,12 +1419,12 @@ function ShiftSwapRequestDialog({
           </FormField>
 
           {approvalRequired && (
-            <FormField label="承認者" htmlFor="shift-swap-approver" required>
+            <FormField label="承認者" htmlFor="shift-swap-approver" required error={swapErrors.of('approver_user_id')}>
               <UserPicker id="shift-swap-approver" value={approverUserId} onChange={setApproverUserId} />
             </FormField>
           )}
 
-          <FormField label="理由(任意)" htmlFor="shift-swap-reason">
+          <FormField label="理由(任意)" htmlFor="shift-swap-reason" error={swapErrors.of('reason')}>
             <Input id="shift-swap-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
           </FormField>
 
@@ -1329,7 +1434,7 @@ function ShiftSwapRequestDialog({
             </p>
           )}
           </div>
-          {createRequest.error && <ErrorMessage error={createRequest.error} />}
+          {createRequest.error && <ErrorMessage error={swapErrors.rest} />}
 
           <DialogFooter>
             <Button variant="secondary" onClick={() => onOpenChange(false)}>

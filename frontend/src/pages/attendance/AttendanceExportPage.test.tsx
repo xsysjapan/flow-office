@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { pickYearMonth } from '../../test-support/pickerInteractions'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
 import { AttendanceExportPage } from './AttendanceExportPage'
@@ -157,5 +158,68 @@ describe('AttendanceExportPage', () => {
         user_id: undefined,
       }),
     )
+  })
+
+  describe('422の項目エラー', () => {
+    const SERVER_MESSAGE = 'サーバーの最初のエラー文'
+    const HEADING = '入力内容を確認してください。'
+
+    function unprocessable(keys: string[]) {
+      return new ApiError(422, SERVER_MESSAGE, Object.fromEntries([...keys, 'unknown_key'].map((key) => [key, [`msg:${key}`]])))
+    }
+
+    it('shows each error once under its field when downloading the CSV, leaving unknown keys in the summary', async () => {
+      const keys = ['year_month', 'year_month.0', 'user_id', 'user_id.0', 'format']
+      vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockRejectedValue(unprocessable(keys))
+      const user = userEvent.setup()
+      renderPage()
+
+      await addYearMonth(user, '2026-06')
+      await user.click(screen.getByRole('button', { name: 'CSVダウンロード' }))
+
+      await screen.findByText(HEADING)
+      for (const key of [...keys, 'unknown_key']) expect(screen.getAllByText(`msg:${key}`)).toHaveLength(1)
+      expect(screen.queryByText(SERVER_MESSAGE)).not.toBeInTheDocument()
+    })
+
+    it('keeps the format error in the summary for the Excel output, which has no format field', async () => {
+      const keys = ['year_month', 'year_month.0', 'user_id', 'user_id.0']
+      vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockRejectedValue(unprocessable([...keys, 'format']))
+      const user = userEvent.setup()
+      renderPage()
+
+      await addYearMonth(user, '2026-06')
+      await user.click(screen.getByRole('radio', { name: /Excel/ }))
+      await user.click(screen.getByRole('button', { name: 'Excelダウンロード' }))
+
+      await screen.findByText(HEADING)
+      for (const key of [...keys, 'format', 'unknown_key']) expect(screen.getAllByText(`msg:${key}`)).toHaveLength(1)
+      expect(screen.queryByText(SERVER_MESSAGE)).not.toBeInTheDocument()
+    })
+
+    it('shows the field error from a real 422 response of the download API under the field', async () => {
+      vi.restoreAllMocks()
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockImplementation(
+          async () =>
+            new Response(
+              JSON.stringify({ message: SERVER_MESSAGE, errors: { year_month: ['msg:year_month'], other: ['msg:other'] } }),
+              { status: 422, headers: { 'content-type': 'application/json' } },
+            ),
+        ),
+      )
+      const user = userEvent.setup()
+      renderPage()
+
+      await addYearMonth(user, '2026-06')
+      await user.click(screen.getByRole('button', { name: 'CSVダウンロード' }))
+
+      await screen.findByText(HEADING)
+      expect(screen.getAllByText('msg:year_month')).toHaveLength(1)
+      expect(screen.getAllByText('msg:other')).toHaveLength(1)
+      expect(screen.queryByText(SERVER_MESSAGE)).not.toBeInTheDocument()
+      vi.unstubAllGlobals()
+    })
   })
 })

@@ -3,6 +3,7 @@ import { useAuth } from '../../auth/useAuth'
 import { useGenerateAttendancePattern } from '../../hooks/useAttendance'
 import { notify } from '../../lib/notify'
 import { attendancePatternResultMessage } from '../../utils/attendancePatternResultMessage'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { browserOffsetString } from '../../utils/offsetDateTime'
 import type { StatusMeta } from '../../utils/statusLabels'
 import { addDays, isoWeekdayOf } from '../../utils/weekDates'
@@ -61,6 +62,25 @@ export function WeeklyAttendanceBulkEntryModal({
   const [overwriteMode, setOverwriteMode] = useState<'skip_existing' | 'overwrite_existing'>('skip_existing')
 
   const generatePattern = useGenerateAttendancePattern()
+  // 曜日ごとの時刻は「曜日ごとに設定」タブでだけ描くので、fields も同じ条件で組み立てる。
+  const patternErrors = fieldErrors(
+    generatePattern.error,
+    activeTab === 'detailed'
+      ? ([
+          'utc_offset',
+          'reason',
+          'overwrite_mode',
+          'weekly_pattern.*.start_time',
+          'weekly_pattern.*.end_time',
+          'weekly_pattern.*.break_start_time',
+          'weekly_pattern.*.break_end_time',
+        ] as const)
+      : (['utc_offset', 'reason', 'overwrite_mode'] as const),
+  )
+  const weekdayErrors: Record<number, string[]> = {}
+  for (let iso = 1; iso <= 7; iso++) {
+    weekdayErrors[iso] = ['start_time', 'end_time', 'break_start_time', 'break_end_time'].flatMap((key) => patternErrors.ofRow('weekly_pattern', iso, key) ?? [])
+  }
 
   const handleOpenChange = (next: boolean) => {
     if (!isControlled) setUncontrolledOpen(next)
@@ -130,7 +150,7 @@ export function WeeklyAttendanceBulkEntryModal({
         <div>
         <p className="text-sm text-muted-foreground">適用期間: {defaultFrom} 〜 {defaultTo}</p>
 
-        <FormField label="タイムゾーンオフセット" htmlFor="weekly-attendance-offset" required>
+        <FormField label="タイムゾーンオフセット" htmlFor="weekly-attendance-offset" required error={patternErrors.of('utc_offset')}>
           <Input
             id="weekly-attendance-offset"
             value={offset}
@@ -156,11 +176,12 @@ export function WeeklyAttendanceBulkEntryModal({
               state={detailedPatternState}
               onChange={handleDetailedWeekdayChange}
               rowBadges={rowBadges}
+              rowErrors={weekdayErrors}
             />
           </TabsContent>
         </Tabs>
 
-        <FormField label="確定理由(任意)" htmlFor="weekly-attendance-reason">
+        <FormField label="確定理由(任意)" htmlFor="weekly-attendance-reason" error={patternErrors.of('reason')}>
           <Input
             id="weekly-attendance-reason"
             value={reason}
@@ -172,6 +193,7 @@ export function WeeklyAttendanceBulkEntryModal({
         <FormField
           label="既存の実績がある日の扱い"
           htmlFor="weekly-attendance-overwrite-mode"
+          error={patternErrors.of('overwrite_mode')}
           description="締め済み・承認済みの月に属する日はどちらを選んでも変更されない。"
         >
           <NativeSelect
@@ -191,7 +213,7 @@ export function WeeklyAttendanceBulkEntryModal({
         )}
         </div>
 
-        {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
+        {generatePattern.error && <ErrorMessage error={patternErrors.rest} />}
 
         <DialogFooter>
           <Button variant="secondary" onClick={() => handleOpenChange(false)}>

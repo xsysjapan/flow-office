@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import { ApiError } from '../../api/client'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import * as compensatoryLeaveApi from '../../api/compensatoryLeave'
 import * as paidLeaveApi from '../../api/paidLeave'
@@ -1037,6 +1038,256 @@ describe('AttendanceDayPage', () => {
 
       await waitFor(() => expect(paidLeaveApi.cancelPaidLeaveRequest).toHaveBeenCalledWith(approvedPaidLeaveRequest.id))
       expect(createPaidLeaveRequestSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('422の項目エラー', () => {
+    const SERVER_MESSAGE = 'サーバーの最初のエラー文'
+    const HEADING = '入力内容を確認してください。'
+    const activePunch: AttendancePunch = {
+      id: 'punch-10',
+      user_id: 'user-1',
+      work_date: date,
+      punch_type: 'clock_in',
+      punched_at: `${date}T09:30:00+09:00`,
+      source: 'web',
+      note: null,
+      status: 'active',
+      correction_reason: null,
+      corrected_by_user_id: null,
+      corrected_at: null,
+      superseded_by_punch_id: null,
+      created_at: null,
+    }
+
+    /** `keys`と未知のキー1つを含む422。メッセージはキーごとに一意。 */
+    function unprocessable(keys: string[]) {
+      return new ApiError(
+        422,
+        SERVER_MESSAGE,
+        Object.fromEntries([...keys, 'unknown_key'].map((key) => [key, [`msg:${key}`]])),
+      )
+    }
+
+    function expectEachMessageOnce(keys: string[]) {
+      for (const key of [...keys, 'unknown_key']) {
+        expect(screen.getAllByText(`msg:${key}`)).toHaveLength(1)
+      }
+      expect(screen.getByText(HEADING)).toBeInTheDocument()
+      expect(screen.queryByText(SERVER_MESSAGE)).not.toBeInTheDocument()
+    }
+
+    const dayKeys = [
+      'actual_start_at',
+      'actual_end_at',
+      'work_type',
+      'work_location_type',
+      'note',
+      'reason',
+      'breaks.0.start',
+      'breaks.0.end',
+      'leave_segments.0.start',
+      'leave_segments.0.end',
+      'leave_segments.0.note',
+    ]
+
+    async function addLeaveSegment() {
+      await userEvent.click(screen.getByRole('button', { name: '遅刻・早退を追加' }))
+      await pickDateTime(userEvent.setup(), '遅刻・早退開始(日付)', '遅刻・早退開始(時刻)', `${date}T09:00`)
+      await pickDateTime(userEvent.setup(), '遅刻・早退終了(日付)', '遅刻・早退終了(時刻)', `${date}T11:00`)
+    }
+
+    it('shows each field error of the day edit form once, under its field or row', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(attendanceApi, 'updateAttendanceDay').mockRejectedValue(unprocessable(dayKeys))
+      renderPage([recordedDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+      await addLeaveSegment()
+      await userEvent.type(screen.getByLabelText('修正理由'), '打刻ミスの修正')
+      await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+      await screen.findByText(HEADING)
+      expectEachMessageOnce(dayKeys)
+      expect(screen.getByLabelText('修正理由')).toHaveAccessibleDescription('msg:reason')
+    })
+
+    it('shows each field error of the day create form once, under its field or row', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(attendanceApi, 'fetchAttendanceDayDefaults').mockResolvedValue({
+        source: 'none',
+        actual_start_at: null,
+        actual_end_at: null,
+        breaks: [],
+      })
+      vi.spyOn(attendanceApi, 'createAttendanceDay').mockRejectedValue(unprocessable(dayKeys))
+      renderPage([])
+
+      await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')
+      await userEvent.click(screen.getByRole('button', { name: '休憩を追加' }))
+      await pickDateTime(userEvent.setup(), '休憩開始(日付)', '休憩開始(時刻)', `${date}T12:00`)
+      await addLeaveSegment()
+      await userEvent.type(screen.getByLabelText('作成理由'), '実績の入力漏れ')
+      await userEvent.click(screen.getByRole('button', { name: '作成' }))
+
+      await screen.findByText(HEADING)
+      expectEachMessageOnce(dayKeys)
+    })
+
+    it('shows each field error of the calculation adjust form once', async () => {
+      const keys = [
+        'prescribed_work_minutes',
+        'statutory_within_overtime_minutes',
+        'statutory_excess_overtime_minutes',
+        'legal_holiday_work_minutes',
+        'prescribed_holiday_work_minutes',
+        'payroll_work_minutes',
+        'late_night_prescribed_work_minutes',
+        'late_night_statutory_within_overtime_minutes',
+        'late_night_statutory_excess_overtime_minutes',
+        'late_night_legal_holiday_work_minutes',
+        'late_night_prescribed_holiday_work_minutes',
+        'reason',
+      ]
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(attendanceApi, 'adjustAttendanceDailyCalculation').mockRejectedValue(unprocessable(keys))
+      renderPage([recordedDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: '集計値を修正' }))
+      await userEvent.type(screen.getByLabelText('補正理由'), '補正')
+      await userEvent.click(screen.getByRole('button', { name: '補正を保存' }))
+
+      await screen.findByText(HEADING)
+      expectEachMessageOnce(keys)
+    })
+
+    it('shows a missing delete reason under the reason field only after submitting', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      const deleteSpy = vi.spyOn(attendanceApi, 'deleteAttendanceDay').mockResolvedValue({ deleted: true })
+      renderPage([recordedDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+      expect(screen.queryByText('削除理由を入力してください。')).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: '削除する' }))
+
+      expect(await screen.findAllByText('削除理由を入力してください。')).toHaveLength(1)
+      expect(screen.getByLabelText('削除理由', { selector: 'input' })).toHaveAccessibleDescription('削除理由を入力してください。')
+      expect(deleteSpy).not.toHaveBeenCalled()
+    })
+
+    it('shows each field error of the day delete dialog once', async () => {
+      const keys = ['reason', 'punch_log_action']
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(attendanceApi, 'deleteAttendanceDay').mockRejectedValue(unprocessable(keys))
+      renderPage([recordedDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+      await userEvent.type(screen.getByLabelText('削除理由'), '二重入力')
+      await userEvent.click(screen.getByRole('button', { name: '削除する' }))
+
+      await screen.findByText(HEADING)
+      expectEachMessageOnce(keys)
+    })
+
+    it('shows each field error of the punch add form once', async () => {
+      const keys = ['punch_type', 'punched_at']
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(attendanceApi, 'createPunch').mockRejectedValue(unprocessable(keys))
+      renderPage([recordedDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: 'ログを編集' }))
+      await pickDateTime(userEvent.setup(), '追加する日時(日付)', '追加する日時(時刻)', `${date}T18:00`)
+      await userEvent.click(screen.getByRole('button', { name: '打刻を追加' }))
+
+      await screen.findByText(HEADING)
+      expectEachMessageOnce(keys)
+    })
+
+    it('shows each field error of the punch correct form once', async () => {
+      const keys = ['punch_type', 'punched_at', 'reason']
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([activePunch])
+      vi.spyOn(attendanceApi, 'correctPunch').mockRejectedValue(unprocessable(keys))
+      renderPage([recordedDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: 'ログを編集' }))
+      await userEvent.click(screen.getByRole('button', { name: '訂正' }))
+      await userEvent.type(screen.getByLabelText('訂正理由'), '訂正')
+      await userEvent.click(screen.getByRole('button', { name: '訂正を保存' }))
+
+      await screen.findByText(HEADING)
+      expectEachMessageOnce(keys)
+    })
+
+    it('shows the reason error of the punch delete dialog once', async () => {
+      const keys = ['reason']
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([activePunch])
+      vi.spyOn(attendanceApi, 'deletePunch').mockRejectedValue(unprocessable(keys))
+      renderPage([recordedDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: 'ログを編集' }))
+      await userEvent.click(screen.getAllByRole('button', { name: '削除' }).at(-1)!)
+      await userEvent.type(screen.getByLabelText('削除理由', { selector: 'input[placeholder="削除理由(必須)"]' }), '誤打刻')
+      await userEvent.click(screen.getByRole('button', { name: '削除する' }))
+
+      await screen.findByText(HEADING)
+      expectEachMessageOnce(keys)
+    })
+
+    describe('振替休日申請', () => {
+      const holidayDay: AttendanceDay = { ...recordedDay, day_classification: 'legal_holiday' }
+      const approver: User = {
+        id: 'approver-1',
+        name: '承認者花子',
+        email: 'hanako@example.com',
+        department: null,
+        job_title: null,
+        employment_status: 'active',
+        last_login_at: null,
+      }
+
+      async function openAndSubmit(withApprover: boolean) {
+        await screen.findByText('7月6日の勤怠')
+        await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+        await userEvent.click(await screen.findByRole('menuitem', { name: '振替休日を申請する' }))
+        await pickDate(userEvent.setup(), '振替先日(休みになる日)', '2026-07-13')
+        if (withApprover) {
+          await userEvent.click(screen.getByLabelText('承認者'))
+          await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+          await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+        }
+        await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+      }
+
+      beforeEach(() => {
+        vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+        vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
+          data: [approver],
+          meta: { current_page: 1, last_page: 1, total: 1 },
+          links: { next: null, prev: null },
+        })
+      })
+
+      it('shows each field error once when approval is required', async () => {
+        const keys = ['substitute_date', 'approver_user_id', 'reason']
+        vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockRejectedValue(unprocessable(keys))
+        renderPage([holidayDay], date, true)
+
+        await openAndSubmit(true)
+
+        await screen.findByText(HEADING)
+        expectEachMessageOnce(keys)
+      })
+
+      it('keeps the approver error in the summary when the approver field is not shown', async () => {
+        const keys = ['substitute_date', 'reason']
+        vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockRejectedValue(unprocessable([...keys, 'approver_user_id']))
+        renderPage([holidayDay], date, false)
+
+        await openAndSubmit(false)
+
+        await screen.findByText(HEADING)
+        expectEachMessageOnce([...keys, 'approver_user_id'])
+      })
     })
   })
 })

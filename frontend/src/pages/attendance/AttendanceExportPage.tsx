@@ -15,6 +15,7 @@ import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicke
 import { useDownloadAttendanceCsv, useDownloadAttendanceExcel } from '../../hooks/useAttendance'
 import { useUser } from '../../hooks/useUsers'
 import type { AttendanceExportFormat } from '../../api/types'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 interface FormatOption {
   value: AttendanceExportFormat
@@ -94,6 +95,19 @@ export function AttendanceExportPage() {
 
   const downloadCsv = useDownloadAttendanceCsv()
   const downloadExcel = useDownloadAttendanceExcel()
+  // 項目は選択中の出力形式のものだけを描く(format の入力はCSVのときだけ)ので、fields も同じ条件で組み立てる。
+  // 選択中でない方のエラーは、全部をまとめての表示に残す。
+  const csvErrors = fieldErrors(
+    downloadCsv.error,
+    outputType === 'csv' ? (['year_month', 'year_month.*', 'user_id', 'user_id.*', 'format'] as const) : [],
+  )
+  const excelErrors = fieldErrors(
+    downloadExcel.error,
+    outputType === 'excel' ? (['year_month', 'year_month.*', 'user_id', 'user_id.*'] as const) : [],
+  )
+  const activeErrors = outputType === 'csv' ? csvErrors : excelErrors
+  const yearMonthMessages = activeErrors.ofAny('year_month')
+  const userMessages = activeErrors.ofAny('user_id')
 
   const selectedFormat = FORMAT_OPTIONS.find((option) => option.value === format) ?? FORMAT_OPTIONS[0]
 
@@ -136,6 +150,11 @@ export function AttendanceExportPage() {
               ))}
             </div>
           )}
+          {yearMonthMessages.map((message) => (
+            <p key={message} className="mt-1 text-xs text-destructive">
+              {message}
+            </p>
+          ))}
         </FormField>
         <FormField label="対象社員(任意・複数可)" htmlFor="attendance-export-user">
           <div className="flex gap-2">
@@ -154,6 +173,11 @@ export function AttendanceExportPage() {
               ))}
             </div>
           )}
+          {userMessages.map((message) => (
+            <p key={message} className="mt-1 text-xs text-destructive">
+              {message}
+            </p>
+          ))}
         </FormField>
         <FormField label="出力形式" htmlFor="attendance-export-output-type">
           <RadioGroup
@@ -185,7 +209,7 @@ export function AttendanceExportPage() {
 
         {outputType === 'csv' && (
           <>
-            <FormField label="CSV出力フォーマット" htmlFor="attendance-export-format">
+            <FormField label="CSV出力フォーマット" htmlFor="attendance-export-format" error={csvErrors.of('format')}>
               <NativeSelect
                 id="attendance-export-format"
                 value={format}
@@ -227,8 +251,8 @@ export function AttendanceExportPage() {
         {yearMonths.length === 0 && (
           <p className="mb-2 text-xs text-muted-foreground">対象月を1つ以上選択するとダウンロードできます。</p>
         )}
-        {downloadCsv.error && <ErrorMessage error={downloadCsv.error} fallback="勤怠CSVの取得に失敗しました。" />}
-        {downloadExcel.error && <ErrorMessage error={downloadExcel.error} fallback="勤怠Excelの取得に失敗しました。" />}
+        {downloadCsv.error && <ErrorMessage error={csvErrors.rest} fallback="勤怠CSVの取得に失敗しました。" />}
+        {downloadExcel.error && <ErrorMessage error={excelErrors.rest} fallback="勤怠Excelの取得に失敗しました。" />}
         <FormActions>
           {outputType === 'csv' ? (
             <Button

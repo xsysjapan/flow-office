@@ -1,4 +1,4 @@
-import { getToken } from './client'
+import { ApiError, getToken } from './client'
 import type { AttendanceExportFilters } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
@@ -24,6 +24,28 @@ function filenameFromContentDisposition(header: string | null): string | null {
   if (quotedMatch) return quotedMatch[1].trim()
 
   return null
+}
+
+/**
+ * ダウンロードが失敗したときのエラー。本文がJSONなら`apiFetch`と同じ形(message・errors・code)で
+ * `ApiError`にし、422の項目エラーを画面が使えるようにする。JSONでなければ`fallback`の`Error`。
+ */
+async function downloadError(response: Response, fallback: string): Promise<Error> {
+  if (!response.headers.get('content-type')?.includes('application/json')) return new Error(fallback)
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    return new Error(fallback)
+  }
+  if (typeof payload !== 'object' || payload === null) return new Error(fallback)
+  const body = payload as { message?: unknown; errors?: Record<string, string[]>; code?: unknown }
+  return new ApiError(
+    response.status,
+    'message' in body ? String(body.message) : response.statusText,
+    body.errors,
+    typeof body.code === 'string' ? body.code : undefined,
+  )
 }
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -66,11 +88,11 @@ export async function downloadAttendanceCsv(filters: AttendanceCsvExportFilters)
 
   const token = getToken()
   const response = await fetch(url.toString(), {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers: { Accept: 'application/json, */*', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
   })
 
   if (!response.ok) {
-    throw new Error('勤怠CSVの取得に失敗しました。')
+    throw await downloadError(response, '勤怠CSVの取得に失敗しました。')
   }
 
   const blob = await response.blob()
@@ -102,11 +124,11 @@ export async function downloadAttendanceExcel(filters: AttendanceExcelExportFilt
 
   const token = getToken()
   const response = await fetch(url.toString(), {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers: { Accept: 'application/json, */*', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
   })
 
   if (!response.ok) {
-    throw new Error('勤怠Excelの取得に失敗しました。')
+    throw await downloadError(response, '勤怠Excelの取得に失敗しました。')
   }
 
   const contentType = response.headers.get('Content-Type') ?? ''

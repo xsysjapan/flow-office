@@ -4,6 +4,7 @@ import { FormField } from '../FormField/FormField'
 import { notify } from '../../lib/notify'
 import { Textarea } from '../ui/textarea'
 import { useRevertMonthConfirmation } from '../../hooks/useAttendance'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 export interface RevertMonthConfirmationDialogProps {
   monthId: string
@@ -19,6 +20,8 @@ export function RevertMonthConfirmationDialog({ monthId, yearMonth }: RevertMont
   const [message, setMessage] = useState('')
   const [validationError, setValidationError] = useState<string | undefined>(undefined)
   const revertMonth = useRevertMonthConfirmation()
+  // メッセージの入力は API の `reason` に対応する。
+  const revertErrors = fieldErrors(revertMonth.error, ['reason'] as const)
 
   return (
     <ConfirmActionDialog
@@ -28,7 +31,7 @@ export function RevertMonthConfirmationDialog({ monthId, yearMonth }: RevertMont
       description={`${yearMonth}の月次勤怠を未提出に戻します。社員は日次実績を編集して再提出できるようになります。入力したメッセージは社員の月次勤怠画面に表示され、通知でも送られます。`}
       confirmLabel="未提出に戻す"
       isPending={revertMonth.isPending}
-      error={revertMonth.error}
+      error={revertErrors.rest}
       onOpenChange={(open) => {
         if (open) {
           setMessage('')
@@ -47,7 +50,7 @@ export function RevertMonthConfirmationDialog({ monthId, yearMonth }: RevertMont
           .then(() => notify.success(`${yearMonth}の月次勤怠を未提出に戻しました`))
       }}
     >
-      <FormField label="社員へのメッセージ" htmlFor="revert-month-message" required error={validationError}>
+      <FormField label="社員へのメッセージ" htmlFor="revert-month-message" required error={validationError ?? revertErrors.of('reason')}>
         <Textarea id="revert-month-message" value={message} onChange={(e) => setMessage(e.target.value)} rows={3} />
       </FormField>
     </ConfirmActionDialog>

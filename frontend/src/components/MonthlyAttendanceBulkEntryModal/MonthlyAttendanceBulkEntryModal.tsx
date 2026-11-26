@@ -3,6 +3,7 @@ import { useAuth } from '../../auth/useAuth'
 import { useGenerateAttendancePattern } from '../../hooks/useAttendance'
 import { notify } from '../../lib/notify'
 import { attendancePatternResultMessage } from '../../utils/attendancePatternResultMessage'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { browserOffsetString } from '../../utils/offsetDateTime'
 import type { StatusMeta } from '../../utils/statusLabels'
 import { datesInMonth, isoWeekdayOf } from '../../utils/weekDates'
@@ -103,6 +104,15 @@ export function MonthlyAttendanceBulkEntryModal({
   const from = dates[0]
   const to = dates[dates.length - 1]
 
+  // 日にちごとの時刻は「日にちごとに設定」タブでだけ描く。送信本文のキーは添字ではなく日付
+  // (`day_overrides.{YYYY-MM-DD}.{項目}`)なので、描く日付のキーを fields に並べる。
+  const DAY_OVERRIDE_KEYS = ['start_time', 'end_time', 'break_start_time', 'break_end_time'] as const
+  const dayOverrideFields =
+    activeTab === 'detailed' ? dates.flatMap((date) => DAY_OVERRIDE_KEYS.map((key) => `day_overrides.${date}.${key}`)) : []
+  const patternErrors = fieldErrors(generatePattern.error, ['utc_offset', 'reason', 'overwrite_mode', ...dayOverrideFields])
+  const dayOverrideErrors = (date: string) =>
+    DAY_OVERRIDE_KEYS.flatMap((key) => patternErrors.of(`day_overrides.${date}.${key}`) ?? [])
+
   const handleOpenChange = (next: boolean) => {
     if (!isControlled) setUncontrolledOpen(next)
     onOpenChange?.(next)
@@ -183,7 +193,7 @@ export function MonthlyAttendanceBulkEntryModal({
         <div>
         <p className="text-sm text-muted-foreground">適用期間: {from} 〜 {to}</p>
 
-        <FormField label="タイムゾーンオフセット" htmlFor="monthly-attendance-offset" required>
+        <FormField label="タイムゾーンオフセット" htmlFor="monthly-attendance-offset" required error={patternErrors.of('utc_offset')}>
           <Input
             id="monthly-attendance-offset"
             value={offset}
@@ -285,6 +295,11 @@ export function MonthlyAttendanceBulkEntryModal({
                         />
                       </div>
                     </div>
+                    {dayOverrideErrors(date).map((message) => (
+                      <p key={message} className="text-xs text-destructive md:order-last md:basis-full">
+                        {message}
+                      </p>
+                    ))}
                   </div>
                 )
               })}
@@ -292,7 +307,7 @@ export function MonthlyAttendanceBulkEntryModal({
           </TabsContent>
         </Tabs>
 
-        <FormField label="確定理由(任意)" htmlFor="monthly-attendance-reason">
+        <FormField label="確定理由(任意)" htmlFor="monthly-attendance-reason" error={patternErrors.of('reason')}>
           <Input
             id="monthly-attendance-reason"
             value={reason}
@@ -304,6 +319,7 @@ export function MonthlyAttendanceBulkEntryModal({
         <FormField
           label="既存の実績がある日の扱い"
           htmlFor="monthly-attendance-overwrite-mode"
+          error={patternErrors.of('overwrite_mode')}
           description="締め済み・承認済みの月に属する日はどちらを選んでも変更されない。"
         >
           <NativeSelect
@@ -323,7 +339,7 @@ export function MonthlyAttendanceBulkEntryModal({
         )}
         </div>
 
-        {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
+        {generatePattern.error && <ErrorMessage error={patternErrors.rest} />}
 
         <DialogFooter>
           <Button variant="secondary" onClick={() => handleOpenChange(false)}>

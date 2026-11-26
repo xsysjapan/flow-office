@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import { ApiError } from '../../api/client'
 import * as requestTypesApi from '../../api/requestTypes'
 import * as userWorkStyleAssignmentsApi from '../../api/userWorkStyleMonthlyAssignments'
 import * as usersApi from '../../api/users'
@@ -654,6 +655,59 @@ describe('AttendanceMonthDetailPage', () => {
       await userEvent.click(screen.getByRole('button', { name: '前月' }))
 
       expect(await screen.findByText('2026-06')).toBeInTheDocument()
+    })
+  })
+
+  describe('422の項目エラー', () => {
+    const SERVER_MESSAGE = 'サーバーの最初のエラー文'
+    const HEADING = '入力内容を確認してください。'
+
+    function unprocessable(keys: string[]) {
+      return new ApiError(422, SERVER_MESSAGE, Object.fromEntries([...keys, 'unknown_key'].map((key) => [key, [`msg:${key}`]])))
+    }
+
+    async function openDialogAndSubmit(withApprover: boolean) {
+      await userEvent.click(await screen.findByRole('button', { name: '提出する' }))
+      const dialog = await screen.findByRole('dialog')
+      if (withApprover) {
+        await userEvent.click(within(dialog).getByRole('combobox'))
+        await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
+        await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+      }
+      await userEvent.click(within(dialog).getByRole('button', { name: '提出する' }))
+    }
+
+    beforeEach(() => {
+      vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+        days: [],
+        month: notSubmittedMonth,
+        flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
+      })
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
+    })
+
+    it('shows the approver error once under the approver field when approval is required', async () => {
+      vi.spyOn(attendanceApi, 'submitMonth').mockRejectedValue(unprocessable(['approver_user_id']))
+      renderPage()
+
+      await openDialogAndSubmit(true)
+
+      await screen.findByText(HEADING)
+      expect(screen.getAllByText('msg:approver_user_id')).toHaveLength(1)
+      expect(screen.getAllByText('msg:unknown_key')).toHaveLength(1)
+      expect(screen.queryByText(SERVER_MESSAGE)).not.toBeInTheDocument()
+    })
+
+    it('keeps the approver error in the summary when the approver field is not shown', async () => {
+      vi.spyOn(attendanceApi, 'submitMonth').mockRejectedValue(unprocessable(['approver_user_id']))
+      renderPage(yearMonth, false)
+
+      await openDialogAndSubmit(false)
+
+      await screen.findByText(HEADING)
+      expect(screen.getAllByText('msg:approver_user_id')).toHaveLength(1)
+      expect(screen.getAllByText('msg:unknown_key')).toHaveLength(1)
     })
   })
 })
