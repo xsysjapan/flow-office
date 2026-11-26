@@ -76,4 +76,30 @@ describe("Ms365CredentialsFields", () => {
       screen.getByPlaceholderText("設定済み(変更する場合のみ入力)"),
     ).toBeInTheDocument();
   });
+
+  it("shows the given field errors under each field", () => {
+    render(
+      <Ms365CredentialsFields
+        idPrefix="test"
+        value={emptyValue}
+        onChange={vi.fn()}
+        errors={{
+          tenantId: "テナントIDエラー。",
+          clientId: "クライアントIDエラー。",
+          clientSecret: "クライアントシークレットエラー。",
+          mockEnabled: "モックエラー。",
+        }}
+      />,
+    );
+
+    for (const message of [
+      "テナントIDエラー。",
+      "クライアントIDエラー。",
+      "クライアントシークレットエラー。",
+      "モックエラー。",
+    ]) {
+      expect(screen.getByText(message)).toBeInTheDocument();
+    }
+    expect(screen.getByLabelText("テナントID")).toHaveAccessibleDescription("テナントIDエラー。");
+  });
 });

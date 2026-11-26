@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as attendanceSubmissionReminderExclusionsApi from '../../api/attendanceSubmissionReminderExclusions'
 import type { AttendanceSubmissionReminderExclusion } from '../../api/types'
 import { AttendanceSubmissionReminderExclusionPanel } from './AttendanceSubmissionReminderExclusionPanel'
@@ -80,5 +81,28 @@ describe('AttendanceSubmissionReminderExclusionPanel', () => {
       reason: '誤ってその月を提出対象にしていたため',
     })
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2026-06の督促を対象外にしました'))
+  })
+
+  it('shows 422 field errors under each field exactly once', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(attendanceSubmissionReminderExclusionsApi, 'excludeAttendanceSubmissionReminder').mockRejectedValue(
+      new ApiError(422, '対象年月エラー。', {
+        year_month: ['対象年月エラー。'],
+        reason: ['除外理由エラー。'],
+        user_id: ['未知のエラー。'],
+      }),
+    )
+    renderPanel([])
+    await screen.findByText('除外設定はまだありません。')
+
+    await user.click(screen.getByRole('button', { name: '対象年月' }))
+    await user.click(screen.getByRole('option', { name: '2026年6月' }))
+    await user.type(screen.getByLabelText('除外理由'), '誤ってその月を提出対象にしていたため')
+    await user.click(screen.getByRole('button', { name: 'この月の督促を対象外にする' }))
+
+    for (const message of ['対象年月エラー。', '除外理由エラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
   })
 })

@@ -45,6 +45,10 @@ import * as access from "../../hooks/useAccessControl";
 import { membershipKindLabel } from '../../utils/statusLabels'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { isGroupFormDirty, type GroupFormValues } from './groupDetailDirty'
+import { fieldErrors } from '../../utils/fieldErrors'
+
+type GroupErrorKey = "group_type_id" | "name" | "parent_group_id" | "status";
+type MembershipErrorKey = "user_id" | "effective_at" | "note" | "items.*.is_primary";
 
 const emptyGroupForm: GroupFormValues = {
   group_type_id: "",
@@ -135,6 +139,10 @@ function GroupDetailForm() {
   }
 
   const mutation = isNew ? createGroup : updateGroup;
+  const fields: GroupErrorKey[] = isNew
+    ? ["group_type_id", "name", "parent_group_id"]
+    : ["name", "parent_group_id", "status"];
+  const { of, rest } = fieldErrors(mutation.error, fields);
   const parentCandidates = groups.data?.filter(
     (candidate) =>
       candidate.id !== id &&
@@ -147,7 +155,7 @@ function GroupDetailForm() {
       {top}
       <Card title={isNew ? "基本情報" : group!.name}>
         <FormLayout>
-          <FormField label="グループ種別" htmlFor="group-detail-type">
+          <FormField label="グループ種別" htmlFor="group-detail-type" error={of("group_type_id")}>
             <NativeSelect
               id="group-detail-type"
               disabled={!isNew}
@@ -168,7 +176,7 @@ function GroupDetailForm() {
               ))}
             </NativeSelect>
           </FormField>
-          <FormField label="名称" htmlFor="group-detail-name">
+          <FormField label="名称" htmlFor="group-detail-name" error={of("name")}>
             <Input
               id="group-detail-name"
               value={form.name}
@@ -177,7 +185,7 @@ function GroupDetailForm() {
               }
             />
           </FormField>
-          <FormField label="親グループ" htmlFor="group-detail-parent">
+          <FormField label="親グループ" htmlFor="group-detail-parent" error={of("parent_group_id")}>
             <NativeSelect
               id="group-detail-parent"
               value={form.parent_group_id}
@@ -194,7 +202,7 @@ function GroupDetailForm() {
             </NativeSelect>
           </FormField>
           {!isNew && (
-            <FormField label="状態" htmlFor="group-detail-status">
+            <FormField label="状態" htmlFor="group-detail-status" error={of("status")}>
               <NativeSelect
                 id="group-detail-status"
                 value={form.status}
@@ -228,7 +236,7 @@ function GroupDetailForm() {
               </NativeSelect>
             </FormField>
           )}
-          {mutation.error && <ErrorMessage error={mutation.error} />}
+          {rest != null && <ErrorMessage error={rest} />}
           <FormActions>
             <Button variant="secondary" onClick={() => navigate("/admin/groups")}>
               キャンセル
@@ -361,6 +369,14 @@ function GroupMembersCard({
     (user) => user.id === userId,
   );
   const mutation = timing === "scheduled" ? scheduleChange : applyNow;
+  // 描かれる項目と同じ条件でキーを組み立てる(追加のときだけ対象ユーザー・所属区分、予約のときだけ適用日時)。
+  const membershipFields: MembershipErrorKey[] = ["note"];
+  if (operation === "add") membershipFields.push("user_id", "items.*.is_primary");
+  if (timing === "scheduled") membershipFields.push("effective_at");
+  const { of: membershipOf, ofRow: membershipOfRow, rest: membershipRest } = fieldErrors(
+    mutation.error,
+    membershipFields,
+  );
 
   const openChange = (nextOperation: "add" | "remove", nextUserId = "") => {
     setOperation(nextOperation);
@@ -524,7 +540,11 @@ function GroupMembersCard({
           </DialogHeader>
           <div>
             {operation === "add" ? (
-              <FormField label="対象ユーザー" htmlFor="group-membership-user">
+              <FormField
+                label="対象ユーザー"
+                htmlFor="group-membership-user"
+                error={membershipOf("user_id")}
+              >
                 <NativeSelect
                   id="group-membership-user"
                   value={userId}
@@ -544,7 +564,11 @@ function GroupMembersCard({
               </p>
             )}
             {operation === "add" && (
-              <FormField label="所属区分" htmlFor="group-membership-primary">
+              <FormField
+                label="所属区分"
+                htmlFor="group-membership-primary"
+                error={membershipOfRow("items", 0, "is_primary")}
+              >
                 <NativeSelect
                   id="group-membership-primary"
                   value={isPrimary ? "primary" : "member"}
@@ -574,6 +598,7 @@ function GroupMembersCard({
               <FormField
                 label="適用日時"
                 htmlFor="group-membership-effective-at"
+                error={membershipOf("effective_at")}
               >
                 <DateTimePicker
                   id="group-membership-effective-at"
@@ -582,7 +607,7 @@ function GroupMembersCard({
                 />
               </FormField>
             )}
-            <FormField label="メモ" htmlFor="group-membership-note">
+            <FormField label="メモ" htmlFor="group-membership-note" error={membershipOf("note")}>
               <Input
                 id="group-membership-note"
                 value={note}
@@ -590,7 +615,7 @@ function GroupMembersCard({
               />
             </FormField>
           </div>
-          {mutation.error && <ErrorMessage error={mutation.error} />}
+          {membershipRest != null && <ErrorMessage error={membershipRest} />}
           <DialogFooter>
             <Button variant="secondary" onClick={() => setDialogOpen(false)}>
               キャンセル

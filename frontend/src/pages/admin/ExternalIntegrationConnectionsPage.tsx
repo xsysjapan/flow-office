@@ -34,6 +34,7 @@ import type {
   ExternalIntegrationProvider,
 } from '../../api/types'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 const PROVIDER_LABELS: Record<ExternalIntegrationProvider, string> = {
   freee: 'freee',
@@ -128,21 +129,43 @@ function validateForm(value: ConnectionFormValue, isCreate: boolean): string | n
   return null
 }
 
+type ConnectionErrorKey =
+  | 'provider'
+  | 'name'
+  | 'auth_type'
+  | 'external_office_id'
+  | 'client_id'
+  | 'client_secret'
+  | 'api_key'
+  | 'custom_settings'
+
+/** 描かれる項目と同じ条件でキーを組み立てる(認証方式ごとの項目、作成のときだけの項目)。 */
+function connectionErrorKeys(value: ConnectionFormValue, isCreate: boolean): ConnectionErrorKey[] {
+  const keys: ConnectionErrorKey[] = ['name', 'external_office_id', 'custom_settings']
+  // 編集のAPI(PATCH)はproviderとauth_typeを受け付けない。
+  if (isCreate) keys.push('provider', 'auth_type')
+  if (value.authType === 'oauth2') keys.push('client_id', 'client_secret')
+  if (value.authType === 'api_key') keys.push('api_key')
+  return keys
+}
+
 function ConnectionFormFields({
   idPrefix,
   value,
   onChange,
   isCreate,
+  errorOf,
 }: {
   idPrefix: string
   value: ConnectionFormValue
   onChange: (value: ConnectionFormValue) => void
   isCreate: boolean
+  errorOf: (key: ConnectionErrorKey) => string | undefined
 }) {
   return (
     <>
       {isCreate && (
-        <FormField label="プロバイダ" htmlFor={`${idPrefix}-provider`} required>
+        <FormField label="プロバイダ" htmlFor={`${idPrefix}-provider`} required error={errorOf('provider')}>
           <NativeSelect
             id={`${idPrefix}-provider`}
             value={value.provider}
@@ -159,7 +182,7 @@ function ConnectionFormFields({
           </NativeSelect>
         </FormField>
       )}
-      <FormField label="名称" htmlFor={`${idPrefix}-name`} required>
+      <FormField label="名称" htmlFor={`${idPrefix}-name`} required error={errorOf('name')}>
         <Input
           id={`${idPrefix}-name`}
           value={value.name}
@@ -167,7 +190,7 @@ function ConnectionFormFields({
           placeholder="例: freee本社経理"
         />
       </FormField>
-      <FormField label="認証方式" htmlFor={`${idPrefix}-auth-type`} required>
+      <FormField label="認証方式" htmlFor={`${idPrefix}-auth-type`} required error={errorOf('auth_type')}>
         <NativeSelect
           id={`${idPrefix}-auth-type`}
           value={value.authType}
@@ -180,7 +203,7 @@ function ConnectionFormFields({
           ))}
         </NativeSelect>
       </FormField>
-      <FormField label="外部事業所ID" htmlFor={`${idPrefix}-office-id`}>
+      <FormField label="外部事業所ID" htmlFor={`${idPrefix}-office-id`} error={errorOf('external_office_id')}>
         <Input
           id={`${idPrefix}-office-id`}
           value={value.externalOfficeId}
@@ -191,7 +214,7 @@ function ConnectionFormFields({
 
       {value.authType === 'oauth2' && (
         <>
-          <FormField label="クライアントID" htmlFor={`${idPrefix}-client-id`} required={isCreate}>
+          <FormField label="クライアントID" htmlFor={`${idPrefix}-client-id`} required={isCreate} error={errorOf('client_id')}>
             <Input
               id={`${idPrefix}-client-id`}
               value={value.clientId}
@@ -199,7 +222,7 @@ function ConnectionFormFields({
               placeholder={isCreate ? undefined : '変更する場合のみ入力(空欄のままなら変更しない)'}
             />
           </FormField>
-          <FormField label="クライアントシークレット" htmlFor={`${idPrefix}-client-secret`} required={isCreate}>
+          <FormField label="クライアントシークレット" htmlFor={`${idPrefix}-client-secret`} required={isCreate} error={errorOf('client_secret')}>
             <Input
               id={`${idPrefix}-client-secret`}
               type="password"
@@ -212,7 +235,7 @@ function ConnectionFormFields({
       )}
 
       {value.authType === 'api_key' && (
-        <FormField label="APIキー" htmlFor={`${idPrefix}-api-key`} required={isCreate}>
+        <FormField label="APIキー" htmlFor={`${idPrefix}-api-key`} required={isCreate} error={errorOf('api_key')}>
           <Input
             id={`${idPrefix}-api-key`}
             type="password"
@@ -223,7 +246,7 @@ function ConnectionFormFields({
         </FormField>
       )}
 
-      <FormField label="カスタム設定(JSON)" htmlFor={`${idPrefix}-custom-settings`}>
+      <FormField label="カスタム設定(JSON)" htmlFor={`${idPrefix}-custom-settings`} error={errorOf('custom_settings')}>
         <Textarea
           id={`${idPrefix}-custom-settings`}
           value={value.customSettingsText}
@@ -335,6 +358,15 @@ export function ExternalIntegrationConnectionsPage() {
   if (isLoading) return <div className="space-y-6"><PageHeader description={pageDescription} /><LoadingState /></div>
   if (error) return <div className="space-y-6"><PageHeader description={pageDescription} /><ErrorMessage error={error} fallback="外部連携設定の取得に失敗しました。" /></div>
 
+  const { of: createOf, rest: createRest } = fieldErrors(
+    createConnection.error,
+    connectionErrorKeys(createValue, true),
+  )
+  const { of: editOf, rest: editRest } = fieldErrors(
+    updateConnection.error,
+    connectionErrorKeys(editValue, false),
+  )
+
   const list = data?.data ?? []
   const createValidationError = isFormOpen ? validateForm(createValue, true) : null
   const editValidationError = editingConnection ? validateForm(editValue, false) : null
@@ -443,12 +475,12 @@ export function ExternalIntegrationConnectionsPage() {
     <Card>
       {isFormOpen && (
         <div className="mb-6 rounded-md border border-border p-4">
-          <ConnectionFormFields idPrefix="connection-create" value={createValue} onChange={setCreateValue} isCreate />
+          <ConnectionFormFields idPrefix="connection-create" value={createValue} onChange={setCreateValue} isCreate errorOf={createOf} />
           <Button isLoading={createConnection.isPending} disabled={Boolean(createValidationError)} onClick={handleCreate}>
             作成
           </Button>
           {createValidationError && <p className="mt-1.5 text-xs text-muted-foreground">{createValidationError}</p>}
-          {createConnection.error && <ErrorMessage error={createConnection.error} />}
+          {createRest != null && <ErrorMessage error={createRest} />}
         </div>
       )}
 
@@ -606,13 +638,14 @@ export function ExternalIntegrationConnectionsPage() {
                 value={editValue}
                 onChange={setEditValue}
                 isCreate={false}
+                errorOf={editOf}
               />
               <p className="mb-2 text-xs text-muted-foreground">
                 クライアントシークレット・APIキーは空欄のままにすると現在の値を変更しません。
               </p>
               {editValidationError && <p className="mb-2 text-xs text-muted-foreground">{editValidationError}</p>}
               </div>
-              {updateConnection.error && <ErrorMessage error={updateConnection.error} />}
+              {editRest != null && <ErrorMessage error={editRest} />}
             </>
           )}
           <DialogFooter>

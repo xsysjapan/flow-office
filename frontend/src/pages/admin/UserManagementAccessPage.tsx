@@ -18,6 +18,7 @@ import { FormActions } from "../../components/FormActions/FormActions";
 import { FormField } from "../../components/FormField/FormField";
 import { FormLayout } from "../../components/FormLayout/FormLayout";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
+import { fieldErrors } from "../../utils/fieldErrors";
 import { ListFilterBar } from "../../components/ListFilterBar/ListFilterBar";
 import { filterWidth } from "../../components/ListFilterBar/filterWidth";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
@@ -48,6 +49,32 @@ import {
 } from "../../utils/membershipChangeLabels";
 import { isValidPositiveIntIdParam } from "../../utils/searchParamValidators";
 import { groupStatusLabel, userFieldKeyLabel } from '../../utils/statusLabels'
+
+const IDENTITY_ERROR_KEYS = [
+  "provider",
+  "external_tenant_id",
+  "external_subject_id",
+  "external_code",
+  "email",
+] as const;
+
+// 変更予約の明細(items)は行ごとの入力が無い(追加済みの一覧)ため、行の下にまとめて出す。
+const CHANGE_ITEM_KEYS = [
+  "operation",
+  "group_type_id",
+  "from_group_id",
+  "to_group_id",
+  "target_group_id",
+  "is_primary",
+] as const;
+const CHANGE_ERROR_KEYS = [
+  "user_id",
+  "effective_at",
+  "note",
+  "items",
+  "items.*",
+  ...CHANGE_ITEM_KEYS.map((key) => `items.*.${key}` as const),
+] as const;
 
 export function UserManagementAccessPage({
   section = "groups",
@@ -231,6 +258,34 @@ export function UserManagementAccessPage({
       </div>
     );
 
+  const { of: identityOf, rest: identityRest } = fieldErrors(
+    linkIdentity.error,
+    IDENTITY_ERROR_KEYS,
+  );
+  const { rest: authorityRest } = fieldErrors(updateAuthority.error, []);
+  const {
+    of: changeOf,
+    ofAny: changeOfAny,
+    ofRow: changeOfRow,
+    rest: changeRest,
+  } = fieldErrors(
+    scheduleChange.error ?? createDraft.error ?? updateChange.error,
+    CHANGE_ERROR_KEYS,
+  );
+  const changeItemErrors = (index: number) => [
+    ...new Set(
+      CHANGE_ITEM_KEYS.map((key) => changeOfRow("items", index, key)).filter(
+        (message): message is string => Boolean(message),
+      ),
+    ),
+  ];
+  const { rest: scheduleExistingRest } = fieldErrors(
+    scheduleExisting.error ?? applyChange.error,
+    [],
+  );
+  const { of: csvOf, rest: previewCsvRest } = fieldErrors(previewCsv.error, ["file"] as const);
+  const { rest: applyCsvRest } = fieldErrors(applyCsv.error, []);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -374,7 +429,11 @@ export function UserManagementAccessPage({
                   users={users.data?.data}
                 />
               </FormField>
-              <FormField label="Provider" htmlFor="identity-form-provider">
+              <FormField
+                label="Provider"
+                htmlFor="identity-form-provider"
+                error={identityOf("provider")}
+              >
                 <Input
                   id="identity-form-provider"
                   placeholder="Provider"
@@ -387,7 +446,11 @@ export function UserManagementAccessPage({
                   }
                 />
               </FormField>
-              <FormField label="Tenant ID" htmlFor="identity-form-tenant-id">
+              <FormField
+                label="Tenant ID"
+                htmlFor="identity-form-tenant-id"
+                error={identityOf("external_tenant_id")}
+              >
                 <Input
                   id="identity-form-tenant-id"
                   placeholder="Tenant ID"
@@ -400,7 +463,11 @@ export function UserManagementAccessPage({
                   }
                 />
               </FormField>
-              <FormField label="Subject ID" htmlFor="identity-form-subject-id">
+              <FormField
+                label="Subject ID"
+                htmlFor="identity-form-subject-id"
+                error={identityOf("external_subject_id")}
+              >
                 <Input
                   id="identity-form-subject-id"
                   placeholder="Subject ID"
@@ -416,6 +483,7 @@ export function UserManagementAccessPage({
               <FormField
                 label="外部コード"
                 htmlFor="identity-form-external-code"
+                error={identityOf("external_code")}
               >
                 <Input
                   id="identity-form-external-code"
@@ -429,7 +497,11 @@ export function UserManagementAccessPage({
                   }
                 />
               </FormField>
-              <FormField label="外部メール" htmlFor="identity-form-email">
+              <FormField
+                label="外部メール"
+                htmlFor="identity-form-email"
+                error={identityOf("email")}
+              >
                 <Input
                   id="identity-form-email"
                   type="email"
@@ -447,9 +519,7 @@ export function UserManagementAccessPage({
                   対象ユーザー・Provider・Subject IDを入力してください。
                 </p>
               )}
-              {linkIdentity.error && (
-                <ErrorMessage error={linkIdentity.error} />
-              )}
+              {identityRest != null && <ErrorMessage error={identityRest} />}
               <FormActions>
                 <Button
                   disabled={
@@ -553,9 +623,9 @@ export function UserManagementAccessPage({
                   </NativeSelect>
                 </div>
               ))}
-              {updateAuthority.error && (
+              {authorityRest != null && (
                 <div className="md:col-span-2">
-                  <ErrorMessage error={updateAuthority.error} />
+                  <ErrorMessage error={authorityRest} />
                 </div>
               )}
             </div>
@@ -593,6 +663,7 @@ export function UserManagementAccessPage({
                   <FormField
                     label="対象ユーザー"
                     htmlFor="membership-change-user"
+                    error={changeOf("user_id")}
                   >
                     <UserSelect
                       id="membership-change-user"
@@ -606,6 +677,7 @@ export function UserManagementAccessPage({
                   <FormField
                     label="適用日時"
                     htmlFor="membership-change-effective-at"
+                    error={changeOf("effective_at")}
                   >
                     <DateTimePicker
                       id="membership-change-effective-at"
@@ -672,7 +744,11 @@ export function UserManagementAccessPage({
                       />
                     </FormField>
                   )}
-                  <FormField label="メモ" htmlFor="membership-change-note">
+                  <FormField
+                    label="メモ"
+                    htmlFor="membership-change-note"
+                    error={changeOf("note")}
+                  >
                     <Input
                       id="membership-change-note"
                       value={changeForm.note}
@@ -694,42 +770,46 @@ export function UserManagementAccessPage({
                     <div className="mb-2 text-sm font-medium">
                       変更明細（{changeItems.length}件）
                     </div>
+                    {changeOfAny("items").map((message) => (
+                      <p className="text-xs text-destructive" key={message}>
+                        {message}
+                      </p>
+                    ))}
                     {changeItems.map((item, index) => (
-                      <div
-                        className="flex flex-wrap items-center justify-between gap-2 text-sm"
-                        key={`${item.operation}-${index}`}
-                      >
-                        <span>
-                          {membershipChangeDescription(item, groups.data)}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() =>
-                            setChangeItems((items) =>
-                              items.filter(
-                                (_, itemIndex) => itemIndex !== index,
-                              ),
-                            )
-                          }
-                        >
-                          削除
-                        </Button>
+                      <div key={`${item.operation}-${index}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                          <span>
+                            {membershipChangeDescription(item, groups.data)}
+                            {changeItemErrors(index).length > 0 && (
+                              <span className="ml-2 text-xs text-destructive">
+                                (エラーあり)
+                              </span>
+                            )}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              setChangeItems((items) =>
+                                items.filter(
+                                  (_, itemIndex) => itemIndex !== index,
+                                ),
+                              )
+                            }
+                          >
+                            削除
+                          </Button>
+                        </div>
+                        {changeItemErrors(index).map((message) => (
+                          <p className="text-xs text-destructive" key={message}>
+                            {message}
+                          </p>
+                        ))}
                       </div>
                     ))}
                   </div>
                 </div>
-                {(scheduleChange.error ||
-                  createDraft.error ||
-                  updateChange.error) && (
-                  <ErrorMessage
-                    error={
-                      scheduleChange.error ??
-                      createDraft.error ??
-                      updateChange.error
-                    }
-                  />
-                )}
+                {changeRest != null && <ErrorMessage error={changeRest} />}
                 <DialogFooter>
                   <Button variant="secondary" onClick={closeChangeDialog}>
                     キャンセル
@@ -835,10 +915,8 @@ export function UserManagementAccessPage({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            {(scheduleExisting.error || applyChange.error) && (
-              <ErrorMessage
-                error={scheduleExisting.error ?? applyChange.error}
-              />
+            {scheduleExistingRest != null && (
+              <ErrorMessage error={scheduleExistingRest} />
             )}
             {changeSets.data?.length === 0 ? (
               <EmptyState
@@ -1044,7 +1122,11 @@ export function UserManagementAccessPage({
               </p>
             </div>
             <FormLayout>
-              <FormField label="外部HR CSVファイル" htmlFor="hr-csv-file">
+              <FormField
+                label="外部HR CSVファイル"
+                htmlFor="hr-csv-file"
+                error={csvOf("file")}
+              >
                 <Input
                   id="hr-csv-file"
                   key={csvInputKey}
@@ -1068,10 +1150,10 @@ export function UserManagementAccessPage({
                   適用が必要な差分はありません。
                 </p>
               )}
-              {previewCsv.error && <ErrorMessage error={previewCsv.error} />}
-              {applyCsv.error && (
+              {previewCsvRest != null && <ErrorMessage error={previewCsvRest} />}
+              {applyCsvRest != null && (
                 <ErrorMessage
-                  error={applyCsv.error}
+                  error={applyCsvRest}
                   fallback="差分の適用に失敗しました。"
                 />
               )}

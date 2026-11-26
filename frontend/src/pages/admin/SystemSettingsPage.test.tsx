@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as systemSettingsApi from '../../api/systemSettings'
 import type { SystemSettings } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -127,5 +128,42 @@ describe('SystemSettingsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('保存に失敗しました')
+  })
+
+  it('shows 422 field errors under each field exactly once and the rest in the summary', async () => {
+    vi.spyOn(systemSettingsApi, 'updateSystemSettings').mockRejectedValue(
+      new ApiError(422, '既定タイムゾーンが正しくありません。', {
+        default_timezone: ['既定タイムゾーンが正しくありません。'],
+        attendance_submission_deadline_day: ['提出基準日エラー。'],
+        attendance_month_close_deadline_day: ['締め基準日エラー。'],
+        m365_tenant_id: ['テナントIDエラー。'],
+        m365_client_id: ['クライアントIDエラー。'],
+        m365_client_secret: ['クライアントシークレットエラー。'],
+        m365_mock_enabled: ['モックエラー。'],
+        notification_mail_sender_address: ['送信元アドレスエラー。'],
+        notification_mail_sender_name: ['送信元表示名エラー。'],
+        unknown_key: ['未知のエラー。'],
+      }),
+    )
+    renderPage()
+
+    await screen.findByLabelText('既定タイムゾーン')
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    for (const message of [
+      '既定タイムゾーンが正しくありません。',
+      '提出基準日エラー。',
+      '締め基準日エラー。',
+      'テナントIDエラー。',
+      'クライアントIDエラー。',
+      'クライアントシークレットエラー。',
+      'モックエラー。',
+      '送信元アドレスエラー。',
+      '送信元表示名エラー。',
+      '未知のエラー。',
+    ]) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
   })
 })

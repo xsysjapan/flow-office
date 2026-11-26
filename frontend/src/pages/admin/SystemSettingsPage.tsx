@@ -14,7 +14,20 @@ import { Input } from '../../components/ui/input'
 import { notify } from '../../lib/notify'
 import { useSystemSettings, useUpdateSystemSettings } from '../../hooks/useSystemSettings'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { isSystemSettingsDirty, systemSettingsToForm, type SystemSettingsFormValues } from './systemSettingsDirty'
+
+const SETTINGS_ERROR_KEYS = [
+  'default_timezone',
+  'attendance_submission_deadline_day',
+  'attendance_month_close_deadline_day',
+  'm365_tenant_id',
+  'm365_client_id',
+  'm365_client_secret',
+  'm365_mock_enabled',
+  'notification_mail_sender_address',
+  'notification_mail_sender_name',
+] as const
 
 /**
  * UC-003: システム設定(default_timezone等)を管理する。
@@ -98,6 +111,8 @@ export function SystemSettingsPage() {
   if (isLoading) return <div className="space-y-6">{header}<LoadingState /></div>
   if (error) return <div className="space-y-6">{header}<ErrorMessage error={error} fallback="システム設定の取得に失敗しました。" /></div>
 
+  const { of, rest } = fieldErrors(updateSettings.error, SETTINGS_ERROR_KEYS)
+
   const handleSave = () => {
     updateSettings.mutate(
       {
@@ -144,7 +159,7 @@ export function SystemSettingsPage() {
         タイムゾーンは変更されません)。
       </p>
 
-      <FormField label="既定タイムゾーン" htmlFor="system-settings-default-timezone" required>
+      <FormField label="既定タイムゾーン" htmlFor="system-settings-default-timezone" required error={of('default_timezone')}>
         <Input
           id="system-settings-default-timezone"
           placeholder="Asia/Tokyo"
@@ -157,6 +172,7 @@ export function SystemSettingsPage() {
         label="勤怠未提出の警告基準日(当月の何日)"
         htmlFor="system-settings-submission-deadline-day"
         required
+        error={of('attendance_submission_deadline_day')}
         description="この日を過ぎても前月分の勤怠が未提出の在籍社員に、解消するまで毎日通知する。"
       >
         <Input
@@ -173,6 +189,7 @@ export function SystemSettingsPage() {
         label="月次締め前警告の基準日(当月の何日)"
         htmlFor="system-settings-month-close-deadline-day"
         required
+        error={of('attendance_month_close_deadline_day')}
         description="この日の3日前になっても前月分の月次勤怠が締められていない場合に通知する。"
       >
         <Input
@@ -268,6 +285,12 @@ export function SystemSettingsPage() {
         value={ms365Value}
         onChange={(value) => setMs365Value(value)}
         clientSecretConfigured={data?.m365_client_secret_configured}
+        errors={{
+          tenantId: of('m365_tenant_id'),
+          clientId: of('m365_client_id'),
+          clientSecret: of('m365_client_secret'),
+          mockEnabled: of('m365_mock_enabled'),
+        }}
       />
 
       </FormSection>
@@ -292,7 +315,7 @@ export function SystemSettingsPage() {
         メール通知を有効にする
       </label>
 
-      <FormField label="送信元メールアドレス" htmlFor="system-settings-mail-sender-address">
+      <FormField label="送信元メールアドレス" htmlFor="system-settings-mail-sender-address" error={of('notification_mail_sender_address')}>
         <Input
           id="system-settings-mail-sender-address"
           type="email"
@@ -301,7 +324,7 @@ export function SystemSettingsPage() {
         />
       </FormField>
 
-      <FormField label="送信元表示名" htmlFor="system-settings-mail-sender-name">
+      <FormField label="送信元表示名" htmlFor="system-settings-mail-sender-name" error={of('notification_mail_sender_name')}>
         <Input
           id="system-settings-mail-sender-name"
           value={notificationMailSenderName}
@@ -316,7 +339,7 @@ export function SystemSettingsPage() {
           既定タイムゾーン・勤怠未提出の警告基準日・月次締め前警告の基準日をすべて入力してください。
         </p>
       )}
-      {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
+      {rest != null && <ErrorMessage error={rest} />}
       <FormActions>
         <Button
           isLoading={updateSettings.isPending}

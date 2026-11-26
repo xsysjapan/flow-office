@@ -197,4 +197,71 @@ describe("GroupTypeManagementPage", () => {
     expect(screen.queryByRole("button", { name: "グループ種別を作成" })).not.toBeInTheDocument();
     expect(notify.success).not.toHaveBeenCalled();
   });
+
+  it("shows 422 field errors of the create form under each field exactly once", async () => {
+    mockGroupTypes();
+    vi.spyOn(userManagementApi, "createGroupType").mockRejectedValue(
+      new ApiError(422, "コードは必須です。", {
+        code: ["コードは必須です。"],
+        name: ["名称は必須です。"],
+        display_order: ["表示順は0以上にしてください。"],
+        membership_limit_type: ["所属数制約が正しくありません。"],
+        max_memberships_per_user: ["所属上限は1以上にしてください。"],
+        max_primary_memberships: ["主所属上限は1以上にしてください。"],
+        other: ["未知のエラーです。"],
+      }),
+    );
+    renderPage();
+
+    await screen.findByText(/組織 \(ORGANIZATION\)/);
+    await userEvent.type(screen.getByPlaceholderText("新規グループ種別コード"), "X");
+    await userEvent.type(screen.getByPlaceholderText("グループ種別名"), "Y");
+    await userEvent.click(screen.getByRole("button", { name: "グループ種別を作成" }));
+
+    for (const message of [
+      "コードは必須です。",
+      "名称は必須です。",
+      "表示順は0以上にしてください。",
+      "所属数制約が正しくありません。",
+      "所属上限は1以上にしてください。",
+      "主所属上限は1以上にしてください。",
+      "未知のエラーです。",
+    ]) {
+      expect(await screen.findByText(message)).toBeInTheDocument();
+    }
+    expect(screen.getByText("入力内容を確認してください。")).toBeInTheDocument();
+  });
+
+  it("shows 422 field errors of the edit form under each field exactly once", async () => {
+    mockGroupTypes();
+    vi.spyOn(userManagementApi, "updateGroupType").mockRejectedValue(
+      new ApiError(422, "名称は必須です。", {
+        name: ["名称は必須です。"],
+        display_order: ["表示順は0以上にしてください。"],
+        status: ["状態が正しくありません。"],
+        membership_limit_type: ["所属数制約が正しくありません。"],
+        max_memberships_per_user: ["所属上限は1以上にしてください。"],
+        max_primary_memberships: ["主所属上限は1以上にしてください。"],
+        other: ["未知のエラーです。"],
+      }),
+    );
+    renderPage();
+
+    await screen.findByText(/プロジェクト \(PROJECT\)/);
+    await userEvent.selectOptions(screen.getByLabelText("編集対象"), "2");
+    await userEvent.click(screen.getByRole("button", { name: "変更を保存" }));
+
+    for (const message of [
+      "名称は必須です。",
+      "表示順は0以上にしてください。",
+      "状態が正しくありません。",
+      "所属数制約が正しくありません。",
+      "所属上限は1以上にしてください。",
+      "主所属上限は1以上にしてください。",
+      "未知のエラーです。",
+    ]) {
+      expect(await screen.findByText(message)).toBeInTheDocument();
+    }
+    expect(screen.getByText("入力内容を確認してください。")).toBeInTheDocument();
+  });
 });

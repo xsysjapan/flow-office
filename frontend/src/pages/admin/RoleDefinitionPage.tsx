@@ -35,7 +35,7 @@ import {
 import { RoleAssignmentSection } from "../../components/RoleAssignmentSection/RoleAssignmentSection";
 import * as access from "../../hooks/useAccessControl";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
-import { fieldErrorOf, nonFieldError } from "../../utils/fieldErrors";
+import { fieldErrors } from "../../utils/fieldErrors";
 import { isRoleDefinitionDirty, type RoleDefinitionValues } from "./roleDefinitionDirty";
 import * as userManagement from "../../hooks/useUserManagement";
 import type {
@@ -72,6 +72,10 @@ export function RoleDefinitionPage() {
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"create" | "clone">("create");
+  const { of: createOf, rest: createRest } = fieldErrors(
+    createMode === "clone" ? cloneRole.error : createRole.error,
+    CREATE_ERROR_KEYS,
+  );
   const [roleForm, setRoleForm] = useState({
     code: "",
     name: "",
@@ -193,7 +197,7 @@ export function RoleDefinitionPage() {
             </DialogDescription>
           </DialogHeader>
           <div>
-            <FormField label="ロールコード" htmlFor="role-form-code" required>
+            <FormField label="ロールコード" htmlFor="role-form-code" required error={createOf("code")}>
               <Input
                 id="role-form-code"
                 value={roleForm.code}
@@ -202,7 +206,7 @@ export function RoleDefinitionPage() {
                 }
               />
             </FormField>
-            <FormField label="ロール名" htmlFor="role-form-name" required>
+            <FormField label="ロール名" htmlFor="role-form-name" required error={createOf("name")}>
               <Input
                 id="role-form-name"
                 value={roleForm.name}
@@ -211,7 +215,7 @@ export function RoleDefinitionPage() {
                 }
               />
             </FormField>
-            <FormField label="説明(任意)" htmlFor="role-form-description">
+            <FormField label="説明(任意)" htmlFor="role-form-description" error={createOf("description")}>
               <Input
                 id="role-form-description"
                 value={roleForm.description}
@@ -226,8 +230,7 @@ export function RoleDefinitionPage() {
               ロールコードと名称を入力してください。
             </p>
           )}
-          {createRole.error && <ErrorMessage error={createRole.error} />}
-          {cloneRole.error && <ErrorMessage error={cloneRole.error} />}
+          {createRest != null && <ErrorMessage error={createRest} />}
           <DialogFooter>
             <Button
               variant="secondary"
@@ -300,13 +303,17 @@ export function RoleDefinitionPage() {
   );
 }
 
+const CREATE_ERROR_KEYS = ["code", "name", "description"] as const;
+
 const DEFINITION_ERROR_KEYS = [
   "name",
   "description",
   "status",
   "permission_ids",
+  "permission_ids.*",
   "feature_ids",
-];
+  "feature_ids.*",
+] as const;
 
 const roleToValues = (role: AccessRole): RoleDefinitionValues => ({
   name: role.name,
@@ -422,8 +429,13 @@ function RoleDetail({
       new URLSearchParams(current.search).get("roleId") !==
         new URLSearchParams(next.search).get("roleId"),
   });
-  const definitionError = updateRoleDefinition.error;
-  const submitError = nonFieldError(definitionError, DEFINITION_ERROR_KEYS);
+  const {
+    of: definitionOf,
+    ofAny: definitionOfAny,
+    rest: submitError,
+  } = fieldErrors(updateRoleDefinition.error, DEFINITION_ERROR_KEYS);
+  const permissionIdsError = definitionOfAny("permission_ids");
+  const featureIdsError = definitionOfAny("feature_ids");
 
   const permissionGroups = useMemo(
     () =>
@@ -461,7 +473,7 @@ function RoleDetail({
           <FormField
             label="ロール名"
             htmlFor="role-basic-name"
-            error={fieldErrorOf(definitionError, "name")}
+            error={definitionOf("name")}
           >
             <Input
               id="role-basic-name"
@@ -474,7 +486,7 @@ function RoleDetail({
           <FormField
             label="説明"
             htmlFor="role-basic-description"
-            error={fieldErrorOf(definitionError, "description")}
+            error={definitionOf("description")}
           >
             <Input
               id="role-basic-description"
@@ -487,7 +499,7 @@ function RoleDetail({
           <FormField
             label="状態"
             htmlFor="role-basic-status"
-            error={fieldErrorOf(definitionError, "status")}
+            error={definitionOf("status")}
             description={
               role.is_system
                 ? "システム標準ロールのため状態は変更できません。"
@@ -541,11 +553,11 @@ function RoleDetail({
               <EmptyState title="Permissionはまだありません。" />
             )}
           </div>
-          {fieldErrorOf(definitionError, "permission_ids") && (
-            <p className="mb-4 text-xs text-destructive">
-              {fieldErrorOf(definitionError, "permission_ids")}
+          {permissionIdsError.map((message) => (
+            <p className="mb-4 text-xs text-destructive" key={message}>
+              {message}
             </p>
-          )}
+          ))}
         </FormSection>
 
         <FormSection title="Feature構成">
@@ -586,17 +598,17 @@ function RoleDetail({
               ))}
             </div>
           )}
-          {fieldErrorOf(definitionError, "feature_ids") && (
-            <p className="mb-4 text-xs text-destructive">
-              {fieldErrorOf(definitionError, "feature_ids")}
+          {featureIdsError.map((message) => (
+            <p className="mb-4 text-xs text-destructive" key={message}>
+              {message}
             </p>
-          )}
+          ))}
           {!basicForm.name && (
             <p className="mb-2 text-xs text-muted-foreground">
               ロール名を入力してください。
             </p>
           )}
-          {submitError && <ErrorMessage error={submitError} />}
+          {submitError != null && <ErrorMessage error={submitError} />}
           <FormActions>
             <Button
               isLoading={updateRoleDefinition.isPending}

@@ -11,6 +11,7 @@ import * as accessControlApi from "../../api/accessControl";
 import type { AccessRole, RoleAssignment } from "../../api/accessControl";
 import { GroupDetailPage } from "./GroupDetailPage";
 import { notify } from "../../lib/notify";
+import { ApiError } from "../../api/client";
 
 vi.mock("../../lib/notify", () => ({ notify: { success: vi.fn() } }));
 
@@ -95,7 +96,8 @@ const availableUser: User = {
 
 function renderPage({
   roleAssignments = [] as RoleAssignment[],
-}: { roleAssignments?: RoleAssignment[] } = {}) {
+  path = "/admin/groups/group-1",
+}: { roleAssignments?: RoleAssignment[]; path?: string } = {}) {
   vi.spyOn(userManagementApi, "fetchManagedGroups").mockResolvedValue([
     parent,
     group,
@@ -118,7 +120,7 @@ function renderPage({
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/admin/groups/group-1"]}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/admin/groups/:id" element={<GroupDetailPage />} />
         </Routes>
@@ -353,5 +355,69 @@ describe("GroupDetailPage", () => {
         expect.anything(),
       ),
     );
+  });
+
+  it("shows 422 field errors under each field of the update form exactly once", async () => {
+    vi.spyOn(userManagementApi, "updateGroup").mockRejectedValue(
+      new ApiError(422, "名称は必須です。", {
+        name: ["名称は必須です。"],
+        parent_group_id: ["親グループが正しくありません。"],
+        status: ["状態が正しくありません。"],
+        other: ["未知のエラーです。"],
+      }),
+    );
+    renderPage();
+    await screen.findByRole("heading", { name: "総務部" });
+    await userEvent.type(screen.getByLabelText("名称"), "2");
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(await screen.findByText("名称は必須です。")).toBeInTheDocument();
+    expect(screen.getByText("親グループが正しくありません。")).toBeInTheDocument();
+    expect(screen.getByText("状態が正しくありません。")).toBeInTheDocument();
+    expect(screen.getByText("未知のエラーです。")).toBeInTheDocument();
+    expect(screen.getByText("入力内容を確認してください。")).toBeInTheDocument();
+  });
+
+  it("shows 422 field errors under each field of the create form exactly once", async () => {
+    vi.spyOn(userManagementApi, "createGroup").mockRejectedValue(
+      new ApiError(422, "グループ種別は必須です。", {
+        group_type_id: ["グループ種別は必須です。"],
+        name: ["名称は必須です。"],
+        parent_group_id: ["親グループが正しくありません。"],
+        other: ["未知のエラーです。"],
+      }),
+    );
+    renderPage({ path: "/admin/groups/new" });
+    await screen.findByRole("heading", { name: "基本情報" });
+    await userEvent.selectOptions(screen.getByLabelText("グループ種別"), "1");
+    await userEvent.type(screen.getByLabelText("名称"), "新規");
+    await userEvent.click(screen.getByRole("button", { name: "作成" }));
+
+    expect(await screen.findByText("グループ種別は必須です。")).toBeInTheDocument();
+    expect(screen.getByText("名称は必須です。")).toBeInTheDocument();
+    expect(screen.getByText("親グループが正しくありません。")).toBeInTheDocument();
+    expect(screen.getByText("未知のエラーです。")).toBeInTheDocument();
+    expect(screen.getByText("入力内容を確認してください。")).toBeInTheDocument();
+  });
+
+  it("shows 422 field errors of the membership dialog (add, immediate) exactly once", async () => {
+    vi.spyOn(userManagementApi, "applyMembershipChangeNow").mockRejectedValue(
+      new ApiError(422, "ユーザーが正しくありません。", {
+        user_id: ["ユーザーが正しくありません。"],
+        note: ["メモが長すぎます。"],
+        "items.0.is_primary": ["所属区分が正しくありません。"],
+        other: ["未知のエラーです。"],
+      }),
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "所属を追加" }));
+    await userEvent.selectOptions(await screen.findByLabelText("対象ユーザー"), "user-2");
+    await userEvent.click(screen.getByRole("button", { name: "変更を実行" }));
+
+    expect(await screen.findByText("ユーザーが正しくありません。")).toBeInTheDocument();
+    expect(screen.getByText("メモが長すぎます。")).toBeInTheDocument();
+    expect(screen.getByText("所属区分が正しくありません。")).toBeInTheDocument();
+    expect(screen.getByText("未知のエラーです。")).toBeInTheDocument();
+    expect(screen.getByText("入力内容を確認してください。")).toBeInTheDocument();
   });
 });

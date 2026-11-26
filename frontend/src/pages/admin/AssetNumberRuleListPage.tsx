@@ -16,6 +16,7 @@ import {
   useUpdateAssetNumberRule,
   useUpdateDefaultAssetNumberRule,
 } from '../../hooks/useAssetNumberRules'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 /** 編集中の対象。「編集中でない」とデフォルト行(`category: null`)の編集中を別の値で表す。 */
 type EditingTarget = { kind: 'none' } | { kind: 'default' } | { kind: 'category'; category: string }
@@ -24,6 +25,13 @@ interface RuleFormState {
   prefix: string
   digitCount: string
   isActive: boolean
+}
+
+const RULE_ERROR_KEYS = ['prefix', 'digit_count', 'is_active'] as const
+
+/** テーブルの行の中の入力(FormFieldを使わない)の下に出す項目エラー。 */
+function RuleFieldError({ message }: { message: string | undefined }) {
+  return message ? <p className="mt-1 text-xs text-destructive">{message}</p> : null
 }
 
 function toFormState(rule: AssetNumberRule | undefined): RuleFormState {
@@ -67,7 +75,13 @@ export function AssetNumberRuleListPage() {
   const allRules = rules.data ?? []
   const defaultRule = allRules.find((rule) => rule.is_default)
   const categoryRules = allRules.filter((rule) => !rule.is_default)
-  const mutationError = updateRule.error ?? updateDefaultRule.error ?? undefined
+  // updateRuleは編集中の行と新規の行の両方で使うので、失敗した対象(variables.category)で出し先を分ける。
+  const failedOnEditingRow =
+    editing.kind === 'category' && updateRule.variables?.category === editing.category
+  const editErrors = fieldErrors(failedOnEditingRow ? updateRule.error : null, RULE_ERROR_KEYS)
+  const newErrors = fieldErrors(failedOnEditingRow ? null : updateRule.error, RULE_ERROR_KEYS)
+  const defaultErrors = fieldErrors(updateDefaultRule.error, RULE_ERROR_KEYS)
+  const mutationError = editErrors.rest ?? newErrors.rest ?? defaultErrors.rest ?? undefined
 
   function startEditCategory(rule: AssetNumberRule) {
     setEditing({ kind: 'category', category: rule.category as string })
@@ -149,7 +163,7 @@ export function AssetNumberRuleListPage() {
         )}
         {editing.kind === 'default' && (
           <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-4">
-            <FormField label="プレフィックス" htmlFor="default-rule-prefix" required>
+            <FormField label="プレフィックス" htmlFor="default-rule-prefix" required error={defaultErrors.of('prefix')}>
               <Input
                 id="default-rule-prefix"
                 value={defaultForm.prefix}
@@ -157,7 +171,7 @@ export function AssetNumberRuleListPage() {
                 placeholder="例: AST"
               />
             </FormField>
-            <FormField label="桁数" htmlFor="default-rule-digit-count" required>
+            <FormField label="桁数" htmlFor="default-rule-digit-count" required error={defaultErrors.of('digit_count')}>
               <Input
                 id="default-rule-digit-count"
                 type="number"
@@ -166,13 +180,16 @@ export function AssetNumberRuleListPage() {
                 onChange={(e) => setDefaultForm({ ...defaultForm, digitCount: e.target.value })}
               />
             </FormField>
-            <label className="flex items-center gap-2 pb-2">
-              <Checkbox
-                checked={defaultForm.isActive}
-                onCheckedChange={(checked) => setDefaultForm({ ...defaultForm, isActive: checked === true })}
-              />
-              有効
-            </label>
+            <div className="pb-2">
+              <label className="flex items-center gap-2">
+                <Checkbox
+                  checked={defaultForm.isActive}
+                  onCheckedChange={(checked) => setDefaultForm({ ...defaultForm, isActive: checked === true })}
+                />
+                有効
+              </label>
+              <RuleFieldError message={defaultErrors.of('is_active')} />
+            </div>
             <div className="flex gap-2 pb-2">
               <Button
                 disabled={!defaultForm.prefix.trim()}
@@ -218,6 +235,7 @@ export function AssetNumberRuleListPage() {
                           value={editForm.prefix}
                           onChange={(e) => setEditForm({ ...editForm, prefix: e.target.value })}
                         />
+                        <RuleFieldError message={editErrors.of('prefix')} />
                       </TableCell>
                       <TableCell>
                         <Input
@@ -227,6 +245,7 @@ export function AssetNumberRuleListPage() {
                           value={editForm.digitCount}
                           onChange={(e) => setEditForm({ ...editForm, digitCount: e.target.value })}
                         />
+                        <RuleFieldError message={editErrors.of('digit_count')} />
                       </TableCell>
                       <TableCell>{String(rule.next_number).padStart(rule.digit_count, '0')}</TableCell>
                       <TableCell>
@@ -235,6 +254,7 @@ export function AssetNumberRuleListPage() {
                           checked={editForm.isActive}
                           onCheckedChange={(checked) => setEditForm({ ...editForm, isActive: checked === true })}
                         />
+                        <RuleFieldError message={editErrors.of('is_active')} />
                       </TableCell>
                       <TableCell>
                         <Badge variant={status.variant}>{status.label}</Badge>
@@ -291,6 +311,7 @@ export function AssetNumberRuleListPage() {
                   onChange={(e) => setNewForm({ ...newForm, prefix: e.target.value })}
                   placeholder="例: NPC"
                 />
+                <RuleFieldError message={newErrors.of('prefix')} />
               </TableCell>
               <TableCell>
                 <Input
@@ -300,6 +321,7 @@ export function AssetNumberRuleListPage() {
                   value={newForm.digitCount}
                   onChange={(e) => setNewForm({ ...newForm, digitCount: e.target.value })}
                 />
+                <RuleFieldError message={newErrors.of('digit_count')} />
               </TableCell>
               <TableCell>-</TableCell>
               <TableCell>
@@ -308,6 +330,7 @@ export function AssetNumberRuleListPage() {
                   checked={newForm.isActive}
                   onCheckedChange={(checked) => setNewForm({ ...newForm, isActive: checked === true })}
                 />
+                <RuleFieldError message={newErrors.of('is_active')} />
               </TableCell>
               <TableCell>-</TableCell>
               <TableCell>

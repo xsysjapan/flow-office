@@ -10,9 +10,13 @@ import { Ms365CredentialsFields, type Ms365CredentialsFieldsValue } from '../../
 import { Input } from '../../components/ui/input'
 import { useCompleteOnboardingLocal, useStartOnboardingSso } from '../../hooks/useOnboarding'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { INITIAL_ONBOARDING_FORM, isOnboardingDirty } from './onboardingDirty'
 
 type OnboardingMode = 'sso' | 'local'
+
+const SSO_ERROR_KEYS = ['m365_tenant_id', 'm365_client_id', 'm365_client_secret', 'm365_mock_enabled'] as const
+const LOCAL_ERROR_KEYS = ['admin_name', 'admin_email', 'admin_password'] as const
 
 const DEFAULT_MS365_VALUE: Ms365CredentialsFieldsValue = {
   tenantId: '',
@@ -60,6 +64,9 @@ export function OnboardingPage() {
     adminEmail &&
     adminPassword.length >= 8 &&
     adminPassword === adminPasswordConfirmation
+
+  const { of: ssoOf, rest: ssoRest } = fieldErrors(startSso.error, SSO_ERROR_KEYS)
+  const { of: localOf, rest: localRest } = fieldErrors(completeLocal.error, LOCAL_ERROR_KEYS)
 
   const handleSubmitSso = () => {
     startSso.mutate(
@@ -119,7 +126,18 @@ export function OnboardingPage() {
 
           {mode === 'sso' && (
             <FormLayout>
-              <Ms365CredentialsFields idPrefix="onboarding-sso" value={ms365Value} onChange={setMs365Value} required />
+              <Ms365CredentialsFields
+                idPrefix="onboarding-sso"
+                value={ms365Value}
+                onChange={setMs365Value}
+                required
+                errors={{
+                  tenantId: ssoOf('m365_tenant_id'),
+                  clientId: ssoOf('m365_client_id'),
+                  clientSecret: ssoOf('m365_client_secret'),
+                  mockEnabled: ssoOf('m365_mock_enabled'),
+                }}
+              />
               <p className="mb-2 text-xs text-muted-foreground">
                 保存すると、そのままMicrosoftのログイン画面へ遷移します。ログインに成功した
                 アカウントがそのまま管理者になります(氏名・メールアドレスの事前入力は不要です)。
@@ -129,7 +147,7 @@ export function OnboardingPage() {
                   テナントID・クライアントID・クライアントシークレットを入力してください。
                 </p>
               )}
-              {startSso.error != null && <ErrorMessage error={startSso.error} fallback="設定の保存に失敗しました。" />}
+              {ssoRest != null && <ErrorMessage error={ssoRest} fallback="設定の保存に失敗しました。" />}
               <FormActions>
                 <Button disabled={!isSsoValid} isLoading={startSso.isPending} onClick={handleSubmitSso}>
                   保存してMicrosoftにログインする
@@ -140,10 +158,10 @@ export function OnboardingPage() {
 
           {mode === 'local' && (
             <FormLayout>
-              <FormField label="氏名" htmlFor="onboarding-local-name" required>
+              <FormField label="氏名" htmlFor="onboarding-local-name" required error={localOf('admin_name')}>
                 <Input id="onboarding-local-name" value={adminName} onChange={(e) => setAdminName(e.target.value)} />
               </FormField>
-              <FormField label="メールアドレス" htmlFor="onboarding-local-email" required>
+              <FormField label="メールアドレス" htmlFor="onboarding-local-email" required error={localOf('admin_email')}>
                 <Input
                   id="onboarding-local-email"
                   type="email"
@@ -151,7 +169,7 @@ export function OnboardingPage() {
                   onChange={(e) => setAdminEmail(e.target.value)}
                 />
               </FormField>
-              <FormField label="パスワード(8文字以上)" htmlFor="onboarding-local-password" required>
+              <FormField label="パスワード(8文字以上)" htmlFor="onboarding-local-password" required error={localOf('admin_password')}>
                 <Input
                   id="onboarding-local-password"
                   type="password"
@@ -172,9 +190,7 @@ export function OnboardingPage() {
                   氏名・メールアドレス・8文字以上のパスワード(確認と一致)を入力してください。
                 </p>
               )}
-              {completeLocal.error != null && (
-                <ErrorMessage error={completeLocal.error} fallback="セットアップに失敗しました。" />
-              )}
+              {localRest != null && <ErrorMessage error={localRest} fallback="セットアップに失敗しました。" />}
               <FormActions>
                 <Button disabled={!isLocalValid} isLoading={completeLocal.isPending} onClick={handleSubmitLocal}>
                   セットアップを完了する

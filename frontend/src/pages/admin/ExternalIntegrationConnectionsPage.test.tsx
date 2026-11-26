@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as connectionsApi from '../../api/externalIntegrationConnections'
 import type { ExternalIntegrationConnection } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -241,5 +242,77 @@ describe('ExternalIntegrationConnectionsPage', () => {
 
     await screen.findByText('freee本社経理')
     expect(screen.getByRole('button', { name: 'freeeと連携する' })).toBeDisabled()
+  })
+
+  it('shows 422 field errors of the create form (oauth2) under each field exactly once', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(connectionsApi, 'createExternalIntegrationConnection').mockRejectedValue(
+      new ApiError(422, 'プロバイダエラー。', {
+        provider: ['プロバイダエラー。'],
+        name: ['名称エラー。'],
+        auth_type: ['認証方式エラー。'],
+        external_office_id: ['事業所IDエラー。'],
+        client_id: ['クライアントIDエラー。'],
+        client_secret: ['クライアントシークレットエラー。'],
+        custom_settings: ['カスタム設定エラー。'],
+        // oauth2では描かれない項目のキーは、まとめての表示に残る。
+        api_key: ['APIキーエラー(描かれない項目)。'],
+      }),
+    )
+    renderPage()
+
+    await screen.findByText('freee本社経理')
+    await user.click(screen.getByRole('button', { name: '新規登録' }))
+    await user.type(screen.getAllByLabelText('名称')[0], '新しい接続')
+    await user.type(screen.getByLabelText('クライアントID'), 'client-id-1')
+    await user.type(screen.getByLabelText('クライアントシークレット'), 'secret-1')
+    await user.click(screen.getByRole('button', { name: '作成' }))
+
+    for (const message of [
+      'プロバイダエラー。',
+      '名称エラー。',
+      '認証方式エラー。',
+      '事業所IDエラー。',
+      'クライアントIDエラー。',
+      'クライアントシークレットエラー。',
+      'カスタム設定エラー。',
+      'APIキーエラー(描かれない項目)。',
+    ]) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+  })
+
+  it('shows 422 field errors of the edit dialog under each field exactly once', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(connectionsApi, 'updateExternalIntegrationConnection').mockRejectedValue(
+      new ApiError(422, '名称エラー。', {
+        name: ['名称エラー。'],
+        external_office_id: ['事業所IDエラー。'],
+        client_id: ['クライアントIDエラー。'],
+        client_secret: ['クライアントシークレットエラー。'],
+        custom_settings: ['カスタム設定エラー。'],
+        api_key: ['APIキーエラー(描かれない項目)。'],
+      }),
+    )
+    renderPage()
+
+    await screen.findByText('freee本社経理')
+    await user.click(screen.getByRole('button', { name: 'freee本社経理の操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '編集' }))
+    await screen.findByText('外部連携を編集')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    for (const message of [
+      '名称エラー。',
+      '事業所IDエラー。',
+      'クライアントIDエラー。',
+      'クライアントシークレットエラー。',
+      'カスタム設定エラー。',
+      'APIキーエラー(描かれない項目)。',
+    ]) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
   })
 })

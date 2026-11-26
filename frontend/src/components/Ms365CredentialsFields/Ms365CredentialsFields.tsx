@@ -18,6 +18,15 @@ export interface Ms365CredentialsFieldsProps {
   required?: boolean;
   /** クライアントシークレットが既に設定済みかどうか(placeholderの表示に使う)。 */
   clientSecretConfigured?: boolean;
+  /** 項目ごとのエラー(backendの422の項目エラーを呼び出し側が振り分けて渡す)。 */
+  errors?: Ms365CredentialsFieldsErrors;
+}
+
+export interface Ms365CredentialsFieldsErrors {
+  tenantId?: string;
+  clientId?: string;
+  clientSecret?: string;
+  mockEnabled?: string;
 }
 
 /**
@@ -31,6 +40,7 @@ export function Ms365CredentialsFields({
   onChange,
   required = false,
   clientSecretConfigured = false,
+  errors,
 }: Ms365CredentialsFieldsProps) {
   return (
     <>
@@ -38,6 +48,7 @@ export function Ms365CredentialsFields({
         label="テナントID"
         htmlFor={`${idPrefix}-tenant-id`}
         required={required}
+        error={errors?.tenantId}
       >
         <Input
           id={`${idPrefix}-tenant-id`}
@@ -50,6 +61,7 @@ export function Ms365CredentialsFields({
         label="クライアントID"
         htmlFor={`${idPrefix}-client-id`}
         required={required}
+        error={errors?.clientId}
       >
         <Input
           id={`${idPrefix}-client-id`}
@@ -62,6 +74,7 @@ export function Ms365CredentialsFields({
         label="クライアントシークレット"
         htmlFor={`${idPrefix}-client-secret`}
         required={required}
+        error={errors?.clientSecret}
       >
         <Input
           id={`${idPrefix}-client-secret`}
@@ -90,6 +103,9 @@ export function Ms365CredentialsFields({
           本番・検証環境では有効にしないこと。有効にすると開発専用の危険なエンドポイント
           (DB初期化)も到達可能になる。
         </p>
+        {errors?.mockEnabled && (
+          <p className="mt-1 text-xs text-destructive">{errors.mockEnabled}</p>
+        )}
       </div>
     </>
   );

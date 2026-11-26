@@ -11,6 +11,24 @@ import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { NativeSelect } from "../../components/ui/native-select";
 import { notify } from "../../lib/notify";
 import * as userManagement from "../../hooks/useUserManagement";
+import { fieldErrors } from "../../utils/fieldErrors";
+
+const CREATE_ERROR_KEYS = [
+  "code",
+  "name",
+  "display_order",
+  "membership_limit_type",
+  "max_memberships_per_user",
+  "max_primary_memberships",
+] as const;
+const EDIT_ERROR_KEYS = [
+  "name",
+  "display_order",
+  "status",
+  "membership_limit_type",
+  "max_memberships_per_user",
+  "max_primary_memberships",
+] as const;
 
 export function GroupTypeManagementPage() {
   const types = userManagement.useGroupTypes();
@@ -36,6 +54,9 @@ export function GroupTypeManagementPage() {
     max_primary_memberships: "",
     is_system: false,
   });
+
+  const { of: createOf, rest: createRest } = fieldErrors(createGroupType.error, CREATE_ERROR_KEYS);
+  const { of: editOf, rest: editRest } = fieldErrors(updateGroupType.error, EDIT_ERROR_KEYS);
 
   const header = (
     <PageHeader description="グループの分類と所属数・主所属の制約を管理します。" />
@@ -64,7 +85,7 @@ export function GroupTypeManagementPage() {
       <Card>
         <h2 className="mb-3 text-base font-semibold">新規作成</h2>
         <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <FormField label="コード" htmlFor="group-type-create-code">
+          <FormField label="コード" htmlFor="group-type-create-code" error={createOf("code")}>
             <Input
               id="group-type-create-code"
               placeholder="新規グループ種別コード"
@@ -74,7 +95,7 @@ export function GroupTypeManagementPage() {
               }
             />
           </FormField>
-          <FormField label="名称" htmlFor="group-type-create-name">
+          <FormField label="名称" htmlFor="group-type-create-name" error={createOf("name")}>
             <Input
               id="group-type-create-name"
               placeholder="グループ種別名"
@@ -84,7 +105,7 @@ export function GroupTypeManagementPage() {
               }
             />
           </FormField>
-          <FormField label="表示順" htmlFor="group-type-create-order">
+          <FormField label="表示順" htmlFor="group-type-create-order" error={createOf("display_order")}>
             <Input
               id="group-type-create-order"
               type="number"
@@ -99,7 +120,7 @@ export function GroupTypeManagementPage() {
               }
             />
           </FormField>
-          <FormField label="所属数制約" htmlFor="group-type-create-limit-type">
+          <FormField label="所属数制約" htmlFor="group-type-create-limit-type" error={createOf("membership_limit_type")}>
             <NativeSelect
               id="group-type-create-limit-type"
               value={createForm.membership_limit_type}
@@ -115,7 +136,7 @@ export function GroupTypeManagementPage() {
               <option value="limited">上限あり</option>
             </NativeSelect>
           </FormField>
-          <FormField label="所属上限" htmlFor="group-type-create-limit">
+          <FormField label="所属上限" htmlFor="group-type-create-limit" error={createOf("max_memberships_per_user")}>
             <Input
               id="group-type-create-limit"
               type="number"
@@ -144,6 +165,7 @@ export function GroupTypeManagementPage() {
           <FormField
             label="主所属上限"
             htmlFor="group-type-create-primary-limit"
+            error={createOf("max_primary_memberships")}
           >
             <Input
               id="group-type-create-primary-limit"
@@ -185,7 +207,7 @@ export function GroupTypeManagementPage() {
           >
             グループ種別を作成
           </Button>
-          {createGroupType.error && <ErrorMessage error={createGroupType.error} />}
+          {createRest != null && <ErrorMessage error={createRest} />}
           {(!createForm.code || !createForm.name) && (
             <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4">
               コードと名称を入力してください。
@@ -253,7 +275,7 @@ export function GroupTypeManagementPage() {
               ))}
             </NativeSelect>
           </FormField>
-          <FormField label="名称" htmlFor="group-type-edit-name">
+          <FormField label="名称" htmlFor="group-type-edit-name" error={editOf("name")}>
             <Input
               id="group-type-edit-name"
               placeholder="名称"
@@ -263,7 +285,7 @@ export function GroupTypeManagementPage() {
               }
             />
           </FormField>
-          <FormField label="表示順" htmlFor="group-type-edit-order">
+          <FormField label="表示順" htmlFor="group-type-edit-order" error={editOf("display_order")}>
             <Input
               id="group-type-edit-order"
               type="number"
@@ -275,7 +297,7 @@ export function GroupTypeManagementPage() {
               }
             />
           </FormField>
-          <FormField label="状態" htmlFor="group-type-edit-status">
+          <FormField label="状態" htmlFor="group-type-edit-status" error={editOf("status")}>
             <NativeSelect
               id="group-type-edit-status"
               disabled={editForm.is_system}
@@ -288,7 +310,7 @@ export function GroupTypeManagementPage() {
               <option value="inactive">廃止</option>
             </NativeSelect>
           </FormField>
-          <FormField label="所属数制約" htmlFor="group-type-edit-limit-type">
+          <FormField label="所属数制約" htmlFor="group-type-edit-limit-type" error={editOf("membership_limit_type")}>
             <NativeSelect
               id="group-type-edit-limit-type"
               disabled={editForm.is_system}
@@ -305,7 +327,7 @@ export function GroupTypeManagementPage() {
               <option value="limited">上限あり</option>
             </NativeSelect>
           </FormField>
-          <FormField label="所属上限" htmlFor="group-type-edit-limit">
+          <FormField label="所属上限" htmlFor="group-type-edit-limit" error={editOf("max_memberships_per_user")}>
             <Input
               id="group-type-edit-limit"
               disabled={editForm.is_system}
@@ -333,7 +355,7 @@ export function GroupTypeManagementPage() {
             />
             主所属必須
           </label>
-          <FormField label="主所属上限" htmlFor="group-type-edit-primary-limit">
+          <FormField label="主所属上限" htmlFor="group-type-edit-primary-limit" error={editOf("max_primary_memberships")}>
             <Input
               id="group-type-edit-primary-limit"
               disabled={editForm.is_system}
@@ -376,7 +398,7 @@ export function GroupTypeManagementPage() {
           >
             変更を保存
           </Button>
-          {updateGroupType.error && <ErrorMessage error={updateGroupType.error} />}
+          {editRest != null && <ErrorMessage error={editRest} />}
           {(!editForm.id || !editForm.name) && (
             <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4">
               {editForm.id ? "名称を入力してください。" : "編集するグループ種別を選択してください。"}

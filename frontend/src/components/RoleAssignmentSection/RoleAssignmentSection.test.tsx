@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../api/client";
 import * as accessControlApi from "../../api/accessControl";
 import type { AccessRole, RoleAssignment } from "../../api/accessControl";
 import type { ManagedGroup } from "../../api/userManagement";
@@ -163,6 +164,57 @@ describe("RoleAssignmentSection", () => {
         expect.anything(),
       ),
     );
+  });
+
+  it("shows 422 field errors of the dialog (pick-group, global scope) exactly once", async () => {
+    vi.spyOn(accessControlApi, "createRoleAssignment").mockRejectedValueOnce(
+      new ApiError(422, "対象グループエラー。", {
+        subject_id: ["対象グループエラー。"],
+        scope_type: ["対象範囲エラー。"],
+        starts_at: ["開始日時エラー。"],
+        ends_at: ["終了日時エラー。"],
+        // この状態では描かれない項目(Roleは固定・対象範囲グループは範囲がグループのときだけ)のキーはまとめての表示に残る。
+        role_id: ["Roleエラー(描かれない項目)。"],
+        scope_group_id: ["対象範囲グループエラー(描かれない項目)。"],
+      }),
+    );
+    Harness();
+
+    await userEvent.click(screen.getByRole("button", { name: "Roleを割り当てる" }));
+    await userEvent.selectOptions(screen.getByLabelText("対象グループ"), "group-1");
+    await userEvent.selectOptions(screen.getByLabelText("対象範囲"), "global");
+    await userEvent.click(screen.getByRole("button", { name: "割り当てる" }));
+
+    for (const message of [
+      "対象グループエラー。",
+      "対象範囲エラー。",
+      "開始日時エラー。",
+      "終了日時エラー。",
+      "Roleエラー(描かれない項目)。",
+      "対象範囲グループエラー(描かれない項目)。",
+    ]) {
+      expect(await screen.findByText(message)).toBeInTheDocument();
+    }
+    expect(screen.getByText("入力内容を確認してください。")).toBeInTheDocument();
+  });
+
+  it("shows the 422 role error under the Role select (pick-role)", async () => {
+    vi.spyOn(accessControlApi, "createRoleAssignment").mockRejectedValueOnce(
+      new ApiError(422, "Roleエラー。", {
+        role_id: ["Roleエラー。"],
+        subject_id: ["対象グループエラー(描かれない項目)。"],
+      }),
+    );
+    Harness({ mode: "pick-role" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Roleを割り当てる" }));
+    await userEvent.selectOptions(screen.getByLabelText("Role"), "2");
+    await userEvent.selectOptions(screen.getByLabelText("対象範囲"), "global");
+    await userEvent.click(screen.getByRole("button", { name: "割り当てる" }));
+
+    expect(await screen.findByText("Roleエラー。")).toBeInTheDocument();
+    expect(screen.getByText("対象グループエラー(描かれない項目)。")).toBeInTheDocument();
+    expect(screen.getByText("入力内容を確認してください。")).toBeInTheDocument();
   });
 
   it("removes an assignment via the confirmation dialog", async () => {

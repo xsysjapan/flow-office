@@ -40,6 +40,7 @@ import {
   isValidUuidParam,
 } from "../../utils/searchParamValidators";
 import { userSourceTypeLabel } from '../../utils/statusLabels'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 const FILTER_PARAM_KEYS = [
   "q",
@@ -51,6 +52,8 @@ const FILTER_PARAM_KEYS = [
 ] as const;
 
 const PER_PAGE = 20;
+
+const CREATE_ERROR_KEYS = ["name", "email", "employee_number", "department", "job_title"] as const;
 
 /**
  * UC-M001: ユーザーを検索し、人事・所属情報を確認する一覧。
@@ -172,6 +175,7 @@ export function UserListPage() {
   // 「今のページに写っているユーザーが持つグループしか選べない」状態を避けるため。
   const groupOptions = managedGroups ?? [];
   const groupTypeOptions = groupTypes ?? [];
+  const { of: createOf, rest: createRest } = fieldErrors(createUser.error, CREATE_ERROR_KEYS);
 
   return (
     <div className="space-y-6">
@@ -200,45 +204,60 @@ export function UserListPage() {
       <Card>
         {showCreate && (
           <div className="mb-4 grid gap-2 rounded border p-3 md:grid-cols-3">
-            <Input
-              aria-label="氏名"
-              placeholder="氏名"
-              value={newUser.name}
-              onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-            />
-            <Input
-              aria-label="メールアドレス"
-              type="email"
-              placeholder="メールアドレス"
-              value={newUser.email}
-              onChange={(e) =>
-                setNewUser({ ...newUser, email: e.target.value })
-              }
-            />
-            <Input
-              aria-label="社員番号"
-              placeholder="社員番号（任意）"
-              value={newUser.employee_number}
-              onChange={(e) =>
-                setNewUser({ ...newUser, employee_number: e.target.value })
-              }
-            />
-            <Input
-              aria-label="部署"
-              placeholder="部署（任意）"
-              value={newUser.department}
-              onChange={(e) =>
-                setNewUser({ ...newUser, department: e.target.value })
-              }
-            />
-            <Input
-              aria-label="役職"
-              placeholder="役職（任意）"
-              value={newUser.job_title}
-              onChange={(e) =>
-                setNewUser({ ...newUser, job_title: e.target.value })
-              }
-            />
+            <div>
+              <Input
+                aria-label="氏名"
+                placeholder="氏名"
+                value={newUser.name}
+                onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+              />
+              {createOf("name") && <p className="mt-1 text-xs text-destructive">{createOf("name")}</p>}
+            </div>
+            <div>
+              <Input
+                aria-label="メールアドレス"
+                type="email"
+                placeholder="メールアドレス"
+                value={newUser.email}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, email: e.target.value })
+                }
+              />
+              {createOf("email") && <p className="mt-1 text-xs text-destructive">{createOf("email")}</p>}
+            </div>
+            <div>
+              <Input
+                aria-label="社員番号"
+                placeholder="社員番号（任意）"
+                value={newUser.employee_number}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, employee_number: e.target.value })
+                }
+              />
+              {createOf("employee_number") && <p className="mt-1 text-xs text-destructive">{createOf("employee_number")}</p>}
+            </div>
+            <div>
+              <Input
+                aria-label="部署"
+                placeholder="部署（任意）"
+                value={newUser.department}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, department: e.target.value })
+                }
+              />
+              {createOf("department") && <p className="mt-1 text-xs text-destructive">{createOf("department")}</p>}
+            </div>
+            <div>
+              <Input
+                aria-label="役職"
+                placeholder="役職（任意）"
+                value={newUser.job_title}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, job_title: e.target.value })
+                }
+              />
+              {createOf("job_title") && <p className="mt-1 text-xs text-destructive">{createOf("job_title")}</p>}
+            </div>
             <div>
               <Button
                 disabled={!newUser.name || !newUser.email}
@@ -278,9 +297,9 @@ export function UserListPage() {
                 </p>
               )}
             </div>
-            {createUser.error && (
+            {createRest != null && (
               <div className="md:col-span-3">
-                <ErrorMessage error={createUser.error} />
+                <ErrorMessage error={createRest} />
               </div>
             )}
           </div>

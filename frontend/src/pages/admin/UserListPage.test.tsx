@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as usersApi from '../../api/users'
 import * as userManagementApi from '../../api/userManagement'
 import type { Paginated, User } from '../../api/types'
@@ -172,6 +173,32 @@ describe('UserListPage', () => {
 
     await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: '新入社員', email: 'new@example.com' })))
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ユーザーを作成しました'))
+  })
+
+  it('shows 422 field errors of the create form under each field exactly once', async () => {
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
+    vi.spyOn(usersApi, 'createUser').mockRejectedValue(
+      new ApiError(422, '氏名エラー。', {
+        name: ['氏名エラー。'],
+        email: ['メールエラー。'],
+        employee_number: ['社員番号エラー。'],
+        department: ['部署エラー。'],
+        job_title: ['役職エラー。'],
+        group_id: ['未知のエラー。'],
+      }),
+    )
+    renderPage()
+
+    const header = within(await screen.findByRole('region', { name: 'ユーザー' }))
+    await userEvent.click(await header.findByRole('button', { name: '新規作成' }))
+    await userEvent.type(screen.getByLabelText('氏名'), '新入社員')
+    await userEvent.type(screen.getByLabelText('メールアドレス'), 'new@example.com')
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+
+    for (const message of ['氏名エラー。', 'メールエラー。', '社員番号エラー。', '部署エラー。', '役職エラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
   })
 
   it('queries users with the entered keyword after the debounce and clears page', async () => {

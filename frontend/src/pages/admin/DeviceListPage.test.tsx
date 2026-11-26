@@ -157,6 +157,52 @@ describe('DeviceListPage', () => {
     })
   })
 
+  it('shows 422 field errors of the registration form under each field exactly once', async () => {
+    const user = userEvent.setup()
+    const registerSpy = vi.spyOn(devicesApi, 'registerDevice').mockRejectedValueOnce(
+      new ApiError(422, '名称エラー。', {
+        name: ['名称エラー。'],
+        device_type: ['端末種別エラー。'],
+        location_name: ['設置場所エラー。'],
+        default_work_location_type: ['勤務形態区分エラー。'],
+        role_types: ['役割エラー。'],
+        'role_types.0': ['役割の値エラー。'],
+        timezone: ['未知のエラー。'],
+      }),
+    )
+    renderPage()
+
+    await screen.findByText('本社1階受付')
+    await user.click(within(screen.getByRole('region', { name: '端末管理' })).getByRole('button', { name: '新規作成' }))
+    await user.type(screen.getByLabelText('名称'), '名古屋支店入口')
+    await user.click(screen.getByRole('button', { name: '登録する' }))
+
+    for (const message of ['名称エラー。', '端末種別エラー。', '設置場所エラー。', '勤務形態区分エラー。', '役割エラー。', '役割の値エラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+    registerSpy.mockRestore()
+  })
+
+  it('shows the 422 revoke reason error under the reason input and the rest in the dialog', async () => {
+    const user = userEvent.setup()
+    const revokeSpy = vi.spyOn(devicesApi, 'revokeDevice').mockRejectedValueOnce(
+      new ApiError(422, '失効理由エラー。', { reason: ['失効理由エラー。'], other: ['未知のエラー。'] }),
+    )
+    renderPage()
+
+    await screen.findByText('本社1階受付')
+    await user.click(screen.getByRole('button', { name: '本社1階受付の操作' }))
+    await user.click(await screen.findByRole('menuitem', { name: '失効させる' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: '失効させる' }))
+
+    expect(await within(dialog).findByText('失効理由エラー。')).toBeInTheDocument()
+    expect(within(dialog).getByText('未知のエラー。')).toBeInTheDocument()
+    expect(within(dialog).getByText('入力内容を確認してください。')).toBeInTheDocument()
+    revokeSpy.mockRestore()
+  })
+
   it('confirms before revoking from the row menu and shows a toast after revoking', async () => {
     const user = userEvent.setup()
     const revokeSpy = vi.spyOn(devicesApi, 'revokeDevice').mockResolvedValue(devices[0])

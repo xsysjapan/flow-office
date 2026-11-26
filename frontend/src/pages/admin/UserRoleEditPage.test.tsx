@@ -555,8 +555,18 @@ describe("UserRoleEditPage", () => {
     it("shows keyed 422 errors under each field and others above the button", async () => {
       vi.spyOn(usersApi, "updateUserDetails").mockRejectedValue(
         new ApiError(422, "入力内容に誤りがあります。", {
+          "profile.name": ["氏名エラー。"],
           "profile.email": ["このメールアドレスは既に使われています。"],
+          "profile.employee_number": ["社員番号エラー。"],
+          "profile.department": ["部署エラー。"],
+          "profile.job_title": ["役職エラー。"],
+          "profile.account_status": ["アカウント状態エラー。"],
           hire_date: ["入社日は退社日より前にしてください。"],
+          termination_date: ["退社日エラー。"],
+          usage_start_date: ["利用開始日エラー。"],
+          paid_leave_auto_grant_enabled: ["有給の自動付与エラー。"],
+          special_leave_auto_grant_enabled: ["特別休暇の自動付与エラー。"],
+          "profile.employment_status": ["在籍区分エラー(入力なし)。"],
           unknown_key: ["その他のエラーです。"],
         }),
       );
@@ -574,8 +584,23 @@ describe("UserRoleEditPage", () => {
       expect(hire.previousElementSibling).toBe(
         screen.getByRole("button", { name: "入社日(有給の自動付与に使用)" }),
       );
-      expect(screen.getByText("その他のエラーです。")).toBeInTheDocument();
-      expect(screen.getAllByText("入力内容に誤りがあります。")).toHaveLength(1);
+      for (const message of [
+        "氏名エラー。",
+        "社員番号エラー。",
+        "部署エラー。",
+        "役職エラー。",
+        "アカウント状態エラー。",
+        "退社日エラー。",
+        "利用開始日エラー。",
+        "有給の自動付与エラー。",
+        "特別休暇の自動付与エラー。",
+        "在籍区分エラー(入力なし)。",
+        "その他のエラーです。",
+      ]) {
+        expect(screen.getByText(message)).toBeInTheDocument();
+      }
+      expect(screen.queryByText("入力内容に誤りがあります。")).not.toBeInTheDocument();
+      expect(screen.getAllByText("入力内容を確認してください。")).toHaveLength(1);
     });
 
     it("disables the fields managed by EXTERNAL_HR and shows the reason", async () => {
@@ -621,6 +646,57 @@ describe("UserRoleEditPage", () => {
       screen.getByRole("radio", { name: /会社のデフォルトを使用/ }),
     ).toBeChecked();
     expect(screen.getByText(/通常勤務/)).toBeInTheDocument();
+  });
+
+  it("shows 422 field errors of the membership change dialog (add, immediate) exactly once", async () => {
+    vi.spyOn(userManagementApi, "applyMembershipChangeNow").mockRejectedValue(
+      new ApiError(422, "変更先が正しくありません。", {
+        "items.0.to_group_id": ["変更先が正しくありません。"],
+        note: ["メモが長すぎます。"],
+        user_id: ["未知のユーザーエラー。"],
+      }),
+    );
+    renderPage(targetUser);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "所属を追加" }),
+    );
+    await userEvent.selectOptions(
+      await screen.findByLabelText("変更先グループ"),
+      "group-1",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "変更を実行" }));
+
+    expect(await screen.findByText("変更先が正しくありません。")).toBeInTheDocument();
+    expect(screen.getByText("メモが長すぎます。")).toBeInTheDocument();
+    expect(screen.getByText("未知のユーザーエラー。")).toBeInTheDocument();
+    expect(screen.getByText("入力内容を確認してください。")).toBeInTheDocument();
+  });
+
+  it("shows the 422 work style error under the select and others in the summary", async () => {
+    vi.spyOn(
+      userWorkStyleMonthlyAssignmentsApi,
+      "assignUserWorkStyleForMonth",
+    ).mockRejectedValue(
+      new ApiError(422, "働き方が正しくありません。", {
+        work_style_id: ["働き方が正しくありません。"],
+        year_month: ["年月が正しくありません。"],
+      }),
+    );
+    renderPage(targetUser);
+
+    await userEvent.click(
+      await screen.findByRole("radio", { name: "別の働き方を指定" }),
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("指定する働き方"),
+      "フレックスタイム制",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "働き方を保存" }));
+
+    expect(await screen.findByText("働き方が正しくありません。")).toBeInTheDocument();
+    expect(screen.getByText("年月が正しくありません。")).toBeInTheDocument();
+    expect(screen.getByText("入力内容を確認してください。")).toBeInTheDocument();
   });
 
   it("assigns a specific work style for the current month", async () => {

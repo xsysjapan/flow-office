@@ -11,6 +11,7 @@ import { ErrorMessage } from "../ErrorMessage/ErrorMessage";
 import { notify } from "../../lib/notify";
 import { FormField } from "../FormField/FormField";
 import { FormRow } from "../FormRow/FormRow";
+import { fieldErrors } from "../../utils/fieldErrors";
 import { Checkbox } from "../ui/checkbox";
 import {
   Dialog,
@@ -45,6 +46,14 @@ function toDateTimeLocal(value: string | null): string {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
 }
+
+type AssignmentErrorKey =
+  | "subject_id"
+  | "role_id"
+  | "scope_type"
+  | "scope_group_id"
+  | "starts_at"
+  | "ends_at";
 
 interface AssignmentFormState {
   targetId: string;
@@ -153,6 +162,16 @@ export function RoleAssignmentSection({
 
   const targetLabel = mode === "pick-group" ? "対象グループ" : "Role";
 
+  // 描かれる項目と同じ条件でキーを組み立てる(対象は新規のときだけ、対象範囲グループは範囲がグループのときだけ)。
+  const errorKeys: AssignmentErrorKey[] = ["scope_type", "starts_at", "ends_at"];
+  if (!editingId) errorKeys.push(mode === "pick-group" ? "subject_id" : "role_id");
+  if (form.scope_type === "group") errorKeys.push("scope_group_id");
+  const { of, rest } = fieldErrors(
+    editingId ? updateAssignment.error : createAssignment.error,
+    errorKeys,
+  );
+  const targetError = of(mode === "pick-group" ? "subject_id" : "role_id");
+
   return (
     <Card
       title={title}
@@ -174,7 +193,7 @@ export function RoleAssignmentSection({
             </DialogDescription>
           </DialogHeader>
           <div>
-          <FormField label={targetLabel} htmlFor="role-assignment-target">
+          <FormField label={targetLabel} htmlFor="role-assignment-target" error={targetError}>
             <NativeSelect
               id="role-assignment-target"
               disabled={Boolean(editingId)}
@@ -202,7 +221,7 @@ export function RoleAssignmentSection({
                   ))}
             </NativeSelect>
           </FormField>
-          <FormField label="対象範囲" htmlFor="role-assignment-scope">
+          <FormField label="対象範囲" htmlFor="role-assignment-scope" error={of("scope_type")}>
             <NativeSelect
               id="role-assignment-scope"
               value={form.scope_type}
@@ -223,7 +242,11 @@ export function RoleAssignmentSection({
             </NativeSelect>
           </FormField>
           {form.scope_type === "group" && (
-            <FormField label="対象範囲グループ" htmlFor="role-assignment-scope-group">
+            <FormField
+              label="対象範囲グループ"
+              htmlFor="role-assignment-scope-group"
+              error={of("scope_group_id")}
+            >
               <NativeSelect
                 id="role-assignment-scope-group"
                 value={form.scope_group_id}
@@ -251,7 +274,7 @@ export function RoleAssignmentSection({
             配下を含む
           </label>
           <FormRow>
-            <FormField label="有効開始日時" htmlFor="role-assignment-starts-at">
+            <FormField label="有効開始日時" htmlFor="role-assignment-starts-at" error={of("starts_at")}>
               <DateTimePicker
                 id="role-assignment-starts-at"
                 aria-label="Role有効開始日時"
@@ -259,7 +282,7 @@ export function RoleAssignmentSection({
                 onChange={(value) => setForm({ ...form, starts_at: value ?? "" })}
               />
             </FormField>
-            <FormField label="有効終了日時" htmlFor="role-assignment-ends-at">
+            <FormField label="有効終了日時" htmlFor="role-assignment-ends-at" error={of("ends_at")}>
               <DateTimePicker
                 id="role-assignment-ends-at"
                 aria-label="Role有効終了日時"
@@ -269,9 +292,7 @@ export function RoleAssignmentSection({
             </FormField>
           </FormRow>
           </div>
-          {(createAssignment.error || updateAssignment.error) && (
-            <ErrorMessage error={createAssignment.error ?? updateAssignment.error} />
-          )}
+          {rest != null && <ErrorMessage error={rest} />}
           <DialogFooter>
             <Button variant="secondary" onClick={closeDialog}>
               キャンセル

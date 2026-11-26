@@ -11,6 +11,7 @@ import { Button } from '../Button/Button'
 import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { EmptyState } from '../EmptyState/EmptyState'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { FormField } from '../FormField/FormField'
 import { LoadingState } from '../LoadingState/LoadingState'
 import { Input } from '../ui/input'
@@ -83,6 +84,11 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
   if (error) return <ErrorMessage error={error} fallback="認証キーの取得に失敗しました。" />
 
   const list = keys ?? []
+  // 入力欄は発行フォームを開いているときだけ描かれる。
+  const { of, rest } = fieldErrors(
+    issueKey.error,
+    isFormOpen ? (['key_type', 'display_name', 'raw_key_value'] as const) : ([] as const),
+  )
 
   return (
     <div>
@@ -93,12 +99,12 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
         </Button>
       </div>
 
-      {issueKey.error && <ErrorMessage error={issueKey.error} />}
+      {rest != null && <ErrorMessage error={rest} />}
 
       {isFormOpen && (
         <div className="mb-4 rounded-md border border-border p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="種別" htmlFor="auth-key-form-type" required>
+            <FormField label="種別" htmlFor="auth-key-form-type" required error={of('key_type')}>
               <NativeSelect
                 id="auth-key-form-type"
                 value={keyType}
@@ -111,7 +117,7 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
                 ))}
               </NativeSelect>
             </FormField>
-            <FormField label="表示名" htmlFor="auth-key-form-name" required>
+            <FormField label="表示名" htmlFor="auth-key-form-name" required error={of('display_name')}>
               <Input
                 id="auth-key-form-name"
                 value={displayName}
@@ -120,7 +126,12 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
               />
             </FormField>
           </div>
-          <FormField label="読み取った値(カードUID・外部認証端末IDなど)" htmlFor="auth-key-form-raw-value" required>
+          <FormField
+            label="読み取った値(カードUID・外部認証端末IDなど)"
+            htmlFor="auth-key-form-raw-value"
+            required
+            error={of('raw_key_value')}
+          >
             <Input
               id="auth-key-form-raw-value"
               value={rawKeyValue}

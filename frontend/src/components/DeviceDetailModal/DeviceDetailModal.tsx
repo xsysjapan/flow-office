@@ -20,7 +20,11 @@ import {
 } from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceScopeType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
+
+const ROLES_ERROR_KEYS = ['role_types', 'role_types.*'] as const
+const SETTINGS_ERROR_KEYS = ['name', 'location_name', 'default_work_location_type', 'timezone'] as const
 
 const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
   android: 'Android',
@@ -195,6 +199,14 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device.id])
 
+  const { ofAny: rolesOfAny, rest: rolesRest } = fieldErrors(updateRoles.error, ROLES_ERROR_KEYS)
+  const { of: settingsOf, rest: settingsRest } = fieldErrors(updateSettings.error, SETTINGS_ERROR_KEYS)
+  // スコープの選択は未付与のスコープがあるときだけ描かれる。
+  const { of: scopeOf, rest: scopeRest } = fieldErrors(
+    grantScope.error,
+    ungrantedScopes.length > 0 ? (['scope'] as const) : ([] as const),
+  )
+
   const handleSave = () => {
     updateSettings.mutate(
       {
@@ -253,9 +265,14 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
                 </label>
               ))}
             </div>
+            {rolesOfAny('role_types').map((message) => (
+              <p key={message} className="mt-1.5 text-xs text-destructive">
+                {message}
+              </p>
+            ))}
           </fieldset>
 
-          {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
+          {rolesRest != null && <ErrorMessage error={rolesRest} />}
 
           <div className="flex justify-end">
             <Button
@@ -353,10 +370,10 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
 
         <FormSection title="設定変更">
           <div>
-            <FormField label="名称" htmlFor="device-detail-name" required>
+            <FormField label="名称" htmlFor="device-detail-name" required error={settingsOf('name')}>
               <Input id="device-detail-name" value={name} onChange={(e) => setName(e.target.value)} />
             </FormField>
-            <FormField label="設置場所" htmlFor="device-detail-location">
+            <FormField label="設置場所" htmlFor="device-detail-location" error={settingsOf('location_name')}>
               <Input
                 id="device-detail-location"
                 value={locationName}
@@ -364,7 +381,11 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
                 placeholder="例: 本社1階受付"
               />
             </FormField>
-            <FormField label="自動反映する勤務形態区分" htmlFor="device-detail-work-location-type">
+            <FormField
+              label="自動反映する勤務形態区分"
+              htmlFor="device-detail-work-location-type"
+              error={settingsOf('default_work_location_type')}
+            >
               <NativeSelect
                 id="device-detail-work-location-type"
                 value={defaultWorkLocationType}
@@ -378,7 +399,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
                 ))}
               </NativeSelect>
             </FormField>
-            <FormField label="タイムゾーン" htmlFor="device-detail-timezone">
+            <FormField label="タイムゾーン" htmlFor="device-detail-timezone" error={settingsOf('timezone')}>
               <Input
                 id="device-detail-timezone"
                 value={timezone}
@@ -403,7 +424,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
             </label>
           </div>
 
-          {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
+          {settingsRest != null && <ErrorMessage error={settingsRest} />}
 
           <div className="flex justify-end">
             <Button variant="secondary" isLoading={updateSettings.isPending} disabled={!name} onClick={handleSave}>
@@ -423,7 +444,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
 
           {ungrantedScopes.length > 0 && (
             <div className="flex flex-wrap items-end gap-2">
-              <FormField label="スコープを付与する" htmlFor="device-detail-scope-select">
+              <FormField label="スコープを付与する" htmlFor="device-detail-scope-select" error={scopeOf('scope')}>
                 <NativeSelect
                   id="device-detail-scope-select"
                   value={scopeToGrant}
@@ -448,7 +469,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
               </Button>
             </div>
           )}
-          {grantScope.error && <ErrorMessage error={grantScope.error} />}
+          {scopeRest != null && <ErrorMessage error={scopeRest} />}
         </FormSection>
       </DialogContent>
     </Dialog>

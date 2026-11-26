@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -208,7 +208,12 @@ describe("RoleDefinitionPage", () => {
     vi.spyOn(accessControlApi, "updateRoleDefinition").mockRejectedValue(
       new ApiError(422, "入力内容に誤りがあります。", {
         name: ["ロール名は既に使われています。"],
+        description: ["説明が正しくありません。"],
+        status: ["状態が正しくありません。"],
+        permission_ids: ["Permission構成が正しくありません。"],
+        "permission_ids.0": ["Permissionが正しくありません。"],
         feature_ids: ["Feature構成が正しくありません。"],
+        "feature_ids.1": ["Featureが正しくありません。"],
         other: ["その他のエラーです。"],
       }),
     );
@@ -222,12 +227,55 @@ describe("RoleDefinitionPage", () => {
     expect(nameError.previousElementSibling).toBe(
       screen.getByLabelText("ロール名"),
     );
-    expect(
-      screen.getByText("Feature構成が正しくありません。"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("その他のエラーです。")).toBeInTheDocument();
-    expect(screen.getAllByText("入力内容に誤りがあります。")).toHaveLength(1);
+    for (const message of [
+      "説明が正しくありません。",
+      "状態が正しくありません。",
+      "Permission構成が正しくありません。",
+      "Permissionが正しくありません。",
+      "Feature構成が正しくありません。",
+      "Featureが正しくありません。",
+      "その他のエラーです。",
+    ]) {
+      expect(screen.getByText(message)).toBeInTheDocument();
+    }
+    expect(screen.queryByText("入力内容に誤りがあります。")).not.toBeInTheDocument();
+    expect(screen.getAllByText("入力内容を確認してください。")).toHaveLength(1);
   });
+
+  it.each([
+    ["create", "新規作成", "作成", "createRole"],
+    ["clone", "このロールを複製", "複製する", "cloneRole"],
+  ] as const)(
+    "shows 422 field errors of the %s dialog under each field exactly once",
+    async (_mode, openLabel, submitLabel, apiName) => {
+      vi.spyOn(accessControlApi, apiName).mockRejectedValue(
+        new ApiError(422, "コードは必須です。", {
+          code: ["コードは必須です。"],
+          name: ["ロール名は必須です。"],
+          description: ["説明が長すぎます。"],
+          other: ["その他のエラーです。"],
+        }),
+      );
+      renderPage({ initialPath: "/admin/access/roles?roleId=2" });
+      await screen.findByDisplayValue("バックオフィス担当者");
+
+      await userEvent.click(screen.getAllByRole("button", { name: openLabel })[0]);
+      const dialog = await screen.findByRole("dialog");
+      await userEvent.type(within(dialog).getByLabelText(/ロールコード/), "x");
+      await userEvent.type(within(dialog).getByLabelText(/ロール名/), "y");
+      await userEvent.click(within(dialog).getByRole("button", { name: submitLabel }));
+
+      for (const message of [
+        "コードは必須です。",
+        "ロール名は必須です。",
+        "説明が長すぎます。",
+        "その他のエラーです。",
+      ]) {
+        expect(await within(dialog).findByText(message)).toBeInTheDocument();
+      }
+      expect(within(dialog).getByText("入力内容を確認してください。")).toBeInTheDocument();
+    },
+  );
 
   it("disables the status of a system role", async () => {
     renderPage({ initialPath: "/admin/access/roles?roleId=1" });

@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as api from '../../api/adminCommands'
 import { notify } from '../../lib/notify'
 import { AdminCommandsPage } from './AdminCommandsPage'
@@ -114,4 +115,31 @@ it('confirms the run and shows a toast once the run is requested', async () => {
 
   await waitFor(() => expect(runSpy).toHaveBeenCalledWith('attendance:recalculate-month-snapshots', {}))
   await waitFor(() => expect(notify.success).toHaveBeenCalledWith('月次勤怠スナップショット再計算の実行を依頼しました', expect.anything()))
+})
+
+it('shows 422 parameter errors under each parameter exactly once and the rest in the confirm dialog', async () => {
+  const param = (name: string) => ({ name, kind: 'option' as const, required: false, array: false, accepts_value: true, value_required: false, default: null, description: '', ui: { control: 'text' as const } })
+  vi.spyOn(api, 'fetchAdminCommands').mockResolvedValue({ data: [{
+    name: 'cmd:params', label: 'パラメーター付き', description: '説明', without_overlapping: true,
+    parameters: [param('alpha'), param('beta')],
+  }] })
+  vi.spyOn(api, 'fetchAdminCommandRuns').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 }, links: { next: null, prev: null } })
+  vi.spyOn(api, 'runAdminCommand').mockRejectedValue(new ApiError(422, 'alphaエラー。', {
+    alpha: ['alphaエラー。'],
+    beta: ['betaエラー。'],
+    parameters: ['未定義のパラメーターが含まれています。'],
+  }))
+  renderAt('/admin/commands')
+
+  await userEvent.type(await screen.findByLabelText('alpha'), 'x')
+  await userEvent.click(screen.getByRole('button', { name: '実行' }))
+  const dialog = await screen.findByRole('dialog')
+  await userEvent.click(within(dialog).getByRole('button', { name: '実行' }))
+
+  expect(await within(dialog).findByText('未定義のパラメーターが含まれています。')).toBeInTheDocument()
+  expect(within(dialog).getByText('入力内容を確認してください。')).toBeInTheDocument()
+  // 項目のエラーはダイアログの外(入力の下)に1回ずつ出て、ダイアログ内には出ない。
+  expect(screen.getAllByText('alphaエラー。')).toHaveLength(1)
+  expect(screen.getAllByText('betaエラー。')).toHaveLength(1)
+  expect(within(dialog).queryByText('alphaエラー。')).toBeNull()
 })

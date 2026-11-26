@@ -7,6 +7,7 @@ import { notify } from '../../lib/notify'
 import { Button } from '../Button/Button'
 import { EmptyState } from '../EmptyState/EmptyState'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { FormField } from '../FormField/FormField'
 import { LoadingState } from '../LoadingState/LoadingState'
 import { Textarea } from '../ui/textarea'
@@ -48,6 +49,7 @@ export function AttendanceSubmissionReminderExclusionPanel({ userId }: Attendanc
   if (error) return <ErrorMessage error={error} fallback="除外設定の取得に失敗しました。" />
 
   const list = exclusions ?? []
+  const { of, rest } = fieldErrors(excludeReminder.error, ['year_month', 'reason'] as const)
 
   return (
     <div>
@@ -58,11 +60,11 @@ export function AttendanceSubmissionReminderExclusionPanel({ userId }: Attendanc
         特定の年月を督促対象から個別に除外できます。
       </p>
 
-      {excludeReminder.error && <ErrorMessage error={excludeReminder.error} />}
+      {rest != null && <ErrorMessage error={rest} />}
 
       <div className="mb-4 rounded-md border border-border p-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <FormField label="対象年月" htmlFor="attendance-reminder-exclusion-year-month" required>
+          <FormField label="対象年月" htmlFor="attendance-reminder-exclusion-year-month" required error={of('year_month')}>
             <YearMonthPicker
               id="attendance-reminder-exclusion-year-month"
               value={yearMonth}
@@ -70,7 +72,7 @@ export function AttendanceSubmissionReminderExclusionPanel({ userId }: Attendanc
             />
           </FormField>
         </div>
-        <FormField label="除外理由" htmlFor="attendance-reminder-exclusion-reason" required>
+        <FormField label="除外理由" htmlFor="attendance-reminder-exclusion-reason" required error={of('reason')}>
           <Textarea
             id="attendance-reminder-exclusion-reason"
             value={reason}

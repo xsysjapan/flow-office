@@ -17,6 +17,7 @@ import { useAdminCommandRuns, useAdminCommands, useRunAdminCommand } from '../..
 import type { AdminCommandParameter, AdminCommandRun } from '../../api/types'
 import { notify } from '../../lib/notify'
 import { adminCommandRunStatusLabel } from '../../utils/statusLabels'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 function formatDateTime(value: string | null): string {
   return value ? new Date(value).toLocaleString('ja-JP') : '—'
@@ -82,6 +83,9 @@ export function AdminCommandsPage() {
   if (commands.isLoading) return <div className="space-y-6"><PageHeader description={PAGE_DESCRIPTION} /><LoadingState /></div>
   if (commands.error) return <div className="space-y-6"><PageHeader description={PAGE_DESCRIPTION} /><ErrorMessage error={commands.error} fallback="運用コマンドを取得できませんでした。" /></div>
 
+  // 描かれる項目(選んだコマンドのパラメーター)と同じ一覧でキーを組み立てる。
+  const { of, rest } = fieldErrors(execute.error, command?.parameters.map((parameter) => parameter.name) ?? [])
+
   return (
     <div className="space-y-6">
       <PageHeader description={PAGE_DESCRIPTION} />
@@ -95,11 +99,11 @@ export function AdminCommandsPage() {
           </FormField>
           {command && <>
             <div className="mb-4"><p className="text-sm text-foreground">{command.description}</p><code className="text-sm text-muted-foreground">{command.name}</code></div>
-            {command.parameters.map((parameter) => <FormField key={parameter.name} label={parameter.name} htmlFor={`command-${parameter.name}`} required={parameter.required} description={parameter.description || undefined}>
+            {command.parameters.map((parameter) => <FormField key={parameter.name} label={parameter.name} htmlFor={`command-${parameter.name}`} required={parameter.required} description={parameter.description || undefined} error={of(parameter.name)}>
               {parameterControl(parameter)}
             </FormField>)}
             <FormActions>
-            <ConfirmActionDialog triggerLabel="実行" triggerVariant="primary" title={`${command.label}を実行`} description="実行は約1分以内に始まり、実行結果は履歴に記録されます。" confirmLabel="実行" isPending={execute.isPending} error={execute.error} onConfirm={async () => {
+            <ConfirmActionDialog triggerLabel="実行" triggerVariant="primary" title={`${command.label}を実行`} description="実行は約1分以内に始まり、実行結果は履歴に記録されます。" confirmLabel="実行" isPending={execute.isPending} error={rest} onConfirm={async () => {
               await execute.mutateAsync({ command: command.name, parameters: Object.fromEntries(Object.entries(parameters).filter(([, value]) => value !== undefined && value !== '')) })
               notify.success(`${command.label}の実行を依頼しました`, { description: '実行は約1分以内に始まります。結果は実行履歴に表示されます。' })
             }} />

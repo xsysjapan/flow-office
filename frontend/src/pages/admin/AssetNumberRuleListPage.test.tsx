@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as assetNumberRulesApi from '../../api/assetNumberRules'
 import type { AssetNumberRule } from '../../api/assetNumberRules'
 import { notify } from '../../lib/notify'
@@ -160,5 +161,51 @@ describe('AssetNumberRuleListPage', () => {
       expect(updateDefaultSpy).toHaveBeenCalledWith({ prefix: 'AST', digit_count: 5, is_active: true }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('デフォルトの採番ルールを保存しました'))
+  })
+
+  const ruleErrors = new ApiError(422, 'プレフィックスエラー。', {
+    prefix: ['プレフィックスエラー。'],
+    digit_count: ['桁数エラー。'],
+    is_active: ['有効エラー。'],
+    enabled: ['未知のエラー。'],
+  })
+  const expectRuleErrorsOnce = async () => {
+    for (const message of ['プレフィックスエラー。', '桁数エラー。', '有効エラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+  }
+
+  it('shows 422 field errors of the new category row exactly once', async () => {
+    vi.spyOn(assetNumberRulesApi, 'updateAssetNumberRule').mockRejectedValue(ruleErrors)
+    renderPage([])
+
+    await screen.findByText('カテゴリ別ルールはまだありません。上の行から追加できます。')
+    await userEvent.type(screen.getByLabelText('新規カテゴリ名'), 'モニター')
+    await userEvent.type(screen.getByLabelText('新規カテゴリのプレフィックス'), 'MON')
+    await userEvent.click(screen.getByRole('button', { name: '追加' }))
+
+    await expectRuleErrorsOnce()
+  })
+
+  it('shows 422 field errors of the edited category row exactly once', async () => {
+    vi.spyOn(assetNumberRulesApi, 'updateAssetNumberRule').mockRejectedValue(ruleErrors)
+    renderPage([categoryRule])
+
+    await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await expectRuleErrorsOnce()
+  })
+
+  it('shows 422 field errors of the default rule form exactly once', async () => {
+    vi.spyOn(assetNumberRulesApi, 'updateDefaultAssetNumberRule').mockRejectedValue(ruleErrors)
+    renderPage([])
+
+    await userEvent.click(await screen.findByRole('button', { name: 'デフォルトルールを作成' }))
+    await userEvent.type(screen.getByLabelText('プレフィックス'), 'AST')
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await expectRuleErrorsOnce()
   })
 })

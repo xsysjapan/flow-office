@@ -3,10 +3,12 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as usersApi from '../../api/users'
 import * as userManagementApi from '../../api/userManagement'
 import { UserManagementAccessPage } from './UserManagementAccessPage'
 import { notify } from '../../lib/notify'
+import { pickDateTime } from '../../test-support/pickerInteractions'
 
 vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
 
@@ -145,5 +147,86 @@ describe('UserManagementAccessPage identities section', () => {
 
     await waitFor(() => expect(link).toHaveBeenCalled())
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('外部IDを連携しました'))
+  })
+})
+
+const oneUser = {
+  data: [{ id: 'user-1', name: '対象社員', email: 'taisho@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null }],
+  meta: { current_page: 1, last_page: 1, total: 1 },
+  links: { next: null, prev: null },
+}
+
+function renderSection(section: 'identities' | 'membershipChanges', path: string) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <UserManagementAccessPage section={section} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+describe('UserManagementAccessPage 422 field errors', () => {
+  it('shows the identity link 422 errors under each field exactly once', async () => {
+    vi.spyOn(userManagementApi, 'fetchExternalIdentities').mockResolvedValue([])
+    vi.spyOn(userManagementApi, 'fetchFieldAuthorities').mockResolvedValue([])
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(oneUser)
+    vi.spyOn(userManagementApi, 'linkExternalIdentity').mockRejectedValue(
+      new ApiError(422, 'Providerエラー。', {
+        provider: ['Providerエラー。'],
+        external_tenant_id: ['Tenant IDエラー。'],
+        external_subject_id: ['Subject IDエラー。'],
+        external_code: ['外部コードエラー。'],
+        email: ['外部メールエラー。'],
+        unknown_key: ['未知のエラー。'],
+      }),
+    )
+    renderSection('identities', '/admin/identity-settings')
+
+    await screen.findByRole('option', { name: '対象社員' })
+    await userEvent.selectOptions(screen.getByLabelText('ユーザー'), 'user-1')
+    await userEvent.type(screen.getByPlaceholderText('Provider'), 'microsoft')
+    await userEvent.type(screen.getByPlaceholderText('Subject ID'), 'subject-1')
+    await userEvent.click(screen.getByRole('button', { name: 'リンク' }))
+
+    for (const message of ['Providerエラー。', 'Tenant IDエラー。', 'Subject IDエラー。', '外部コードエラー。', '外部メールエラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+  })
+
+  it('shows the membership change dialog 422 errors under each field and row exactly once', async () => {
+    vi.spyOn(userManagementApi, 'fetchManagedGroups').mockResolvedValue([
+      { id: 'group-1', group_type_id: 1, name: '総務部', code: 'GA', status: 'active', parent_group_id: null, memberships_count: 0, type: orgType, features: [], memberships: [], role_assignments: [] },
+    ] as never)
+    vi.spyOn(userManagementApi, 'fetchMembershipChangeSets').mockResolvedValue([] as never)
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(oneUser)
+    vi.spyOn(userManagementApi, 'scheduleMembershipChange').mockRejectedValue(
+      new ApiError(422, '対象ユーザーエラー。', {
+        user_id: ['対象ユーザーエラー。'],
+        effective_at: ['適用日時エラー。'],
+        note: ['メモエラー。'],
+        items: ['明細エラー。'],
+        'items.0.to_group_id': ['変更先グループエラー。'],
+        'items.0.operation': ['変更内容エラー。'],
+        unknown_key: ['未知のエラー。'],
+      }),
+    )
+    renderSection('membershipChanges', '/admin/membership-changes')
+
+    await screen.findByText('所属変更はまだありません。')
+    await userEvent.click(screen.getAllByRole('button', { name: '新規作成' })[0])
+    await screen.findByRole('option', { name: '対象社員' })
+    await userEvent.selectOptions(screen.getByLabelText('対象ユーザー'), 'user-1')
+    await pickDateTime(userEvent.setup(), '所属変更の適用日時(日付)', '所属変更の適用日時(時刻)', '2026-07-06T09:00')
+    await userEvent.selectOptions(screen.getByLabelText('変更先グループ'), 'group-1')
+    await userEvent.click(screen.getByRole('button', { name: '明細に追加' }))
+    await userEvent.click(screen.getByRole('button', { name: '変更を予約' }))
+
+    for (const message of ['対象ユーザーエラー。', '適用日時エラー。', 'メモエラー。', '明細エラー。', '変更先グループエラー。', '変更内容エラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
   })
 })

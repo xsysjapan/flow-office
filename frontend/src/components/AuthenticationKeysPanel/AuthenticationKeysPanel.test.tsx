@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as authenticationKeysApi from '../../api/authenticationKeys'
 import type { AuthenticationKey } from '../../api/types'
 import { AuthenticationKeysPanel } from './AuthenticationKeysPanel'
@@ -111,5 +112,30 @@ describe('AuthenticationKeysPanel', () => {
     await user.click(screen.getByRole('button', { name: '無効化する' }))
 
     expect(await screen.findByText('認証キーを無効化しますか?')).toBeInTheDocument()
+  })
+
+  it('shows 422 field errors of the issue form under each field exactly once', async () => {
+    const user = userEvent.setup()
+    const issueSpy = vi.spyOn(authenticationKeysApi, 'issueAuthenticationKey').mockRejectedValueOnce(
+      new ApiError(422, '種別エラー。', {
+        key_type: ['種別エラー。'],
+        display_name: ['表示名エラー。'],
+        raw_key_value: ['読み取った値エラー。'],
+        user_id: ['未知のエラー。'],
+      }),
+    )
+    renderPanel()
+
+    await screen.findByText('本社ICカード')
+    await user.click(screen.getByRole('button', { name: '新規発行' }))
+    await user.type(screen.getByLabelText('表示名'), '来客用QR')
+    await user.type(screen.getByLabelText('読み取った値(カードUID・外部認証端末IDなど)'), 'abc123')
+    await user.click(screen.getByRole('button', { name: '発行する' }))
+
+    for (const message of ['種別エラー。', '表示名エラー。', '読み取った値エラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+    issueSpy.mockRestore()
   })
 })

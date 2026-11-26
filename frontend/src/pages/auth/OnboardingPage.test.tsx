@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as onboardingApi from '../../api/onboarding'
 import { AuthContext } from '../../auth/AuthContext'
 import { OnboardingPage } from './OnboardingPage'
@@ -114,5 +115,52 @@ describe('OnboardingPage', () => {
     await userEvent.type(screen.getByLabelText('パスワード(確認)'), 'different-password')
 
     expect(screen.getByRole('button', { name: 'セットアップを完了する' })).toBeDisabled()
+  })
+
+  it('shows 422 field errors of the SSO form under each field exactly once', async () => {
+    vi.spyOn(onboardingApi, 'startOnboardingSso').mockRejectedValue(
+      new ApiError(422, 'テナントIDエラー。', {
+        m365_tenant_id: ['テナントIDエラー。'],
+        m365_client_id: ['クライアントIDエラー。'],
+        m365_client_secret: ['クライアントシークレットエラー。'],
+        m365_mock_enabled: ['モックエラー。'],
+        unknown_key: ['未知のエラー。'],
+      }),
+    )
+    renderPage()
+
+    await userEvent.type(screen.getByLabelText('テナントID'), 'tenant-1')
+    await userEvent.type(screen.getByLabelText('クライアントID'), 'client-1')
+    await userEvent.type(screen.getByLabelText('クライアントシークレット'), 'secret-1')
+    await userEvent.click(screen.getByRole('button', { name: '保存してMicrosoftにログインする' }))
+
+    for (const message of ['テナントIDエラー。', 'クライアントIDエラー。', 'クライアントシークレットエラー。', 'モックエラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+  })
+
+  it('shows 422 field errors of the local form under each field exactly once', async () => {
+    vi.spyOn(onboardingApi, 'completeOnboardingLocal').mockRejectedValue(
+      new ApiError(422, '氏名エラー。', {
+        admin_name: ['氏名エラー。'],
+        admin_email: ['メールエラー。'],
+        admin_password: ['パスワードエラー。'],
+        unknown_key: ['未知のエラー。'],
+      }),
+    )
+    renderPage()
+
+    await userEvent.click(screen.getByRole('button', { name: 'ローカルパスワードで作成する' }))
+    await userEvent.type(screen.getByLabelText('氏名'), 'テスト管理者')
+    await userEvent.type(screen.getByLabelText('メールアドレス'), 'admin@example.com')
+    await userEvent.type(screen.getByLabelText('パスワード(8文字以上)'), 'correct-horse-battery-staple')
+    await userEvent.type(screen.getByLabelText('パスワード(確認)'), 'correct-horse-battery-staple')
+    await userEvent.click(screen.getByRole('button', { name: 'セットアップを完了する' }))
+
+    for (const message of ['氏名エラー。', 'メールエラー。', 'パスワードエラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
   })
 })

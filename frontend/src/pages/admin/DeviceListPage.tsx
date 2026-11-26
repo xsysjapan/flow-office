@@ -22,6 +22,7 @@ import { ApiError } from '../../api/client'
 import { useDeleteDevice, useDevice, useDevices, useRegisterDevice, useRevokeDevice } from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { isValidPageParam } from '../../utils/searchParamValidators'
 import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
 
@@ -63,6 +64,9 @@ const DEVICE_STATUS_LABELS: Record<DeviceStatus, string> = {
   disabled: '停止中',
   revoked: '失効済み',
 }
+
+const REGISTER_ERROR_KEYS = ['name', 'device_type', 'location_name', 'default_work_location_type', 'role_types', 'role_types.*'] as const
+const REVOKE_ERROR_KEYS = ['reason'] as const
 
 const REGISTERABLE_ROLE_TYPES: DeviceRoleType[] = ['attendance_reader', 'authentication_device', 'access_control']
 
@@ -221,6 +225,11 @@ export function DeviceListPage() {
   const list = devices?.data ?? []
   const selectedDevice = selectedInList ?? (selectedDeviceId !== null && fetchedDevice?.id === selectedDeviceId ? fetchedDevice : null)
 
+  const { of: registerOf, ofAny: registerOfAny, rest: registerRest } = fieldErrors(
+    registerDevice.error,
+    REGISTER_ERROR_KEYS,
+  )
+
   return (
     <div className="space-y-6">
     {header}
@@ -228,10 +237,10 @@ export function DeviceListPage() {
       {isFormOpen && (
         <div className="mb-6 rounded-md border border-border p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="名称" htmlFor="device-form-name" required>
+            <FormField label="名称" htmlFor="device-form-name" required error={registerOf('name')}>
               <Input id="device-form-name" value={name} onChange={(e) => setName(e.target.value)} />
             </FormField>
-            <FormField label="端末種別" htmlFor="device-form-type" required>
+            <FormField label="端末種別" htmlFor="device-form-type" required error={registerOf('device_type')}>
               <NativeSelect
                 id="device-form-type"
                 value={deviceType}
@@ -244,7 +253,7 @@ export function DeviceListPage() {
                 ))}
               </NativeSelect>
             </FormField>
-            <FormField label="設置場所" htmlFor="device-form-location">
+            <FormField label="設置場所" htmlFor="device-form-location" error={registerOf('location_name')}>
               <Input
                 id="device-form-location"
                 value={locationName}
@@ -252,7 +261,7 @@ export function DeviceListPage() {
                 placeholder="例: 本社1階受付"
               />
             </FormField>
-            <FormField label="自動反映する勤務形態区分" htmlFor="device-form-work-location-type">
+            <FormField label="自動反映する勤務形態区分" htmlFor="device-form-work-location-type" error={registerOf('default_work_location_type')}>
               <NativeSelect
                 id="device-form-work-location-type"
                 value={defaultWorkLocationType}
@@ -281,6 +290,11 @@ export function DeviceListPage() {
                 </label>
               ))}
             </div>
+            {registerOfAny('role_types').map((message) => (
+              <p key={message} className="mt-1.5 text-xs text-destructive">
+                {message}
+              </p>
+            ))}
           </fieldset>
 
           <Button
@@ -296,7 +310,7 @@ export function DeviceListPage() {
             </p>
           )}
 
-          {registerDevice.error && <ErrorMessage error={registerDevice.error} />}
+          {registerRest != null && <ErrorMessage error={registerRest} />}
         </div>
       )}
 
@@ -458,6 +472,8 @@ function RevokeDeviceDialog({ device, onClose }: { device: Device | null; onClos
   const [reason, setReason] = useState('')
   const revokeDevice = useRevokeDevice()
 
+  const { of: revokeOf, rest: revokeRest } = fieldErrors(revokeDevice.error, REVOKE_ERROR_KEYS)
+
   const close = () => {
     setReason('')
     revokeDevice.reset()
@@ -476,7 +492,7 @@ function RevokeDeviceDialog({ device, onClose }: { device: Device | null; onClos
       }
       confirmLabel="失効させる"
       isPending={revokeDevice.isPending}
-      error={revokeDevice.error}
+      error={revokeRest}
       onConfirm={() => {
         if (!device) return
         revokeDevice.mutate(
@@ -496,6 +512,7 @@ function RevokeDeviceDialog({ device, onClose }: { device: Device | null; onClos
         value={reason}
         onChange={(e) => setReason(e.target.value)}
       />
+      {revokeOf('reason') && <p className="mt-1.5 text-xs text-destructive">{revokeOf('reason')}</p>}
     </ConfirmActionDialog>
   )
 }

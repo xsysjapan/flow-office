@@ -40,7 +40,7 @@ import {
 import { useUpdateUserDetails, useUser } from "../../hooks/useUsers";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { isUserDetailsDirty, type UserDetailsForm } from "./userRoleEditDirty";
-import { fieldErrorOf, nonFieldError } from "../../utils/fieldErrors";
+import { fieldErrors } from "../../utils/fieldErrors";
 import { useWorkStyles } from "../../hooks/useWorkStyles";
 import {
   useApplyMembershipChangeNow,
@@ -64,14 +64,15 @@ const DETAILS_ERROR_KEYS = [
   "profile.employee_number",
   "profile.department",
   "profile.job_title",
-  "profile.employment_status",
   "profile.account_status",
   "hire_date",
   "termination_date",
   "usage_start_date",
   "paid_leave_auto_grant_enabled",
   "special_leave_auto_grant_enabled",
-];
+] as const;
+
+type MembershipErrorKey = "effective_at" | "note" | "items.*.to_group_id";
 
 function isExternalHr(user: User, field: string): boolean {
   return (
@@ -316,13 +317,31 @@ export function UserRoleEditPage() {
   };
 
   const isExternalHrField = (field: string) => isExternalHr(user, field);
-  const detailsError = (key: string) => fieldErrorOf(updateDetails.error, key);
-  const externalDescription = (field: string) =>
-    isExternalHrField(field) ? EXTERNAL_HR_REASON : undefined;
-  const detailsSubmitError = nonFieldError(
+  const { of: detailsError, rest: detailsSubmitError } = fieldErrors(
     updateDetails.error,
     DETAILS_ERROR_KEYS,
   );
+  // 描かれる項目と同じ条件でキーを組み立てる(変更先グループは追加・移動のとき、適用日時は予約のときだけ)。
+  const membershipMutationError =
+    membershipChange.timing === "scheduled"
+      ? scheduleMembershipChange.error
+      : applyMembershipChangeNow.error;
+  const membershipFields: MembershipErrorKey[] = ["note"];
+  if (["add", "replace"].includes(membershipChange.operation)) {
+    membershipFields.push("items.*.to_group_id");
+  }
+  if (membershipChange.timing === "scheduled") membershipFields.push("effective_at");
+  const {
+    of: membershipOf,
+    ofRow: membershipOfRow,
+    rest: membershipRest,
+  } = fieldErrors(membershipMutationError, membershipFields);
+  const { of: workStyleOf, rest: workStyleRest } = fieldErrors(
+    assignWorkStyleForMonth.error,
+    workStyleMode === "specify" ? (["work_style_id"] as const) : ([] as const),
+  );
+  const externalDescription = (field: string) =>
+    isExternalHrField(field) ? EXTERNAL_HR_REASON : undefined;
 
   const handleSaveDetails = () => {
     if (!changes) return;
@@ -699,14 +718,7 @@ export function UserRoleEditPage() {
               </DialogDescription>
             </DialogHeader>
 
-            {(scheduleMembershipChange.error ||
-              applyMembershipChangeNow.error) && (
-              <ErrorMessage
-                error={
-                  scheduleMembershipChange.error ?? applyMembershipChangeNow.error
-                }
-              />
-            )}
+            {membershipRest != null && <ErrorMessage error={membershipRest} />}
 
             <div>
               {membershipChange.from_group_id && (
@@ -719,7 +731,11 @@ export function UserRoleEditPage() {
                 </div>
               )}
               {["add", "replace"].includes(membershipChange.operation) && (
-                <FormField label="変更先グループ" htmlFor="membership-change-to">
+                <FormField
+                  label="変更先グループ"
+                  htmlFor="membership-change-to"
+                  error={membershipOfRow("items", 0, "to_group_id")}
+                >
                   <NativeSelect
                     id="membership-change-to"
                     value={membershipChange.to_group_id}
@@ -789,6 +805,7 @@ export function UserRoleEditPage() {
                 <FormField
                   label="適用日時"
                   htmlFor="membership-change-effective-at"
+                  error={membershipOf("effective_at")}
                 >
                   <DateTimePicker
                     id="membership-change-effective-at"
@@ -802,7 +819,7 @@ export function UserRoleEditPage() {
                   />
                 </FormField>
               )}
-              <FormField label="メモ" htmlFor="membership-change-note">
+              <FormField label="メモ" htmlFor="membership-change-note" error={membershipOf("note")}>
                 <Input
                   id="membership-change-note"
                   value={membershipChange.note}
@@ -941,11 +958,14 @@ export function UserRoleEditPage() {
                 )}
               </div>
             </div>
-            {(detailsError("paid_leave_auto_grant_enabled") ||
-              detailsError("special_leave_auto_grant_enabled")) && (
+            {detailsError("paid_leave_auto_grant_enabled") && (
               <p className="mb-4 text-xs text-destructive">
-                {detailsError("paid_leave_auto_grant_enabled") ??
-                  detailsError("special_leave_auto_grant_enabled")}
+                {detailsError("paid_leave_auto_grant_enabled")}
+              </p>
+            )}
+            {detailsError("special_leave_auto_grant_enabled") && (
+              <p className="mb-4 text-xs text-destructive">
+                {detailsError("special_leave_auto_grant_enabled")}
               </p>
             )}
             {changes && changes.blockers.length > 0 && (
@@ -953,7 +973,7 @@ export function UserRoleEditPage() {
                 {changes.blockers.join("")}
               </p>
             )}
-            {detailsSubmitError && <ErrorMessage error={detailsSubmitError} />}
+            {detailsSubmitError != null && <ErrorMessage error={detailsSubmitError} />}
             <FormActions>
               <Button
                 isLoading={updateDetails.isPending}
@@ -998,18 +1018,25 @@ export function UserRoleEditPage() {
               </RadioGroup>
 
               {workStyleMode === "specify" && (
-                <NativeSelect
-                  aria-label="指定する働き方"
-                  value={selectedWorkStyleId}
-                  onChange={(e) => setSelectedWorkStyleId(e.target.value)}
-                >
-                  <option value="">選択してください</option>
-                  {workStyles?.map((style) => (
-                    <option key={style.id} value={style.id}>
-                      {style.name}
-                    </option>
-                  ))}
-                </NativeSelect>
+                <>
+                  <NativeSelect
+                    aria-label="指定する働き方"
+                    value={selectedWorkStyleId}
+                    onChange={(e) => setSelectedWorkStyleId(e.target.value)}
+                  >
+                    <option value="">選択してください</option>
+                    {workStyles?.map((style) => (
+                      <option key={style.id} value={style.id}>
+                        {style.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  {workStyleOf("work_style_id") && (
+                    <p className="text-xs text-destructive">
+                      {workStyleOf("work_style_id")}
+                    </p>
+                  )}
+                </>
               )}
             </div>
             {workStyleMode === "specify" && !selectedWorkStyleId && (
@@ -1018,9 +1045,7 @@ export function UserRoleEditPage() {
               </p>
             )}
 
-            {assignWorkStyleForMonth.error && (
-              <ErrorMessage error={assignWorkStyleForMonth.error} />
-            )}
+            {workStyleRest != null && <ErrorMessage error={workStyleRest} />}
             {removeWorkStyleAssignment.error && (
               <ErrorMessage error={removeWorkStyleAssignment.error} />
             )}

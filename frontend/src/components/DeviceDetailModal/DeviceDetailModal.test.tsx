@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as devicesApi from '../../api/devices'
 import type { Device } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -200,5 +201,67 @@ describe('DeviceDetailModal', () => {
       expect.objectContaining({ name: '本社1階受付', location_name: '本社2階会議室' }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('本社1階受付の設定を保存しました'))
+  })
+
+  it('shows 422 field errors of the settings form under each field exactly once', async () => {
+    const user = userEvent.setup()
+    const spy = vi.spyOn(devicesApi, 'updateDeviceSettings').mockRejectedValueOnce(
+      new ApiError(422, '名称エラー。', {
+        name: ['名称エラー。'],
+        location_name: ['設置場所エラー。'],
+        default_work_location_type: ['勤務形態区分エラー。'],
+        timezone: ['タイムゾーンエラー。'],
+        site_id: ['未知のエラー。'],
+      }),
+    )
+    renderModal()
+
+    await user.click(screen.getByRole('button', { name: '詳細' }))
+    await user.click(screen.getByRole('button', { name: '設定を保存' }))
+
+    for (const message of ['名称エラー。', '設置場所エラー。', '勤務形態区分エラー。', 'タイムゾーンエラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+    spy.mockRestore()
+  })
+
+  it('shows 422 field errors of the roles form under the role checkboxes exactly once', async () => {
+    const user = userEvent.setup()
+    const spy = vi.spyOn(devicesApi, 'updateDeviceRoles').mockRejectedValueOnce(
+      new ApiError(422, '役割エラー。', {
+        role_types: ['役割エラー。'],
+        'role_types.0': ['役割の値エラー。'],
+        other: ['未知のエラー。'],
+      }),
+    )
+    renderModal({ roles: ['attendance_reader'] })
+
+    await user.click(screen.getByRole('button', { name: '詳細' }))
+    await user.click(screen.getByRole('button', { name: '役割を保存' }))
+
+    for (const message of ['役割エラー。', '役割の値エラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+    spy.mockRestore()
+  })
+
+  it('shows 422 field errors of the scope grant under the select exactly once', async () => {
+    const user = userEvent.setup()
+    const spy = vi.spyOn(devicesApi, 'grantDeviceScope').mockRejectedValueOnce(
+      new ApiError(422, 'スコープエラー。', { scope: ['スコープエラー。'], other: ['未知のエラー。'] }),
+    )
+    renderModal({ scopes: ['attendance:read_result'] })
+
+    await user.click(screen.getByRole('button', { name: '詳細' }))
+    await user.selectOptions(screen.getByLabelText('スコープを付与する'), '管理者モード(入館証等の現地登録)')
+    await user.click(screen.getByRole('button', { name: '付与する' }))
+
+    for (const message of ['スコープエラー。', '未知のエラー。']) {
+      expect(await screen.findByText(message)).toBeInTheDocument()
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+    spy.mockRestore()
   })
 })
