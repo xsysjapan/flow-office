@@ -277,3 +277,36 @@ describe("ConfirmActionDialog", () => {
     });
   });
 });
+
+describe("ConfirmActionDialog cancelLabel", () => {
+  it("shows a custom cancel label and defaults to キャンセル", () => {
+    const { rerender } = render(
+      <ConfirmActionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="確認"
+        description="本文"
+        confirmLabel="実行"
+        cancelLabel="編集を続ける"
+        onConfirm={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "編集を続ける" }),
+    ).toBeInTheDocument();
+
+    rerender(
+      <ConfirmActionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="確認"
+        description="本文"
+        confirmLabel="実行"
+        onConfirm={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "キャンセル" }),
+    ).toBeInTheDocument();
+  });
+});

@@ -173,4 +173,8 @@
   - そのほか: 外部への移動の `beforeunload`(`leaveWithoutGuard`)、`ConfirmActionDialog` の文言と variant(`cancelLabel`・`danger`)、`errorElement`、保存して留まる画面の比べる元(送った値)、保存して移る画面のテスト、E2E の `beforeunload` の経路。
 
 ## 実装結果
-未着手
+### 土台(段階1)
+- `main.tsx` を `createBrowserRouter`+`RouterProvider` に変更(`Root`=Auth/AppSettings/`UnsavedChangesProvider`/`App`、`errorElement`=`RootErrorFallback`)。
+- `hooks/useUnsavedChangesGuard.tsx`(`.ts`から改名): Provider・hook(`navigateAfterSave`/`leaveWithoutGuard`/`confirmDiscard`、`blockOn`)。ルーター外(renderHook)でも`beforeunload`だけ動く。
+- `ConfirmActionDialog` に `cancelLabel`、`components/RootErrorFallback/`、テスト補助 `src/test/renderWithGuard.tsx`。
+- テスト: `useUnsavedChangesGuardRouter.test.tsx`・`useUnsavedChangesGuardNoProvider.test.tsx`ほか。各画面への適用は未実施。

@@ -34,6 +34,8 @@ export interface ConfirmActionDialogProps {
   open?: boolean;
   /** キャンセルボタンを出さない(一括操作の結果表示で「閉じる」だけにする用途)。 */
   hideCancel?: boolean;
+  /** キャンセルボタンの文言。既定は「キャンセル」。 */
+  cancelLabel?: string;
   /** trueの間はキャンセルボタンを押せない(実行中は閉じさせない用途)。 */
   cancelDisabled?: boolean;
   /** 説明文と確認/キャンセルボタンの間に表示する追加コンテンツ(理由入力欄など)。 */
@@ -59,6 +61,7 @@ export function ConfirmActionDialog({
   onOpenChange,
   open,
   hideCancel = false,
+  cancelLabel = "キャンセル",
   cancelDisabled = false,
   children,
 }: ConfirmActionDialogProps) {
@@ -110,7 +113,7 @@ export function ConfirmActionDialog({
               disabled={cancelDisabled}
               onClick={() => handleOpenChange(false)}
             >
-              キャンセル
+              {cancelLabel}
             </Button>
           )}
           <Button
