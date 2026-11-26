@@ -31,7 +31,7 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
    `POST /dev/reset-database`もこのフラグがtrueの時のみ有効になる)。あわせて
    `MICROSOFT_CLIENT_ID=mock-client-id`・`MICROSOFT_CLIENT_SECRET=mock-client-secret`・
    `MICROSOFT_TENANT_ID=mock`・`MICROSOFT_REDIRECT_URI=http://localhost:8000/api/auth/microsoft/callback`
-   を設定する(`.devcontainer/post-create.sh`と同じ値。未設定だとSSO未設定扱いになりログイン画面に
+   を設定する。`MICROSOFT_MOCK_INTERNAL_BASE_URL`は`.env.example`ではDocker用の`http://mock-oidc:9000`なので、ホストで動かすときは`http://localhost:9000`にする(`.devcontainer/post-create.sh`と同じ値。未設定だとSSO未設定扱いになりログイン画面に
    「Microsoftでログイン」ボタンが出ず、全シナリオがログインで失敗する) →
    `php artisan migrate --seed` → `php artisan serve`(ポート8000)。
    (`db:seed --class=ScenarioSeeder`を手動実行しておく必要はない。E2E実行時の
