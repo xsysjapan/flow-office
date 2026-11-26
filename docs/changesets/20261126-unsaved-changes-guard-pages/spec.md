@@ -177,4 +177,31 @@
 - `main.tsx` を `createBrowserRouter`+`RouterProvider` に変更(`Root`=Auth/AppSettings/`UnsavedChangesProvider`/`App`、`errorElement`=`RootErrorFallback`)。
 - `hooks/useUnsavedChangesGuard.tsx`(`.ts`から改名): Provider・hook(`navigateAfterSave`/`leaveWithoutGuard`/`confirmDiscard`、`blockOn`)。ルーター外(renderHook)でも`beforeunload`だけ動く。
 - `ConfirmActionDialog` に `cancelLabel`、`components/RootErrorFallback/`、テスト補助 `src/test/renderWithGuard.tsx`。
-- テスト: `useUnsavedChangesGuardRouter.test.tsx`・`useUnsavedChangesGuardNoProvider.test.tsx`ほか。各画面への適用は未実施。
+- テスト: `useUnsavedChangesGuardRouter.test.tsx`・`useUnsavedChangesGuardNoProvider.test.tsx`ほか。各画面への適用は段階2。
+
+### 画面への適用(段階2)
+コミット: `3dab7ade`(土台)、`08c4a1b2`(管理・初回設定・申請・勤怠の日・カレンダー)、備品・経費・付与ルールのコミット。
+
+| 画面 | dirty の判定 | 止める判定 | 保存の後 |
+|---|---|---|---|
+| P1 グループ | `isGroupFormDirty` | パス。`GroupDetailForm key={id}` | 作成は `navigateAfterSave`、編集は送った値を比べる元に |
+| P2 ロール詳細 | `isRoleDefinitionDirty` | パスまたは `roleId` | 送った値 |
+| P3 システム設定 | `isSystemSettingsDirty` | パス | 送った値 |
+| P5 利用者詳細 | `isUserDetailsDirty` | パス | 送った値 |
+| P8・P9 備品 | `isAssetEditDirty`・`isAssetRegisterDirty` | パス | `navigateAfterSave` |
+| P11〜P13 勤怠の日 | `isDayFormDirty`・`isCalculationAdjustDirty` | パス。`AttendanceDayContent key={date}` | 表示を戻す。キャンセルは `confirmDiscard` |
+| P17 初回設定 | `isOnboardingDirty` | パス | `navigateAfterSave`、SSO は `leaveWithoutGuard` |
+| P20 経費の申請 | `isExpenseClaimNewDirty`(単票入力は `isSingleExpenseItemFormDirty` を `onDirtyChange` で) | `'location'`。手順を戻すボタンは `confirmDiscard` の後に state と URL を変える | `navigateAfterSave`(下書きの削除の後も) |
+| P21・P22 経費区分・プリセット | `isExpenseCategoryDirty`・`isExpenseEntryPresetDirty` | パス | `navigateAfterSave` |
+| P23 付与ルール | `isPaidLeaveGrantRuleDirty` | パス | `navigateAfterSave` |
+| P24 カレンダーの作成 | `isWorkCalendarCreateDirty` | パス | `navigateAfterSave` |
+| P25・P27 カレンダー | `isWorkCalendarSettingsDirty`・`isWorkCalendarDaysDirty` | パス | 送った値・`navigateAfterSave` |
+| P29 働き方の一般設定 | `isWorkStyleOnboardingDirty` | パス | 送った値 |
+| P30・P31 申請種別・申請 | `isRequestTypeFormDirty`・`isWorkflowRequestNewDirty` | パス | `navigateAfterSave` |
+
+- 委譲元の判断で加えたこと:
+  - 勤怠の日の作成(P12)は、提案値が入った後の値を比べる元にする(記録の無い日を開いて前日・翌日へ移るだけで確認が出ないように)。
+  - 経費の申請の単票入力を変更に含め、手順を戻すボタンで画面と URL が食い違わないようにした。
+- 勤怠の日で前日・翌日へ移ると前の日の編集中の状態が残る不具合は、`key={date}` で解消した(テストで `key` を外すと失敗することを確認)。
+- 既存のテストの変更は `OnboardingPage.test.tsx` を `MemoryRouter` で包んだ1か所だけ(`navigateAfterSave` はルーターが要る)。
+- 単体テスト: 全件 1703 件成功(委譲元で再実行)。tsc 成功。

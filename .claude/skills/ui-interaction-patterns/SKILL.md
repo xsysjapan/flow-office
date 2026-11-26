@@ -247,6 +247,14 @@ Createは新規オブジェクトを作る行為。UI文言は原則「作成」
 編集途中で離脱すると変更が失われる場合は離脱警告を出す。対象はBrowser Back、他ページへの
 Navigation、Cancel、実装可能な範囲でのタブクローズ。**変更が存在しない場合は警告しない**。
 
+実装(変更セット`20261126-unsaved-changes-guard-pages`):
+- 対象はページの作成・編集・設定のフォーム。Dialog・Sheet、実行・出力・一括操作・インラインの入力は対象外。
+- `useUnsavedChangesGuard(dirty, { blockOn })` を呼ぶ。`dirty` は比べる元(読み込んだ値、新規なら初期値)と今の入力を比べる純粋関数(`xxxDirty.ts`)で作り、テストで直接呼ぶ。即時に保存される操作は含めない。
+- 保存に成功した後の移動は必ず返り値の`navigateAfterSave`を使う(`navigate`を直接呼ぶと確認が出る)。外部への移動は`leaveWithoutGuard`。ページの中で表示を戻すだけのキャンセルは`await confirmDiscard()`の後に戻す。
+- 保存して留まる画面は、保存に成功したら比べる元を送った値にする(再取得を待たない)。
+- 止める移動は既定でパスが変わる移動。クエリの移動で入力が失われる画面は`blockOn: 'location'`か関数で指定する。パスの変数で同じ部品が使い回される画面は、フォームの部品に`key={パスの変数}`を付ける。
+- テストは`src/test/renderWithGuard.tsx`で「保存の後に確認が出ない」を書く(`navigateAfterSave`の付け忘れを捕まえる)。
+
 ### 2.10 URLと一覧状態
 
 可能な限り以下をURLへ表現する。
