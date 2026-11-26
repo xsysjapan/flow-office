@@ -25,6 +25,8 @@ import {
   useAssignUserWorkStyleForMonth,
   useUserWorkStyleMonthlyAssignments,
 } from '../../hooks/useUserWorkStyleMonthlyAssignments'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isWorkStyleOnboardingDirty, type WorkStyleOnboardingValues } from './workStyleOnboardingDirty'
 import { useGenerateShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { useUser } from '../../hooks/useUsers'
 import { useCreateDefaultWorkStyle, useSetDefaultWorkStyle, useWorkStyles } from '../../hooks/useWorkStyles'
@@ -59,6 +61,16 @@ function WorkStyleOnboardingCard() {
   const [endTime, setEndTime] = useState(STANDARD_WORK_STYLE_DEFAULTS.default_end_time)
   const [breakMinutes, setBreakMinutes] = useState(String(STANDARD_WORK_STYLE_DEFAULTS.default_break_minutes))
 
+  // 保存に成功したら比べる元を「送った値」にする(再取得を待つ間に変更ありと誤判定しない)。
+  const [baseValues, setBaseValues] = useState<WorkStyleOnboardingValues>({
+    name: STANDARD_WORK_STYLE_DEFAULTS.name,
+    startTime: STANDARD_WORK_STYLE_DEFAULTS.default_start_time,
+    endTime: STANDARD_WORK_STYLE_DEFAULTS.default_end_time,
+    breakMinutes: String(STANDARD_WORK_STYLE_DEFAULTS.default_break_minutes),
+  })
+  const currentValues: WorkStyleOnboardingValues = { name, startTime, endTime, breakMinutes }
+  const { confirmDiscard } = useUnsavedChangesGuard(isEditing && isWorkStyleOnboardingDirty(baseValues, currentValues))
+
   const hasDefault = (workStyles ?? []).some((style) => style.is_default)
   if (hasDefault) return null
 
@@ -67,6 +79,7 @@ function WorkStyleOnboardingCard() {
   }
 
   const handleSaveEdited = () => {
+    const sentValues = currentValues
     createDefault.mutate(
       {
         name,
@@ -74,7 +87,12 @@ function WorkStyleOnboardingCard() {
         default_end_time: endTime,
         default_break_minutes: Number(breakMinutes),
       },
-      { onSuccess: () => notify.success('一般的な勤務設定を作成しました') },
+      {
+        onSuccess: () => {
+          setBaseValues(sentValues)
+          notify.success('一般的な勤務設定を作成しました')
+        },
+      },
     )
   }
 
@@ -133,7 +151,12 @@ function WorkStyleOnboardingCard() {
 
           {createDefault.error && <ErrorMessage error={createDefault.error} />}
           <FormActions>
-            <Button variant="secondary" onClick={() => setIsEditing(false)}>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                if (await confirmDiscard()) setIsEditing(false)
+              }}
+            >
               キャンセル
             </Button>
             <Button isLoading={createDefault.isPending} onClick={handleSaveEdited}>

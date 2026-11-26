@@ -16,6 +16,8 @@ import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { useBackTarget, useKeepBackState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { notify } from '../../lib/notify'
 import { useRequestTypes } from '../../hooks/useRequestTypes'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isWorkflowRequestNewDirty } from './workflowRequestNewDirty'
 import { useCreateWorkflowRequest, useSubmitWorkflowRequest } from '../../hooks/useWorkflowRequests'
 
 type RequestNewInitial = {
@@ -69,6 +71,15 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
   const [formValues, setFormValues] = useState<Record<string, string>>(() => initial.formValues)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
 
+  // 比べる元は最初の描画の初期値(URLクエリの初期値を含む)。
+  const [base] = useState<RequestNewInitial & { approverUserId: string | undefined }>(() => ({
+    ...initial,
+    approverUserId: undefined,
+  }))
+  const { navigateAfterSave } = useUnsavedChangesGuard(
+    isWorkflowRequestNewDirty(base, { requestTypeCode, title, formValues, approverUserId }),
+  )
+
   const createRequest = useCreateWorkflowRequest()
   const submitRequest = useSubmitWorkflowRequest()
 
@@ -95,7 +106,7 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
       notify.success('申請を下書き保存しました')
     }
 
-    navigate(`/requests/${created.id}`, { state: keepState })
+    navigateAfterSave(`/requests/${created.id}`, { state: keepState })
   }
 
   return (

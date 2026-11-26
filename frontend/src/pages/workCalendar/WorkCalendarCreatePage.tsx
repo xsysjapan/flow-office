@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BackLink } from '../../components/BackLink/BackLink'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
@@ -17,6 +17,8 @@ import { NativeSelect } from '../../components/ui/native-select'
 import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { useCreateHolidayCalendarSource, useHolidayCalendarSources } from '../../hooks/useHolidayCalendarSources'
 import { useCreateWorkCalendar } from '../../hooks/useWorkCalendars'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isWorkCalendarCreateDirty } from './workCalendarCreateDirty'
 import type { WeekdayHolidayPattern, WeekdayHolidayPatternDayType } from '../../api/types'
 
 const ICS_FILE_ACCEPT = '.ics,.ical,.ifb'
@@ -98,6 +100,8 @@ export function WorkCalendarCreatePage() {
   const createSource = useCreateHolidayCalendarSource()
 
   const [form, setForm] = useState(emptyFormState())
+  const baseForm = useMemo(emptyFormState, [])
+  const { navigateAfterSave } = useUnsavedChangesGuard(isWorkCalendarCreateDirty(baseForm, form))
 
   const [isRegisteringSource, setIsRegisteringSource] = useState(false)
   const [newSourceName, setNewSourceName] = useState('')
@@ -143,7 +147,7 @@ export function WorkCalendarCreatePage() {
         // 作成後は作成された会社カレンダーの詳細画面(正史画面)へ遷移する(SKILL.md §2.5)。
         onSuccess: (created) => {
           notify.success(`「${created.name}」を作成しました`)
-          navigate(`/admin/work-calendars/${created.id}`, { state: keepBackState })
+          navigateAfterSave(`/admin/work-calendars/${created.id}`, { state: keepBackState })
         },
       },
     )

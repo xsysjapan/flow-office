@@ -13,6 +13,8 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { notify } from '../../lib/notify'
 import { useSystemSettings, useUpdateSystemSettings } from '../../hooks/useSystemSettings'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isSystemSettingsDirty, systemSettingsToForm, type SystemSettingsFormValues } from './systemSettingsDirty'
 
 /**
  * UC-003: システム設定(default_timezone等)を管理する。
@@ -44,8 +46,32 @@ export function SystemSettingsPage() {
   const [prohibitSelfPrivilegedRoleAssignment, setProhibitSelfPrivilegedRoleAssignment] = useState(false)
   const [compensatoryLeaveRequiresApproval, setCompensatoryLeaveRequiresApproval] = useState(true)
 
+  // 比べる元(読み込んだ値。保存に成功したら送った値)。
+  const [base, setBase] = useState<SystemSettingsFormValues | null>(null)
+  const current: SystemSettingsFormValues = {
+    defaultTimezone,
+    submissionDeadlineDay,
+    monthCloseDeadlineDay,
+    ms365TenantId: ms365Value.tenantId,
+    ms365ClientId: ms365Value.clientId,
+    ms365ClientSecret: ms365Value.clientSecret,
+    ms365MockEnabled: ms365Value.mockEnabled,
+    notificationMailEnabled,
+    notificationMailSenderAddress,
+    notificationMailSenderName,
+    paidLeaveRequiresApproval,
+    specialLeaveRequiresApproval,
+    shiftSwapRequiresApproval,
+    attendanceRequiresApproval,
+    expenseClaimRequiresApproval,
+    prohibitSelfPrivilegedRoleAssignment,
+    compensatoryLeaveRequiresApproval,
+  }
+  useUnsavedChangesGuard(base !== null && isSystemSettingsDirty(base, current))
+
   useEffect(() => {
     if (!data) return
+    setBase(systemSettingsToForm(data))
     setDefaultTimezone(data.default_timezone)
     setSubmissionDeadlineDay(String(data.attendance_submission_deadline_day))
     setMonthCloseDeadlineDay(String(data.attendance_month_close_deadline_day))
@@ -100,6 +126,8 @@ export function SystemSettingsPage() {
       {
         onSuccess: () => {
           notify.success('システム設定を保存しました')
+          // 保存して留まる: 比べる元を送った値にする(再取得を待たない)。送らないシークレットは空欄に戻す。
+          setBase({ ...current, ms365ClientSecret: '' })
           setMs365Value((current) => ({ ...current, clientSecret: '' }))
         },
       },

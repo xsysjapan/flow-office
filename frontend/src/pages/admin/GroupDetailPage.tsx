@@ -43,8 +43,24 @@ import {
 import { RoleAssignmentSection } from "../../components/RoleAssignmentSection/RoleAssignmentSection";
 import * as access from "../../hooks/useAccessControl";
 import { membershipKindLabel } from '../../utils/statusLabels'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isGroupFormDirty, type GroupFormValues } from './groupDetailDirty'
+
+const emptyGroupForm: GroupFormValues = {
+  group_type_id: "",
+  name: "",
+  parent_group_id: "",
+  status: "active",
+  initial_role_id: "",
+};
 
 export function GroupDetailPage() {
+  const { id = "new" } = useParams<{ id: string }>();
+  // new と :id で同じ部品が使い回されないよう、id をキーにしてフォームを作り直す。
+  return <GroupDetailForm key={id} />;
+}
+
+function GroupDetailForm() {
   const { id = "new" } = useParams<{ id: string }>();
   const isNew = id === "new";
   const navigate = useNavigate();
@@ -59,24 +75,22 @@ export function GroupDetailPage() {
   const removeAssignment = access.useRemoveRoleAssignment();
   const assignments = access.useRoleAssignments(!isNew);
   const [initializedId, setInitializedId] = useState("");
-  const [form, setForm] = useState({
-    group_type_id: "",
-    name: "",
-    parent_group_id: "",
-    status: "active",
-    initial_role_id: "",
-  });
+  const [form, setForm] = useState<GroupFormValues>(emptyGroupForm);
+  const [base, setBase] = useState<GroupFormValues>(emptyGroupForm);
+  const { navigateAfterSave } = useUnsavedChangesGuard(isGroupFormDirty(base, form));
 
   const group = groups.data?.find((item) => item.id === id);
   useEffect(() => {
     if (isNew || !group || initializedId === group.id) return;
-    setForm({
+    const loaded = {
       group_type_id: String(group.group_type_id),
       name: group.name,
       parent_group_id: group.parent_group_id ?? "",
       status: group.status,
       initial_role_id: "",
-    });
+    };
+    setForm(loaded);
+    setBase(loaded);
     setInitializedId(group.id);
   }, [group, initializedId, isNew]);
 
@@ -248,7 +262,7 @@ export function GroupDetailPage() {
                           });
                         }
                         notify.success("グループを作成しました");
-                        navigate(`/admin/groups/${newGroupId}`, {
+                        navigateAfterSave(`/admin/groups/${newGroupId}`, {
                           replace: true,
                           state: keepBackState,
                         });
@@ -266,7 +280,12 @@ export function GroupDetailPage() {
                       status: form.status,
                     },
                   },
-                  { onSuccess: () => notify.success("グループを保存しました") },
+                  {
+                    onSuccess: () => {
+                      setBase(form);
+                      notify.success("グループを保存しました");
+                    },
+                  },
                 );
               }}
             >

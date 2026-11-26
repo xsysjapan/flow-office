@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { BackLink } from '../../components/BackLink/BackLink'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -23,6 +23,7 @@ import type {
   WorkCalendarYearStatus,
 } from '../../api/types'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isWorkCalendarDaysDirty } from './workCalendarDaysDirty'
 import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { cn } from '../../lib/utils'
 import { addDays, addMonths, datesInMonth } from '../../utils/weekDates'
@@ -308,7 +309,6 @@ function DayCell({ date, state, inRange, allowOverride, weekdayClassification, o
  */
 export function WorkCalendarDaysPage() {
   const { calendarId = '', fiscalYear = '' } = useParams<{ calendarId: string; fiscalYear: string }>()
-  const navigate = useNavigate()
   const backTarget = useBackTarget()
   const keepBackState = useKeepBackState()
   const putDays = usePutWorkCalendarDays()
@@ -331,6 +331,8 @@ export function WorkCalendarDaysPage() {
   const [daysMap, setDaysMap] = useState<Map<string, DayState>>(new Map())
   const [loadedForYearId, setLoadedForYearId] = useState<string | null>(null)
   const [hoursPerDay, setHoursPerDay] = useState(8)
+  // 保存に成功したら比べる元を「送った値」にする(再取得を待つ間に変更ありと誤判定しない)。
+  const [savedDays, setSavedDays] = useState<Map<string, DayState> | null>(null)
 
   useEffect(() => {
     if (!daysQuery.data || loadedForYearId === resolvedYearId) return
@@ -340,13 +342,16 @@ export function WorkCalendarDaysPage() {
       map.set(day.date, toDayState(day))
     }
     setDaysMap(map)
+    setSavedDays(null)
     setLoadedForYearId(resolvedYearId || null)
   }, [daysQuery.data, resolvedYearId, loadedForYearId])
 
-  const isDirty = Boolean(
-    daysQuery.data?.some((day) => JSON.stringify(daysMap.get(day.date)) !== JSON.stringify(toDayState(day))),
+  const loadedDays = useMemo(
+    () => new Map<string, DayState>((daysQuery.data ?? []).map((day) => [day.date, toDayState(day)])),
+    [daysQuery.data],
   )
-  useUnsavedChangesGuard(isDirty)
+  const isDirty = isWorkCalendarDaysDirty(savedDays ?? loadedDays, daysMap)
+  const { navigateAfterSave } = useUnsavedChangesGuard(isDirty)
 
   const dates = useMemo(() => (year ? allDatesInRange(year.starts_on, year.ends_on) : []), [year])
   const months = useMemo(() => (year ? monthsInRange(year.starts_on, year.ends_on) : []), [year])
@@ -410,6 +415,7 @@ export function WorkCalendarDaysPage() {
   const handleSave = () => {
     if (!resolvedYearId) return
 
+    const sentDays = new Map(daysMap)
     putDays.mutate(
       {
         id: resolvedYearId,
@@ -429,7 +435,12 @@ export function WorkCalendarDaysPage() {
         }
       }),
       },
-      { onSuccess: () => notify.success(`${fiscalYear}年度の日別データを保存しました`) },
+      {
+        onSuccess: () => {
+          setSavedDays(sentDays)
+          notify.success(`${fiscalYear}年度の日別データを保存しました`)
+        },
+      },
     )
   }
 
@@ -440,9 +451,9 @@ export function WorkCalendarDaysPage() {
         notify.success(`${year.fiscal_year}年度を削除しました`)
         const detailPath = `/admin/work-calendars/${calendar.id}`
         if (backTarget && backTarget.to.split(/[?#]/)[0] === detailPath) {
-          navigate(backTarget.to, { state: backTarget.state })
+          navigateAfterSave(backTarget.to, { state: backTarget.state })
         } else {
-          navigate(detailPath, { state: keepBackState })
+          navigateAfterSave(detailPath, { state: keepBackState })
         }
       },
     })

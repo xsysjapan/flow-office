@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -10,6 +9,8 @@ import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { Ms365CredentialsFields, type Ms365CredentialsFieldsValue } from '../../components/Ms365CredentialsFields/Ms365CredentialsFields'
 import { Input } from '../../components/ui/input'
 import { useCompleteOnboardingLocal, useStartOnboardingSso } from '../../hooks/useOnboarding'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { INITIAL_ONBOARDING_FORM, isOnboardingDirty } from './onboardingDirty'
 
 type OnboardingMode = 'sso' | 'local'
 
@@ -29,7 +30,6 @@ const DEFAULT_MS365_VALUE: Ms365CredentialsFieldsValue = {
  */
 export function OnboardingPage() {
   const { applySession } = useAuth()
-  const navigate = useNavigate()
   const startSso = useStartOnboardingSso()
   const completeLocal = useCompleteOnboardingLocal()
 
@@ -40,6 +40,19 @@ export function OnboardingPage() {
   const [adminEmail, setAdminEmail] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [adminPasswordConfirmation, setAdminPasswordConfirmation] = useState('')
+
+  const { navigateAfterSave, leaveWithoutGuard } = useUnsavedChangesGuard(
+    isOnboardingDirty(INITIAL_ONBOARDING_FORM, {
+      ms365TenantId: ms365Value.tenantId,
+      ms365ClientId: ms365Value.clientId,
+      ms365ClientSecret: ms365Value.clientSecret,
+      ms365MockEnabled: ms365Value.mockEnabled,
+      adminName,
+      adminEmail,
+      adminPassword,
+      adminPasswordConfirmation,
+    }),
+  )
 
   const isSsoValid = ms365Value.tenantId && ms365Value.clientId && ms365Value.clientSecret
   const isLocalValid =
@@ -58,7 +71,9 @@ export function OnboardingPage() {
       },
       {
         onSuccess: ({ redirect_url: redirectUrl }) => {
-          window.location.href = redirectUrl
+          leaveWithoutGuard(() => {
+            window.location.href = redirectUrl
+          })
         },
       },
     )
@@ -70,7 +85,7 @@ export function OnboardingPage() {
       {
         onSuccess: ({ token, user }) => {
           applySession(token, user)
-          navigate('/', { replace: true })
+          navigateAfterSave('/', { replace: true })
         },
       },
     )

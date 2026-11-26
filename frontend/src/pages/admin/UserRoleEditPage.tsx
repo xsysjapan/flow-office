@@ -39,6 +39,7 @@ import {
 } from "../../hooks/useUserWorkStyleMonthlyAssignments";
 import { useUpdateUserDetails, useUser } from "../../hooks/useUsers";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
+import { isUserDetailsDirty, type UserDetailsForm } from "./userRoleEditDirty";
 import { fieldErrorOf, nonFieldError } from "../../utils/fieldErrors";
 import { useWorkStyles } from "../../hooks/useWorkStyles";
 import {
@@ -71,23 +72,6 @@ const DETAILS_ERROR_KEYS = [
   "paid_leave_auto_grant_enabled",
   "special_leave_auto_grant_enabled",
 ];
-
-interface UserDetailsForm {
-  profile: {
-    name: string;
-    email: string;
-    employee_number: string;
-    department: string;
-    job_title: string;
-    employment_status: string;
-    account_status: string;
-  };
-  hireDate: string;
-  terminationDate: string;
-  usageStartDate: string;
-  paidLeaveAutoGrantEnabled: boolean;
-  specialLeaveAutoGrantEnabled: boolean;
-}
 
 function isExternalHr(user: User, field: string): boolean {
   return (
@@ -220,17 +204,18 @@ export function UserRoleEditPage() {
     account_status: "active",
   });
 
-  const changes = user
-    ? buildUserDetailsChanges(user, {
-        profile,
-        hireDate,
-        terminationDate,
-        usageStartDate,
-        paidLeaveAutoGrantEnabled,
-        specialLeaveAutoGrantEnabled,
-      })
-    : null;
-  const dirty = isInitialized && (changes?.dirty ?? false);
+  // 比べる元(読み込んだ値。保存に成功したら送った値)。
+  const [base, setBase] = useState<UserDetailsForm | null>(null);
+  const currentForm: UserDetailsForm = {
+    profile,
+    hireDate,
+    terminationDate,
+    usageStartDate,
+    paidLeaveAutoGrantEnabled,
+    specialLeaveAutoGrantEnabled,
+  };
+  const changes = user ? buildUserDetailsChanges(user, currentForm) : null;
+  const dirty = isInitialized && base !== null && isUserDetailsDirty(base, currentForm);
   useUnsavedChangesGuard(dirty);
 
   const currentYearMonth = formatDate(new Date()).slice(0, 7);
@@ -251,7 +236,7 @@ export function UserRoleEditPage() {
       setSpecialLeaveAutoGrantEnabled(
         user.special_leave_auto_grant_enabled ?? true,
       );
-      setProfile({
+      const loadedProfile = {
         name: user.name,
         email: user.email ?? "",
         employee_number: user.employee_number ?? "",
@@ -259,6 +244,16 @@ export function UserRoleEditPage() {
         job_title: user.job_title ?? "",
         employment_status: user.employment_status,
         account_status: user.account_status ?? "active",
+      };
+      setProfile(loadedProfile);
+      setBase({
+        profile: loadedProfile,
+        hireDate: user.hire_date ?? "",
+        terminationDate: user.termination_date ?? "",
+        usageStartDate: user.usage_start_date ?? "",
+        paidLeaveAutoGrantEnabled: user.paid_leave_auto_grant_enabled ?? true,
+        specialLeaveAutoGrantEnabled:
+          user.special_leave_auto_grant_enabled ?? true,
       });
       setIsInitialized(true);
     }
@@ -333,7 +328,12 @@ export function UserRoleEditPage() {
     if (!changes) return;
     updateDetails.mutate(
       { id: userId, input: changes.input },
-      { onSuccess: () => notify.success("利用者の情報を保存しました") },
+      {
+        onSuccess: () => {
+          setBase(currentForm);
+          notify.success("利用者の情報を保存しました");
+        },
+      },
     );
   };
 

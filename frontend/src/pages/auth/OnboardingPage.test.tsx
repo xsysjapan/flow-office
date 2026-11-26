@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as onboardingApi from '../../api/onboarding'
 import { AuthContext } from '../../auth/AuthContext'
@@ -29,7 +30,9 @@ function renderPage() {
           logout: vi.fn(),
         }}
       >
-        <OnboardingPage />
+        <MemoryRouter>
+          <OnboardingPage />
+        </MemoryRouter>
       </AuthContext.Provider>
     </QueryClientProvider>,
   )

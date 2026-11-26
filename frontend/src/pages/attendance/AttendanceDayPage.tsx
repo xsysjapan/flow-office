@@ -63,6 +63,7 @@ import {
 } from '../../hooks/useCompensatoryLeave'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isCalculationAdjustDirty, isDayFormDirty, type DayLeaveValues } from './attendanceDayDirty'
 import {
   useAdjustAttendanceDailyCalculation,
   useAttendanceDayDefaults,
@@ -635,6 +636,16 @@ function useLeaveDesignationController(date: string, initialLeaves: AttendanceDa
     existingPaid?.approver?.id ?? existingSpecial?.approver?.id ?? existingCompensatory?.approver?.id,
   )
   const [leaveReason, setLeaveReason] = useState('')
+  // 離脱警告の比べる元。state の初期値と同じ値をマウント時に1度だけ控える(申請一覧の再取得で動かさない)。
+  const [baseValues] = useState<DayLeaveValues>(() => ({
+    kind: initial.kind,
+    unit: initial.unit ?? 'full',
+    hours: existingHours !== null ? String(existingHours) : '',
+    specialLeaveTypeId: existingSpecial?.special_leave_type_id,
+    approverUserId: existingPaid?.approver?.id ?? existingSpecial?.approver?.id ?? existingCompensatory?.approver?.id,
+    leaveReason: '',
+  }))
+  const values: DayLeaveValues = { kind, unit, hours, specialLeaveTypeId, approverUserId, leaveReason }
 
   const createPaidLeave = useCreatePaidLeaveRequest()
   const cancelPaidLeave = useCancelPaidLeaveRequest()
@@ -704,12 +715,29 @@ function useLeaveDesignationController(date: string, initialLeaves: AttendanceDa
     setApproverUserId,
     leaveReason,
     setLeaveReason,
+    baseValues,
+    values,
     apply,
     isPending,
   }
 }
 
 function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: () => void; leaveLists: LeaveDesignationLists }) {
+  const initialValues = {
+    actualStartAt: toDatetimeLocal(day.actual_start_at),
+    actualEndAt: toDatetimeLocal(day.actual_end_at),
+    offset: typeof day.utc_offset_minutes === 'number' ? offsetMinutesToString(day.utc_offset_minutes) : browserOffsetString(),
+    workType: day.work_type ?? '',
+    workLocationType: day.work_location_type ?? '',
+    note: day.note ?? '',
+    breaks: day.breaks.map((b) => ({ start: toDatetimeLocal(b.break_start_at), end: toDatetimeLocal(b.break_end_at) })),
+    leaveSegments: (day.leave_segments ?? []).map((segment) => ({
+      start: toDatetimeLocal(segment.start_at),
+      end: toDatetimeLocal(segment.end_at),
+      note: segment.note ?? '',
+    })),
+  }
+  const [baseInitial] = useState(initialValues)
   const [actualStartAt, setActualStartAt] = useState(toDatetimeLocal(day.actual_start_at))
   const [actualEndAt, setActualEndAt] = useState(toDatetimeLocal(day.actual_end_at))
   const [offset, setOffset] = useState(
@@ -738,7 +766,27 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
   const leaveController = useLeaveDesignationController(day.work_date, day.leaves, leaveLists)
   const [leaveError, setLeaveError] = useState<Error | null>(null)
-  useUnsavedChangesGuard(true)
+  const { confirmDiscard } = useUnsavedChangesGuard(
+    isDayFormDirty(
+      { ...baseInitial, reason: '', leave: leaveController.baseValues },
+      {
+        actualStartAt,
+        actualEndAt,
+        offset,
+        workType,
+        workLocationType,
+        note,
+        reason,
+        breaks: rows,
+        leaveSegments: leaveSegmentRows,
+        leave: leaveController.values,
+      },
+    ),
+  )
+
+  const handleCancel = async () => {
+    if (await confirmDiscard()) onDone()
+  }
 
   const handleSave = () => {
     setLeaveError(null)
@@ -837,7 +885,7 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
         {updateDay.error && <ErrorMessage error={updateDay.error} />}
         {leaveError && <ErrorMessage error={leaveError} />}
         <FormActions>
-          <Button variant="secondary" onClick={onDone}>
+          <Button variant="secondary" onClick={handleCancel}>
             キャンセル
           </Button>
           <Button isLoading={updateDay.isPending || leaveController.isPending} disabled={!reason} onClick={handleSave}>
@@ -869,6 +917,13 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
   const createDay = useCreateAttendanceDay()
   const { data: defaults } = useAttendanceDayDefaults(user?.id, date)
   const appliedDefaultsDateRef = useRef<string | null>(null)
+  // 離脱警告の比べる元。提案値が入ったら、入った値に更新する(提案値だけでは変更ありにしない)。
+  const [baseInput, setBaseInput] = useState(() => ({
+    actualStartAt: '',
+    actualEndAt: '',
+    offset: browserOffsetString(),
+    breaks: [] as BreakRowData[],
+  }))
 
   // 日付が変わったら前日の入力状態を破棄する。同じ週の前日・翌日へ遷移した場合も
   // コンポーネントの再マウント有無に依存せず、遷移先の日付の初期値を表示する。
@@ -882,6 +937,7 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
     setNote('')
     setReason('')
     resetRows([])
+    setBaseInput({ actualStartAt: '', actualEndAt: '', offset: browserOffsetString(), breaks: [] })
   }, [date, resetRows])
 
   // 打刻→勤務予定(休憩を含む)→システムの初期設定の優先順位で提案された値を
@@ -892,17 +948,47 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
     if (defaults.source === 'none') return
 
     const referenceOffset = isoToOffsetString(defaults.actual_start_at ?? defaults.breaks[0]?.start)
+    const defaultBreaks = defaults.breaks.map((b) => ({ start: toDatetimeLocal(b.start), end: toDatetimeLocal(b.end) }))
     setOffset(referenceOffset)
     setActualStartAt(toDatetimeLocal(defaults.actual_start_at))
     setActualEndAt(toDatetimeLocal(defaults.actual_end_at))
-    resetRows(defaults.breaks.map((b) => ({ start: toDatetimeLocal(b.start), end: toDatetimeLocal(b.end) })))
+    resetRows(defaultBreaks)
+    setBaseInput({
+      actualStartAt: toDatetimeLocal(defaults.actual_start_at),
+      actualEndAt: toDatetimeLocal(defaults.actual_end_at),
+      offset: referenceOffset,
+      breaks: defaultBreaks,
+    })
   }, [date, defaults, resetRows])
 
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
   const leaveController = useLeaveDesignationController(date, undefined, leaveLists)
   const [leaveError, setLeaveError] = useState<Error | null>(null)
-  const isDirty = Boolean(
-    actualStartAt || actualEndAt || note || workType || reason || rows.some((r) => r.start || r.end) || leaveController.kind !== 'none',
+  const isDirty = isDayFormDirty(
+    {
+      actualStartAt: baseInput.actualStartAt,
+      actualEndAt: baseInput.actualEndAt,
+      offset: baseInput.offset,
+      workType: '',
+      workLocationType: '',
+      note: '',
+      reason: '',
+      breaks: baseInput.breaks,
+      leaveSegments: [],
+      leave: leaveController.baseValues,
+    },
+    {
+      actualStartAt,
+      actualEndAt,
+      offset,
+      workType,
+      workLocationType,
+      note,
+      reason,
+      breaks: rows,
+      leaveSegments: leaveSegmentRows,
+      leave: leaveController.values,
+    },
   )
   useUnsavedChangesGuard(isDirty)
 
@@ -1058,7 +1144,14 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
   const [fields, setFields] = useState<AdjustmentFields>(adjustmentFieldsFrom(day))
   const [reason, setReason] = useState('')
   const adjustCalculation = useAdjustAttendanceDailyCalculation()
-  useUnsavedChangesGuard(true)
+  const [baseFields] = useState<AdjustmentFields>(() => adjustmentFieldsFrom(day))
+  const { confirmDiscard } = useUnsavedChangesGuard(
+    isCalculationAdjustDirty({ fields: { ...baseFields }, reason: '' }, { fields: { ...fields }, reason }),
+  )
+
+  const handleCancel = async () => {
+    if (await confirmDiscard()) onDone()
+  }
 
   const updateField = (key: keyof AdjustmentFields, value: string) => setFields((prev) => ({ ...prev, [key]: value }))
 
@@ -1124,7 +1217,7 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
 
       {adjustCalculation.error && <ErrorMessage error={adjustCalculation.error} />}
       <FormActions>
-        <Button variant="secondary" onClick={onDone}>
+        <Button variant="secondary" onClick={handleCancel}>
           キャンセル
         </Button>
         <Button isLoading={adjustCalculation.isPending} disabled={!reason} onClick={handleSave}>
@@ -1258,6 +1351,12 @@ function ShiftSwapRequestDialog({
  * 1画面にまとめ、任意の勤務日の実績を直接入力できるようにする。
  */
 export function AttendanceDayPage() {
+  const { date } = useParams<{ date: string }>()
+  // 前日・翌日へ移っても同じ部品が使い回されるので、日付をキーにして編集中の state を作り直す。
+  return <AttendanceDayContent key={date} />
+}
+
+function AttendanceDayContent() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
   const forwardState = useForwardState()

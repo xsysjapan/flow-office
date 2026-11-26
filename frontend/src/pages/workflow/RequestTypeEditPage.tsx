@@ -18,7 +18,14 @@ import { notify } from '../../lib/notify'
 import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useCreateRequestType, useRequestTypes, useUpdateRequestType } from '../../hooks/useRequestTypes'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import type { RequestFormFieldSchema } from '../../api/types'
+import {
+  INITIAL_REQUEST_TYPE_FORM,
+  isRequestTypeFormDirty,
+  requestTypeToForm,
+  type RequestTypeFormValues,
+} from './requestTypeEditDirty'
 
 const LIST_PATH = '/admin/request-types'
 
@@ -57,6 +64,26 @@ export function RequestTypeEditPage() {
   const [isActive, setIsActive] = useState(true)
   const { rows, addRow, updateRow, removeRow, reset, toData } = useEditableRows<RequestFormFieldSchema>([])
 
+  // 比べる元(編集は読み込んだ値、新規は初期値)。編集は読み込むまで変更なしとして扱う。
+  const [base, setBase] = useState<RequestTypeFormValues | null>(isCreate ? INITIAL_REQUEST_TYPE_FORM : null)
+  const currentForm: RequestTypeFormValues = {
+    code,
+    name,
+    description,
+    requiresAttachment,
+    attachmentMaxSizeKb,
+    attachmentAllowedExtensions,
+    eligibleRoleCodes,
+    requiresBackOfficeTask,
+    backOfficeTaskType,
+    backOfficeDepartment,
+    exportAmountField,
+    allowedStatusTransitionsJson,
+    isActive,
+    formSchema: toData(),
+  }
+  const { navigateAfterSave } = useUnsavedChangesGuard(base !== null && isRequestTypeFormDirty(base, currentForm))
+
   useEffect(() => {
     if (!existing) return
     setCode(existing.code)
@@ -75,6 +102,7 @@ export function RequestTypeEditPage() {
     )
     setIsActive(existing.is_active)
     reset(existing.form_schema)
+    setBase(requestTypeToForm(existing))
   }, [existing, reset])
 
   const parseCommaSeparated = (value: string): string[] | undefined => {
@@ -143,9 +171,9 @@ export function RequestTypeEditPage() {
     notify.success('申請種別を保存しました')
 
     if (backTarget && backTarget.to.split(/[?#]/)[0] === LIST_PATH) {
-      navigate(backTarget.to, { state: backTarget.state })
+      navigateAfterSave(backTarget.to, { state: backTarget.state })
     } else {
-      navigate(LIST_PATH, { state: keepBackState })
+      navigateAfterSave(LIST_PATH, { state: keepBackState })
     }
   }
 

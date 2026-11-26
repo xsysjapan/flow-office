@@ -36,6 +36,7 @@ import { RoleAssignmentSection } from "../../components/RoleAssignmentSection/Ro
 import * as access from "../../hooks/useAccessControl";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { fieldErrorOf, nonFieldError } from "../../utils/fieldErrors";
+import { isRoleDefinitionDirty, type RoleDefinitionValues } from "./roleDefinitionDirty";
 import * as userManagement from "../../hooks/useUserManagement";
 import type {
   AccessRole,
@@ -307,35 +308,32 @@ const DEFINITION_ERROR_KEYS = [
   "feature_ids",
 ];
 
+const roleToValues = (role: AccessRole): RoleDefinitionValues => ({
+  name: role.name,
+  description: role.description ?? "",
+  status: role.status,
+  permissionIds: role.permissions.map((permission) => permission.id),
+  featureIds: role.features.map((feature) => feature.id),
+});
+
 const sameIds = (a: number[], b: number[]) =>
   a.length === b.length && [...a].sort().join(",") === [...b].sort().join(",");
 
-/** 読み込んだ値と画面の値を比べ、変更した項目だけの本文を作る。 */
+/** 比べる元(読み込んだ値、保存後は送った値)と画面の値を比べ、変更した項目だけの本文を作る。 */
 function buildRoleDefinitionChanges(
-  role: AccessRole,
+  base: RoleDefinitionValues,
   basic: { name: string; description: string; status: string },
   permissionIds: number[],
   featureIds: number[],
 ) {
   const input: RoleDefinitionInput = {};
-  if (basic.name !== role.name) input.name = basic.name;
-  if (basic.description !== (role.description ?? ""))
+  if (basic.name !== base.name) input.name = basic.name;
+  if (basic.description !== base.description)
     input.description = basic.description || null;
-  if (basic.status !== role.status) input.status = basic.status;
-  if (
-    !sameIds(
-      permissionIds,
-      role.permissions.map((permission) => permission.id),
-    )
-  )
+  if (basic.status !== base.status) input.status = basic.status;
+  if (!sameIds(permissionIds, base.permissionIds))
     input.permission_ids = permissionIds;
-  if (
-    !sameIds(
-      featureIds,
-      role.features.map((feature) => feature.id),
-    )
-  )
-    input.feature_ids = featureIds;
+  if (!sameIds(featureIds, base.featureIds)) input.feature_ids = featureIds;
   return { input, dirty: Object.keys(input).length > 0 };
 }
 
@@ -382,7 +380,11 @@ function RoleDetail({
     role.features.map((feature) => feature.id),
   );
 
+  // 保存して留まる画面: 保存に成功したら比べる元を「送った値」にする(再取得を待たない)。
+  const [savedBase, setSavedBase] = useState<RoleDefinitionValues | null>(null);
+
   if (basicForm.id !== role.id) {
+    setSavedBase(null);
     setBasicForm({
       id: role.id,
       name: role.name,
@@ -398,14 +400,28 @@ function RoleDetail({
     resetDefinitionError();
   }, [role.id, resetDefinitionError]);
 
+  const base = savedBase ?? roleToValues(role);
   const changes = buildRoleDefinitionChanges(
-    role,
+    base,
     basicForm,
     selectedPermissions,
     selectedFeatureIds,
   );
-  const dirty = basicForm.id === role.id && changes.dirty;
-  useUnsavedChangesGuard(dirty);
+  const currentValues: RoleDefinitionValues = {
+    name: basicForm.name,
+    description: basicForm.description,
+    status: basicForm.status,
+    permissionIds: selectedPermissions,
+    featureIds: selectedFeatureIds,
+  };
+  const dirty = basicForm.id === role.id && isRoleDefinitionDirty(base, currentValues);
+  useUnsavedChangesGuard(dirty, {
+    // パスが変わる移動と、roleId が変わる移動(ロールの切り替え)を止める。
+    blockOn: (current, next) =>
+      current.pathname !== next.pathname ||
+      new URLSearchParams(current.search).get("roleId") !==
+        new URLSearchParams(next.search).get("roleId"),
+  });
   const definitionError = updateRoleDefinition.error;
   const submitError = nonFieldError(definitionError, DEFINITION_ERROR_KEYS);
 
@@ -588,7 +604,12 @@ function RoleDetail({
               onClick={() =>
                 updateRoleDefinition.mutate(
                   { roleId: role.id, input: changes.input },
-                  { onSuccess: () => notify.success("ロールの定義を保存しました") },
+                  {
+                    onSuccess: () => {
+                      setSavedBase(currentValues);
+                      notify.success("ロールの定義を保存しました");
+                    },
+                  },
                 )
               }
             >

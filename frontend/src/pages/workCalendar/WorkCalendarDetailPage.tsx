@@ -42,6 +42,7 @@ import {
   useWorkCalendars,
 } from '../../hooks/useWorkCalendars'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { isWorkCalendarSettingsDirty, type WorkCalendarSettingsValues } from './workCalendarSettingsDirty'
 import { useForwardState } from '../../navigation/backState'
 
 const SYNC_STATUS_LABEL: Record<string, string> = {
@@ -177,15 +178,29 @@ export function WorkCalendarDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendar?.id])
 
-  const isSettingsDirty = Boolean(
-    calendar &&
-      (name !== calendar.name ||
-        weekStartsOn !== String(calendar.week_starts_on) ||
-        fiscalYearStartMonth !== String(calendar.fiscal_year_start_month) ||
-        fiscalYearStartDay !== String(calendar.fiscal_year_start_day) ||
-        allowDailyHolidayOverride !== calendar.allows_daily_holiday_override ||
-        JSON.stringify(weekdayPattern) !== JSON.stringify(calendar.weekday_holiday_pattern)),
-  )
+  // 保存に成功したら比べる元を「送った値」にする(再取得を待つ間に変更ありと誤判定しない)。
+  const [savedSettings, setSavedSettings] = useState<{ calendarId: string; values: WorkCalendarSettingsValues } | null>(null)
+  const baseSettings: WorkCalendarSettingsValues | null = calendar
+    ? savedSettings?.calendarId === calendar.id
+      ? savedSettings.values
+      : {
+          name: calendar.name,
+          weekStartsOn: String(calendar.week_starts_on),
+          fiscalYearStartMonth: String(calendar.fiscal_year_start_month),
+          fiscalYearStartDay: String(calendar.fiscal_year_start_day),
+          allowDailyHolidayOverride: calendar.allows_daily_holiday_override,
+          weekdayPattern: calendar.weekday_holiday_pattern,
+        }
+    : null
+  const currentSettings: WorkCalendarSettingsValues = {
+    name,
+    weekStartsOn,
+    fiscalYearStartMonth,
+    fiscalYearStartDay,
+    allowDailyHolidayOverride,
+    weekdayPattern,
+  }
+  const isSettingsDirty = baseSettings !== null && isWorkCalendarSettingsDirty(baseSettings, currentSettings)
   useUnsavedChangesGuard(isSettingsDirty)
 
   const [selectedSourceId, setSelectedSourceId] = useState<string>(NONE_OPTION_VALUE)
@@ -251,6 +266,7 @@ export function WorkCalendarDetailPage() {
     )
 
   const handleSaveSettings = () => {
+    const sentSettings = currentSettings
     setCalendarUpdateTarget('settings')
     updateCalendar.mutate(
       {
@@ -265,7 +281,12 @@ export function WorkCalendarDetailPage() {
           allows_daily_holiday_override: allowDailyHolidayOverride,
         },
       },
-      { onSuccess: () => notify.success('カレンダーの基本設定を保存しました') },
+      {
+        onSuccess: () => {
+          setSavedSettings({ calendarId: calendar.id, values: sentSettings })
+          notify.success('カレンダーの基本設定を保存しました')
+        },
+      },
     )
   }
 
