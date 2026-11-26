@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as integrationsApi from '../../api/integrations'
 import type { ApplicationIntegration } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -136,5 +137,32 @@ describe('MyIntegrationsPage', () => {
     await vi.waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Claude Desktopを停止しました')
     })
+  })
+
+  it('shows each 422 field error once under its field and the rest in the summary', async () => {
+    const user = userEvent.setup()
+    const errors = {
+      client_type: ['種別のエラー'],
+      client_name: ['名称のエラー'],
+      purpose: ['用途のエラー'],
+      scopes: ['許可する操作のエラー'],
+      'scopes.0': ['許可する操作の0番のエラー'],
+      unknown_key: ['未知のキーのエラー'],
+    }
+    vi.spyOn(integrationsApi, 'registerIntegration').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+    renderPage()
+
+    await screen.findByText('Claude Desktop')
+    await user.click(screen.getByRole('button', { name: '新規登録' }))
+    await user.type(screen.getByLabelText('名称'), 'Claude Code')
+    await user.click(screen.getByLabelText('自分の勤怠を閲覧する'))
+    await user.click(screen.getByRole('button', { name: '登録する' }))
+
+    expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+    for (const messages of Object.values(errors)) {
+      expect(screen.getAllByText(messages[0])).toHaveLength(1)
+    }
+    expect(screen.getByLabelText('名称')).toHaveAccessibleDescription('名称のエラー')
+    expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
   })
 })

@@ -14,6 +14,7 @@ import { FormLayout } from '../../components/FormLayout/FormLayout'
 import { FormSection } from '../../components/FormSection/FormSection'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -72,6 +73,7 @@ function AttendanceConfirmationRevertSection({ workflowRequestId }: { workflowRe
   const applicantId = request?.applicant?.id
   const { data: monthData } = useAttendanceMonth(targetYearMonth ?? '', applicantId)
   const revertConfirmation = useRevertMonthConfirmation()
+  const revertErrors = fieldErrors(revertConfirmation.error, ['reason'])
   const [reason, setReason] = useState('')
 
   return (
@@ -105,7 +107,7 @@ function AttendanceConfirmationRevertSection({ workflowRequestId }: { workflowRe
               description={`${targetYearMonth}の月次勤怠の確定を取り消し、日次実績を編集できる状態(未提出)に戻します。この操作は元に戻せません。`}
               confirmLabel="確定取消を実行する"
               isPending={revertConfirmation.isPending}
-              error={revertConfirmation.error}
+              error={revertErrors.rest}
               onOpenChange={(open) => {
                 if (open) {
                   setReason('')
@@ -121,7 +123,7 @@ function AttendanceConfirmationRevertSection({ workflowRequestId }: { workflowRe
                 notify.success(`${targetYearMonth}の月次勤怠の確定を取り消しました`)
               }}
             >
-              <FormField label="取消理由" htmlFor="revert-confirmation-reason" required>
+              <FormField label="取消理由" htmlFor="revert-confirmation-reason" required error={revertErrors.of('reason')}>
                 <Textarea id="revert-confirmation-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
               </FormField>
             </ConfirmActionDialog>
@@ -173,6 +175,9 @@ export function BackOfficeTaskDetailPage() {
   const statusUnchanged = status === task.status
   /** 完了・取消のタスクは担当者を設定・変更できない(フォームを出さない)。 */
   const isClosedTask = task.status === 'completed' || task.status === 'cancelled'
+  // 項目の下に出す422のキー。担当者の割り当ては完了・取消のタスクでは、状態の変更は変更できるステータスが無いときは描かない。
+  const assignErrors = fieldErrors(assignTask.error, isClosedTask ? [] : ['assigned_user_id'])
+  const statusErrors = fieldErrors(changeStatus.error, noNextStatus ? [] : ['status', 'comment'])
 
   return (
     <div className="flex flex-col gap-3">
@@ -206,7 +211,7 @@ export function BackOfficeTaskDetailPage() {
               confirmVariant="primary"
               confirmDisabled={!assigned}
               isPending={assignTask.isPending}
-              error={assignTask.error}
+              error={assignErrors.rest}
               onOpenChange={(open) => {
                 if (open) {
                   setAssigned(undefined)
@@ -224,7 +229,7 @@ export function BackOfficeTaskDetailPage() {
                 )
               }}
             >
-              <FormField label="担当者" htmlFor="assignee">
+              <FormField label="担当者" htmlFor="assignee" error={assignErrors.of('assigned_user_id')}>
                 <UserPicker
                   id="assignee"
                   value={assigned?.id}
@@ -241,7 +246,7 @@ export function BackOfficeTaskDetailPage() {
             <p className="text-sm text-muted-foreground">この状態から変更できるステータスはありません</p>
           ) : (
             <FormLayout>
-              <FormField label="状態" htmlFor="status">
+              <FormField label="状態" htmlFor="status" error={statusErrors.of('status')}>
                 <NativeSelect
                   id="status"
                   value={status}
@@ -254,13 +259,13 @@ export function BackOfficeTaskDetailPage() {
                   ))}
                 </NativeSelect>
               </FormField>
-              <FormField label="コメント(任意)" htmlFor="status-comment">
+              <FormField label="コメント(任意)" htmlFor="status-comment" error={statusErrors.of('comment')}>
                 <Input id="status-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
               </FormField>
               {statusUnchanged && (
                 <p className="mb-2 text-xs text-muted-foreground">変更後のステータスを選択してください。</p>
               )}
-              {changeStatus.error && <ErrorMessage error={changeStatus.error} />}
+              {statusErrors.rest != null && <ErrorMessage error={statusErrors.rest} />}
               <FormActions>
                 <Button
                   isLoading={changeStatus.isPending}

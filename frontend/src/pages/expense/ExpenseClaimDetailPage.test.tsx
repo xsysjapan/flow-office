@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
+import { ApiError } from '../../api/client'
 import * as expenseClaimsApi from '../../api/expenseClaims'
 import type { AttendanceDay, ExpenseClaim, ExpenseClaimHistoryEntry, User } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -214,7 +215,11 @@ describe('ExpenseClaimDetailPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '取り消す' }))
     await userEvent.click(screen.getByRole('button', { name: '取り消しを確定する' }))
 
-    expect(await screen.findByText('取消理由を入力してください')).toBeInTheDocument()
+    const message = await screen.findByText('取消理由を入力してください')
+    expect(message).toBeInTheDocument()
+    // 取消理由の入力の下に出る(ダイアログ上部のまとめての表示ではない)。
+    expect(screen.getByLabelText('取消理由')).toHaveAccessibleDescription('取消理由を入力してください')
+    expect(screen.queryByText('入力内容を確認してください。')).not.toBeInTheDocument()
     expect(cancelSpy).not.toHaveBeenCalled()
   })
 
@@ -234,5 +239,53 @@ describe('ExpenseClaimDetailPage', () => {
     renderPage({ ...inReviewClaim, title: '大阪出張分' })
 
     expect(await screen.findByText(`大阪出張分(${inReviewClaim.period_from} 〜 ${inReviewClaim.period_to})`)).toBeInTheDocument()
+  })
+
+  describe('422の項目エラー', () => {
+    function expectEachOnce(errors: Record<string, string[]>) {
+      for (const messages of Object.values(errors)) {
+        expect(screen.getAllByText(messages[0])).toHaveLength(1)
+      }
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
+    }
+
+    it('shows the cancel reason error under the reason field in the dialog', async () => {
+      const errors = { reason: ['取消理由のエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(expenseClaimsApi, 'cancelExpenseClaim').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage(inReviewClaim)
+      await userEvent.click(await screen.findByRole('button', { name: '取り消す' }))
+      await userEvent.type(await screen.findByLabelText('取消理由'), '理由')
+      await userEvent.click(screen.getByRole('button', { name: '取り消しを確定する' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+      expect(screen.getByLabelText('取消理由')).toHaveAccessibleDescription('取消理由のエラー')
+    })
+
+    it('shows the return comment error under the comment input', async () => {
+      currentUser = approver
+      const errors = { comment: ['差戻しコメントのエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(expenseClaimsApi, 'returnExpenseClaim').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage(inReviewClaim)
+      await userEvent.type(await screen.findByPlaceholderText('差戻しコメント'), '不備')
+      await userEvent.click(screen.getByRole('button', { name: '差戻す' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
+
+    it('shows the approver error next to the approver picker when submitting a draft', async () => {
+      const errors = { approver_user_id: ['承認者のエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(expenseClaimsApi, 'submitExpenseClaim').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage({ ...inReviewClaim, status: 'draft' })
+      await userEvent.click(await screen.findByRole('button', { name: '申請する' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
   })
 })

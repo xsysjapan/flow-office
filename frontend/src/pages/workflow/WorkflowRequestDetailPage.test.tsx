@@ -262,6 +262,8 @@ describe('WorkflowRequestDetailPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '取り消す' }))
 
     expect(await screen.findByText('取消理由を入力してください。')).toBeInTheDocument()
+    // 取消理由の入力の下に出る(ダイアログ上部のまとめての表示ではない)。
+    expect(screen.getByPlaceholderText('取消理由')).toHaveAccessibleDescription('取消理由を入力してください。')
     expect(cancelSpy).not.toHaveBeenCalled()
   })
 
@@ -473,5 +475,83 @@ describe('WorkflowRequestDetailPage', () => {
     renderPage({ ...assetLoanRequest, status: 'rejected', rejected_at: '2026-08-05T00:00:00+09:00', rejection_reason: '在庫不足のため' })
 
     expect(await screen.findByText('却下理由: 在庫不足のため')).toBeInTheDocument()
+  })
+
+  it('shows a message under the reason field and does not reject when no reject reason is entered', async () => {
+    currentUser = approver
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)
+    const rejectSpy = vi.spyOn(workflowRequestsApi, 'rejectWorkflowRequest')
+
+    renderPage(assetLoanRequest)
+    await userEvent.click(await screen.findByRole('button', { name: '却下' }))
+    await userEvent.click(screen.getByRole('button', { name: '却下する' }))
+
+    expect(await screen.findByText('却下理由を入力してください。')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('却下理由')).toHaveAccessibleDescription('却下理由を入力してください。')
+    expect(rejectSpy).not.toHaveBeenCalled()
+  })
+
+  describe('422の項目エラー', () => {
+    function expectEachOnce(errors: Record<string, string[]>) {
+      for (const messages of Object.values(errors)) {
+        expect(screen.getAllByText(messages[0])).toHaveLength(1)
+      }
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
+    }
+
+    it('shows the cancel reason error under the reason field in the dialog', async () => {
+      const errors = { reason: ['取消理由のエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(workflowRequestsApi, 'cancelWorkflowRequest').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage(submittedRequest)
+      await userEvent.click(await screen.findByRole('button', { name: '取消' }))
+      await userEvent.type(screen.getByPlaceholderText('取消理由'), '理由')
+      await userEvent.click(screen.getByRole('button', { name: '取り消す' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+      expect(screen.getByPlaceholderText('取消理由')).toHaveAccessibleDescription('取消理由のエラー')
+    })
+
+    it('shows the reject reason error under the reason field in the dialog', async () => {
+      currentUser = approver
+      const errors = { reason: ['却下理由のエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)
+      vi.spyOn(workflowRequestsApi, 'rejectWorkflowRequest').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage(assetLoanRequest)
+      await userEvent.click(await screen.findByRole('button', { name: '却下' }))
+      await userEvent.type(screen.getByPlaceholderText('却下理由'), '理由')
+      await userEvent.click(screen.getByRole('button', { name: '却下する' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+      expect(screen.getByPlaceholderText('却下理由')).toHaveAccessibleDescription('却下理由のエラー')
+    })
+
+    it('shows the return comment error under the comment input', async () => {
+      currentUser = approver
+      const errors = { comment: ['差戻しコメントのエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(workflowRequestsApi, 'returnWorkflowRequest').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage(submittedRequest)
+      await userEvent.type(await screen.findByPlaceholderText('差戻しコメント'), '不備')
+      await userEvent.click(screen.getByRole('button', { name: '差戻す' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
+
+    it('keeps submit errors (no field on this screen) in the summary under the submit button', async () => {
+      const errors = { approver_user_id: ['承認者のエラー'] }
+      vi.spyOn(workflowRequestsApi, 'submitWorkflowRequest').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage({ ...submittedRequest, status: 'draft' })
+      await userEvent.click(await screen.findByRole('button', { name: '提出する' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
   })
 })

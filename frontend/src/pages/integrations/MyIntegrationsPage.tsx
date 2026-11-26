@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import type { ApplicationIntegration, IntegrationClientType, IntegrationScopeType } from '../../api/types'
 import { useMyIntegrations, useReissueIntegrationToken, useRegisterIntegration, useRevokeIntegration } from '../../hooks/useIntegrations'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 const CLIENT_TYPE_LABELS: Record<IntegrationClientType, string> = {
   api_client: 'APIクライアント',
@@ -125,6 +126,15 @@ export function MyIntegrationsPage() {
     })
   }
 
+  // 登録フォームの項目の下に出す422のキー(許可する操作の一覧は`scopes.*`を一覧の下へ)。
+  const registerErrors = fieldErrors(registerIntegration.error, [
+    'client_type',
+    'client_name',
+    'purpose',
+    'scopes',
+    'scopes.*',
+  ])
+
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="連携一覧の取得に失敗しました。" />
 
@@ -150,7 +160,7 @@ export function MyIntegrationsPage() {
       {isFormOpen && (
         <div className="mb-6 rounded-md border border-border p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="種別" htmlFor="integration-form-type" required>
+            <FormField label="種別" htmlFor="integration-form-type" required error={registerErrors.of('client_type')}>
               <NativeSelect
                 id="integration-form-type"
                 value={clientType}
@@ -163,7 +173,7 @@ export function MyIntegrationsPage() {
                 ))}
               </NativeSelect>
             </FormField>
-            <FormField label="名称" htmlFor="integration-form-name" required>
+            <FormField label="名称" htmlFor="integration-form-name" required error={registerErrors.of('client_name')}>
               <Input
                 id="integration-form-name"
                 value={clientName}
@@ -172,7 +182,7 @@ export function MyIntegrationsPage() {
               />
             </FormField>
           </div>
-          <FormField label="用途(任意)" htmlFor="integration-form-purpose">
+          <FormField label="用途(任意)" htmlFor="integration-form-purpose" error={registerErrors.of('purpose')}>
             <Input
               id="integration-form-purpose"
               value={purpose}
@@ -194,6 +204,11 @@ export function MyIntegrationsPage() {
                 </label>
               ))}
             </div>
+            {registerErrors.ofAny('scopes').map((message) => (
+              <p key={message} className="mt-1 text-xs text-destructive">
+                {message}
+              </p>
+            ))}
           </fieldset>
 
           <Button
@@ -208,7 +223,7 @@ export function MyIntegrationsPage() {
               名称を入力し、許可する操作を1つ以上選択してください。
             </p>
           )}
-          {registerIntegration.error && <ErrorMessage error={registerIntegration.error} />}
+          {registerErrors.rest != null && <ErrorMessage error={registerErrors.rest} />}
         </div>
       )}
 

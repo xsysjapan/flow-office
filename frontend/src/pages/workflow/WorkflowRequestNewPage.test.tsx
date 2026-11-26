@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as requestTypesApi from '../../api/requestTypes'
 import * as usersApi from '../../api/users'
 import * as workflowRequestsApi from '../../api/workflowRequests'
@@ -166,5 +167,32 @@ describe('WorkflowRequestNewPage', () => {
     expect(await screen.findByLabelText('対象年月')).toHaveValue('2026-09')
     expect(container.querySelector('#field-foo')).toBeNull()
     expect(screen.queryByLabelText(/foo/)).not.toBeInTheDocument()
+  })
+
+  it('shows each 422 field error once under its field and the rest in the summary', async () => {
+    const errors = {
+      request_type_code: ['申請種別のエラー'],
+      title: ['タイトルのエラー'],
+      approver_user_id: ['承認者のエラー'],
+      unknown_key: ['未知のキーのエラー'],
+    }
+    vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue([expenseType])
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({ data: [approver], meta: { current_page: 1, last_page: 1, total: 1 }, links: { next: null, prev: null } })
+    vi.spyOn(workflowRequestsApi, 'createWorkflowRequest').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+    renderPage()
+
+    await userEvent.selectOptions(await screen.findByLabelText('申請種別'), '経費精算')
+    await userEvent.type(screen.getByLabelText('タイトル'), 'タクシー代')
+    await userEvent.click(screen.getByLabelText('承認者'))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+    await userEvent.click(screen.getByRole('button', { name: '提出する' }))
+
+    expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+    for (const messages of Object.values(errors)) {
+      expect(screen.getAllByText(messages[0])).toHaveLength(1)
+    }
+    expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
   })
 })

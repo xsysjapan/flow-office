@@ -541,5 +541,77 @@ describe('BackOfficeTaskDetailPage', () => {
       )
       await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2026-07の月次勤怠の確定を取り消しました'))
     })
+
+    it('shows the revert reason error under the reason field in the dialog', async () => {
+      const errors = {
+        reason: ['取消理由のエラー'],
+        workflow_request_id: ['申請のエラー'],
+        unknown_key: ['未知のキーのエラー'],
+      }
+      vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockResolvedValue(revertRequest)
+      mockFetchMonth(approvedMonth)
+      vi.spyOn(attendanceApi, 'revertMonthConfirmation').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage(confirmationRevertTask)
+      await userEvent.click(await screen.findByRole('button', { name: '確定を取り消す' }))
+      await userEvent.type(await screen.findByLabelText('取消理由'), '理由')
+      await userEvent.click(screen.getByRole('button', { name: '確定取消を実行する' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      for (const messages of Object.values(errors)) {
+        expect(screen.getAllByText(messages[0])).toHaveLength(1)
+      }
+      expect(screen.getByLabelText('取消理由')).toHaveAccessibleDescription('取消理由のエラー')
+      expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('422の項目エラー', () => {
+    function expectEachOnce(errors: Record<string, string[]>) {
+      for (const messages of Object.values(errors)) {
+        expect(screen.getAllByText(messages[0])).toHaveLength(1)
+      }
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
+    }
+
+    it('shows the assignee error under the assignee field in the dialog', async () => {
+      const errors = { assigned_user_id: ['担当者のエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
+        data: [assignee],
+        meta: { current_page: 1, last_page: 1, total: 1 },
+        links: { next: null, prev: null },
+      })
+      vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage(baseTask)
+      await userEvent.click(await screen.findByRole('button', { name: '担当者を割り当てる' }))
+      await userEvent.click(await screen.findByRole('combobox', { name: '担当者' }))
+      await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
+      await userEvent.click(await screen.findByRole('option', { name: '担当者花子(hanako@example.com)' }))
+      await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
+
+    it('shows the status and comment errors under their fields', async () => {
+      const errors = {
+        status: ['状態のエラー'],
+        comment: ['コメントのエラー'],
+        unknown_key: ['未知のキーのエラー'],
+      }
+      vi.spyOn(backOfficeTasksApi, 'changeBackOfficeTaskStatus').mockRejectedValue(
+        new ApiError(422, '最初のエラーの文', errors),
+      )
+
+      renderPage({ ...baseTask, allowed_next_statuses: ['completed'] })
+      await screen.findByText('タクシー代の経理処理')
+      await userEvent.selectOptions(screen.getByLabelText('状態'), '完了')
+      await userEvent.click(screen.getByRole('button', { name: '状態を変更' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
   })
 })

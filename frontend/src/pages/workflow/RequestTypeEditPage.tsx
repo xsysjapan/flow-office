@@ -19,6 +19,7 @@ import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useCreateRequestType, useRequestTypes, useUpdateRequestType } from '../../hooks/useRequestTypes'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { fieldErrors } from '../../utils/fieldErrors'
 import type { RequestFormFieldSchema } from '../../api/types'
 import {
   INITIAL_REQUEST_TYPE_FORM,
@@ -132,7 +133,26 @@ export function RequestTypeEditPage() {
     )
 
   const isBusy = createType.isPending || updateType.isPending
-  const error = createType.error ?? updateType.error
+  // 項目の下に出す422のキー。描く項目(添付・バックオフィスの設定は該当のチェックが入っているときだけ)と同じ条件で組み立てる。
+  const { of, ofAny, rest } = fieldErrors(createType.error ?? updateType.error, [
+    'code',
+    'name',
+    'description',
+    'eligible_role_codes',
+    'eligible_role_codes.*',
+    ...(requiresAttachment
+      ? ['attachment_max_size_kb', 'attachment_allowed_extensions', 'attachment_allowed_extensions.*']
+      : []),
+    ...(requiresBackOfficeTask
+      ? [
+          'backoffice_task_type',
+          'backoffice_department',
+          'export_amount_field',
+          'allowed_status_transitions',
+        ]
+      : []),
+  ])
+  const anyOf = (prefix: string) => ofAny(prefix).join(' ') || undefined
 
   const handleSave = async () => {
     let allowedStatusTransitions: Record<string, string[]> | undefined
@@ -191,19 +211,23 @@ export function RequestTypeEditPage() {
 
       <Card>
         <FormLayout>
-          <FormField label="コード" htmlFor="code" required>
+          <FormField label="コード" htmlFor="code" required error={of('code')}>
             <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
           </FormField>
 
-          <FormField label="名称" htmlFor="name" required>
+          <FormField label="名称" htmlFor="name" required error={of('name')}>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
 
-        <FormField label="説明" htmlFor="description">
+        <FormField label="説明" htmlFor="description" error={of('description')}>
           <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </FormField>
 
-        <FormField label="申請可能な対象者(ロールコード、カンマ区切り。空欄なら全員)" htmlFor="eligible-role-codes">
+        <FormField
+          label="申請可能な対象者(ロールコード、カンマ区切り。空欄なら全員)"
+          htmlFor="eligible-role-codes"
+          error={anyOf('eligible_role_codes')}
+        >
           <Input
             id="eligible-role-codes"
             placeholder="admin, hr_staff"
@@ -224,7 +248,7 @@ export function RequestTypeEditPage() {
 
           {requiresAttachment && (
             <div>
-              <FormField label="添付ファイルの上限サイズ(KB)" htmlFor="attachment-max-size-kb">
+              <FormField label="添付ファイルの上限サイズ(KB)" htmlFor="attachment-max-size-kb" error={of('attachment_max_size_kb')}>
                 <Input
                   id="attachment-max-size-kb"
                   type="number"
@@ -234,7 +258,11 @@ export function RequestTypeEditPage() {
                 />
               </FormField>
 
-              <FormField label="許可する拡張子(カンマ区切り)" htmlFor="attachment-allowed-extensions">
+              <FormField
+                label="許可する拡張子(カンマ区切り)"
+                htmlFor="attachment-allowed-extensions"
+                error={anyOf('attachment_allowed_extensions')}
+              >
                 <Input
                   id="attachment-allowed-extensions"
                   placeholder="pdf, jpg, png"
@@ -258,7 +286,7 @@ export function RequestTypeEditPage() {
 
           {requiresBackOfficeTask && (
             <div>
-              <FormField label="バックオフィスタスク種別" htmlFor="backoffice-task-type">
+              <FormField label="バックオフィスタスク種別" htmlFor="backoffice-task-type" error={of('backoffice_task_type')}>
                 <Input
                   id="backoffice-task-type"
                   value={backOfficeTaskType}
@@ -266,7 +294,7 @@ export function RequestTypeEditPage() {
                 />
               </FormField>
 
-              <FormField label="初期処理部署" htmlFor="backoffice-department">
+              <FormField label="初期処理部署" htmlFor="backoffice-department" error={of('backoffice_department')}>
                 <Input
                   id="backoffice-department"
                   value={backOfficeDepartment}
@@ -274,7 +302,11 @@ export function RequestTypeEditPage() {
                 />
               </FormField>
 
-              <FormField label="会計/振込CSVの金額項目(form_dataのキー。空欄ならCSV対象外)" htmlFor="export-amount-field">
+              <FormField
+                label="会計/振込CSVの金額項目(form_dataのキー。空欄ならCSV対象外)"
+                htmlFor="export-amount-field"
+                error={of('export_amount_field')}
+              >
                 <Input
                   id="export-amount-field"
                   value={exportAmountField}
@@ -285,6 +317,7 @@ export function RequestTypeEditPage() {
               <FormField
                 label="ステータス遷移(JSON、任意)"
                 htmlFor="allowed-status-transitions"
+                error={of('allowed_status_transitions')}
                 description="未設定なら遷移制限なし。設定するとUC-B003のステータス変更がこの定義に従う。"
               >
                 <Textarea
@@ -353,12 +386,12 @@ export function RequestTypeEditPage() {
           {(!code || !name) && (
             <p className="mb-2 text-xs text-muted-foreground">コードと名称を入力すると保存できます。</p>
           )}
-          {error && <ErrorMessage error={error} />}
+          {rest != null && <ErrorMessage error={rest} />}
           <FormActions>
             <Button variant="secondary" disabled={isBusy} onClick={handleCancel}>
               キャンセル
             </Button>
-            <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
+            <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave().catch(() => undefined)}>
               {isCreate ? '作成' : '保存'}
             </Button>
           </FormActions>

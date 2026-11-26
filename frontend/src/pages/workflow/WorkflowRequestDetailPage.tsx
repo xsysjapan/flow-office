@@ -18,6 +18,7 @@ import { WorkflowRequestSubjectDetail } from '../../components/WorkflowRequestSu
 import { useForwardState } from '../../navigation/backState'
 import { useAsset } from '../../hooks/useAsset'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 import {
   useApproveWorkflowRequest,
   useCancelWorkflowRequest,
@@ -79,8 +80,10 @@ export function WorkflowRequestDetailPage() {
   const [comment, setComment] = useState('')
   const [reason, setReason] = useState('')
   const [cancelError, setCancelError] = useState<Error | null>(null)
+  const [cancelReasonError, setCancelReasonError] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectError, setRejectError] = useState<Error | null>(null)
+  const [rejectReasonError, setRejectReasonError] = useState<string | null>(null)
   const [approveOpen, setApproveOpen] = useState(false)
 
   if (isLoading) return <LoadingState />
@@ -90,6 +93,10 @@ export function WorkflowRequestDetailPage() {
   }
   if (!request) return null
 
+  const submitErrors = fieldErrors(submitRequest.error, [])
+  const cancelErrors = fieldErrors(cancelError, ['reason'])
+  const returnErrors = fieldErrors(returnRequest.error, ['comment'])
+  const rejectErrors = fieldErrors(rejectError, ['reason'])
   const { label, tone } = workflowRequestStatusLabel(request.status)
   const isApplicant = user?.id === request.applicant?.id
   const isApprover = user?.id === request.approver?.id
@@ -109,11 +116,12 @@ export function WorkflowRequestDetailPage() {
    *  経由させる。理由未入力の場合はダイアログを開いたまま留める。 */
   async function handleCancel() {
     if (!reason) {
-      const emptyReasonError = new Error('取消理由を入力してください。')
-      setCancelError(emptyReasonError)
-      throw emptyReasonError
+      setCancelError(null)
+      setCancelReasonError('取消理由を入力してください。')
+      throw new Error('取消理由を入力してください。')
     }
     setCancelError(null)
+    setCancelReasonError(null)
     try {
       await cancelRequest.mutateAsync({ id: requestId, reason })
       setReason('')
@@ -217,7 +225,7 @@ export function WorkflowRequestDetailPage() {
               >
                 提出する
               </Button>
-              {submitRequest.error && <ErrorMessage error={submitRequest.error} />}
+              {submitErrors.rest != null && <ErrorMessage error={submitErrors.rest} />}
             </div>
           )}
 
@@ -229,13 +237,16 @@ export function WorkflowRequestDetailPage() {
               description="この操作は元に戻せません。申請は取消状態になります。"
               confirmLabel="取り消す"
               isPending={cancelRequest.isPending}
-              error={cancelError}
+              error={cancelErrors.rest}
               onConfirm={handleCancel}
               onOpenChange={(open) => {
-                if (open) setCancelError(null)
+                if (open) {
+                  setCancelError(null)
+                  setCancelReasonError(null)
+                }
               }}
             >
-              <FormField label="取消理由" htmlFor="cancel-reason" required>
+              <FormField label="取消理由" htmlFor="cancel-reason" required error={cancelReasonError ?? cancelErrors.of('reason')}>
                 <Input id="cancel-reason" placeholder="取消理由" value={reason} onChange={(e) => setReason(e.target.value)} />
               </FormField>
             </ConfirmActionDialog>
@@ -278,8 +289,9 @@ export function WorkflowRequestDetailPage() {
                     差戻す
                   </Button>
                 </div>
+                {returnErrors.of('comment') && <p className="text-xs text-destructive">{returnErrors.of('comment')}</p>}
                 {!comment && <p className="text-xs text-muted-foreground">差戻しコメントを入力してください。</p>}
-                {returnRequest.error && <ErrorMessage error={returnRequest.error} />}
+                {returnErrors.rest != null && <ErrorMessage error={returnErrors.rest} />}
               </div>
               {canReject && (
                 <ConfirmActionDialog
@@ -289,14 +301,15 @@ export function WorkflowRequestDetailPage() {
                   description="この操作は元に戻せません。申請者は編集・再提出できなくなります。"
                   confirmLabel="却下する"
                   isPending={rejectRequest.isPending}
-                  error={rejectError}
+                  error={rejectErrors.rest}
                   onConfirm={async () => {
                     if (!rejectReason) {
-                      const emptyReasonError = new Error('却下理由を入力してください。')
-                      setRejectError(emptyReasonError)
-                      throw emptyReasonError
+                      setRejectError(null)
+                      setRejectReasonError('却下理由を入力してください。')
+                      throw new Error('却下理由を入力してください。')
                     }
                     setRejectError(null)
+                    setRejectReasonError(null)
                     try {
                       await rejectRequest.mutateAsync({ id: requestId, reason: rejectReason })
                       setRejectReason('')
@@ -307,10 +320,13 @@ export function WorkflowRequestDetailPage() {
                     }
                   }}
                   onOpenChange={(open) => {
-                    if (open) setRejectError(null)
+                    if (open) {
+                      setRejectError(null)
+                      setRejectReasonError(null)
+                    }
                   }}
                 >
-                  <FormField label="却下理由" htmlFor="reject-reason" required>
+                  <FormField label="却下理由" htmlFor="reject-reason" required error={rejectReasonError ?? rejectErrors.of('reason')}>
                     <Input
                       id="reject-reason"
                       placeholder="却下理由"

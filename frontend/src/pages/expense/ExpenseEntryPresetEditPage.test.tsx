@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as expenseEntryPresetsApi from '../../api/expenseEntryPresets'
 import type { ExpenseCategory, ExpenseEntryPreset } from '../../api/types'
@@ -247,5 +248,41 @@ describe('ExpenseEntryPresetEditPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
 
     expect(await screen.findByText('入力プリセット一覧ページ?category_id=3')).toBeInTheDocument()
+  })
+
+  it('shows each 422 field error once under its field (rows follow the drawn fields) and the rest in the summary', async () => {
+    const errors: Record<string, string[]> = {
+      name: ['名称のエラー'],
+      visibility: ['公開範囲のエラー'],
+      description: ['説明のエラー'],
+      preset_type: ['種類のエラー'],
+      'definition.0.category_id': ['0行の区分のエラー'],
+      'definition.0.amount': ['0行の金額のエラー'],
+      'definition.0.payment_bearer': ['0行の支払方法のエラー'],
+      'definition.0.departure': ['0行の出発地のエラー'],
+      'definition.0.destination': ['0行の到着地のエラー'],
+      'definition.1.category_id': ['1行の区分のエラー'],
+      'definition.1.amount': ['1行の金額のエラー'],
+      'definition.1.payment_bearer': ['1行の支払方法のエラー'],
+      'definition.1.payee': ['1行の宿泊先のエラー'],
+      'definition.1.content': ['1行の内容のエラー'],
+      unknown_key: ['未知のキーのエラー'],
+    }
+    vi.spyOn(expenseEntryPresetsApi, 'createExpenseEntryPreset').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文', errors),
+    )
+    renderPage('/expenses/presets/new')
+
+    await userEvent.type(await screen.findByLabelText('名称'), '名前')
+    await userEvent.selectOptions(screen.getByLabelText('1番目の明細の経費区分'), '交通費')
+    await userEvent.click(screen.getByRole('button', { name: '明細を追加' }))
+    await userEvent.selectOptions(screen.getByLabelText('2番目の明細の経費区分'), '宿泊費')
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
+
+    expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+    for (const messages of Object.values(errors)) {
+      expect(screen.getAllByText(messages[0])).toHaveLength(1)
+    }
+    expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
   })
 })

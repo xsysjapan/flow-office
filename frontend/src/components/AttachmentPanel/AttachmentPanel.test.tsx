@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
+import { ApiError } from '../../api/client'
 import type { Attachment } from '../../api/types'
 import { AttachmentPanel } from './AttachmentPanel'
 import { notify } from '../../lib/notify'
@@ -66,6 +67,21 @@ describe('AttachmentPanel', () => {
       expect(attachmentsApi.uploadAttachment).toHaveBeenCalledWith('expense_item', 'expense-item-1', file),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('receipt.pdfを添付しました'))
+  })
+
+  it('shows the 422 file error under the file input and the rest in the summary, each once', async () => {
+    const errors = { file: ['ファイルのエラー'], unknown_key: ['未知のキーのエラー'] }
+    vi.spyOn(attachmentsApi, 'uploadAttachment').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+    renderPanel()
+    await screen.findByText('添付ファイルはありません。')
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await userEvent.upload(input, new File(['dummy'], 'receipt.pdf', { type: 'application/pdf' }))
+
+    expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+    expect(screen.getAllByText('ファイルのエラー')).toHaveLength(1)
+    expect(screen.getAllByText('未知のキーのエラー')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
   })
 
   it('downloads an attachment on click', async () => {

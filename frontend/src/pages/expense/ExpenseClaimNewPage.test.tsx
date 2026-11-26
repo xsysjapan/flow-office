@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
+import { ApiError } from '../../api/client'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as expenseClaimsApi from '../../api/expenseClaims'
@@ -1115,6 +1116,151 @@ describe('ExpenseClaimNewPage', () => {
 
       expect(updateItem).not.toHaveBeenCalled()
       expect(notify.success).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('422の項目エラー', () => {
+    const savedItem = {
+      id: 'item-1',
+      category_id: 1,
+      usage_date: '2026-07-10',
+      description: '客先訪問',
+      amount: 1000,
+      project_id: null,
+      evidence_type: 'fact_reference_available' as const,
+      fact_reference_type: null,
+      fact_reference_id: null,
+      commuting_deduction_amount: 200,
+    }
+
+    function expectEachOnce(errors: Record<string, string[]>) {
+      for (const messages of Object.values(errors)) {
+        expect(screen.getAllByText(messages[0])).toHaveLength(1)
+      }
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
+    }
+
+    it('shows the title error under the title field in the まとめて経費登録 title step', async () => {
+      const errors = { title: ['タイトルのエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage()
+      await userEvent.click(await screen.findByRole('button', { name: 'まとめて登録する' }))
+      await userEvent.type(await screen.findByLabelText('タイトル'), 'タイトル')
+      await userEvent.click(screen.getByRole('button', { name: '次へ' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
+
+    it('shows the single-item form errors under their fields', async () => {
+      const errors = {
+        usage_date: ['利用日のエラー'],
+        amount: ['金額のエラー'],
+        payment_bearer: ['支払方法のエラー'],
+        unknown_key: ['未知のキーのエラー'],
+      }
+      vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      // 既存の下書きの編集(初回の保存では下書きの作成で画面が読み込み中に切り替わり、入力が作り直される)。
+      renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+      await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+      await screen.findByLabelText('利用日')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-10')
+      await userEvent.type(screen.getByLabelText('金額'), '12000')
+      await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
+      await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+      // 422のときは入力を残す(消さない)。
+      expect(screen.getByLabelText('宿泊先名')).toHaveValue('ホテルABC')
+    })
+
+    it('shows the receipt file error under the receipt field of the single-item form', async () => {
+      const errors = { file: ['ファイルのエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockResolvedValue({ ...savedItem, category_id: 2 })
+      vi.spyOn(attachmentsApi, 'uploadAttachment').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage()
+      await selectIndividualEntryMode()
+      await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+      await screen.findByLabelText('利用日')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-10')
+      await userEvent.type(screen.getByLabelText('金額'), '12000')
+      await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
+      await userEvent.upload(screen.getByLabelText('領収書(任意)'), new File(['dummy'], 'receipt.png', { type: 'image/png' }))
+      await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
+
+    it('shows the claim title error under the title field of the saved items section', async () => {
+      const errors = { title: ['申請タイトルのエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim({ items: [savedItem] }))
+      vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+      await userEvent.type(await screen.findByLabelText('申請タイトル'), '大阪出張分')
+      await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
+
+    it('shows the commuting deduction error under the item row', async () => {
+      const errors = { commuting_deduction_amount: ['控除額のエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim({ items: [savedItem] }))
+      vi.spyOn(expenseClaimsApi, 'updateExpenseItem').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+      const input = await screen.findByLabelText('2026-07-10の定期区間控除額')
+      await userEvent.clear(input)
+      await userEvent.type(input, '250{Enter}')
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
+
+    it('shows the approver error under the approver field when approval is required', async () => {
+      const errors = { approver_user_id: ['承認者のエラー'], unknown_key: ['未知のキーのエラー'] }
+      const approver: User = { ...applicant, id: 'approver-1', name: '承認者花子', email: 'hanako@example.com' }
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim({ items: [savedItem] }))
+      vi.spyOn(expenseClaimsApi, 'submitExpenseClaim').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
+        data: [approver],
+        meta: { current_page: 1, last_page: 1, total: 1 },
+        links: { next: null, prev: null },
+      })
+
+      renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+      await userEvent.click(await screen.findByLabelText('承認者'))
+      await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+      await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+      await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
+
+    it('keeps the approver error in the summary when no approver field is drawn', async () => {
+      const errors = { approver_user_id: ['承認者のエラー'], unknown_key: ['未知のキーのエラー'] }
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim({ items: [savedItem] }))
+      vi.spyOn(expenseClaimsApi, 'submitExpenseClaim').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+
+      renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit', [], false)
+      await userEvent.click(await screen.findByRole('button', { name: '申請する' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
     })
   })
 })

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
+import { ApiError } from '../../api/client'
 import * as attendanceApi from '../../api/attendance'
 import type { AttendanceMonthlyCalculationTotals, User, WorkflowRequest } from '../../api/types'
 import { ApprovalDetailPanel } from './ApprovalDetailPanel'
@@ -372,6 +373,29 @@ describe('ApprovalDetailPanel', () => {
     await user.click(screen.getByRole('button', { name: '差戻す' }))
 
     expect(onReturn).toHaveBeenCalledWith('要修正')
+  })
+
+  it('shows the 422 comment error under the comment input and the rest in the summary', () => {
+    const errors = { comment: ['差戻しコメントのエラー'], unknown_key: ['未知のキーのエラー'] }
+    renderPanel(genericRequest, { actionError: new ApiError(422, '最初のエラーの文', errors) })
+
+    expect(screen.getAllByText('差戻しコメントのエラー')).toHaveLength(1)
+    expect(screen.getAllByText('未知のキーのエラー')).toHaveLength(1)
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
+  })
+
+  it('keeps the comment error in the summary when the comment input is not drawn', () => {
+    const approvedExpense: WorkflowRequest = {
+      ...expenseRequest,
+      subject: { ...expenseRequest.subject!, status: 'approved' },
+    }
+    renderPanel(approvedExpense, {
+      actionError: new ApiError(422, '最初のエラーの文', { comment: ['差戻しコメントのエラー'] }),
+    })
+
+    expect(screen.getAllByText('差戻しコメントのエラー')).toHaveLength(1)
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
   })
 
   it('disables actions when the subject is not in an actionable state', () => {

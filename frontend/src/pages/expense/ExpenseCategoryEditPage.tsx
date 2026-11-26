@@ -22,6 +22,7 @@ import {
   useUpdateExpenseCategory,
 } from '../../hooks/useExpenseCategories'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { fieldErrors } from '../../utils/fieldErrors'
 import {
   EXPENSE_CATEGORY_INITIAL,
   isExpenseCategoryDirty,
@@ -29,6 +30,21 @@ import {
 } from './expenseCategoryDirty'
 
 const LIST_PATH = '/admin/expense-categories'
+
+/** 項目の下に出す422のキー。`field_definitions.{i}.*`は行の下に出す。 */
+const FIELD_ERROR_KEYS = [
+  'code',
+  'name',
+  'description',
+  'entry_mode',
+  'evidence_type_default',
+  'receipt_required_threshold',
+  'approval_skip_threshold',
+  'field_definitions.*.key',
+  'field_definitions.*.label',
+  'field_definitions.*.type',
+  'field_definitions.*.required',
+] as const
 
 const evidenceTypeOptions: { value: ExpenseEvidenceType; label: string }[] = [
   { value: 'fact_reference_available', label: '実績参照のみ' },
@@ -48,6 +64,10 @@ const fieldTypeOptions: { value: ExpenseCategoryFieldDefinition['type']; label: 
   { value: 'select', label: '選択肢' },
   { value: 'boolean', label: 'はい/いいえ' },
 ]
+
+function RowError({ message }: { message: string | undefined }) {
+  return message ? <p className="text-xs text-destructive">{message}</p> : null
+}
 
 let fieldRowSeq = 0
 function newFieldRow(): ExpenseCategoryFieldDefinition & { rowId: number } {
@@ -163,7 +183,7 @@ function ExpenseCategoryEditForm() {
     )
 
   const isBusy = createCategory.isPending || updateCategory.isPending
-  const error = createCategory.error ?? updateCategory.error
+  const { of, ofRow, rest } = fieldErrors(createCategory.error ?? updateCategory.error, FIELD_ERROR_KEYS)
 
   const addFieldDefinitionRow = () => setFieldDefinitions((rows) => [...rows, newFieldRow()])
   const removeFieldDefinitionRow = (rowId: number) =>
@@ -216,19 +236,19 @@ function ExpenseCategoryEditForm() {
       {top}
       <Card>
         <FormLayout>
-          <FormField label="コード" htmlFor="code" required>
+          <FormField label="コード" htmlFor="code" required error={of('code')}>
             <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
           </FormField>
 
-          <FormField label="名称" htmlFor="name" required>
+          <FormField label="名称" htmlFor="name" required error={of('name')}>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
 
-        <FormField label="説明" htmlFor="description">
+        <FormField label="説明" htmlFor="description" error={of('description')}>
           <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </FormField>
 
-        <FormField label="証憑タイプ既定" htmlFor="evidence-type-default" required>
+        <FormField label="証憑タイプ既定" htmlFor="evidence-type-default" required error={of('evidence_type_default')}>
           <NativeSelect
             id="evidence-type-default"
             value={evidenceTypeDefault}
@@ -242,7 +262,7 @@ function ExpenseCategoryEditForm() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="入力方式" htmlFor="entry-mode" required>
+        <FormField label="入力方式" htmlFor="entry-mode" required error={of('entry_mode')}>
           <NativeSelect
             id="entry-mode"
             value={entryMode}
@@ -274,12 +294,14 @@ function ExpenseCategoryEditForm() {
                 value={row.key}
                 onChange={(e) => updateFieldDefinitionRow(row.rowId, { key: e.target.value })}
               />
+              <RowError message={ofRow('field_definitions', index, 'key')} />
               <Input
                 aria-label={`${index + 1}番目の項目の表示名`}
                 placeholder="表示名(例: 出発地)"
                 value={row.label}
                 onChange={(e) => updateFieldDefinitionRow(row.rowId, { label: e.target.value })}
               />
+              <RowError message={ofRow('field_definitions', index, 'label')} />
               <NativeSelect
                 aria-label={`${index + 1}番目の項目の種類`}
                 value={row.type}
@@ -293,6 +315,7 @@ function ExpenseCategoryEditForm() {
                   </option>
                 ))}
               </NativeSelect>
+              <RowError message={ofRow('field_definitions', index, 'type')} />
               <label className="flex items-center gap-2 text-sm text-foreground">
                 <Checkbox
                   checked={row.required ?? false}
@@ -300,6 +323,7 @@ function ExpenseCategoryEditForm() {
                 />
                 必須
               </label>
+              <RowError message={ofRow('field_definitions', index, 'required')} />
               <Button variant="danger" size="sm" onClick={() => removeFieldDefinitionRow(row.rowId)}>
                 削除
               </Button>
@@ -307,7 +331,11 @@ function ExpenseCategoryEditForm() {
           ))}
         </div>
 
-          <FormField label="レシート必須しきい値(円・任意)" htmlFor="receipt-required-threshold">
+          <FormField
+            label="レシート必須しきい値(円・任意)"
+            htmlFor="receipt-required-threshold"
+            error={of('receipt_required_threshold')}
+          >
             <Input
               id="receipt-required-threshold"
               type="number"
@@ -321,6 +349,7 @@ function ExpenseCategoryEditForm() {
             label="承認省略しきい値(円・任意)"
             htmlFor="approval-skip-threshold"
             description="この金額以下の明細は承認を1段階省略できます。"
+            error={of('approval_skip_threshold')}
           >
             <Input
               id="approval-skip-threshold"
@@ -339,12 +368,12 @@ function ExpenseCategoryEditForm() {
         {(!code || !name) && (
           <p className="mb-2 text-xs text-muted-foreground">コードと名称を入力してください。</p>
         )}
-        {error && <ErrorMessage error={error} />}
+        {rest != null && <ErrorMessage error={rest} />}
         <FormActions>
           <Button variant="secondary" onClick={handleCancel}>
             キャンセル
           </Button>
-          <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
+          <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave().catch(() => undefined)}>
             {isCreate ? '作成' : '保存'}
           </Button>
         </FormActions>

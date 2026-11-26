@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import type { AttachmentOwnerType } from '../../api/attachments'
 import { downloadAttachment } from '../../api/attachments'
 import { useAttachments, useUploadAttachment } from '../../hooks/useAttachments'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { formatFileSize } from '../../utils/formatFileSize'
 import { notify } from '../../lib/notify'
 import { cn } from '../../lib/utils'
@@ -29,6 +30,8 @@ export interface AttachmentPanelProps {
 export function AttachmentPanel({ ownerType, ownerId, readOnly = false, required = false, compact = false, className }: AttachmentPanelProps) {
   const { data: attachments, isLoading } = useAttachments(ownerType, ownerId)
   const uploadAttachment = useUploadAttachment()
+  // アップロード入力(読み取り専用では描かない)の下に出す422のキー。
+  const uploadErrors = fieldErrors(uploadAttachment.error, readOnly ? [] : ['file'])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const hasNoAttachments = !isLoading && (attachments ?? []).length === 0
@@ -38,7 +41,7 @@ export function AttachmentPanel({ ownerType, ownerId, readOnly = false, required
 
   return (
     <div className={cn('flex flex-col', gap, className)}>
-      {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
+      {uploadErrors.rest != null && <ErrorMessage error={uploadErrors.rest} />}
       {isLoading ? (
         <LoadingState />
       ) : (
@@ -100,6 +103,10 @@ export function AttachmentPanel({ ownerType, ownerId, readOnly = false, required
           />
           {uploadAttachment.isPending && <span className={cn(textSize, 'text-muted-foreground')}>アップロード中...</span>}
         </div>
+      )}
+
+      {!readOnly && uploadErrors.of('file') && (
+        <p className={cn(textSize, 'text-destructive')}>{uploadErrors.of('file')}</p>
       )}
     </div>
   )

@@ -17,6 +17,9 @@ import { buildExpenseItemDescription, composeRouteDescription, type SingleExpens
 
 export type { SingleExpenseItemFieldSet }
 
+/** 422の項目エラー(API側のキー)のうち、このフォームの入力に対応するもの。 */
+export type SingleExpenseItemFormErrors = Partial<Record<'usage_date' | 'amount' | 'payment_bearer' | 'file', string>>
+
 export interface SingleExpenseItemFormProps {
   /** UC-X004b〜d: 経費区分ごとに入力項目が異なる(会食/宿泊/消耗品・その他)。 */
   fieldSet: SingleExpenseItemFieldSet
@@ -25,7 +28,9 @@ export interface SingleExpenseItemFormProps {
   fieldDefinitions?: ExpenseCategoryFieldDefinition[] | null
   /** 明細の作成と同じ操作で領収書を添付できるよう、選択中のファイルも合わせて渡す
    *  (呼び出し側が明細作成後にこのファイルをアップロードする)。 */
-  onSubmit: (input: SaveExpenseItemInput, receiptFile: File | null) => void
+  /** Promiseを返す場合、成功(解決)したときだけフォームを空に戻す。失敗(拒否)のときは入力を残す
+   *  (エラーは呼び出し側が`errors`で渡す)。 */
+  onSubmit: (input: SaveExpenseItemInput, receiptFile: File | null) => void | Promise<unknown>
   isSubmitting?: boolean
   /** プリセットから適用する下書き定義1件。利用日は持たないため利用日は変更しない。
    *  同じプリセットを続けて選び直しても反映されるよう、呼び出し側は`presetApplyToken`を
@@ -34,6 +39,8 @@ export interface SingleExpenseItemFormProps {
   presetApplyToken?: number
   /** 保存していない入力があるかを通知する(離脱警告用)。保存後・アンマウント時は`false`。 */
   onDirtyChange?: (dirty: boolean) => void
+  /** 保存の422で返った項目エラー。対応する入力の下に出す。 */
+  errors?: SingleExpenseItemFormErrors
 }
 
 /** プリセットのattributes(保存用の値)を、このフォームが保持するattributeValuesの
@@ -91,6 +98,7 @@ export function SingleExpenseItemForm({
   presetItem,
   presetApplyToken,
   onDirtyChange,
+  errors,
 }: SingleExpenseItemFormProps) {
   const [usageDate, setUsageDate] = useState('')
   const [amount, setAmount] = useState('')
@@ -202,19 +210,24 @@ export function SingleExpenseItemForm({
     return attributes
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!isValid) return
-    onSubmit(
-      {
-        category_id: categoryId,
-        usage_date: usageDate,
-        amount: Number(amount),
-        description: buildDescription(),
-        payment_bearer: paymentBearer,
-        attributes: buildAttributes(),
-      },
-      receiptFile,
-    )
+    try {
+      await onSubmit(
+        {
+          category_id: categoryId,
+          usage_date: usageDate,
+          amount: Number(amount),
+          description: buildDescription(),
+          payment_bearer: paymentBearer,
+          attributes: buildAttributes(),
+        },
+        receiptFile,
+      )
+    } catch {
+      // 失敗は呼び出し側が`errors`で伝える。入力は残して再送信できるようにする。
+      return
+    }
     reset()
   }
 
@@ -222,7 +235,7 @@ export function SingleExpenseItemForm({
     <div className="flex flex-col gap-1">
       <h3 className="text-sm font-semibold text-foreground">{fieldSetTitle[fieldSet]}</h3>
 
-      <FormField label="利用日" htmlFor="single-item-usage-date" required>
+      <FormField label="利用日" htmlFor="single-item-usage-date" required error={errors?.usage_date}>
         <DatePicker
           id="single-item-usage-date"
           value={usageDate || undefined}
@@ -230,7 +243,7 @@ export function SingleExpenseItemForm({
         />
       </FormField>
 
-      <FormField label="金額" htmlFor="single-item-amount" required>
+      <FormField label="金額" htmlFor="single-item-amount" required error={errors?.amount}>
         <Input
           id="single-item-amount"
           type="number"
@@ -334,7 +347,7 @@ export function SingleExpenseItemForm({
         </>
       )}
 
-      <FormField label="支払方法" htmlFor="single-item-payment-bearer">
+      <FormField label="支払方法" htmlFor="single-item-payment-bearer" error={errors?.payment_bearer}>
         <NativeSelect
           id="single-item-payment-bearer"
           value={paymentBearer}
@@ -388,6 +401,7 @@ export function SingleExpenseItemForm({
       <FormField
         label="領収書(任意)"
         htmlFor="single-item-receipt-file"
+        error={errors?.file}
         description="この場で選択すると、明細の保存と同時に添付されます。後から追加・変更することもできます。"
       >
         <Input
@@ -401,7 +415,7 @@ export function SingleExpenseItemForm({
       </FormField>
 
       <div>
-        <Button disabled={!isValid} isLoading={isSubmitting} onClick={handleSubmit}>
+        <Button disabled={!isValid} isLoading={isSubmitting} onClick={() => void handleSubmit()}>
           明細を保存して続けて入力する
         </Button>
       </div>

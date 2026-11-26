@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as requestTypesApi from '../../api/requestTypes'
 import type { RequestType } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -162,5 +163,59 @@ describe('RequestTypeEditPage', () => {
         is_active: true,
       }),
     )
+  })
+
+  describe('422の項目エラー', () => {
+    function expectEachOnce(errors: Record<string, string[]>) {
+      for (const [key, messages] of Object.entries(errors)) {
+        expect(screen.getAllByText(messages[0]), key).toHaveLength(1)
+      }
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
+    }
+
+    it('shows each field error once under its field, including the conditional settings', async () => {
+      const errors = {
+        code: ['コードのエラー'],
+        name: ['名称のエラー'],
+        description: ['説明のエラー'],
+        'eligible_role_codes.0': ['対象者の0番のエラー'],
+        attachment_max_size_kb: ['上限サイズのエラー'],
+        attachment_allowed_extensions: ['拡張子のエラー'],
+        backoffice_task_type: ['タスク種別のエラー'],
+        backoffice_department: ['処理部署のエラー'],
+        export_amount_field: ['金額項目のエラー'],
+        allowed_status_transitions: ['ステータス遷移のエラー'],
+        unknown_key: ['未知のキーのエラー'],
+      }
+      vi.spyOn(requestTypesApi, 'createRequestType').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+      renderPage('/admin/request-types/new')
+
+      await userEvent.type(await screen.findByLabelText('コード'), 'x')
+      await userEvent.type(screen.getByLabelText('名称'), 'y')
+      await userEvent.click(screen.getByLabelText('添付ファイルを必須にする'))
+      await userEvent.click(screen.getByLabelText('バックオフィス処理を発生させる'))
+      await userEvent.click(screen.getByRole('button', { name: '作成' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
+
+    it('keeps the errors of undrawn conditional fields in the summary', async () => {
+      const errors = {
+        code: ['コードのエラー'],
+        attachment_max_size_kb: ['上限サイズのエラー'],
+        backoffice_task_type: ['タスク種別のエラー'],
+      }
+      vi.spyOn(requestTypesApi, 'createRequestType').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+      renderPage('/admin/request-types/new')
+
+      await userEvent.type(await screen.findByLabelText('コード'), 'x')
+      await userEvent.type(screen.getByLabelText('名称'), 'y')
+      await userEvent.click(screen.getByRole('button', { name: '作成' }))
+
+      expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+      expectEachOnce(errors)
+    })
   })
 })

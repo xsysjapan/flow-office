@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import type { ExpenseCategory } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -147,5 +148,37 @@ describe('ExpenseCategoryEditPage', () => {
 
     expect(await screen.findByText('経費区分一覧ページ')).toBeInTheDocument()
     expect(updateSpy).not.toHaveBeenCalled()
+  })
+
+  it('shows each 422 field error once under its field and the rest in the summary', async () => {
+    const errors = {
+      code: ['コードのエラー'],
+      name: ['名称のエラー'],
+      description: ['説明のエラー'],
+      entry_mode: ['入力方式のエラー'],
+      evidence_type_default: ['証憑タイプのエラー'],
+      receipt_required_threshold: ['レシートしきい値のエラー'],
+      approval_skip_threshold: ['承認省略しきい値のエラー'],
+      'field_definitions.0.key': ['項目キーのエラー'],
+      'field_definitions.0.label': ['項目表示名のエラー'],
+      'field_definitions.0.type': ['項目種類のエラー'],
+      'field_definitions.0.required': ['項目必須のエラー'],
+      unknown_key: ['未知のキーのエラー'],
+    }
+    vi.spyOn(expenseCategoriesApi, 'createExpenseCategory').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文', errors),
+    )
+    renderPage('/admin/expense-categories/new')
+
+    await userEvent.type(await screen.findByLabelText('コード'), 'x')
+    await userEvent.type(screen.getByLabelText('名称'), 'y')
+    await userEvent.click(screen.getByRole('button', { name: '項目を追加' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
+
+    expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
+    for (const messages of Object.values(errors)) {
+      expect(screen.getAllByText(messages[0])).toHaveLength(1)
+    }
+    expect(screen.queryByText('最初のエラーの文')).not.toBeInTheDocument()
   })
 })

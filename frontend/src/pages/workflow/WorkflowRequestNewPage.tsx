@@ -15,6 +15,7 @@ import { NativeSelect } from '../../components/ui/native-select'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { useBackTarget, useKeepBackState, useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { useRequestTypes } from '../../hooks/useRequestTypes'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { isWorkflowRequestNewDirty } from './workflowRequestNewDirty'
@@ -89,7 +90,11 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
   )
 
   const isBusy = createRequest.isPending || submitRequest.isPending
-  const error = createRequest.error ?? submitRequest.error
+  const { of, rest } = fieldErrors(createRequest.error ?? submitRequest.error, [
+    'request_type_code',
+    'title',
+    'approver_user_id',
+  ])
 
   const handleSave = async (submitAfterCreate: boolean) => {
     const created = await createRequest.mutateAsync({
@@ -115,7 +120,7 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
 
       <Card title="新規申請">
         <FormLayout>
-          <FormField label="申請種別" htmlFor="request-type" required>
+          <FormField label="申請種別" htmlFor="request-type" required error={of('request_type_code')}>
             <NativeSelect
               id="request-type"
               value={requestTypeCode}
@@ -133,7 +138,7 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
             </NativeSelect>
           </FormField>
 
-          <FormField label="タイトル" htmlFor="title" required>
+          <FormField label="タイトル" htmlFor="title" required error={of('title')}>
             <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
           </FormField>
 
@@ -156,7 +161,7 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
             </FormField>
           ))}
 
-          <FormField label="承認者" htmlFor="approver" required>
+          <FormField label="承認者" htmlFor="approver" required error={of('approver_user_id')}>
             <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
           </FormField>
 
@@ -166,7 +171,7 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
           {requestTypeCode && title && !approverUserId && (
             <p className="mb-2 text-xs text-muted-foreground">提出するには承認者を選択してください。</p>
           )}
-          {error && <ErrorMessage error={error} />}
+          {rest != null && <ErrorMessage error={rest} />}
           <FormActions>
             <Button variant="secondary" disabled={isBusy} onClick={() =>
                 backTarget ? navigate(backTarget.to, { state: backTarget.state, replace: true }) : navigate('/requests')
@@ -177,14 +182,14 @@ function WorkflowRequestNewForm({ requestTypes, initial }: { requestTypes: Reque
               variant="secondary"
               isLoading={isBusy}
               disabled={!requestTypeCode || !title}
-              onClick={() => void handleSave(false)}
+              onClick={() => void handleSave(false).catch(() => undefined)}
             >
               下書き保存
             </Button>
             <Button
               isLoading={isBusy}
               disabled={!requestTypeCode || !title || !approverUserId}
-              onClick={() => void handleSave(true)}
+              onClick={() => void handleSave(true).catch(() => undefined)}
             >
               提出する
             </Button>

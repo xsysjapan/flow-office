@@ -28,6 +28,7 @@ import {
   useUpdateExpenseEntryPreset,
 } from '../../hooks/useExpenseEntryPresets'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { fieldErrors } from '../../utils/fieldErrors'
 import {
   EXPENSE_ENTRY_PRESET_INITIAL,
   isExpenseEntryPresetDirty,
@@ -148,7 +149,18 @@ function ExpenseEntryPresetEditContent() {
   if (categoriesError) return <ErrorMessage error={categoriesError} fallback="経費区分の取得に失敗しました。" />
 
   const isBusy = createPreset.isPending || updatePreset.isPending
-  const error = createPreset.error ?? updatePreset.error
+  // 項目の下に出す422のキー。明細の行は、選んだ経費区分の入力補助欄(描く項目)と同じ条件で組み立てる。
+  const { of, ofRow, rest } = fieldErrors(createPreset.error ?? updatePreset.error, [
+    'name',
+    'visibility',
+    'description',
+    'preset_type',
+    ...items.flatMap((row, index) => {
+      const category = categories?.find((c) => c.id === row.category_id)
+      const fieldSet = category ? fieldSetForCategory(category) : undefined
+      return presetRowFieldKeys(fieldSet).map((key) => `definition.${index}.${key}`)
+    }),
+  ])
 
   const addItemRow = () => setItems((rows) => [...rows, newDefinitionRow()])
   const removeItemRow = (rowId: number) => setItems((rows) => rows.filter((row) => row.rowId !== rowId))
@@ -213,11 +225,11 @@ function ExpenseEntryPresetEditContent() {
   return (
     <Card title={isCreate ? 'プリセットを作成' : 'プリセットを編集'}>
       <FormLayout>
-        <FormField label="名称" htmlFor="preset-name" required>
+        <FormField label="名称" htmlFor="preset-name" required error={of('name')}>
           <Input id="preset-name" value={name} onChange={(e) => setName(e.target.value)} />
         </FormField>
 
-        <FormField label="公開範囲" htmlFor="preset-visibility" required>
+        <FormField label="公開範囲" htmlFor="preset-visibility" required error={of('visibility')}>
           <NativeSelect
             id="preset-visibility"
             value={visibility}
@@ -231,11 +243,11 @@ function ExpenseEntryPresetEditContent() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="説明(任意)" htmlFor="preset-description">
+        <FormField label="説明(任意)" htmlFor="preset-description" error={of('description')}>
           <Textarea id="preset-description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </FormField>
 
-        <FormField label="種類" htmlFor="preset-type" required>
+        <FormField label="種類" htmlFor="preset-type" required error={of('preset_type')}>
           <NativeSelect
             id="preset-type"
             value={presetType}
@@ -268,6 +280,7 @@ function ExpenseEntryPresetEditContent() {
             index={index}
             categories={categories ?? []}
             canRemove={items.length > 1}
+            errorOf={(key) => ofRow('definition', index, key)}
             onChange={(patch) => updateItemRow(row.rowId, patch)}
             onRemove={() => removeItemRow(row.rowId)}
           />
@@ -287,18 +300,27 @@ function ExpenseEntryPresetEditContent() {
               : '各明細の経費区分を選択してください。'}
           </p>
         )}
-        {error && <ErrorMessage error={error} />}
+        {rest != null && <ErrorMessage error={rest} />}
         <FormActions>
           <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/expenses/presets', { state: backTarget?.state, replace: true })}>
             キャンセル
           </Button>
-          <Button isLoading={isBusy} disabled={!canSave} onClick={() => void handleSave()}>
+          <Button isLoading={isBusy} disabled={!canSave} onClick={() => void handleSave().catch(() => undefined)}>
             {isCreate ? '作成' : '保存'}
           </Button>
         </FormActions>
       </FormLayout>
     </Card>
   )
+}
+
+/** 明細の行に描く入力のキー(`definition.{i}.{key}`の`key`)。`PresetDefinitionRowFields`の描き分けと同じ条件。 */
+function presetRowFieldKeys(fieldSet: ReturnType<typeof fieldSetForCategory> | undefined): string[] {
+  const keys = ['category_id', 'amount', 'payment_bearer']
+  if (fieldSet === 'transport') keys.push('departure', 'destination')
+  if (fieldSet && fieldSet !== 'transport') keys.push('payee', 'content')
+  if (fieldSet === 'meal') keys.push('participants', 'participant_count')
+  return keys
 }
 
 /** 明細1件分の初期値入力欄。選んだ経費区分のfieldSetに応じて、実際の入力画面と同じ
@@ -308,6 +330,7 @@ function PresetDefinitionRowFields({
   index,
   categories,
   canRemove,
+  errorOf,
   onChange,
   onRemove,
 }: {
@@ -315,6 +338,7 @@ function PresetDefinitionRowFields({
   index: number
   categories: ExpenseCategory[]
   canRemove: boolean
+  errorOf: (key: string) => string | undefined
   onChange: (patch: Partial<ExpenseEntryPresetDefinitionItem>) => void
   onRemove: () => void
 }) {
@@ -325,7 +349,7 @@ function PresetDefinitionRowFields({
   return (
     <div className="@container flex flex-col gap-3 rounded-md border border-border p-3">
       <div className="grid grid-cols-1 items-end gap-x-3 @2xl:grid-cols-3">
-        <FormField label="経費区分" htmlFor={`preset-item-${row.rowId}-category`} required>
+        <FormField label="経費区分" htmlFor={`preset-item-${row.rowId}-category`} required error={errorOf('category_id')}>
           <NativeSelect
             id={`preset-item-${row.rowId}-category`}
             aria-label={`${label}の経費区分`}
@@ -343,7 +367,7 @@ function PresetDefinitionRowFields({
           </NativeSelect>
         </FormField>
 
-        <FormField label="金額(初期値・任意)" htmlFor={`preset-item-${row.rowId}-amount`}>
+        <FormField label="金額(初期値・任意)" htmlFor={`preset-item-${row.rowId}-amount`} error={errorOf('amount')}>
           <Input
             id={`preset-item-${row.rowId}-amount`}
             aria-label={`${label}の金額の初期値`}
@@ -354,7 +378,7 @@ function PresetDefinitionRowFields({
           />
         </FormField>
 
-        <FormField label="支払方法(初期値・任意)" htmlFor={`preset-item-${row.rowId}-payment-bearer`}>
+        <FormField label="支払方法(初期値・任意)" htmlFor={`preset-item-${row.rowId}-payment-bearer`} error={errorOf('payment_bearer')}>
           <NativeSelect
             id={`preset-item-${row.rowId}-payment-bearer`}
             aria-label={`${label}の支払方法の初期値`}
@@ -373,7 +397,7 @@ function PresetDefinitionRowFields({
 
       {fieldSet === 'transport' && (
         <>
-          <FormField label="出発地(初期値・任意)" htmlFor={`preset-item-${row.rowId}-departure`}>
+          <FormField label="出発地(初期値・任意)" htmlFor={`preset-item-${row.rowId}-departure`} error={errorOf('departure')}>
             <Input
               id={`preset-item-${row.rowId}-departure`}
               aria-label={`${label}の出発地の初期値`}
@@ -381,7 +405,7 @@ function PresetDefinitionRowFields({
               onChange={(e) => onChange({ departure: e.target.value })}
             />
           </FormField>
-          <FormField label="到着地(初期値・任意)" htmlFor={`preset-item-${row.rowId}-destination`}>
+          <FormField label="到着地(初期値・任意)" htmlFor={`preset-item-${row.rowId}-destination`} error={errorOf('destination')}>
             <Input
               id={`preset-item-${row.rowId}-destination`}
               aria-label={`${label}の到着地の初期値`}
@@ -397,6 +421,7 @@ function PresetDefinitionRowFields({
           <FormField
             label={fieldSet === 'lodging' ? '宿泊先名(初期値・任意)' : '取引先(初期値・任意)'}
             htmlFor={`preset-item-${row.rowId}-payee`}
+            error={errorOf('payee')}
           >
             <Input
               id={`preset-item-${row.rowId}-payee`}
@@ -405,7 +430,7 @@ function PresetDefinitionRowFields({
               onChange={(e) => onChange({ payee: e.target.value })}
             />
           </FormField>
-          <FormField label="内容(初期値・任意)" htmlFor={`preset-item-${row.rowId}-content`}>
+          <FormField label="内容(初期値・任意)" htmlFor={`preset-item-${row.rowId}-content`} error={errorOf('content')}>
             <Input
               id={`preset-item-${row.rowId}-content`}
               aria-label={`${label}の内容の初期値`}
@@ -418,7 +443,7 @@ function PresetDefinitionRowFields({
 
       {fieldSet === 'meal' && (
         <>
-          <FormField label="参加者氏名(初期値・任意)" htmlFor={`preset-item-${row.rowId}-participants`}>
+          <FormField label="参加者氏名(初期値・任意)" htmlFor={`preset-item-${row.rowId}-participants`} error={errorOf('participants')}>
             <Input
               id={`preset-item-${row.rowId}-participants`}
               aria-label={`${label}の参加者氏名の初期値`}
@@ -426,7 +451,7 @@ function PresetDefinitionRowFields({
               onChange={(e) => onChange({ participants: e.target.value })}
             />
           </FormField>
-          <FormField label="参加人数(初期値・任意)" htmlFor={`preset-item-${row.rowId}-participant-count`}>
+          <FormField label="参加人数(初期値・任意)" htmlFor={`preset-item-${row.rowId}-participant-count`} error={errorOf('participant_count')}>
             <Input
               id={`preset-item-${row.rowId}-participant-count`}
               aria-label={`${label}の参加人数の初期値`}

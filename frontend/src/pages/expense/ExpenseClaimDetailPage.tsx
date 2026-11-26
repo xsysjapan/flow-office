@@ -26,6 +26,7 @@ import {
   useSubmitExpenseClaim,
 } from '../../hooks/useExpenseClaims'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import {
   expenseClaimStatusLabel,
@@ -88,7 +89,7 @@ export function ExpenseClaimDetailPage() {
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [comment, setComment] = useState('')
   const [reason, setReason] = useState('')
-  const [cancelValidationError, setCancelValidationError] = useState<Error | null>(null)
+  const [cancelReasonError, setCancelReasonError] = useState<string | null>(null)
   const [approveOpen, setApproveOpen] = useState(false)
 
   if (isLoading) return <LoadingState />
@@ -96,6 +97,9 @@ export function ExpenseClaimDetailPage() {
   if (!claim) return null
 
   const { label, tone } = expenseClaimStatusLabel(claim.status)
+  const submitErrors = fieldErrors(submitClaim.error, ['approver_user_id'])
+  const cancelErrors = fieldErrors(cancelClaim.error, ['reason'])
+  const returnErrors = fieldErrors(returnClaim.error, ['comment'])
   const isApplicant = user?.id === claim.employee_id
   const isApprover = user?.id === claim.approver_user_id
 
@@ -216,10 +220,13 @@ export function ExpenseClaimDetailPage() {
                     申請する
                   </Button>
                 </div>
+                {submitErrors.of('approver_user_id') && (
+                  <p className="text-xs text-destructive">{submitErrors.of('approver_user_id')}</p>
+                )}
                 {!(approverUserId ?? claim.approver_user_id) && (
                   <p className="text-xs text-muted-foreground">承認者を選択してください</p>
                 )}
-                {submitClaim.error && <ErrorMessage error={submitClaim.error} />}
+                {submitErrors.rest != null && <ErrorMessage error={submitErrors.rest} />}
               </div>
             )}
 
@@ -230,25 +237,30 @@ export function ExpenseClaimDetailPage() {
                 description="取り消すと、この経費精算は取消済みの状態になり元に戻せません。再度申請する場合は最初から作成し直してください。"
                 confirmLabel="取り消しを確定する"
                 isPending={cancelClaim.isPending}
-                error={cancelValidationError ?? cancelClaim.error}
+                error={cancelErrors.rest}
                 onOpenChange={(open) => {
                   if (open) {
                     setReason('')
-                    setCancelValidationError(null)
+                    setCancelReasonError(null)
                     cancelClaim.reset()
                   }
                 }}
                 onConfirm={async () => {
                   if (!reason) {
-                    setCancelValidationError(new Error('取消理由を入力してください'))
+                    setCancelReasonError('取消理由を入力してください')
                     throw new Error('取消理由を入力してください')
                   }
-                  setCancelValidationError(null)
+                  setCancelReasonError(null)
                   await cancelClaim.mutateAsync(reason)
                   notify.success('経費精算を取り消しました')
                 }}
               >
-                <FormField label="取消理由" htmlFor="claim-cancel-reason" required>
+                <FormField
+                  label="取消理由"
+                  htmlFor="claim-cancel-reason"
+                  required
+                  error={cancelReasonError ?? cancelErrors.of('reason')}
+                >
                   <Input
                     id="claim-cancel-reason"
                     placeholder="取消理由"
@@ -293,8 +305,11 @@ export function ExpenseClaimDetailPage() {
                       差戻す
                     </Button>
                   </div>
+                  {returnErrors.of('comment') && (
+                    <p className="text-xs text-destructive">{returnErrors.of('comment')}</p>
+                  )}
                   {!comment && <p className="text-xs text-muted-foreground">差戻しコメントを入力してください</p>}
-                  {returnClaim.error && <ErrorMessage error={returnClaim.error} />}
+                  {returnErrors.rest != null && <ErrorMessage error={returnErrors.rest} />}
                 </div>
               </>
             )}

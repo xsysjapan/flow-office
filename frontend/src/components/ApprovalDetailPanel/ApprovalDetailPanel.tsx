@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { WorkflowRequest } from '../../api/types'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { workflowRequestStatusLabel } from '../../utils/statusLabels'
 import { WorkflowRequestSubjectDetail } from '../WorkflowRequestSubjectDetail/WorkflowRequestSubjectDetail'
 import { AttachmentPanel } from '../AttachmentPanel/AttachmentPanel'
@@ -94,10 +95,12 @@ export function ApprovalDetailPanel({
 }: ApprovalDetailPanelProps) {
   const [comment, setComment] = useState('')
   const actionable = isActionable(request)
+  // 差戻しコメントの入力は操作できる状態のときだけ描く。
+  const { of, rest } = fieldErrors(actionError, actionable ? ['comment'] : [])
 
   return (
     <div className="flex flex-col gap-6">
-      {actionError && <ErrorMessage error={actionError} />}
+      {rest != null && <ErrorMessage error={rest} />}
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt className="font-medium text-muted-foreground">申請者</dt>
@@ -119,11 +122,14 @@ export function ApprovalDetailPanel({
           <Button isLoading={approveIsPending} onClick={onApprove}>
             承認する
           </Button>
-          <div className="flex items-center gap-2">
-            <Input placeholder="差戻しコメント" value={comment} onChange={(e) => setComment(e.target.value)} />
-            <Button variant="secondary" isLoading={returnIsPending} disabled={!comment} onClick={() => onReturn(comment)}>
-              差戻す
-            </Button>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Input placeholder="差戻しコメント" value={comment} onChange={(e) => setComment(e.target.value)} />
+              <Button variant="secondary" isLoading={returnIsPending} disabled={!comment} onClick={() => onReturn(comment)}>
+                差戻す
+              </Button>
+            </div>
+            {of('comment') && <p className="text-xs text-destructive">{of('comment')}</p>}
           </div>
         </div>
       ) : (

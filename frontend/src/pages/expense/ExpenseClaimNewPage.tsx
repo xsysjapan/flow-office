@@ -28,6 +28,7 @@ import type { SaveExpenseItemInput } from '../../api/expenseClaims'
 import type { ExpenseCategory, ExpenseEntryPreset, ExpenseEntryPresetDefinitionItem } from '../../api/types'
 import { useAppSettings } from '../../contexts/useAppSettings'
 import { useWeek } from '../../hooks/useAttendance'
+import { fieldErrors } from '../../utils/fieldErrors'
 import {
   useAddExpenseItem,
   useAddExpenseItemsBulk,
@@ -347,6 +348,7 @@ function BulkTitleStep({
 }) {
   const [title, setTitle] = useState('')
   const suggestions = suggestedBulkTitles()
+  const { of, rest } = fieldErrors(error, ['title'])
 
   // 未確定のタイトル入力を離脱警告の判定へ伝える。この手順が閉じたら空に戻す。
   useEffect(() => {
@@ -381,7 +383,7 @@ function BulkTitleStep({
           ))}
         </div>
 
-        <FormField label="タイトル" htmlFor="bulk-claim-title" required>
+        <FormField label="タイトル" htmlFor="bulk-claim-title" required error={of('title')}>
           <Input
             id="bulk-claim-title"
             placeholder="例: 2026年7月分交通費"
@@ -390,7 +392,7 @@ function BulkTitleStep({
           />
         </FormField>
 
-        {error !== null && error !== undefined && <ErrorMessage error={error} />}
+        {rest !== null && rest !== undefined && <ErrorMessage error={rest} />}
         <FormActions>
           <Button disabled={!title.trim()} isLoading={isSubmitting} onClick={() => onSubmit(title.trim())}>
             次へ
@@ -697,7 +699,7 @@ function ExpenseClaimNewContent() {
       <BulkTitleStep
         onDraftChange={setBulkTitleDraft}
         onBack={() => void handleClearEntryMode()}
-        onSubmit={(title) => void handleStartBulkClaim(title)}
+        onSubmit={(title) => void handleStartBulkClaim(title).catch(() => undefined)}
         isSubmitting={createClaim.isPending || startClaimTitle.isPending}
         error={createClaim.error ?? startClaimTitle.error}
       />
@@ -723,7 +725,7 @@ function ExpenseClaimNewContent() {
             onApproverChange={setApproverUserId}
             updateItem={updateItem}
             deleteItem={deleteItem}
-            onSubmit={() => void handleSubmit()}
+            onSubmit={() => void handleSubmit().catch(() => undefined)}
             onDeleteClaim={() => {
               deleteClaimMutation.mutate(claim.id, { onSuccess: navigateAfterDelete })
             }}
@@ -740,6 +742,10 @@ function ExpenseClaimNewContent() {
   // entry_modeは変えず、どちらの画面を出すかだけをここで振り分ける(下書き再開時など
   // entryModeが未確定の場合は、まとめて登録時と同じ表形式を既定にする)。
   const showBatchTable = selectedCategory.entry_mode === 'batch' && entryMode !== 'individual'
+
+  // 1件入力フォーム(batchの表形式ではない側)の項目エラー。フォームが描く項目と同じ条件で振り分ける。
+  const addItemErrors = fieldErrors(addItem.error, ['usage_date', 'amount', 'payment_bearer'])
+  const receiptErrors = fieldErrors(uploadAttachment.error, ['file'])
 
   return (
     <div className="flex flex-col gap-6">
@@ -797,8 +803,8 @@ function ExpenseClaimNewContent() {
           </>
         ) : (
           <>
-            {addItem.error && <ErrorMessage error={addItem.error} />}
-            {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
+            {addItemErrors.rest != null && <ErrorMessage error={addItemErrors.rest} />}
+            {receiptErrors.rest != null && <ErrorMessage error={receiptErrors.rest} />}
 
             <div className="mb-4">
               <SinglePresetPicker
@@ -814,11 +820,17 @@ function ExpenseClaimNewContent() {
               fieldSet={fieldSetForCategory(selectedCategory)}
               categoryId={selectedCategory.id}
               fieldDefinitions={selectedCategory.field_definitions}
-              onSubmit={(input, receiptFile) => void handleSaveSingleItem(input, receiptFile)}
+              onSubmit={handleSaveSingleItem}
               isSubmitting={createClaim.isPending || addItem.isPending || uploadAttachment.isPending}
               presetItem={singlePresetItem}
               presetApplyToken={singlePresetToken}
               onDirtyChange={setSingleFormDirty}
+              errors={{
+                usage_date: addItemErrors.of('usage_date'),
+                amount: addItemErrors.of('amount'),
+                payment_bearer: addItemErrors.of('payment_bearer'),
+                file: receiptErrors.of('file'),
+              }}
             />
           </>
         )}
@@ -832,7 +844,7 @@ function ExpenseClaimNewContent() {
           onApproverChange={setApproverUserId}
           updateItem={updateItem}
           deleteItem={deleteItem}
-          onSubmit={() => void handleSubmit()}
+          onSubmit={() => void handleSubmit().catch(() => undefined)}
           submitClaim={submitClaim}
           onDeleteClaim={() => {
             deleteClaimMutation.mutate(claim.id, { onSuccess: navigateAfterDelete })
@@ -911,6 +923,10 @@ function SavedItemsAndSubmit({
   const period =
     claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '対象期間未確定'
   const updateTitle = useUpdateExpenseClaimTitle()
+  const titleErrors = fieldErrors(updateTitle.error, ['title'])
+  const updateItemErrors = fieldErrors(updateItem.error, ['commuting_deduction_amount'])
+  // 承認者の入力は承認が必要な設定のときだけ描く。
+  const submitErrors = fieldErrors(submitClaim.error, approvalRequired ? ['approver_user_id'] : [])
   const [titleInput, setTitleInput] = useState(claim.title ?? '')
   // 「個別に経費登録」では明細保存後にタイトルが自動提案される。ユーザーが自分で編集を
   // 始めるまでは、そのバックグラウンド更新をこの入力欄に反映し続ける。
@@ -923,7 +939,7 @@ function SavedItemsAndSubmit({
     <>
       <Card title="申請タイトル(任意)">
         <FormLayout>
-          <FormField label="申請タイトル" htmlFor="claim-title">
+          <FormField label="申請タイトル" htmlFor="claim-title" error={titleErrors.of('title')}>
             <Input
               id="claim-title"
               placeholder="例: 7月分の立替経費、大阪出張分"
@@ -934,7 +950,7 @@ function SavedItemsAndSubmit({
               }}
             />
           </FormField>
-          {updateTitle.error && <ErrorMessage error={updateTitle.error} />}
+          {titleErrors.rest != null && <ErrorMessage error={titleErrors.rest} />}
           <FormActions>
             <Button
               isLoading={updateTitle.isPending}
@@ -958,7 +974,7 @@ function SavedItemsAndSubmit({
       </Card>
 
       <Card title={`保存済みの明細(${claim.items.length}件・対象期間: ${period})`}>
-        {updateItem.error && <ErrorMessage error={updateItem.error} />}
+        {updateItemErrors.rest != null && <ErrorMessage error={updateItemErrors.rest} />}
         {deleteItem.error && <ErrorMessage error={deleteItem.error} />}
         {claim.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">保存済みの明細はまだありません。上のフォームから追加してください。</p>
@@ -1040,6 +1056,9 @@ function SavedItemsAndSubmit({
                           }
                         />
                       )}
+                      {updateItem.variables?.itemId === item.id && updateItemErrors.of('commuting_deduction_amount') && (
+                        <p className="text-xs text-destructive">{updateItemErrors.of('commuting_deduction_amount')}</p>
+                      )}
                     </TableCell>
                     <TableCell>
                       <AttachmentPanel ownerType="expense_item" ownerId={item.id} required={requiresReceipt} compact />
@@ -1069,7 +1088,7 @@ function SavedItemsAndSubmit({
       <Card title="申請する">
         <FormLayout>
           {approvalRequired && (
-            <FormField label="承認者" htmlFor="approver" required>
+            <FormField label="承認者" htmlFor="approver" required error={submitErrors.of('approver_user_id')}>
               <UserPicker id="approver" value={approverUserId} onChange={onApproverChange} />
             </FormField>
           )}
@@ -1078,7 +1097,7 @@ function SavedItemsAndSubmit({
               現在の設定では経費精算の申請に承認は不要です。申請すると同時に確定します。
             </p>
           )}
-          {submitClaim.error && <ErrorMessage error={submitClaim.error} />}
+          {submitErrors.rest != null && <ErrorMessage error={submitErrors.rest} />}
           {deleteClaimMutation.error && <ErrorMessage error={deleteClaimMutation.error} />}
           <div className="flex items-center gap-3">
             <Button

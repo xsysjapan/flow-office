@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { pickDate } from '../../test-support/pickerInteractions'
@@ -405,6 +405,57 @@ describe('SingleExpenseItemForm', () => {
       await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
 
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ category_id: 4 }), null)
+    })
+  })
+
+  it('shows the given field errors under their fields', () => {
+    render(
+      <SingleExpenseItemForm
+        fieldSet="lodging"
+        categoryId={2}
+        onSubmit={vi.fn()}
+        errors={{
+          usage_date: '利用日のエラー',
+          amount: '金額のエラー',
+          payment_bearer: '支払方法のエラー',
+          file: 'ファイルのエラー',
+        }}
+      />,
+    )
+
+    expect(screen.getByLabelText('金額')).toHaveAccessibleDescription('金額のエラー')
+    expect(screen.getByLabelText('支払方法')).toHaveAccessibleDescription('支払方法のエラー')
+    expect(screen.getAllByText('利用日のエラー')).toHaveLength(1)
+    expect(screen.getAllByText('ファイルのエラー')).toHaveLength(1)
+  })
+
+  describe('送信後の入力', () => {
+    async function fillLodging() {
+      await pickDate(userEvent.setup(), '利用日', '2026-07-10')
+      await userEvent.type(screen.getByLabelText('金額'), '12000')
+      await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
+      await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+    }
+
+    it('keeps the input when onSubmit rejects (e.g. a 422)', async () => {
+      const onSubmit = vi.fn().mockRejectedValue(new Error('422'))
+      render(<SingleExpenseItemForm fieldSet="lodging" categoryId={2} onSubmit={onSubmit} />)
+
+      await fillLodging()
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+      expect(screen.getByLabelText('金額')).toHaveValue(12000)
+      expect(screen.getByLabelText('宿泊先名')).toHaveValue('ホテルABC')
+    })
+
+    it('clears the input when onSubmit resolves', async () => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined)
+      render(<SingleExpenseItemForm fieldSet="lodging" categoryId={2} onSubmit={onSubmit} />)
+
+      await fillLodging()
+
+      await waitFor(() => expect(screen.getByLabelText('宿泊先名')).toHaveValue(''))
+      expect(screen.getByLabelText('金額')).toHaveValue(null)
     })
   })
 })
