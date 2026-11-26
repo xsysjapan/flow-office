@@ -16,7 +16,7 @@ export function ErrorMessage({ error, fallback = '予期しないエラーが発
       <CircleAlert />
       <AlertDescription>
         <p>{message}</p>
-        {fieldErrors && (
+        {fieldErrors && Object.keys(fieldErrors).length > 0 && (
           <ul className="list-disc pl-4">
             {Object.entries(fieldErrors).map(([field, messages]) => (
               <li key={field}>{messages.join(' ')}</li>

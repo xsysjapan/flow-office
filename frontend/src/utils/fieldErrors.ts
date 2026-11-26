@@ -23,3 +23,54 @@ export function nonFieldError(error: unknown, knownKeys: readonly string[]): Err
   if (Object.keys(unknown).length === 0) return null
   return new ApiError(error.status, error.message, unknown, error.code)
 }
+
+const SUBMIT_ERROR_HEADING = '入力内容を確認してください。'
+
+/** `fields`のパターン(`*`は数字だけの1区切り)をキーに照合する。 */
+function matchesPattern(pattern: string, key: string): boolean {
+  if (!pattern.includes('*')) return pattern === key
+  const p = pattern.split('.')
+  const k = key.split('.')
+  if (p.length !== k.length) return false
+  return p.every((seg, i) => (seg === '*' ? /^\d+$/.test(k[i]) : seg === k[i]))
+}
+
+export interface FieldErrors<K extends string> {
+  /** 完全一致のキーの最初のメッセージ。 */
+  of: (key: K) => string | undefined
+  /** `{prefix}.{index}.{key}`(`key`省略で`{prefix}.{index}`)の最初のメッセージ。 */
+  ofRow: (prefix: string, index: number, key?: string) => string | undefined
+  /** `{prefix}`と`{prefix}.{数字}`のメッセージ全部(重複は除く)。 */
+  ofAny: (prefix: string) => string[]
+  /** 項目に出さないキーだけを残したエラー(`ErrorMessage`に渡す)。 */
+  rest: unknown
+}
+
+/**
+ * 422の項目エラーを項目の下へ振り分ける(`ui-interaction-patterns` §2.19)。
+ * `fields`は項目に出すキー。`{prefix}.*.{key}`・`{prefix}.*`を書ける(`*`は数字1区切り)。
+ */
+export function fieldErrors<K extends string>(error: unknown, fields: readonly K[]): FieldErrors<K> {
+  const errors = error instanceof ApiError ? (error.errors ?? {}) : {}
+  const first = (key: string) => errors[key]?.[0]
+
+  let rest: unknown = error ?? null
+  if (error instanceof ApiError && error.status === 422 && error.errors) {
+    const remaining = Object.fromEntries(
+      Object.entries(error.errors).filter(([key]) => !fields.some((f) => matchesPattern(f, key))),
+    )
+    rest = new ApiError(error.status, SUBMIT_ERROR_HEADING, remaining, error.code)
+  }
+
+  return {
+    of: (key) => first(key),
+    ofRow: (prefix, index, key) => first(key === undefined ? `${prefix}.${index}` : `${prefix}.${index}.${key}`),
+    ofAny: (prefix) => {
+      const messages = Object.entries(errors)
+        .filter(([key]) => key === prefix || matchesPattern(`${prefix}.*`, key))
+        .flatMap(([, list]) => list)
+      return [...new Set(messages)]
+    },
+    rest,
+  }
+}

@@ -18,6 +18,12 @@ describe('ErrorMessage', () => {
     expect(screen.getByText('タイトルは必須です。')).toBeInTheDocument()
   })
 
+  it('shows only the heading when errors is empty', () => {
+    render(<ErrorMessage error={new ApiError(422, '入力内容を確認してください。', {})} />)
+    expect(screen.getByRole('alert')).toHaveTextContent('入力内容を確認してください。')
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  })
+
   it('shows the message from a plain Error', () => {
     render(<ErrorMessage error={new Error('通信エラー')} />)
     expect(screen.getByRole('alert')).toHaveTextContent('通信エラー')
