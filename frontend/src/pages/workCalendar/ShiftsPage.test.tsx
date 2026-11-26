@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { pickYearMonth } from '../../test-support/pickerInteractions'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as employeeRotationAssignmentsApi from '../../api/employeeRotationAssignments'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import * as rotationPatternsApi from '../../api/rotationPatterns'
@@ -516,4 +517,237 @@ describe('ShiftsPage', () => {
     )
     expect(await screen.findByText('30件生成しました。(実績・締め済み・個別上書きのため1件をスキップしました)')).toBeInTheDocument()
   }, 15000)
+
+  describe('422 field errors', () => {
+    const shiftWorkStyle: WorkStyle = { ...workStyle, id: 'work-style-2', code: 'shift-3', name: '3交代制', is_shift_based: true }
+    const aShift: ShiftPattern = {
+      id: 'shift-pattern-1',
+      code: 'a-shift',
+      name: 'A勤',
+      start_time: '06:00',
+      end_time: '14:00',
+      crosses_midnight: false,
+      break_minutes: 45,
+      break_start_time: null,
+      break_end_time: null,
+      prescribed_work_minutes: 435,
+    }
+    const rotationPattern: RotationPattern = {
+      id: 'rotation-pattern-1',
+      work_style_id: 'work-style-2',
+      name: '2交代3班ローテーション',
+      cycle_length: 1,
+      items: [{ sequence: 0, shift_pattern_id: 'shift-pattern-1', shift_pattern_name: 'A勤', shift_pattern_code: 'a-shift' }],
+    }
+
+    const unprocessable = (errors: Record<string, string[]>) =>
+      new ApiError(422, '最初のエラーの文です。', { ...errors, unknown_key: ['その他のエラー'] })
+
+    async function pickTargetUser(label: string) {
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
+        data: [targetUser],
+        meta: { current_page: 1, last_page: 1, total: 1 },
+        links: { next: null, prev: null },
+      })
+      await userEvent.click(screen.getByRole('combobox', { name: label }))
+      await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+      await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    }
+
+    async function expectEachOnce(messages: string[]) {
+      for (const message of [...messages, 'その他のエラー']) {
+        expect(await screen.findAllByText(message)).toHaveLength(1)
+      }
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+    }
+
+    it('shows the shift generation errors under each field', async () => {
+      const messages = { user_id: ['社員のエラー'], work_style_id: ['勤務形態のエラー'], from: ['開始のエラー'], to: ['終了のエラー'] }
+      vi.spyOn(employeeShiftAssignmentsApi, 'generateShiftAssignments').mockRejectedValue(unprocessable(messages))
+      vi.spyOn(employeeShiftAssignmentsApi, 'fetchShiftAssignments').mockResolvedValue([])
+      renderPage()
+      await screen.findByRole('heading', { name: 'シフト生成・確認' })
+
+      await pickTargetUser('対象社員')
+      await userEvent.selectOptions(screen.getByLabelText('勤務形態'), '標準勤務')
+      await pickDate(userEvent.setup(), '開始日', '2026-08-01')
+      await pickDate(userEvent.setup(), '終了日', '2026-08-31')
+      await userEvent.click(screen.getByRole('button', { name: '生成する' }))
+
+      await expectEachOnce(Object.values(messages).flat())
+    }, 15000)
+
+    it('shows the weekly pattern errors under each field and weekday row', async () => {
+      vi.spyOn(employeeShiftAssignmentsApi, 'generatePatternShiftAssignments').mockRejectedValue(
+        unprocessable({
+          user_id: ['社員のエラー'],
+          work_style_id: ['勤務形態のエラー'],
+          from: ['開始のエラー'],
+          to: ['終了のエラー'],
+          overwrite_mode: ['再生成のエラー'],
+          'weekly_pattern.1.start_time': ['月曜の開始のエラー'],
+          'weekly_pattern.2.break_minutes': ['火曜の休憩のエラー'],
+        }),
+      )
+      renderPage()
+      await screen.findByRole('heading', { name: '週次の一括入力' })
+
+      await pickTargetUser('対象社員(週次)')
+      await userEvent.selectOptions(screen.getByLabelText('勤務形態(週次)'), '標準勤務')
+      await pickDate(userEvent.setup(), '適用開始日', '2026-08-01')
+      await pickDate(userEvent.setup(), '適用終了日', '2026-08-31')
+      await userEvent.click(screen.getByRole('button', { name: '週次パターンで確定する' }))
+
+      await expectEachOnce([
+        '社員のエラー',
+        '勤務形態のエラー',
+        '開始のエラー',
+        '終了のエラー',
+        '再生成のエラー',
+        '月曜の開始のエラー',
+        '火曜の休憩のエラー',
+      ])
+    }, 15000)
+
+    it('shows the monthly pattern errors under each field, weekday row and enabled day', async () => {
+      vi.spyOn(employeeShiftAssignmentsApi, 'generatePatternShiftAssignments').mockRejectedValue(
+        unprocessable({
+          user_id: ['社員のエラー'],
+          work_style_id: ['勤務形態のエラー'],
+          from: ['開始のエラー'],
+          overwrite_mode: ['再生成のエラー'],
+          'weekly_pattern.1.end_time': ['月曜の終了のエラー'],
+          'day_overrides.2026-08-03.start_time': ['3日の開始のエラー'],
+        }),
+      )
+      renderPage()
+      await screen.findByRole('heading', { name: '月次の一括入力(日単位の個別設定つき)' })
+
+      await pickTargetUser('対象社員(月次)')
+      await userEvent.selectOptions(screen.getByLabelText('勤務形態(月次)'), '標準勤務')
+      await pickYearMonth(userEvent.setup(), '対象年月(月次パターン)', '2026-08')
+      await userEvent.click(await screen.findByRole('checkbox', { name: '2026-08-03(月)' }))
+      await userEvent.click(screen.getByRole('button', { name: '月次パターンで確定する' }))
+
+      await expectEachOnce([
+        '社員のエラー',
+        '勤務形態のエラー',
+        '開始のエラー',
+        '再生成のエラー',
+        '月曜の終了のエラー',
+        '3日の開始のエラー',
+      ])
+    }, 15000)
+
+    it('shows the shift pattern creation errors under each field', async () => {
+      const messages = {
+        code: ['コードのエラー'],
+        name: ['名称のエラー'],
+        start_time: ['開始のエラー'],
+        end_time: ['終了のエラー'],
+        crosses_midnight: ['日跨ぎのエラー'],
+        break_minutes: ['休憩のエラー'],
+        break_start_time: ['休憩開始のエラー'],
+        break_end_time: ['休憩終了のエラー'],
+        prescribed_work_minutes: ['所定のエラー'],
+      }
+      vi.spyOn(shiftPatternsApi, 'createShiftPattern').mockRejectedValue(unprocessable(messages))
+      renderPage()
+      await screen.findByRole('heading', { name: 'シフトパターン' })
+
+      await userEvent.type(screen.getByLabelText('パターンコード'), 'x')
+      await userEvent.type(screen.getByLabelText('パターン名称'), 'y')
+      await userEvent.click(screen.getByRole('button', { name: 'シフトパターンを作成する' }))
+
+      await expectEachOnce(Object.values(messages).flat())
+    }, 15000)
+
+    it('shows the rotation pattern errors under the fields, the cycle row and the list', async () => {
+      vi.spyOn(rotationPatternsApi, 'createRotationPattern').mockRejectedValue(
+        unprocessable({
+          work_style_id: ['働き方のエラー'],
+          name: ['名称のエラー'],
+          items: ['周期のエラー'],
+          'items.0': ['周期0のエラー'],
+          'items.0.shift_pattern_id': ['1日目のエラー'],
+        }),
+      )
+      renderPage({ workStyles: [workStyle, shiftWorkStyle], shiftPatterns: [aShift] })
+      await screen.findByRole('heading', { name: 'ローテーションパターン' })
+      const workStyleSelect = screen.getByLabelText('対象の働き方(シフト制のみ)')
+      await within(workStyleSelect).findByRole('option', { name: '3交代制' })
+
+      await userEvent.selectOptions(workStyleSelect, '3交代制')
+      await userEvent.type(screen.getByLabelText('ローテーションパターン名称'), 'r')
+      await userEvent.selectOptions(screen.getByLabelText('1日目のシフトパターン'), 'A勤')
+      await userEvent.click(screen.getByRole('button', { name: 'ローテーションパターンを作成する' }))
+
+      await expectEachOnce(['働き方のエラー', '名称のエラー', '周期のエラー', '周期0のエラー', '1日目のエラー'])
+    }, 15000)
+
+    it('shows the rotation assignment, preview and generation errors under their fields', async () => {
+      vi.spyOn(employeeRotationAssignmentsApi, 'assignEmployeeRotation').mockRejectedValue(
+        unprocessable({
+          user_id: ['社員のエラー'],
+          rotation_pattern_id: ['パターンのエラー'],
+          rotation_start_date: ['開始日のエラー'],
+          rotation_start_position: ['開始位置のエラー'],
+        }),
+      )
+      vi.spyOn(rotationPatternsApi, 'previewRotationPattern').mockRejectedValue(
+        unprocessable({ from: ['生成開始のエラー'], to: ['生成終了のエラー'] }),
+      )
+      vi.spyOn(employeeRotationAssignmentsApi, 'generateRotationShiftAssignments').mockRejectedValue(
+        unprocessable({ overwrite_mode: ['再生成のエラー'] }),
+      )
+      renderPage({ rotationPatterns: [rotationPattern] })
+      await screen.findByRole('heading', { name: 'ローテーションの割当・生成' })
+
+      await pickTargetUser('対象社員(ローテーション)')
+      await userEvent.selectOptions(screen.getByLabelText('ローテーションパターン'), '2交代3班ローテーション')
+      await pickDate(userEvent.setup(), 'ローテーション開始日', '2026-08-01')
+      await userEvent.click(screen.getByRole('button', { name: 'ローテーションを割り当てる' }))
+      await pickDate(userEvent.setup(), '生成開始日', '2026-08-01')
+      await pickDate(userEvent.setup(), '生成終了日', '2026-08-02')
+      await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
+      await userEvent.click(screen.getByRole('button', { name: '勤務予定を生成する' }))
+
+      for (const message of [
+        '社員のエラー',
+        'パターンのエラー',
+        '開始日のエラー',
+        '開始位置のエラー',
+        '生成開始のエラー',
+        '生成終了のエラー',
+        '再生成のエラー',
+      ]) {
+        expect(await screen.findAllByText(message)).toHaveLength(1)
+      }
+      // 3つのmutationそれぞれの未知のキーが、それぞれのボタンの近くに出る。
+      expect(await screen.findAllByText('その他のエラー')).toHaveLength(3)
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(3)
+    }, 20000)
+
+    it('shows the shift board assignment errors under each field', async () => {
+      const messages = {
+        user_id: ['社員のエラー'],
+        work_style_id: ['勤務形態のエラー'],
+        work_date: ['対象日のエラー'],
+        shift_pattern_id: ['パターンのエラー'],
+        is_legal_holiday: ['法定休日のエラー'],
+      }
+      vi.spyOn(employeeShiftAssignmentsApi, 'assignShiftPatternDay').mockRejectedValue(unprocessable(messages))
+      renderPage({ workStyles: [workStyle, shiftWorkStyle], shiftPatterns: [aShift] })
+      await screen.findByRole('heading', { name: '3交代制シフト表' })
+
+      await pickTargetUser('対象社員(シフト表)')
+      await userEvent.selectOptions(screen.getByLabelText('勤務形態(シフト表)'), '3交代制')
+      await pickDate(userEvent.setup(), '対象日', '2026-08-10')
+      await userEvent.selectOptions(screen.getByLabelText('シフトパターン'), 'A勤')
+      await userEvent.click(screen.getByRole('button', { name: '割り当てる(下書き)' }))
+
+      await expectEachOnce(Object.values(messages).flat())
+    }, 15000)
+  })
 })

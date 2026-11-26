@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
 import type { PaidLeaveGrant, PaidLeaveRequest, Paginated, User } from '../../api/types'
@@ -241,6 +242,44 @@ describe('MyPaidLeavePage', () => {
     await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
 
     expect(screen.getByRole('button', { name: '申請する' })).toBeDisabled()
+  })
+
+  it('shows each 422 message once under its field and the heading above the button (hourly leave)', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        target_date: ['対象日のエラー'],
+        leave_type: ['取得単位のエラー'],
+        hours: ['取得時間のエラー'],
+        approver_user_id: ['承認者のエラー'],
+        reason: ['理由のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    )
+
+    renderPage()
+    await screen.findByText('有給申請はまだありません。')
+
+    await pickDate(userEvent.setup(), '対象日', '2026-08-10')
+    await userEvent.selectOptions(screen.getByLabelText('取得単位'), '時間休')
+    await userEvent.type(screen.getByLabelText('取得時間'), '2')
+    await userEvent.click(screen.getByLabelText('承認者'))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+    await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+
+    for (const message of [
+      '対象日のエラー',
+      '取得単位のエラー',
+      '取得時間のエラー',
+      '承認者のエラー',
+      '理由のエラー',
+      'その他のエラー',
+    ]) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
   })
 
   it('allows submitting without an approver when approval is not required', async () => {

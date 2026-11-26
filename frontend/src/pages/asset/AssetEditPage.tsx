@@ -5,6 +5,7 @@ import { BackLink } from '../../components/BackLink/BackLink'
 import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
@@ -67,17 +68,23 @@ function AssetEditForm() {
   if (!asset) return null
 
   const isValid = name.trim() !== '' && category.trim() !== ''
+  const { of, rest } = fieldErrors(updateAsset.error, ['name', 'category', 'serial_number', 'notes'] as const)
 
   async function handleSave() {
-    await updateAsset.mutateAsync({
-      id: assetId,
-      input: {
-        name,
-        category,
-        serial_number: serialNumber || null,
-        notes: notes || null,
-      },
-    })
+    try {
+      await updateAsset.mutateAsync({
+        id: assetId,
+        input: {
+          name,
+          category,
+          serial_number: serialNumber || null,
+          notes: notes || null,
+        },
+      })
+    } catch {
+      // 失敗は`updateAsset.error`として項目の下・ボタンの近くに出る。
+      return
+    }
     notify.success(`${name}を保存しました`)
     // 遷移先(詳細)が戻り先と同じ画面なら戻り先とその遷移元を引き継ぎ、違えば現在の遷移元を引き継ぐ。
     const detailPath = `/assets/${assetId}`
@@ -93,22 +100,22 @@ function AssetEditForm() {
       <BackLink />
       <Card title="備品を編集">
         <FormLayout>
-          <FormField label="名称" htmlFor="asset-edit-name" required>
+          <FormField label="名称" htmlFor="asset-edit-name" required error={of('name')}>
             <Input id="asset-edit-name" value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label="カテゴリ" htmlFor="asset-edit-category" required>
+          <FormField label="カテゴリ" htmlFor="asset-edit-category" required error={of('category')}>
             <Input id="asset-edit-category" value={category} onChange={(e) => setCategory(e.target.value)} />
           </FormField>
 
-          <FormField label="シリアル番号" htmlFor="asset-edit-serial">
+          <FormField label="シリアル番号" htmlFor="asset-edit-serial" error={of('serial_number')}>
             <Input id="asset-edit-serial" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
           </FormField>
 
-          <FormField label="備考" htmlFor="asset-edit-notes">
+          <FormField label="備考" htmlFor="asset-edit-notes" error={of('notes')}>
             <Textarea id="asset-edit-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
 
-          {updateAsset.error && <ErrorMessage error={updateAsset.error} />}
+          {rest != null && <ErrorMessage error={rest} />}
           <FormActions>
             <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? `/assets/${assetId}`, { state: backTarget?.state, replace: true })}>
               キャンセル

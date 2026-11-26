@@ -25,6 +25,7 @@ import type {
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { isWorkCalendarDaysDirty } from './workCalendarDaysDirty'
 import { useBackTarget, useKeepBackState } from '../../navigation/backState'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { cn } from '../../lib/utils'
 import { addDays, addMonths, datesInMonth } from '../../utils/weekDates'
 import {
@@ -412,6 +413,9 @@ export function WorkCalendarDaysPage() {
   const allowDailyHolidayOverride = calendar?.allows_daily_holiday_override ?? true
   const yearActionError = unpublishYear.error ?? duplicateYear.error ?? syncYearHolidayCalendar.error
 
+  // 日別の格子の値は画面が組み立てて送る(`days.{i}.*`に対応する入力欄は無い)ため、項目には出さず、まとめての表示に出す。
+  const putDaysErrors = fieldErrors(putDays.error, [] as const)
+
   const handleSave = () => {
     if (!resolvedYearId) return
 
@@ -744,7 +748,7 @@ export function WorkCalendarDaysPage() {
             )}
 
             <FormLayout>
-              {putDays.error && <ErrorMessage error={putDays.error} />}
+              {putDaysErrors.rest != null && <ErrorMessage error={putDaysErrors.rest} />}
               <FormActions>
                 <Button isLoading={putDays.isPending} disabled={dates.length === 0} onClick={handleSave}>
                   保存

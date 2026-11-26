@@ -106,7 +106,7 @@ describe('PaidLeaveGrantStepsEditor', () => {
         steps={steps}
         onChange={vi.fn()}
         statutory={statutory}
-        fieldErrors={{ 'steps.2.grant_days': ['週4日の法定最低日数は7日です。'] }}
+        rowErrors={(index) => (index === 2 ? ['週4日の法定最低日数は7日です。'] : [])}
       />,
     )
 

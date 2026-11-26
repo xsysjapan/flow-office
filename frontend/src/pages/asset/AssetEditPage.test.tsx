@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as assetApi from '../../api/asset'
 import type { Asset } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -85,5 +86,29 @@ describe('AssetEditPage', () => {
     })
     expect(navigate).toHaveBeenCalledWith('/assets/asset-1', { state: undefined })
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ThinkPad X1 Gen2を保存しました'))
+  })
+
+  it('shows each 422 message once under its field and the heading above the buttons', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)
+    vi.spyOn(assetApi, 'updateAssetDetails').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        name: ['名称のエラー'],
+        category: ['カテゴリのエラー'],
+        serial_number: ['シリアルのエラー'],
+        notes: ['備考のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    )
+
+    renderPage()
+    await screen.findByLabelText('名称')
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    for (const message of ['名称のエラー', 'カテゴリのエラー', 'シリアルのエラー', '備考のエラー', 'その他のエラー']) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+    expect(navigate).not.toHaveBeenCalled()
   })
 })

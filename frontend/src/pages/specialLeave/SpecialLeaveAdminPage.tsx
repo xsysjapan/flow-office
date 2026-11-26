@@ -21,6 +21,7 @@ import { NativeSelect } from '../../components/ui/native-select'
 import { useQueryClient } from '@tanstack/react-query'
 import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 import {
   useAdminCancelSpecialLeaveRequest,
   useCreateSpecialLeaveGrantRule,
@@ -87,6 +88,7 @@ function SpecialLeaveTypesCard() {
   const { data: types, isLoading, error } = useSpecialLeaveTypes()
   const createType = useCreateSpecialLeaveType()
   const updateType = useUpdateSpecialLeaveType()
+  const { of: typeOf, rest: typeRest } = fieldErrors(createType.error, ['name', 'requires_grant'] as const)
 
   const [name, setName] = useState('')
   const [requiresGrant, setRequiresGrant] = useState(true)
@@ -106,7 +108,7 @@ function SpecialLeaveTypesCard() {
   return (
     <Card title="特別休暇の種類">
       {error && <ErrorMessage error={error} fallback="特別休暇種別の取得に失敗しました。" />}
-      {createType.error && <ErrorMessage error={createType.error} />}
+      {typeRest != null && <ErrorMessage error={typeRest} />}
 
       {isLoading ? (
         <LoadingState />
@@ -168,7 +170,7 @@ function SpecialLeaveTypesCard() {
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        <FormField label="種類名(例: 誕生日休暇、代休)" htmlFor="special-leave-type-name">
+        <FormField label="種類名(例: 誕生日休暇、代休)" htmlFor="special-leave-type-name" error={typeOf('name')}>
           <Input id="special-leave-type-name" value={name} onChange={(e) => setName(e.target.value)} />
         </FormField>
         <Button isLoading={createType.isPending} disabled={!name} onClick={handleCreate}>
@@ -180,6 +182,7 @@ function SpecialLeaveTypesCard() {
         <Checkbox checked={requiresGrant} onCheckedChange={(checked) => setRequiresGrant(checked === true)} />
         事前の付与(残数)が必要
       </label>
+      {typeOf('requires_grant') && <p className="mt-1 text-xs text-destructive">{typeOf('requires_grant')}</p>}
       <p className="mt-1 text-xs text-muted-foreground">
         チェックを外すと、忌引・代休のように事前の付与が無くても申請できる種類になります。
       </p>
@@ -266,6 +269,17 @@ function SpecialLeaveGrantRulesCard() {
   const { data: types } = useSpecialLeaveTypes()
   const { data: rules, isLoading, error } = useSpecialLeaveGrantRules()
   const createRule = useCreateSpecialLeaveGrantRule()
+  const { of, ofRow, rest } = fieldErrors(createRule.error, [
+    'special_leave_type_id',
+    'name',
+    'min_attendance_rate',
+    'first_grant_after_months',
+    'grant_cycle_months',
+    'expires_after_months',
+    'is_active',
+    'steps.*.continuous_service_months',
+    'steps.*.grant_days',
+  ] as const)
   const [expandedRuleIds, setExpandedRuleIds] = useState<Set<number>>(new Set())
 
   const toggleExpanded = (ruleId: number) => {
@@ -329,7 +343,7 @@ function SpecialLeaveGrantRulesCard() {
   return (
     <Card title="自動付与ルール">
       {error && <ErrorMessage error={error} fallback="付与ルールの取得に失敗しました。" />}
-      {createRule.error && <ErrorMessage error={createRule.error} />}
+      {rest != null && <ErrorMessage error={rest} />}
 
       {isLoading ? (
         <LoadingState />
@@ -380,7 +394,7 @@ function SpecialLeaveGrantRulesCard() {
       <h3 className="mb-3 text-sm font-semibold text-foreground">新しい自動付与ルールを作成</h3>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="特別休暇の種類" htmlFor="special-leave-rule-type" required>
+        <FormField label="特別休暇の種類" htmlFor="special-leave-rule-type" required error={of('special_leave_type_id')}>
           <NativeSelect
             id="special-leave-rule-type"
             value={specialLeaveTypeId ?? ''}
@@ -395,11 +409,11 @@ function SpecialLeaveGrantRulesCard() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="ルール名" htmlFor="special-leave-rule-name" required>
+        <FormField label="ルール名" htmlFor="special-leave-rule-name" required error={of('name')}>
           <Input id="special-leave-rule-name" value={ruleName} onChange={(e) => setRuleName(e.target.value)} />
         </FormField>
 
-        <FormField label="最低出勤率" htmlFor="special-leave-rule-min-attendance-rate">
+        <FormField label="最低出勤率" htmlFor="special-leave-rule-min-attendance-rate" error={of('min_attendance_rate')}>
           <Input
             id="special-leave-rule-min-attendance-rate"
             type="number"
@@ -408,7 +422,11 @@ function SpecialLeaveGrantRulesCard() {
           />
         </FormField>
 
-        <FormField label="初回付与までの月数" htmlFor="special-leave-rule-first-grant-after-months">
+        <FormField
+          label="初回付与までの月数"
+          htmlFor="special-leave-rule-first-grant-after-months"
+          error={of('first_grant_after_months')}
+        >
           <Input
             id="special-leave-rule-first-grant-after-months"
             type="number"
@@ -417,7 +435,11 @@ function SpecialLeaveGrantRulesCard() {
           />
         </FormField>
 
-        <FormField label="付与サイクル(月数)" htmlFor="special-leave-rule-grant-cycle-months">
+        <FormField
+          label="付与サイクル(月数)"
+          htmlFor="special-leave-rule-grant-cycle-months"
+          error={of('grant_cycle_months')}
+        >
           <Input
             id="special-leave-rule-grant-cycle-months"
             type="number"
@@ -426,7 +448,11 @@ function SpecialLeaveGrantRulesCard() {
           />
         </FormField>
 
-        <FormField label="失効までの月数(空欄なら失効しない)" htmlFor="special-leave-rule-expires-after-months">
+        <FormField
+          label="失効までの月数(空欄なら失効しない)"
+          htmlFor="special-leave-rule-expires-after-months"
+          error={of('expires_after_months')}
+        >
           <Input
             id="special-leave-rule-expires-after-months"
             type="number"
@@ -440,6 +466,7 @@ function SpecialLeaveGrantRulesCard() {
         <Checkbox checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
         有効
       </label>
+      {of('is_active') && <p className="-mt-2 mb-4 text-xs text-destructive">{of('is_active')}</p>}
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <FormField label="継続勤務(か月)" htmlFor="special-leave-rule-step-months">
@@ -468,6 +495,13 @@ function SpecialLeaveGrantRulesCard() {
           {steps.map((step, index) => (
             <li key={index}>
               継続勤務{step.continuous_service_months}か月→{step.grant_days}日
+              {[ofRow('steps', index, 'continuous_service_months'), ofRow('steps', index, 'grant_days')]
+                .filter(Boolean)
+                .map((message) => (
+                  <span key={message} className="ml-2 text-xs text-destructive">
+                    {message}
+                  </span>
+                ))}
             </li>
           ))}
         </ul>

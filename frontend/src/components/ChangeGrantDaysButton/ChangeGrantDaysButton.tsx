@@ -4,6 +4,7 @@ import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { FormField } from '../FormField/FormField'
 import { notify } from '../../lib/notify'
 import { Input } from '../ui/input'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 export interface ChangeGrantDaysButtonProps {
   id: string
@@ -47,6 +48,7 @@ export function ChangeGrantDaysButton({
   const min = minGrantDays(usedDays)
   const parsed = days.trim() === '' ? Number.NaN : Number(days)
   const invalid = Number.isNaN(parsed) || parsed < min
+  const { of, rest } = fieldErrors(error, ['granted_days', 'reason'] as const)
 
   if (disabled) {
     return (
@@ -66,7 +68,7 @@ export function ChangeGrantDaysButton({
       confirmVariant="primary"
       confirmDisabled={invalid}
       isPending={isPending}
-      error={error}
+      error={rest}
       onConfirm={async () => {
         await onChange(parsed, reason || undefined)
         notify.success(`${grantedOn}付与の付与日数を${parsed}日に変更しました`)
@@ -78,7 +80,7 @@ export function ChangeGrantDaysButton({
         }
       }}
     >
-      <FormField label="新しい付与日数" htmlFor={`${id}-days`} required>
+      <FormField label="新しい付与日数" htmlFor={`${id}-days`} required error={of('granted_days')}>
         <Input
           id={`${id}-days`}
           type="number"
@@ -88,7 +90,7 @@ export function ChangeGrantDaysButton({
           onChange={(e) => setDays(e.target.value)}
         />
       </FormField>
-      <FormField label="変更理由(任意)" htmlFor={`${id}-reason`}>
+      <FormField label="変更理由(任意)" htmlFor={`${id}-reason`} error={of('reason')}>
         <Input id={`${id}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} />
       </FormField>
     </ConfirmActionDialog>

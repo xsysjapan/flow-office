@@ -44,6 +44,7 @@ import {
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { isWorkCalendarSettingsDirty, type WorkCalendarSettingsValues } from './workCalendarSettingsDirty'
 import { useForwardState } from '../../navigation/backState'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 const SYNC_STATUS_LABEL: Record<string, string> = {
   pending: '未同期',
@@ -135,6 +136,26 @@ function formatSyncSummary(summary: HolidayCalendarSyncSummary): string {
  * Reason: 外部iCalendarソースの取り込み自体が「登録」と呼ばれる業務用語のため
  * (ui-interaction-patterns SKILL.md §2.7の例外)。
  */
+/** 基本設定の保存で項目の下に出す422のキー。 */
+const SETTINGS_ERROR_KEYS = [
+  'name',
+  'week_starts_on',
+  'fiscal_year_start_month',
+  'fiscal_year_start_day',
+  'weekday_holiday_pattern',
+  'allows_daily_holiday_override',
+] as const
+
+/** 休日ソースの割当で項目の下に出す422のキー。 */
+const SOURCE_ASSIGN_ERROR_KEYS = ['holiday_calendar_source_id'] as const
+
+/** 休日ソースの登録・編集(展開したときだけ描く)で項目の下に出す422のキー。 */
+const SOURCE_FORM_ERROR_KEYS = ['name'] as const
+const SOURCE_URL_ERROR_KEYS = ['ics_url'] as const
+const SOURCE_FILE_ERROR_KEYS = ['ics_file'] as const
+
+const YEAR_ERROR_KEYS = ['fiscal_year', 'starts_on', 'ends_on'] as const
+
 export function WorkCalendarDetailPage() {
   const forwardState = useForwardState()
   const { id: companyCalendarId } = useParams<{ id: string }>()
@@ -264,6 +285,26 @@ export function WorkCalendarDetailPage() {
         <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
       </div>
     )
+
+  const settingsErrors = fieldErrors(
+    calendarUpdateTarget === 'settings' ? updateCalendar.error : null,
+    SETTINGS_ERROR_KEYS,
+  )
+  const assignErrors = fieldErrors(
+    calendarUpdateTarget === 'source' ? updateCalendar.error : null,
+    SOURCE_ASSIGN_ERROR_KEYS,
+  )
+  const createSourceErrors = fieldErrors(createSource.error, [
+    ...(isRegisteringSource ? SOURCE_FORM_ERROR_KEYS : []),
+    ...(isRegisteringSource && newSourceMode === 'url' ? SOURCE_URL_ERROR_KEYS : []),
+    ...(isRegisteringSource && newSourceMode === 'upload' ? SOURCE_FILE_ERROR_KEYS : []),
+  ] as const)
+  const updateSourceErrors = fieldErrors(updateSource.error, [
+    ...(isEditingSource ? SOURCE_FORM_ERROR_KEYS : []),
+    ...(isEditingSource && editSourceMode === 'url' ? SOURCE_URL_ERROR_KEYS : []),
+    ...(isEditingSource && editSourceMode === 'upload' ? SOURCE_FILE_ERROR_KEYS : []),
+  ] as const)
+  const yearErrors = fieldErrors(createYear.error, YEAR_ERROR_KEYS)
 
   const handleSaveSettings = () => {
     const sentSettings = currentSettings
@@ -439,11 +480,11 @@ export function WorkCalendarDetailPage() {
       <Card title={calendar.name}>
         <FormLayout>
           <FormSection title="基本設定">
-          <FormField label="カレンダー名" htmlFor="company-calendar-name" required>
+          <FormField label="カレンダー名" htmlFor="company-calendar-name" required error={settingsErrors.of('name')}>
             <Input id="company-calendar-name" value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
 
-          <FormField label="週の開始日(0=日曜)" htmlFor="company-calendar-week-starts-on">
+          <FormField label="週の開始日(0=日曜)" htmlFor="company-calendar-week-starts-on" error={settingsErrors.of('week_starts_on')}>
             <Input
               id="company-calendar-week-starts-on"
               type="number"
@@ -455,7 +496,11 @@ export function WorkCalendarDetailPage() {
           </FormField>
 
           <FormRow>
-            <FormField label="年度開始月" htmlFor="company-calendar-fiscal-year-start-month">
+            <FormField
+              label="年度開始月"
+              htmlFor="company-calendar-fiscal-year-start-month"
+              error={settingsErrors.of('fiscal_year_start_month')}
+            >
               <Input
                 id="company-calendar-fiscal-year-start-month"
                 type="number"
@@ -466,7 +511,11 @@ export function WorkCalendarDetailPage() {
               />
             </FormField>
 
-            <FormField label="年度開始日" htmlFor="company-calendar-fiscal-year-start-day">
+            <FormField
+              label="年度開始日"
+              htmlFor="company-calendar-fiscal-year-start-day"
+              error={settingsErrors.of('fiscal_year_start_day')}
+            >
               <Input
                 id="company-calendar-fiscal-year-start-day"
                 type="number"
@@ -507,6 +556,9 @@ export function WorkCalendarDetailPage() {
                 </FormField>
               ))}
           </FormRow>
+          {settingsErrors.of('weekday_holiday_pattern') && (
+            <p className="mb-4 text-xs text-destructive">{settingsErrors.of('weekday_holiday_pattern')}</p>
+          )}
           <div className="mb-4">
             <label className="flex items-center gap-2 text-sm text-foreground">
               <Checkbox
@@ -519,11 +571,14 @@ export function WorkCalendarDetailPage() {
             <p className="mt-1 text-xs text-muted-foreground">
               この設定を有効にすると、会社カレンダーの各日ごとに休日区分を個別に変更できるようになります。
             </p>
+            {settingsErrors.of('allows_daily_holiday_override') && (
+              <p className="mt-1 text-xs text-destructive">{settingsErrors.of('allows_daily_holiday_override')}</p>
+            )}
           </div>
           </FormSection>
 
           {!name && <p className="mb-2 text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
-          {updateCalendar.error && calendarUpdateTarget === 'settings' && <ErrorMessage error={updateCalendar.error} />}
+          {settingsErrors.rest != null && <ErrorMessage error={settingsErrors.rest} />}
           <FormActions>
             <Button isLoading={updateCalendar.isPending} disabled={!name} onClick={handleSaveSettings}>
               基本設定を保存
@@ -543,7 +598,7 @@ export function WorkCalendarDetailPage() {
             </DialogHeader>
 
             <div>
-              <FormField label="年度" htmlFor="year-fiscal-year" required>
+              <FormField label="年度" htmlFor="year-fiscal-year" required error={yearErrors.of('fiscal_year')}>
                 <Input
                   id="year-fiscal-year"
                   type="number"
@@ -553,7 +608,7 @@ export function WorkCalendarDetailPage() {
               </FormField>
 
               <FormRow>
-                <FormField label="開始日" htmlFor="year-starts-on" required>
+                <FormField label="開始日" htmlFor="year-starts-on" required error={yearErrors.of('starts_on')}>
                   <DatePicker
                     id="year-starts-on"
                     value={yearStartsOn || undefined}
@@ -561,7 +616,7 @@ export function WorkCalendarDetailPage() {
                   />
                 </FormField>
 
-                <FormField label="終了日" htmlFor="year-ends-on" required>
+                <FormField label="終了日" htmlFor="year-ends-on" required error={yearErrors.of('ends_on')}>
                   <DatePicker
                     id="year-ends-on"
                     value={yearEndsOn || undefined}
@@ -575,7 +630,7 @@ export function WorkCalendarDetailPage() {
               年度を入力すると、このカレンダーの年度開始月日(設定は「基本設定」から変更できます)から開始日・終了日を自動計算します。開始日・終了日は個別に変更できます。
             </p>
 
-            {createYear.error && <ErrorMessage error={createYear.error} />}
+            {yearErrors.rest != null && <ErrorMessage error={yearErrors.rest} />}
 
             <DialogFooter>
               <Button variant="secondary" onClick={() => handleYearModalOpenChange(false)}>
@@ -637,7 +692,11 @@ export function WorkCalendarDetailPage() {
         ) : (
           <div className="flex flex-col gap-4">
             <FormLayout>
-            <FormField label="使用する休日iCalendarソース" htmlFor="holiday-source-select">
+            <FormField
+              label="使用する休日iCalendarソース"
+              htmlFor="holiday-source-select"
+              error={assignErrors.of('holiday_calendar_source_id')}
+            >
               <NativeSelect
                 id="holiday-source-select"
                 value={selectedSourceId}
@@ -661,7 +720,7 @@ export function WorkCalendarDetailPage() {
             ) : (
               <div className="mb-4">
                 <div>
-                  <FormField label="名称" htmlFor="holiday-source-name" required>
+                  <FormField label="名称" htmlFor="holiday-source-name" required error={createSourceErrors.of('name')}>
                     <Input
                       id="holiday-source-name"
                       value={newSourceName}
@@ -695,7 +754,12 @@ export function WorkCalendarDetailPage() {
                 </div>
 
                 {newSourceMode === 'url' ? (
-                  <FormField label="iCalendar URL" htmlFor="holiday-source-ics-url" required>
+                  <FormField
+                    label="iCalendar URL"
+                    htmlFor="holiday-source-ics-url"
+                    required
+                    error={createSourceErrors.of('ics_url')}
+                  >
                     <Input
                       id="holiday-source-ics-url"
                       type="url"
@@ -704,7 +768,12 @@ export function WorkCalendarDetailPage() {
                     />
                   </FormField>
                 ) : (
-                  <FormField label="iCalendarファイル" htmlFor="holiday-source-ics-file" required>
+                  <FormField
+                    label="iCalendarファイル"
+                    htmlFor="holiday-source-ics-file"
+                    required
+                    error={createSourceErrors.of('ics_file')}
+                  >
                     <Input
                       id="holiday-source-ics-file"
                       type="file"
@@ -714,7 +783,7 @@ export function WorkCalendarDetailPage() {
                   </FormField>
                 )}
 
-                {createSource.error && <ErrorMessage error={createSource.error} />}
+                {createSourceErrors.rest != null && <ErrorMessage error={createSourceErrors.rest} />}
                 <FormActions>
                   <Button variant="secondary" onClick={() => setIsRegisteringSource(false)}>
                     キャンセル
@@ -732,9 +801,7 @@ export function WorkCalendarDetailPage() {
 
             {selectedSourceId !== (calendar.holiday_calendar_source_id ?? NONE_OPTION_VALUE) && (
               <>
-                {updateCalendar.error && calendarUpdateTarget === 'source' && (
-                  <ErrorMessage error={updateCalendar.error} />
-                )}
+                {assignErrors.rest != null && <ErrorMessage error={assignErrors.rest} />}
                 <FormActions>
                   <Button isLoading={updateCalendar.isPending} onClick={handleAssignSource}>
                     このカレンダーに設定する
@@ -831,7 +898,7 @@ export function WorkCalendarDetailPage() {
                 ) : (
                   <FormLayout>
                     <div>
-                      <FormField label="名称" htmlFor="holiday-source-edit-name" required>
+                      <FormField label="名称" htmlFor="holiday-source-edit-name" required error={updateSourceErrors.of('name')}>
                         <Input
                           id="holiday-source-edit-name"
                           value={editSourceName}
@@ -865,7 +932,12 @@ export function WorkCalendarDetailPage() {
                     </div>
 
                     {editSourceMode === 'url' ? (
-                      <FormField label="iCalendar URL" htmlFor="holiday-source-edit-ics-url" required>
+                      <FormField
+                        label="iCalendar URL"
+                        htmlFor="holiday-source-edit-ics-url"
+                        required
+                        error={updateSourceErrors.of('ics_url')}
+                      >
                         <Input
                           id="holiday-source-edit-ics-url"
                           type="url"
@@ -878,7 +950,11 @@ export function WorkCalendarDetailPage() {
                         <span className="text-xs text-muted-foreground">
                           現在のファイル: {selectedSource.uploaded_ics_filename ?? '未アップロード'}
                         </span>
-                        <FormField label="iCalendarファイル(置き換え)" htmlFor="holiday-source-edit-ics-file">
+                        <FormField
+                          label="iCalendarファイル(置き換え)"
+                          htmlFor="holiday-source-edit-ics-file"
+                          error={updateSourceErrors.of('ics_file')}
+                        >
                           <Input
                             id="holiday-source-edit-ics-file"
                             type="file"
@@ -889,7 +965,7 @@ export function WorkCalendarDetailPage() {
                       </div>
                     )}
 
-                    {updateSource.error && <ErrorMessage error={updateSource.error} />}
+                    {updateSourceErrors.rest != null && <ErrorMessage error={updateSourceErrors.rest} />}
                     <FormActions>
                       <Button variant="secondary" onClick={() => setIsEditingSource(false)}>
                         キャンセル

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { PaidLeaveGrantPolicies, PaidLeaveGrantRule } from '../../api/types'
@@ -90,5 +91,41 @@ describe('PaidLeaveGrantRuleEditPage', () => {
   it('shows the statutory minimum reference for each step', async () => {
     renderPage()
     expect(await screen.findByText('(この継続勤務月数の法定最低日数: 10日)')).toBeInTheDocument()
+  })
+
+  it('shows each 422 message once under its field and on the step row, under the heading above the buttons', async () => {
+    vi.spyOn(paidLeaveApi, 'updatePaidLeaveGrantRule').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        name: ['ルール名のエラー'],
+        min_attendance_rate: ['出勤率のエラー'],
+        first_grant_after_months: ['初回のエラー'],
+        grant_cycle_months: ['サイクルのエラー'],
+        grant_cycle_type: ['付与方式のエラー'],
+        is_active: ['有効のエラー'],
+        'steps.0.grant_days': ['通常の行のエラー'],
+        'steps.0.continuous_service_months': ['月数のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    )
+    renderPage()
+
+    await screen.findByLabelText('ルール名')
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    for (const message of [
+      'ルール名のエラー',
+      '出勤率のエラー',
+      '初回のエラー',
+      'サイクルのエラー',
+      '付与方式のエラー',
+      '有効のエラー',
+      '通常の行のエラー',
+      '月数のエラー',
+      'その他のエラー',
+    ]) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
   })
 })

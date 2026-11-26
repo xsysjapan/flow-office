@@ -32,6 +32,7 @@ import { useUser } from '../../hooks/useUsers'
 import { useCreateDefaultWorkStyle, useSetDefaultWorkStyle, useWorkStyles } from '../../hooks/useWorkStyles'
 import type { WorkStyle } from '../../api/types'
 import { isValidPageParam } from '../../utils/searchParamValidators'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 /** "YYYY-MM" から、その月の1日と末日(YYYY-MM-DD)を返す。 */
 function monthBoundaries(yearMonth: string): { from: string; to: string } {
@@ -73,6 +74,12 @@ function WorkStyleOnboardingCard() {
 
   const hasDefault = (workStyles ?? []).some((style) => style.is_default)
   if (hasDefault) return null
+
+  // 内容を変更するときだけ入力欄を描く。「この設定で始める」(入力なし)のエラーは今のまま出す。
+  const { of, rest } = fieldErrors(
+    isEditing ? createDefault.error : null,
+    ['name', 'default_break_minutes', 'default_start_time', 'default_end_time'] as const,
+  )
 
   const handleStart = () => {
     createDefault.mutate({}, { onSuccess: () => notify.success('一般的な勤務設定を作成しました') })
@@ -124,11 +131,16 @@ function WorkStyleOnboardingCard() {
       ) : (
         <>
           <div>
-            <FormField label="名称" htmlFor="onboarding-work-style-name" required>
+            <FormField label="名称" htmlFor="onboarding-work-style-name" required error={of('name')}>
               <Input id="onboarding-work-style-name" value={name} onChange={(e) => setName(e.target.value)} />
             </FormField>
 
-            <FormField label="休憩(分)" htmlFor="onboarding-work-style-break-minutes" required>
+            <FormField
+              label="休憩(分)"
+              htmlFor="onboarding-work-style-break-minutes"
+              required
+              error={of('default_break_minutes')}
+            >
               <Input
                 id="onboarding-work-style-break-minutes"
                 type="number"
@@ -139,17 +151,17 @@ function WorkStyleOnboardingCard() {
             </FormField>
 
             <FormRow>
-              <FormField label="始業時刻" htmlFor="onboarding-work-style-start-time" required>
+              <FormField label="始業時刻" htmlFor="onboarding-work-style-start-time" required error={of('default_start_time')}>
                 <TimePicker id="onboarding-work-style-start-time" value={startTime} onChange={(time) => setStartTime(time ?? '')} />
               </FormField>
 
-              <FormField label="終業時刻" htmlFor="onboarding-work-style-end-time" required>
+              <FormField label="終業時刻" htmlFor="onboarding-work-style-end-time" required error={of('default_end_time')}>
                 <TimePicker id="onboarding-work-style-end-time" value={endTime} onChange={(time) => setEndTime(time ?? '')} />
               </FormField>
             </FormRow>
           </div>
 
-          {createDefault.error && <ErrorMessage error={createDefault.error} />}
+          {rest != null && <ErrorMessage error={rest} />}
           <FormActions>
             <Button
               variant="secondary"
@@ -354,6 +366,11 @@ function MonthlyWorkStyleAssignmentCard() {
   const assignForMonth = useAssignUserWorkStyleForMonth()
   const generateShifts = useGenerateShiftAssignments()
 
+  const monthlyFields = ['user_id', 'work_style_id', 'year_month', 'from', 'to'] as const
+  const assignErrors = fieldErrors(assignForMonth.error, monthlyFields)
+  const generateErrors = fieldErrors(generateShifts.error, monthlyFields)
+  const errorOf = (key: (typeof monthlyFields)[number]) => assignErrors.of(key) ?? generateErrors.of(key)
+
   const currentAssignment = history?.find((assignment) => assignment.year_month === yearMonth)
   const selectedWorkStyle = workStyles?.find((style) => style.id === workStyleId)
 
@@ -401,11 +418,16 @@ function MonthlyWorkStyleAssignmentCard() {
       </p>
       <FormLayout>
       <div>
-        <FormField label="働き方の対象社員" htmlFor="monthly-work-style-user" required>
+        <FormField label="働き方の対象社員" htmlFor="monthly-work-style-user" required error={errorOf('user_id')}>
           <UserPicker id="monthly-work-style-user" value={targetUserId} onChange={handleUserChange} />
         </FormField>
 
-        <FormField label="対象年月" htmlFor="monthly-work-style-year-month" required>
+        <FormField
+          label="対象年月"
+          htmlFor="monthly-work-style-year-month"
+          required
+          error={errorOf('year_month') ?? errorOf('from') ?? errorOf('to')}
+        >
           <YearMonthPicker
             id="monthly-work-style-year-month"
             value={yearMonth || undefined}
@@ -413,7 +435,7 @@ function MonthlyWorkStyleAssignmentCard() {
           />
         </FormField>
 
-        <FormField label="働き方" htmlFor="monthly-work-style-select" required>
+        <FormField label="働き方" htmlFor="monthly-work-style-select" required error={errorOf('work_style_id')}>
           <NativeSelect
             id="monthly-work-style-select"
             value={workStyleId}
@@ -473,8 +495,8 @@ function MonthlyWorkStyleAssignmentCard() {
           </label>
 
         </div>
-        {assignForMonth.error && <ErrorMessage error={assignForMonth.error} />}
-        {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
+        {assignErrors.rest != null && <ErrorMessage error={assignErrors.rest} />}
+        {generateErrors.rest != null && <ErrorMessage error={generateErrors.rest} />}
         <FormActions>
           <Button variant="secondary" onClick={() => setIsConfirming(false)}>
             キャンセル

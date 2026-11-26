@@ -44,7 +44,6 @@ import {
 } from '../../hooks/usePaidLeave'
 import { useUpdatePaidLeaveAutoGrantEnabled } from '../../hooks/useUsers'
 import { useWorkCalendars } from '../../hooks/useWorkCalendars'
-import { ApiError } from '../../api/client'
 import type {
   PaidLeaveGrantCycleType,
   PaidLeaveGrantPolicyStep,
@@ -58,6 +57,7 @@ import {
   statutoryGrantSteps,
 } from '../../lib/paidLeaveGrantRule'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { isValidUuidParam } from '../../utils/searchParamValidators'
 
 const STATUTORY_POLICY_WARNING =
@@ -75,6 +75,30 @@ const WEEKLY_CATEGORY_OPTIONS: Array<{ value: '4' | '3' | '2' | '1'; label: stri
  * 現行versionの行で初期化し、行の追加・削除・編集ができる。クライアント側バリデーションは
  * バックエンドと同じ規則を簡易チェックするが、最終的な正はバックエンド側。
  */
+/** 付与表の新バージョン作成(`rows.{i}.*`は行の項目の下、`rows`は行の一覧の下に出す)の422のキー。 */
+const NORMAL_POLICY_ERROR_KEYS = ['rows', 'rows.*', 'rows.*.continuous_service_months', 'rows.*.grant_days'] as const
+const PROPORTIONAL_POLICY_ERROR_KEYS = [
+  'rows',
+  'rows.*',
+  'rows.*.weekly_scheduled_days_category',
+  'rows.*.continuous_service_months',
+  'rows.*.grant_days',
+] as const
+
+/** 付与ルールの作成で項目の下に出す422のキー。`steps.{i}.*`は付与日数の表の行の下に出す。 */
+const RULE_ERROR_KEYS = [
+  'name',
+  'min_attendance_rate',
+  'first_grant_after_months',
+  'grant_cycle_months',
+  'grant_cycle_type',
+  'is_active',
+  'steps.*.grant_category',
+  'steps.*.continuous_service_months',
+  'steps.*.grant_days',
+] as const
+const RULE_STEP_ROW_KEYS = ['grant_category', 'continuous_service_months', 'grant_days'] as const
+
 function PaidLeaveGrantPolicyEditSheet({
   open,
   onOpenChange,
@@ -86,6 +110,7 @@ function PaidLeaveGrantPolicyEditSheet({
 }) {
   const [rows, setRows] = useState<PaidLeaveGrantPolicyStep[]>(initialRows)
   const createVersion = useCreatePaidLeaveGrantPolicyVersion()
+  const { ofRow, ofAny, rest } = fieldErrors(createVersion.error, NORMAL_POLICY_ERROR_KEYS)
 
   useEffect(() => {
     if (open) {
@@ -141,13 +166,17 @@ function PaidLeaveGrantPolicyEditSheet({
           {STATUTORY_POLICY_WARNING}
         </div>
 
-        {createVersion.error && <ErrorMessage error={createVersion.error} fallback="保存に失敗しました。" />}
+        {rest != null && <ErrorMessage error={rest} fallback="保存に失敗しました。" />}
         {hasDuplicateMonths && <p className="mt-2 text-xs text-destructive">継続勤務月数が重複しています。</p>}
 
         <ul className="mt-4 flex flex-col gap-3">
           {rows.map((row, index) => (
             <li key={index} className="flex flex-wrap items-end gap-3">
-              <FormField label="継続勤務(か月)" htmlFor={`normal-policy-months-${index}`}>
+              <FormField
+                label="継続勤務(か月)"
+                htmlFor={`normal-policy-months-${index}`}
+                error={ofRow('rows', index, 'continuous_service_months')}
+              >
                 <Input
                   id={`normal-policy-months-${index}`}
                   type="number"
@@ -155,7 +184,7 @@ function PaidLeaveGrantPolicyEditSheet({
                   onChange={(e) => updateRow(index, { continuous_service_months: Number(e.target.value) })}
                 />
               </FormField>
-              <FormField label="付与日数" htmlFor={`normal-policy-days-${index}`}>
+              <FormField label="付与日数" htmlFor={`normal-policy-days-${index}`} error={ofRow('rows', index, 'grant_days')}>
                 <Input
                   id={`normal-policy-days-${index}`}
                   type="number"
@@ -169,6 +198,12 @@ function PaidLeaveGrantPolicyEditSheet({
             </li>
           ))}
         </ul>
+
+        {ofAny('rows').map((message) => (
+          <p key={message} className="mt-2 text-xs text-destructive">
+            {message}
+          </p>
+        ))}
 
         <Button variant="secondary" size="sm" className="mt-3" onClick={handleAddRow}>
           行を追加
@@ -199,6 +234,7 @@ function PaidLeaveProportionalGrantPolicyEditSheet({
 }) {
   const [rows, setRows] = useState<PaidLeaveProportionalGrantPolicyStep[]>(initialRows)
   const createVersion = useCreatePaidLeaveProportionalGrantPolicyVersion()
+  const { ofRow, ofAny, rest } = fieldErrors(createVersion.error, PROPORTIONAL_POLICY_ERROR_KEYS)
 
   useEffect(() => {
     if (open) {
@@ -254,7 +290,7 @@ function PaidLeaveProportionalGrantPolicyEditSheet({
           {STATUTORY_POLICY_WARNING}
         </div>
 
-        {createVersion.error && <ErrorMessage error={createVersion.error} fallback="保存に失敗しました。" />}
+        {rest != null && <ErrorMessage error={rest} fallback="保存に失敗しました。" />}
         {hasDuplicateKeys && (
           <p className="mt-2 text-xs text-destructive">週所定労働日数区分と継続勤務月数の組み合わせが重複しています。</p>
         )}
@@ -262,7 +298,11 @@ function PaidLeaveProportionalGrantPolicyEditSheet({
         <ul className="mt-4 flex flex-col gap-3">
           {rows.map((row, index) => (
             <li key={index} className="flex flex-wrap items-end gap-3">
-              <FormField label="週所定労働日数" htmlFor={`proportional-policy-category-${index}`}>
+              <FormField
+                label="週所定労働日数"
+                htmlFor={`proportional-policy-category-${index}`}
+                error={ofRow('rows', index, 'weekly_scheduled_days_category')}
+              >
                 <NativeSelect
                   id={`proportional-policy-category-${index}`}
                   value={row.weekly_scheduled_days_category}
@@ -277,7 +317,11 @@ function PaidLeaveProportionalGrantPolicyEditSheet({
                   ))}
                 </NativeSelect>
               </FormField>
-              <FormField label="継続勤務(か月)" htmlFor={`proportional-policy-months-${index}`}>
+              <FormField
+                label="継続勤務(か月)"
+                htmlFor={`proportional-policy-months-${index}`}
+                error={ofRow('rows', index, 'continuous_service_months')}
+              >
                 <Input
                   id={`proportional-policy-months-${index}`}
                   type="number"
@@ -285,7 +329,11 @@ function PaidLeaveProportionalGrantPolicyEditSheet({
                   onChange={(e) => updateRow(index, { continuous_service_months: Number(e.target.value) })}
                 />
               </FormField>
-              <FormField label="付与日数" htmlFor={`proportional-policy-days-${index}`}>
+              <FormField
+                label="付与日数"
+                htmlFor={`proportional-policy-days-${index}`}
+                error={ofRow('rows', index, 'grant_days')}
+              >
                 <Input
                   id={`proportional-policy-days-${index}`}
                   type="number"
@@ -299,6 +347,12 @@ function PaidLeaveProportionalGrantPolicyEditSheet({
             </li>
           ))}
         </ul>
+
+        {ofAny('rows').map((message) => (
+          <p key={message} className="mt-2 text-xs text-destructive">
+            {message}
+          </p>
+        ))}
 
         <Button variant="secondary" size="sm" className="mt-3" onClick={handleAddRow}>
           行を追加
@@ -481,12 +535,12 @@ function PaidLeaveGrantRulesCard() {
     )
   }
 
-  const createFieldErrors = createRule.error instanceof ApiError ? createRule.error.errors : undefined
+  const { of, ofRow, rest: createRest } = fieldErrors(createRule.error, RULE_ERROR_KEYS)
 
   return (
     <Card title="付与ルール">
       {error && <ErrorMessage error={error} fallback="付与ルールの取得に失敗しました。" />}
-      {createRule.error && <ErrorMessage error={createRule.error} />}
+      {createRest != null && <ErrorMessage error={createRest} />}
 
       {isLoading ? (
         <LoadingState />
@@ -535,11 +589,11 @@ function PaidLeaveGrantRulesCard() {
       <h3 className="mb-3 text-sm font-semibold text-foreground">新しい付与ルールを作成</h3>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="ルール名" htmlFor="rule-name" required>
+        <FormField label="ルール名" htmlFor="rule-name" required error={of('name')}>
           <Input id="rule-name" value={ruleName} onChange={(e) => setRuleName(e.target.value)} />
         </FormField>
 
-        <FormField label="最低出勤率" htmlFor="rule-min-attendance-rate">
+        <FormField label="最低出勤率" htmlFor="rule-min-attendance-rate" error={of('min_attendance_rate')}>
           <Input
             id="rule-min-attendance-rate"
             type="number"
@@ -548,7 +602,11 @@ function PaidLeaveGrantRulesCard() {
           />
         </FormField>
 
-        <FormField label="初回付与までの月数" htmlFor="rule-first-grant-after-months">
+        <FormField
+          label="初回付与までの月数"
+          htmlFor="rule-first-grant-after-months"
+          error={of('first_grant_after_months')}
+        >
           <Input
             id="rule-first-grant-after-months"
             type="number"
@@ -557,7 +615,7 @@ function PaidLeaveGrantRulesCard() {
           />
         </FormField>
 
-        <FormField label="付与サイクル(月数)" htmlFor="rule-grant-cycle-months">
+        <FormField label="付与サイクル(月数)" htmlFor="rule-grant-cycle-months" error={of('grant_cycle_months')}>
           <Input
             id="rule-grant-cycle-months"
             type="number"
@@ -572,17 +630,21 @@ function PaidLeaveGrantRulesCard() {
         onChange={setGrantCycleType}
         defaultFiscalYearStart={defaultFiscalYearStart}
       />
+      {of('grant_cycle_type') && <p className="-mt-2 mb-4 text-xs text-destructive">{of('grant_cycle_type')}</p>}
 
       <label className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
         <Checkbox checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
         有効
       </label>
+      {of('is_active') && <p className="-mt-2 mb-4 text-xs text-destructive">{of('is_active')}</p>}
 
       <PaidLeaveGrantStepsEditor
         steps={steps}
         onChange={setStepsOverride}
         statutory={policies}
-        fieldErrors={createFieldErrors}
+        rowErrors={(index) =>
+          RULE_STEP_ROW_KEYS.map((key) => ofRow('steps', index, key)).filter((message): message is string => Boolean(message))
+        }
       />
 
       <div className="flex flex-col items-start gap-1">

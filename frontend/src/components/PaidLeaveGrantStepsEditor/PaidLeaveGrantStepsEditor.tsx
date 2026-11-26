@@ -11,23 +11,20 @@ export interface PaidLeaveGrantStepsEditorProps {
   onChange: (steps: PaidLeaveGrantRuleStep[]) => void
   /** 法定表。下回りの参考表示(行ごとの法定最低日数)に使う。未取得のときは表示しない。 */
   statutory: PaidLeaveGrantPolicies | undefined
-  /** バックエンドの422のフィールドエラー。キーは `steps.{i}.{項目}`(iはsteps配列の位置)。 */
-  fieldErrors?: Record<string, string[]>
+  /** 行(`steps`配列の位置`index`)に出す422のエラーメッセージ。行の項目(`steps.{i}.*`)のものをまとめて返す。 */
+  rowErrors?: (index: number) => string[]
 }
 
 /**
  * 付与日数の表を区分(通常・週4〜1日)ごとのタブで編集する。行の追加・削除・日数の編集はすべて
  * 親のstepsを`onChange`で差し替える(保存は親の画面の保存ボタンで行う)。
  */
-export function PaidLeaveGrantStepsEditor({ steps, onChange, statutory, fieldErrors }: PaidLeaveGrantStepsEditorProps) {
+export function PaidLeaveGrantStepsEditor({ steps, onChange, statutory, rowErrors }: PaidLeaveGrantStepsEditorProps) {
   const [activeCategory, setActiveCategory] = useState<PaidLeaveGrantCategory>('normal')
   const [monthsInput, setMonthsInput] = useState('')
   const [daysInput, setDaysInput] = useState('')
 
-  const errorsOfRow = (index: number): string[] =>
-    Object.entries(fieldErrors ?? {})
-      .filter(([key]) => key.startsWith(`steps.${index}.`))
-      .flatMap(([, messages]) => messages)
+  const errorsOfRow = (index: number): string[] => rowErrors?.(index) ?? []
 
   const categoryHasError = (category: PaidLeaveGrantCategory): boolean =>
     steps.some((step, index) => step.grant_category === category && errorsOfRow(index).length > 0)

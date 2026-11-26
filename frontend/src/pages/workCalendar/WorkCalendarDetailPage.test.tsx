@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as holidayCalendarSourcesApi from '../../api/holidayCalendarSources'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { HolidayCalendarSource, WorkCalendar, WorkCalendarYear } from '../../api/types'
@@ -528,6 +529,114 @@ describe('WorkCalendarDetailPage', () => {
       expect(screen.queryByRole('button', { name: '廃止する' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '複製して翌年度を作成' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'この年度を休日と同期する' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('422 field errors', () => {
+    const unprocessable = (errors: Record<string, string[]>) =>
+      new ApiError(422, '最初のエラーの文です。', { ...errors, unknown_key: ['その他のエラー'] })
+
+    async function expectEachOnce(messages: string[]) {
+      for (const message of [...messages, 'その他のエラー']) {
+        expect(await screen.findAllByText(message)).toHaveLength(1)
+      }
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+    }
+
+    it('shows the settings errors under each field', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockRejectedValue(
+        unprocessable({
+          name: ['名称のエラー'],
+          week_starts_on: ['週開始のエラー'],
+          fiscal_year_start_month: ['年度開始月のエラー'],
+          fiscal_year_start_day: ['年度開始日のエラー'],
+          weekday_holiday_pattern: ['曜日区分のエラー'],
+          allows_daily_holiday_override: ['個別変更のエラー'],
+        }),
+      )
+      renderPage()
+
+      await screen.findByLabelText('カレンダー名')
+      await userEvent.click(screen.getByRole('button', { name: '基本設定を保存' }))
+
+      await expectEachOnce([
+        '名称のエラー',
+        '週開始のエラー',
+        '年度開始月のエラー',
+        '年度開始日のエラー',
+        '曜日区分のエラー',
+        '個別変更のエラー',
+      ])
+    })
+
+    it('shows the year creation errors under each field in the dialog', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'createWorkCalendarYear').mockRejectedValue(
+        unprocessable({
+          fiscal_year: ['年度のエラー'],
+          starts_on: ['開始日のエラー'],
+          ends_on: ['終了日のエラー'],
+        }),
+      )
+      renderPage()
+
+      await userEvent.click((await screen.findAllByRole('button', { name: '新規作成' }))[0])
+      await userEvent.type(await screen.findByLabelText('年度'), '2026')
+      await userEvent.click(screen.getByRole('button', { name: '作成' }))
+
+      await expectEachOnce(['年度のエラー', '開始日のエラー', '終了日のエラー'])
+    })
+
+    it('shows the source registration errors under the expanded fields', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+      vi.spyOn(holidayCalendarSourcesApi, 'createHolidayCalendarSource').mockRejectedValue(
+        unprocessable({ name: ['ソース名のエラー'], ics_url: ['URLのエラー'] }),
+      )
+      renderPage()
+
+      await screen.findByLabelText('使用する休日iCalendarソース')
+      await userEvent.click(screen.getByRole('button', { name: '新しいiCalendarを登録する' }))
+      await userEvent.type(screen.getByLabelText('名称'), 'a')
+      await userEvent.type(screen.getByLabelText('iCalendar URL'), 'https://example.com/a.ics')
+      await userEvent.click(screen.getByRole('button', { name: '登録する' }))
+
+      await expectEachOnce(['ソース名のエラー', 'URLのエラー'])
+    })
+
+    it('shows the source edit errors under the edit fields', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+      vi.spyOn(holidayCalendarSourcesApi, 'updateHolidayCalendarSource').mockRejectedValue(
+        unprocessable({ name: ['ソース名のエラー'], ics_url: ['URLのエラー'] }),
+      )
+      renderPage()
+
+      await screen.findByLabelText('使用する休日iCalendarソース')
+      await userEvent.selectOptions(screen.getByLabelText('使用する休日iCalendarソース'), source.id)
+      await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+      await userEvent.click(screen.getByRole('button', { name: 'ソースを保存' }))
+
+      await expectEachOnce(['ソース名のエラー', 'URLのエラー'])
+    })
+
+    it('shows the source assignment error under the source select', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockRejectedValue(
+        unprocessable({ holiday_calendar_source_id: ['ソースのエラー'] }),
+      )
+      renderPage()
+
+      await screen.findByLabelText('使用する休日iCalendarソース')
+      await userEvent.selectOptions(screen.getByLabelText('使用する休日iCalendarソース'), source.id)
+      await userEvent.click(await screen.findByRole('button', { name: 'このカレンダーに設定する' }))
+
+      await expectEachOnce(['ソースのエラー'])
     })
   })
 })

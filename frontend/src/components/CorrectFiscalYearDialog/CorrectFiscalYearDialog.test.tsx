@@ -82,6 +82,27 @@ describe('CorrectFiscalYearDialog', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
+  it('shows each 422 message once under its field and the heading above the buttons', async () => {
+    vi.spyOn(workCalendarsApi, 'correctWorkCalendarYearFiscalYear').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        fiscal_year: ['年度のエラー'],
+        starts_on: ['開始日のエラー'],
+        ends_on: ['終了日のエラー'],
+        reason: ['理由のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    )
+    renderDialog(year)
+
+    await userEvent.click(screen.getByRole('button', { name: '訂正する' }))
+
+    for (const message of ['年度のエラー', '開始日のエラー', '終了日のエラー', '理由のエラー', 'その他のエラー']) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+  })
+
   it('calls onOpenChange(false) when キャンセル is clicked', async () => {
     const { onOpenChange } = renderDialog(year)
 

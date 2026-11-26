@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { pickYearMonth } from '../../test-support/pickerInteractions'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import * as userWorkStyleMonthlyAssignmentsApi from '../../api/userWorkStyleMonthlyAssignments'
 import * as usersApi from '../../api/users'
@@ -492,5 +493,93 @@ describe('WorkStylesPage', () => {
         to: '2026-11-30',
       }),
     )
+  })
+
+  describe('422 field errors', () => {
+    async function expectEachOnce(messages: string[]) {
+      for (const message of messages) {
+        expect(await screen.findAllByText(message)).toHaveLength(1)
+      }
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+    }
+
+    async function fillMonthlyForm() {
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
+        data: [targetUser],
+        meta: { current_page: 1, last_page: 1, total: 1 },
+        links: { next: null, prev: null },
+      })
+      vi.spyOn(usersApi, 'fetchUser').mockResolvedValue(targetUser)
+      await screen.findByText('標準勤務', { selector: 'strong, td' })
+      await userEvent.click(screen.getByRole('combobox', { name: '働き方の対象社員' }))
+      await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+      await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+      await pickYearMonth(userEvent.setup(), '対象年月', '2026-11')
+      await userEvent.selectOptions(screen.getByLabelText('働き方'), '標準勤務')
+      await userEvent.click(screen.getByRole('button', { name: '変更内容を確認する' }))
+    }
+
+    it('shows the onboarding edit errors under each field', async () => {
+      vi.spyOn(workStylesApi, 'createDefaultWorkStyle').mockRejectedValue(
+        new ApiError(422, '最初のエラーの文です。', {
+          name: ['名称のエラー'],
+          default_break_minutes: ['休憩のエラー'],
+          default_start_time: ['始業のエラー'],
+          default_end_time: ['終業のエラー'],
+          unknown_key: ['その他のエラー'],
+        }),
+      )
+      renderPage({ workStyles: [] })
+
+      await userEvent.click(await screen.findByRole('button', { name: '内容を変更する' }))
+      await userEvent.click(screen.getByRole('button', { name: '保存して開始' }))
+
+      await expectEachOnce(['名称のエラー', '休憩のエラー', '始業のエラー', '終業のエラー', 'その他のエラー'])
+    })
+
+    it('shows the monthly assignment errors under each field', async () => {
+      vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockRejectedValue(
+        new ApiError(422, '最初のエラーの文です。', {
+          user_id: ['社員のエラー'],
+          year_month: ['年月のエラー'],
+          work_style_id: ['働き方のエラー'],
+          unknown_key: ['その他のエラー'],
+        }),
+      )
+      renderPage()
+      await fillMonthlyForm()
+      await userEvent.click(screen.getByRole('button', { name: 'この内容で保存' }))
+
+      await expectEachOnce(['社員のエラー', '年月のエラー', '働き方のエラー', 'その他のエラー'])
+    })
+
+    it('shows the shift generation errors of the monthly assignment under the fields', async () => {
+      vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue({
+        id: 'monthly-assignment-3',
+        user_id: 'user-5',
+        year_month: '2026-11',
+        work_style_id: 'work-style-1',
+        work_style: { id: 'work-style-1', code: 'standard', name: '標準勤務' },
+        assigned_by_user_id: 'admin-1',
+      })
+      vi.spyOn(employeeShiftAssignmentsApi, 'generateShiftAssignments').mockRejectedValue(
+        new ApiError(422, '最初のエラーの文です。', {
+          user_id: ['社員のエラー'],
+          work_style_id: ['働き方のエラー'],
+          from: ['開始のエラー'],
+          unknown_key: ['その他のエラー'],
+        }),
+      )
+      renderPage()
+      await fillMonthlyForm()
+      await userEvent.click(await screen.findByLabelText(/この働き方をもとに2026-11の勤務予定を自動生成する/))
+      await userEvent.click(screen.getByRole('button', { name: 'この内容で保存' }))
+
+      // 成功後に確認の表示を閉じる既存の動作のため、まとめての表示(確認の表示の中)は出ない。項目の下には出る。
+      for (const message of ['社員のエラー', '働き方のエラー', '開始のエラー']) {
+        expect(await screen.findAllByText(message)).toHaveLength(1)
+      }
+    })
   })
 })

@@ -53,6 +53,6 @@ export const WithFieldError: Story = {
     steps: initialSteps,
     onChange: () => {},
     statutory,
-    fieldErrors: { 'steps.3.grant_days': ['週4日の法定最低日数は7日です。'] },
+    rowErrors: (index: number) => (index === 3 ? ['週4日の法定最低日数は7日です。'] : []),
   },
 }

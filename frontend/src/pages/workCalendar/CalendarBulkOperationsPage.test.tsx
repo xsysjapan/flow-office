@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as calendarBulkOperationsApi from '../../api/calendarBulkOperations'
 import * as usersApi from '../../api/users'
 import * as workStylesApi from '../../api/workStyles'
@@ -153,6 +154,48 @@ describe('CalendarBulkOperationsPage', () => {
 
     await waitFor(() => expect(calendarBulkOperationsApi.createCalendarBulkOperation).toHaveBeenCalled())
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('一括操作を適用しました'))
+  })
+
+  it('shows each 422 message once under its field and the heading above the button', async () => {
+    vi.spyOn(calendarBulkOperationsApi, 'previewCalendarBulkOperation').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        operation_type: ['操作種別のエラー'],
+        conflict_policy: ['競合方針のエラー'],
+        reason: ['理由のエラー'],
+        'target_scope.from': ['開始のエラー'],
+        'target_scope.to': ['終了のエラー'],
+        'target_scope.work_style_id': ['勤務形態のエラー'],
+        'target_scope.user_ids': ['対象社員のエラー'],
+        'target_scope.user_ids.0': ['対象社員0のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    )
+    renderPage()
+
+    await userEvent.type(screen.getByLabelText('理由'), '理由')
+    await pickDate(userEvent.setup(), '対象期間(開始)', '2026-09-01')
+    await pickDate(userEvent.setup(), '対象期間(終了)', '2026-09-30')
+    await userEvent.selectOptions(screen.getByLabelText('勤務形態'), 'work-style-1')
+    const comboboxes = screen.getAllByRole('combobox')
+    await userEvent.click(comboboxes[comboboxes.length - 1])
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員一郎(ichiro@example.com)' }))
+    await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
+
+    for (const message of [
+      '操作種別のエラー',
+      '競合方針のエラー',
+      '理由のエラー',
+      '開始のエラー',
+      '終了のエラー',
+      '勤務形態のエラー',
+      '対象社員のエラー',
+      '対象社員0のエラー',
+      'その他のエラー',
+    ]) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getByText('入力内容を確認してください。')).toBeInTheDocument()
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
   })
 
   it('reverts an applied operation from the history list', async () => {

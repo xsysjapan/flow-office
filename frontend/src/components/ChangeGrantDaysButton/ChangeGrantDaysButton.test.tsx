@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { ApiError } from '../../api/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { notify } from '../../lib/notify'
 import { ChangeGrantDaysButton } from './ChangeGrantDaysButton'
@@ -39,6 +40,24 @@ describe('ChangeGrantDaysButton', () => {
 
     expect(onChange).toHaveBeenCalledWith(12, '訂正')
     expect(notify.success).toHaveBeenCalledWith('2026-07-01付与の付与日数を12日に変更しました')
+  })
+
+  it('shows each 422 message once under its field and the heading above the buttons', async () => {
+    setup({
+      error: new ApiError(422, '最初のエラーの文です。', {
+        granted_days: ['付与日数のエラー'],
+        reason: ['理由のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: '日数を変更' }))
+
+    for (const message of ['付与日数のエラー', '理由のエラー', 'その他のエラー']) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
   })
 
   it('passes undefined reason when empty', async () => {

@@ -34,6 +34,7 @@ import { useCreateShiftPattern, useShiftPatterns } from '../../hooks/useShiftPat
 import { useWorkStyles } from '../../hooks/useWorkStyles'
 import type { RotationPreviewDay } from '../../api/types'
 import type { DayShiftOverrides, WeeklyShiftPattern } from '../../api/employeeShiftAssignments'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { shiftDayTypeLabel } from '../../utils/statusLabels'
 
 /** "YYYY-MM" から、その月の1日と末日(YYYY-MM-DD)を返す。 */
@@ -51,6 +52,7 @@ function ShiftGenerationCard() {
   const [shiftTo, setShiftTo] = useState('')
 
   const generateShifts = useGenerateShiftAssignments()
+  const { of, rest } = fieldErrors(generateShifts.error, ['user_id', 'work_style_id', 'from', 'to'] as const)
   const { data: shiftAssignments, isLoading: isLoadingShifts } = useShiftAssignments(
     shiftUserId ?? '',
     shiftFrom,
@@ -74,11 +76,11 @@ function ShiftGenerationCard() {
     <Card title="シフト生成・確認">
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="対象社員" htmlFor="shift-target-user" required>
+        <FormField label="対象社員" htmlFor="shift-target-user" required error={of('user_id')}>
           <UserPicker id="shift-target-user" value={shiftUserId} onChange={setShiftUserId} />
         </FormField>
 
-        <FormField label="勤務形態" htmlFor="shift-work-style" required>
+        <FormField label="勤務形態" htmlFor="shift-work-style" required error={of('work_style_id')}>
           <NativeSelect id="shift-work-style" value={shiftWorkStyleId} onChange={(e) => setShiftWorkStyleId(e.target.value)}>
             <option value="">選択してください</option>
             {workStyles?.map((style) => (
@@ -89,11 +91,11 @@ function ShiftGenerationCard() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="開始日" htmlFor="shift-from" required>
+        <FormField label="開始日" htmlFor="shift-from" required error={of('from')}>
           <DatePicker id="shift-from" value={shiftFrom || undefined} onChange={(date) => setShiftFrom(date ?? '')} />
         </FormField>
 
-        <FormField label="終了日" htmlFor="shift-to" required>
+        <FormField label="終了日" htmlFor="shift-to" required error={of('to')}>
           <DatePicker id="shift-to" value={shiftTo || undefined} onChange={(date) => setShiftTo(date ?? '')} />
         </FormField>
       </div>
@@ -105,7 +107,7 @@ function ShiftGenerationCard() {
       >
         生成する
       </Button>
-      {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
+      {rest != null && <ErrorMessage error={rest} />}
       {(!shiftUserId || !shiftWorkStyleId || !shiftFrom || !shiftTo) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・開始日・終了日を入力してください。</p>
       )}
@@ -174,13 +176,30 @@ function buildWeeklyPattern(state: Record<number, WeekdayRowState>): WeeklyShift
   return pattern
 }
 
+const WEEKLY_PATTERN_ROW_FIELDS = ['start_time', 'end_time', 'break_minutes'] as const
+const DAY_OVERRIDE_FIELDS = ['start_time', 'end_time', 'break_minutes'] as const
+
+/** 週次・月次の一括入力(プレビューと確定)で項目の下に出す422のキー。曜日の行は`weekly_pattern.{曜日}.*`。 */
+const PATTERN_ERROR_KEYS = [
+  'user_id',
+  'work_style_id',
+  'from',
+  'to',
+  'overwrite_mode',
+  'weekly_pattern.*.start_time',
+  'weekly_pattern.*.end_time',
+  'weekly_pattern.*.break_minutes',
+] as const
+
 /** 週次・月次一括入力で共通して使う「曜日ごとの勤務する/しない・時刻・休憩」の入力行。 */
 function WeekdayPatternGrid({
   state,
   onChange,
+  rowError,
 }: {
   state: Record<number, WeekdayRowState>
   onChange: (iso: number, patch: Partial<WeekdayRowState>) => void
+  rowError?: (iso: number) => string | undefined
 }) {
   return (
     <div className="grid grid-cols-1 gap-2">
@@ -222,6 +241,7 @@ function WeekdayPatternGrid({
               onChange={(e) => onChange(iso, { breakMinutes: e.target.value })}
             />
             <span className="text-sm text-muted-foreground">分休憩</span>
+            {rowError?.(iso) && <p className="w-full text-xs text-destructive">{rowError(iso)}</p>}
           </div>
         )
       })}
@@ -245,6 +265,13 @@ function WeeklyPatternShiftAssignmentCard() {
 
   const previewPattern = usePreviewPatternShiftAssignments()
   const generatePattern = useGeneratePatternShiftAssignments()
+  const previewErrors = fieldErrors(previewPattern.error, PATTERN_ERROR_KEYS)
+  const generateErrors = fieldErrors(generatePattern.error, PATTERN_ERROR_KEYS)
+  const errorOf = (key: (typeof PATTERN_ERROR_KEYS)[number]) => previewErrors.of(key) ?? generateErrors.of(key)
+  const weekdayRowError = (iso: number) =>
+    WEEKLY_PATTERN_ROW_FIELDS.map(
+      (field) => previewErrors.ofRow('weekly_pattern', iso, field) ?? generateErrors.ofRow('weekly_pattern', iso, field),
+    ).find(Boolean)
 
   const handleWeekdayChange = (iso: number, patch: Partial<WeekdayRowState>) => {
     setWeeklyPatternState((prev) => ({ ...prev, [iso]: { ...prev[iso], ...patch } }))
@@ -274,11 +301,11 @@ function WeeklyPatternShiftAssignmentCard() {
     <Card title="週次の一括入力">
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="対象社員(週次)" htmlFor="weekly-pattern-user" required>
+        <FormField label="対象社員(週次)" htmlFor="weekly-pattern-user" required error={errorOf('user_id')}>
           <UserPicker id="weekly-pattern-user" value={targetUserId} onChange={setTargetUserId} />
         </FormField>
 
-        <FormField label="勤務形態(週次)" htmlFor="weekly-pattern-work-style" required>
+        <FormField label="勤務形態(週次)" htmlFor="weekly-pattern-work-style" required error={errorOf('work_style_id')}>
           <NativeSelect id="weekly-pattern-work-style" value={workStyleId} onChange={(e) => setWorkStyleId(e.target.value)}>
             <option value="">選択してください</option>
             {workStyles?.map((style) => (
@@ -289,24 +316,24 @@ function WeeklyPatternShiftAssignmentCard() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="適用開始日" htmlFor="weekly-pattern-from" required>
+        <FormField label="適用開始日" htmlFor="weekly-pattern-from" required error={errorOf('from')}>
           <DatePicker id="weekly-pattern-from" value={from || undefined} onChange={(date) => setFrom(date ?? '')} />
         </FormField>
 
-        <FormField label="適用終了日" htmlFor="weekly-pattern-to" required>
+        <FormField label="適用終了日" htmlFor="weekly-pattern-to" required error={errorOf('to')}>
           <DatePicker id="weekly-pattern-to" value={to || undefined} onChange={(date) => setTo(date ?? '')} />
         </FormField>
       </div>
 
       <p className="mb-2 text-sm font-semibold text-foreground">曜日ごとの勤務時間</p>
-      <WeekdayPatternGrid state={weeklyPatternState} onChange={handleWeekdayChange} />
+      <WeekdayPatternGrid state={weeklyPatternState} onChange={handleWeekdayChange} rowError={weekdayRowError} />
 
       <div className="my-4 flex flex-wrap gap-3">
         <div>
           <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
             週次パターンをプレビューする
           </Button>
-          {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
+          {previewErrors.rest != null && <ErrorMessage error={previewErrors.rest} />}
           {(!from || !to) && (
             <p className="mt-1 text-xs text-muted-foreground">適用開始日・適用終了日を入力してください。</p>
           )}
@@ -323,7 +350,7 @@ function WeeklyPatternShiftAssignmentCard() {
         </ul>
       )}
 
-      <FormField label="再生成時の扱い(週次)" htmlFor="weekly-pattern-overwrite-mode">
+      <FormField label="再生成時の扱い(週次)" htmlFor="weekly-pattern-overwrite-mode" error={errorOf('overwrite_mode')}>
         <NativeSelect
           id="weekly-pattern-overwrite-mode"
           value={overwriteMode}
@@ -342,7 +369,7 @@ function WeeklyPatternShiftAssignmentCard() {
       >
         週次パターンで確定する
       </Button>
-      {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
+      {generateErrors.rest != null && <ErrorMessage error={generateErrors.rest} />}
       {(!targetUserId || !workStyleId || !from || !to) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・適用開始日・適用終了日を入力してください。</p>
       )}
@@ -395,11 +422,27 @@ function MonthlyPatternShiftAssignmentCard() {
   const [dayOverrideState, setDayOverrideState] = useState<Record<string, DayOverrideRowState>>({})
   const [overwriteMode, setOverwriteMode] = useState<'skip_edited' | 'overwrite_all'>('skip_edited')
 
-  const previewPattern = usePreviewPatternShiftAssignments()
-  const generatePattern = useGeneratePatternShiftAssignments()
-
   const { from, to } = yearMonth ? monthBoundaries(yearMonth) : { from: '', to: '' }
   const dates = daysInMonth(yearMonth)
+
+  const previewPattern = usePreviewPatternShiftAssignments()
+  const generatePattern = useGeneratePatternShiftAssignments()
+  // 日単位の個別設定は、描いている(有効で休みでない)日の時刻・休憩のキーだけを項目に出す。
+  const dayOverrideKeys = dates.flatMap((date) =>
+    dayOverrideState[date]?.enabled && !dayOverrideState[date].dayOff
+      ? DAY_OVERRIDE_FIELDS.map((field) => `day_overrides.${date}.${field}`)
+      : [],
+  )
+  const monthlyFields: string[] = [...PATTERN_ERROR_KEYS, ...dayOverrideKeys]
+  const previewErrors = fieldErrors(previewPattern.error, monthlyFields)
+  const generateErrors = fieldErrors(generatePattern.error, monthlyFields)
+  const errorOf = (key: string) => previewErrors.of(key) ?? generateErrors.of(key)
+  const weekdayRowError = (iso: number) =>
+    WEEKLY_PATTERN_ROW_FIELDS.map(
+      (field) => previewErrors.ofRow('weekly_pattern', iso, field) ?? generateErrors.ofRow('weekly_pattern', iso, field),
+    ).find(Boolean)
+  const dayOverrideError = (date: string) =>
+    DAY_OVERRIDE_FIELDS.map((field) => errorOf(`day_overrides.${date}.${field}`)).find(Boolean)
 
   const handleWeekdayChange = (iso: number, patch: Partial<WeekdayRowState>) => {
     setWeeklyPatternState((prev) => ({ ...prev, [iso]: { ...prev[iso], ...patch } }))
@@ -460,11 +503,11 @@ function MonthlyPatternShiftAssignmentCard() {
     <Card title="月次の一括入力(日単位の個別設定つき)">
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="対象社員(月次)" htmlFor="monthly-pattern-user" required>
+        <FormField label="対象社員(月次)" htmlFor="monthly-pattern-user" required error={errorOf('user_id')}>
           <UserPicker id="monthly-pattern-user" value={targetUserId} onChange={setTargetUserId} />
         </FormField>
 
-        <FormField label="勤務形態(月次)" htmlFor="monthly-pattern-work-style" required>
+        <FormField label="勤務形態(月次)" htmlFor="monthly-pattern-work-style" required error={errorOf('work_style_id')}>
           <NativeSelect
             id="monthly-pattern-work-style"
             value={workStyleId}
@@ -479,7 +522,12 @@ function MonthlyPatternShiftAssignmentCard() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="対象年月(月次パターン)" htmlFor="monthly-pattern-year-month" required>
+        <FormField
+          label="対象年月(月次パターン)"
+          htmlFor="monthly-pattern-year-month"
+          required
+          error={errorOf('from') ?? errorOf('to')}
+        >
           <YearMonthPicker
             id="monthly-pattern-year-month"
             value={yearMonth || undefined}
@@ -489,7 +537,7 @@ function MonthlyPatternShiftAssignmentCard() {
       </div>
 
       <p className="mb-2 text-sm font-semibold text-foreground">曜日ごとの既定の勤務時間</p>
-      <WeekdayPatternGrid state={weeklyPatternState} onChange={handleWeekdayChange} />
+      <WeekdayPatternGrid state={weeklyPatternState} onChange={handleWeekdayChange} rowError={weekdayRowError} />
 
       {dates.length > 0 && (
         <div className="mt-5 border-t border-border pt-4">
@@ -542,6 +590,9 @@ function MonthlyPatternShiftAssignmentCard() {
                             onChange={(e) => handleDayOverrideChange(date, { breakMinutes: e.target.value })}
                           />
                           <span className="text-muted-foreground">分休憩</span>
+                          {dayOverrideError(date) && (
+                            <p className="w-full text-xs text-destructive">{dayOverrideError(date)}</p>
+                          )}
                         </>
                       )}
                     </>
@@ -558,7 +609,7 @@ function MonthlyPatternShiftAssignmentCard() {
           <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
             月次パターンをプレビューする
           </Button>
-          {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
+          {previewErrors.rest != null && <ErrorMessage error={previewErrors.rest} />}
           {(!from || !to) && (
             <p className="mt-1 text-xs text-muted-foreground">対象年月を入力してください。</p>
           )}
@@ -576,7 +627,7 @@ function MonthlyPatternShiftAssignmentCard() {
         </ul>
       )}
 
-      <FormField label="再生成時の扱い(月次)" htmlFor="monthly-pattern-overwrite-mode">
+      <FormField label="再生成時の扱い(月次)" htmlFor="monthly-pattern-overwrite-mode" error={errorOf('overwrite_mode')}>
         <NativeSelect
           id="monthly-pattern-overwrite-mode"
           value={overwriteMode}
@@ -595,7 +646,7 @@ function MonthlyPatternShiftAssignmentCard() {
       >
         月次パターンで確定する
       </Button>
-      {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
+      {generateErrors.rest != null && <ErrorMessage error={generateErrors.rest} />}
       {(!targetUserId || !workStyleId || !from || !to) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・対象年月を入力してください。</p>
       )}
@@ -611,9 +662,22 @@ function MonthlyPatternShiftAssignmentCard() {
   )
 }
 
+const SHIFT_PATTERN_ERROR_KEYS = [
+  'code',
+  'name',
+  'start_time',
+  'end_time',
+  'crosses_midnight',
+  'break_minutes',
+  'break_start_time',
+  'break_end_time',
+  'prescribed_work_minutes',
+] as const
+
 function ShiftPatternFormCard() {
   const { data: patterns, isLoading, error } = useShiftPatterns()
   const createShiftPattern = useCreateShiftPattern()
+  const { of, rest } = fieldErrors(createShiftPattern.error, SHIFT_PATTERN_ERROR_KEYS)
 
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
@@ -686,23 +750,23 @@ function ShiftPatternFormCard() {
       </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="パターンコード" htmlFor="shift-pattern-code" required>
+        <FormField label="パターンコード" htmlFor="shift-pattern-code" required error={of('code')}>
           <Input id="shift-pattern-code" value={code} onChange={(e) => setCode(e.target.value)} />
         </FormField>
 
-        <FormField label="パターン名称" htmlFor="shift-pattern-name" required>
+        <FormField label="パターン名称" htmlFor="shift-pattern-name" required error={of('name')}>
           <Input id="shift-pattern-name" value={name} onChange={(e) => setName(e.target.value)} />
         </FormField>
 
-        <FormField label="開始時刻" htmlFor="shift-pattern-start-time">
+        <FormField label="開始時刻" htmlFor="shift-pattern-start-time" error={of('start_time')}>
           <TimePicker id="shift-pattern-start-time" value={startTime} onChange={(time) => setStartTime(time ?? '')} />
         </FormField>
 
-        <FormField label="終了時刻" htmlFor="shift-pattern-end-time">
+        <FormField label="終了時刻" htmlFor="shift-pattern-end-time" error={of('end_time')}>
           <TimePicker id="shift-pattern-end-time" value={endTime} onChange={(time) => setEndTime(time ?? '')} />
         </FormField>
 
-        <FormField label="休憩(分)" htmlFor="shift-pattern-break-minutes">
+        <FormField label="休憩(分)" htmlFor="shift-pattern-break-minutes" error={of('break_minutes')}>
           <Input
             id="shift-pattern-break-minutes"
             type="number"
@@ -712,18 +776,18 @@ function ShiftPatternFormCard() {
           />
         </FormField>
 
-        <FormField label="休憩開始時刻" htmlFor="shift-pattern-break-start-time">
+        <FormField label="休憩開始時刻" htmlFor="shift-pattern-break-start-time" error={of('break_start_time')}>
           <TimePicker id="shift-pattern-break-start-time" value={breakStartTime} onChange={(time) => setBreakStartTime(time ?? '')} />
           <p className="mt-1 text-xs text-muted-foreground">
             日次勤怠の入力画面で、打刻が無く勤務予定がある日の休憩の初期値に使う。
           </p>
         </FormField>
 
-        <FormField label="休憩終了時刻" htmlFor="shift-pattern-break-end-time">
+        <FormField label="休憩終了時刻" htmlFor="shift-pattern-break-end-time" error={of('break_end_time')}>
           <TimePicker id="shift-pattern-break-end-time" value={breakEndTime} onChange={(time) => setBreakEndTime(time ?? '')} />
         </FormField>
 
-        <FormField label="所定労働時間(分)" htmlFor="shift-pattern-prescribed-minutes" required>
+        <FormField label="所定労働時間(分)" htmlFor="shift-pattern-prescribed-minutes" required error={of('prescribed_work_minutes')}>
           <Input
             id="shift-pattern-prescribed-minutes"
             type="number"
@@ -738,11 +802,12 @@ function ShiftPatternFormCard() {
         <Checkbox checked={crossesMidnight} onCheckedChange={(checked) => setCrossesMidnight(checked === true)} />
         日跨ぎ勤務(終了時刻は翌日)
       </label>
+      {of('crosses_midnight') && <p className="-mt-2 mb-4 text-xs text-destructive">{of('crosses_midnight')}</p>}
 
       <Button isLoading={createShiftPattern.isPending} disabled={!code || !name} onClick={handleCreate}>
         シフトパターンを作成する
       </Button>
-      {createShiftPattern.error && <ErrorMessage error={createShiftPattern.error} />}
+      {rest != null && <ErrorMessage error={rest} />}
       {(!code || !name) && (
         <p className="mt-1 text-xs text-muted-foreground">パターンコード・パターン名称を入力してください。</p>
       )}
@@ -759,6 +824,13 @@ function RotationPatternFormCard() {
   const { data: patterns } = useShiftPatterns()
   const { data: rotationPatterns } = useRotationPatterns()
   const createRotationPattern = useCreateRotationPattern()
+  const { of, ofRow, ofAny, rest } = fieldErrors(createRotationPattern.error, [
+    'work_style_id',
+    'name',
+    'items',
+    'items.*',
+    'items.*.shift_pattern_id',
+  ] as const)
 
   const shiftBasedWorkStyles = (workStyles ?? []).filter((style) => style.is_shift_based)
 
@@ -820,7 +892,7 @@ function RotationPatternFormCard() {
       </p>
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="対象の働き方(シフト制のみ)" htmlFor="rotation-pattern-work-style" required>
+        <FormField label="対象の働き方(シフト制のみ)" htmlFor="rotation-pattern-work-style" required error={of('work_style_id')}>
           <NativeSelect
             id="rotation-pattern-work-style"
             value={workStyleId}
@@ -835,7 +907,7 @@ function RotationPatternFormCard() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="ローテーションパターン名称" htmlFor="rotation-pattern-name" required>
+        <FormField label="ローテーションパターン名称" htmlFor="rotation-pattern-name" required error={of('name')}>
           <Input id="rotation-pattern-name" value={name} onChange={(e) => setName(e.target.value)} />
         </FormField>
       </div>
@@ -861,17 +933,25 @@ function RotationPatternFormCard() {
                 削除
               </Button>
             )}
+            {ofRow('items', index, 'shift_pattern_id') && (
+              <p className="text-xs text-destructive">{ofRow('items', index, 'shift_pattern_id')}</p>
+            )}
           </div>
         ))}
         <Button variant="secondary" onClick={handleAddItem}>
           周期に追加する
         </Button>
+        {ofAny('items').map((message) => (
+          <p key={message} className="text-xs text-destructive">
+            {message}
+          </p>
+        ))}
       </div>
 
       <Button isLoading={createRotationPattern.isPending} disabled={!canCreate} onClick={handleCreate}>
         ローテーションパターンを作成する
       </Button>
-      {createRotationPattern.error && <ErrorMessage error={createRotationPattern.error} />}
+      {rest != null && <ErrorMessage error={rest} />}
       {!canCreate && (
         <p className="mt-1 text-xs text-muted-foreground">
           対象の働き方・ローテーションパターン名称と、周期内のすべてのシフトパターンを入力してください。
@@ -899,6 +979,19 @@ function RotationAssignmentCard() {
   const assignRotation = useAssignEmployeeRotation()
   const previewRotation = usePreviewRotationPattern()
   const generateShifts = useGenerateRotationShiftAssignments()
+  const assignErrors = fieldErrors(assignRotation.error, [
+    'user_id',
+    'rotation_pattern_id',
+    'rotation_start_date',
+    'rotation_start_position',
+  ] as const)
+  const previewErrors = fieldErrors(previewRotation.error, [
+    'rotation_start_date',
+    'rotation_start_position',
+    'from',
+    'to',
+  ] as const)
+  const generateErrors = fieldErrors(generateShifts.error, ['user_id', 'from', 'to', 'overwrite_mode'] as const)
 
   const selectedPattern = rotationPatterns?.find((pattern) => pattern.id === rotationPatternId)
 
@@ -945,11 +1038,21 @@ function RotationAssignmentCard() {
     <Card title="ローテーションの割当・生成">
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="対象社員(ローテーション)" htmlFor="rotation-assignment-user" required>
+        <FormField
+          label="対象社員(ローテーション)"
+          htmlFor="rotation-assignment-user"
+          required
+          error={assignErrors.of('user_id') ?? generateErrors.of('user_id')}
+        >
           <UserPicker id="rotation-assignment-user" value={targetUserId} onChange={setTargetUserId} />
         </FormField>
 
-        <FormField label="ローテーションパターン" htmlFor="rotation-assignment-pattern" required>
+        <FormField
+          label="ローテーションパターン"
+          htmlFor="rotation-assignment-pattern"
+          required
+          error={assignErrors.of('rotation_pattern_id')}
+        >
           <NativeSelect
             id="rotation-assignment-pattern"
             value={rotationPatternId}
@@ -964,7 +1067,12 @@ function RotationAssignmentCard() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="ローテーション開始日" htmlFor="rotation-assignment-start-date" required>
+        <FormField
+          label="ローテーション開始日"
+          htmlFor="rotation-assignment-start-date"
+          required
+          error={assignErrors.of('rotation_start_date') ?? previewErrors.of('rotation_start_date')}
+        >
           <DatePicker
             id="rotation-assignment-start-date"
             value={rotationStartDate || undefined}
@@ -972,7 +1080,12 @@ function RotationAssignmentCard() {
           />
         </FormField>
 
-        <FormField label="開始位置(0始まり)" htmlFor="rotation-assignment-start-position" required>
+        <FormField
+          label="開始位置(0始まり)"
+          htmlFor="rotation-assignment-start-position"
+          required
+          error={assignErrors.of('rotation_start_position') ?? previewErrors.of('rotation_start_position')}
+        >
           <Input
             id="rotation-assignment-start-position"
             type="number"
@@ -998,7 +1111,7 @@ function RotationAssignmentCard() {
       >
         ローテーションを割り当てる
       </Button>
-      {assignRotation.error && <ErrorMessage error={assignRotation.error} />}
+      {assignErrors.rest != null && <ErrorMessage error={assignErrors.rest} />}
       {(!targetUserId || !rotationPatternId || !rotationStartDate) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・ローテーションパターン・ローテーション開始日を入力してください。</p>
       )}
@@ -1007,11 +1120,21 @@ function RotationAssignmentCard() {
         <h3 className="mb-2 text-sm font-semibold text-foreground">カレンダープレビュー・生成</h3>
 
         <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="生成開始日" htmlFor="rotation-generate-from" required>
+          <FormField
+            label="生成開始日"
+            htmlFor="rotation-generate-from"
+            required
+            error={previewErrors.of('from') ?? generateErrors.of('from')}
+          >
             <DatePicker id="rotation-generate-from" value={generateFrom || undefined} onChange={(date) => setGenerateFrom(date ?? '')} />
           </FormField>
 
-          <FormField label="生成終了日" htmlFor="rotation-generate-to" required>
+          <FormField
+            label="生成終了日"
+            htmlFor="rotation-generate-to"
+            required
+            error={previewErrors.of('to') ?? generateErrors.of('to')}
+          >
             <DatePicker id="rotation-generate-to" value={generateTo || undefined} onChange={(date) => setGenerateTo(date ?? '')} />
           </FormField>
         </div>
@@ -1026,7 +1149,7 @@ function RotationAssignmentCard() {
             >
               プレビューする
             </Button>
-            {previewRotation.error && <ErrorMessage error={previewRotation.error} />}
+            {previewErrors.rest != null && <ErrorMessage error={previewErrors.rest} />}
             {(!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo) && (
               <p className="mt-1 text-xs text-muted-foreground">
                 ローテーションパターン・ローテーション開始日・生成開始日・生成終了日を入力してください。
@@ -1045,7 +1168,7 @@ function RotationAssignmentCard() {
           </ul>
         )}
 
-        <FormField label="再生成時の扱い" htmlFor="rotation-overwrite-mode">
+        <FormField label="再生成時の扱い" htmlFor="rotation-overwrite-mode" error={generateErrors.of('overwrite_mode')}>
           <NativeSelect
             id="rotation-overwrite-mode"
             value={overwriteMode}
@@ -1064,7 +1187,7 @@ function RotationAssignmentCard() {
         >
           勤務予定を生成する
         </Button>
-        {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
+        {generateErrors.rest != null && <ErrorMessage error={generateErrors.rest} />}
         {(!targetUserId || !generateFrom || !generateTo) && (
           <p className="mt-1 text-xs text-muted-foreground">対象社員・生成開始日・生成終了日を入力してください。</p>
         )}
@@ -1096,6 +1219,13 @@ function ShiftScheduleBoardCard() {
   const [isPublishConfirmOpen, setIsPublishConfirmOpen] = useState(false)
 
   const assignPattern = useAssignShiftPatternDay()
+  const { of, rest } = fieldErrors(assignPattern.error, [
+    'user_id',
+    'work_style_id',
+    'work_date',
+    'shift_pattern_id',
+    'is_legal_holiday',
+  ] as const)
   const publishSchedule = usePublishShiftSchedule()
 
   const reviewTarget = department && yearMonth ? { department, year_month: yearMonth } : undefined
@@ -1128,11 +1258,11 @@ function ShiftScheduleBoardCard() {
       <h3 className="mb-3 text-sm font-semibold text-foreground">日別にシフトパターンを割り当てる</h3>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="対象社員(シフト表)" htmlFor="shift-board-user" required>
+        <FormField label="対象社員(シフト表)" htmlFor="shift-board-user" required error={of('user_id')}>
           <UserPicker id="shift-board-user" value={userId} onChange={setUserId} />
         </FormField>
 
-        <FormField label="勤務形態(シフト表)" htmlFor="shift-board-work-style" required>
+        <FormField label="勤務形態(シフト表)" htmlFor="shift-board-work-style" required error={of('work_style_id')}>
           <NativeSelect id="shift-board-work-style" value={workStyleId} onChange={(e) => setWorkStyleId(e.target.value)}>
             <option value="">選択してください</option>
             {workStyles?.filter((style) => style.is_shift_based).map((style) => (
@@ -1143,11 +1273,11 @@ function ShiftScheduleBoardCard() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="対象日" htmlFor="shift-board-date" required>
+        <FormField label="対象日" htmlFor="shift-board-date" required error={of('work_date')}>
           <DatePicker id="shift-board-date" value={workDate || undefined} onChange={(date) => setWorkDate(date ?? '')} />
         </FormField>
 
-        <FormField label="シフトパターン" htmlFor="shift-board-pattern" required>
+        <FormField label="シフトパターン" htmlFor="shift-board-pattern" required error={of('shift_pattern_id')}>
           <NativeSelect id="shift-board-pattern" value={shiftPatternId} onChange={(e) => setShiftPatternId(e.target.value)}>
             <option value="">選択してください</option>
             {patterns?.map((pattern) => (
@@ -1163,6 +1293,7 @@ function ShiftScheduleBoardCard() {
         <Checkbox checked={isLegalHoliday} onCheckedChange={(checked) => setIsLegalHoliday(checked === true)} />
         この日を法定休日にする
       </label>
+      {of('is_legal_holiday') && <p className="-mt-2 mb-4 text-xs text-destructive">{of('is_legal_holiday')}</p>}
 
       <Button
         isLoading={assignPattern.isPending}
@@ -1171,7 +1302,7 @@ function ShiftScheduleBoardCard() {
       >
         割り当てる(下書き)
       </Button>
-      {assignPattern.error && <ErrorMessage error={assignPattern.error} />}
+      {rest != null && <ErrorMessage error={rest} />}
       {(!userId || !workStyleId || !workDate || !shiftPatternId) && (
         <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・対象日・シフトパターンを入力してください。</p>
       )}

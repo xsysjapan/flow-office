@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
 import type {
@@ -107,6 +108,70 @@ describe('SpecialLeaveAdminPage', () => {
       expect(specialLeaveApi.createSpecialLeaveType).toHaveBeenCalledWith({ name: 'リフレッシュ休暇', requires_grant: true }),
     )
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('特別休暇の種類「リフレッシュ休暇」を追加しました'))
+  })
+
+  it('shows the type creation 422 messages once under the name and the checkbox, with the heading', async () => {
+    vi.spyOn(specialLeaveApi, 'createSpecialLeaveType').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        name: ['種類名のエラー'],
+        requires_grant: ['要付与のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    )
+    renderPage([])
+
+    await screen.findByText('特別休暇の種類はまだありません。作成するまで特別休暇メニューは表示されません。')
+    await userEvent.type(screen.getByLabelText('種類名(例: 誕生日休暇、代休)'), 'x')
+    await userEvent.click(screen.getByRole('button', { name: '追加する' }))
+
+    for (const message of ['種類名のエラー', '要付与のエラー', 'その他のエラー']) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+  })
+
+  it('shows the rule creation 422 messages once under each field and the added step row, with the heading', async () => {
+    vi.spyOn(specialLeaveApi, 'createSpecialLeaveGrantRule').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        special_leave_type_id: ['種類のエラー'],
+        name: ['ルール名のエラー'],
+        min_attendance_rate: ['出勤率のエラー'],
+        first_grant_after_months: ['初回のエラー'],
+        grant_cycle_months: ['サイクルのエラー'],
+        expires_after_months: ['失効のエラー'],
+        is_active: ['有効のエラー'],
+        'steps.0.continuous_service_months': ['月数のエラー'],
+        'steps.0.grant_days': ['日数のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    )
+    renderPage()
+    await screen.findByText('誕生日休暇: 誕生日休暇ルール')
+
+    await userEvent.selectOptions(screen.getAllByLabelText('特別休暇の種類')[0], '誕生日休暇')
+    await userEvent.type(screen.getByLabelText('ルール名'), 'x')
+    await userEvent.type(screen.getByLabelText('継続勤務(か月)'), '3')
+    await userEvent.type(screen.getByLabelText('付与日数', { selector: '#special-leave-rule-step-days' }), '2')
+    await userEvent.click(screen.getByRole('button', { name: '追加' }))
+    await userEvent.click(screen.getByRole('button', { name: 'ルールを作成' }))
+
+    for (const message of [
+      '種類のエラー',
+      'ルール名のエラー',
+      '出勤率のエラー',
+      '初回のエラー',
+      'サイクルのエラー',
+      '失効のエラー',
+      '有効のエラー',
+      '月数のエラー',
+      '日数のエラー',
+      'その他のエラー',
+    ]) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
   })
 
   it('lists existing grant rules with their steps and expiry', async () => {

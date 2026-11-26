@@ -29,6 +29,7 @@ import {
   usePreviewCalendarBulkOperation,
   useRevertCalendarBulkOperation,
 } from '../../hooks/useCalendarBulkOperations'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 const OPERATION_TYPE_OPTIONS: { value: CalendarBulkOperationType; label: string }[] = [
   { value: 'calendar_apply', label: '会社カレンダー適用' },
@@ -53,6 +54,17 @@ const STATUS_TONE: Record<string, 'success' | 'neutral' | 'danger'> = {
   reverted: 'neutral',
   failed: 'danger',
 }
+
+/** 項目の下に出す422のキー(プレビューの入力)。描く項目と同じ条件で組み立てる。 */
+const COMMON_ERROR_KEYS = ['operation_type', 'conflict_policy', 'reason'] as const
+const PERIOD_ERROR_KEYS = ['target_scope.from', 'target_scope.to', 'target_scope.user_ids', 'target_scope.user_ids.*'] as const
+const WORK_STYLE_ERROR_KEYS = ['target_scope.work_style_id'] as const
+const ENTRY_ERROR_KEYS = [
+  'target_scope.entries',
+  'target_scope.entries.*.user_id',
+  'target_scope.entries.*.work_date',
+  'target_scope.entries.*.schedule_state',
+] as const
 
 interface UserRow {
   userId: string
@@ -117,6 +129,19 @@ export function CalendarBulkOperationsPage() {
     ? entryRows.some((row) => row.userId && row.workDate)
     : userRows.some((row) => row.userId) && Boolean(from) && Boolean(to) && (operationType !== 'calendar_apply' || Boolean(workStyleId))
 
+  const { of, ofRow, ofAny, rest: previewRest } = fieldErrors(preview.error, [
+    ...COMMON_ERROR_KEYS,
+    ...(isEntryBased ? ENTRY_ERROR_KEYS : PERIOD_ERROR_KEYS),
+    ...(!isEntryBased && operationType === 'calendar_apply' ? WORK_STYLE_ERROR_KEYS : []),
+  ] as const)
+  // 個別指定編集は、社員と対象日が入った行だけを送るため、422の行番号は送った行の順番になる。
+  const sentEntryRowIds = entryRows.filter((row) => row.userId && row.workDate).map((row) => row.rowId)
+  const entryRowError = (rowId: number) => {
+    const index = sentEntryRowIds.indexOf(rowId)
+    if (index < 0) return undefined
+    return ofRow('target_scope.entries', index, 'user_id') ?? ofRow('target_scope.entries', index, 'work_date') ?? ofRow('target_scope.entries', index, 'schedule_state')
+  }
+
   const handlePreview = () => {
     preview.mutate({
       operation_type: operationType,
@@ -144,7 +169,7 @@ export function CalendarBulkOperationsPage() {
       <PageHeader description="複数従業員の勤務予定を一括で適用・取消します。プレビューで確認してから確定します。" />
       <Card title="一括操作を作成">
         <FormLayout>
-          <FormField label="操作種別" htmlFor="bulk-op-type" required>
+          <FormField label="操作種別" htmlFor="bulk-op-type" required error={of('operation_type')}>
             <NativeSelect
               id="bulk-op-type"
               value={operationType}
@@ -161,7 +186,7 @@ export function CalendarBulkOperationsPage() {
             </NativeSelect>
           </FormField>
 
-          <FormField label="競合時の方針" htmlFor="bulk-op-conflict-policy" required>
+          <FormField label="競合時の方針" htmlFor="bulk-op-conflict-policy" required error={of('conflict_policy')}>
             <NativeSelect
               id="bulk-op-conflict-policy"
               value={conflictPolicy}
@@ -175,23 +200,23 @@ export function CalendarBulkOperationsPage() {
             </NativeSelect>
           </FormField>
 
-        <FormField label="理由" htmlFor="bulk-op-reason" required>
+        <FormField label="理由" htmlFor="bulk-op-reason" required error={of('reason')}>
           <Textarea id="bulk-op-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
         </FormField>
 
         {!isEntryBased && (
           <>
             <FormRow>
-              <FormField label="対象期間(開始)" htmlFor="bulk-op-from" required>
+              <FormField label="対象期間(開始)" htmlFor="bulk-op-from" required error={of('target_scope.from')}>
                 <DatePicker id="bulk-op-from" value={from || undefined} onChange={(date) => setFrom(date ?? '')} />
               </FormField>
-              <FormField label="対象期間(終了)" htmlFor="bulk-op-to" required>
+              <FormField label="対象期間(終了)" htmlFor="bulk-op-to" required error={of('target_scope.to')}>
                 <DatePicker id="bulk-op-to" value={to || undefined} onChange={(date) => setTo(date ?? '')} />
               </FormField>
             </FormRow>
 
             {operationType === 'calendar_apply' && (
-              <FormField label="勤務形態" htmlFor="bulk-op-work-style" required>
+              <FormField label="勤務形態" htmlFor="bulk-op-work-style" required error={of('target_scope.work_style_id')}>
                 <NativeSelect id="bulk-op-work-style" value={workStyleId} onChange={(e) => setWorkStyleId(e.target.value)}>
                   <option value="">選択してください</option>
                   {workStyles?.map((workStyle) => (
@@ -222,6 +247,11 @@ export function CalendarBulkOperationsPage() {
               <Button variant="secondary" onClick={() => addUserRow({ userId: '' })}>
                 社員を追加
               </Button>
+              {ofAny('target_scope.user_ids').map((message) => (
+                <p key={message} className="text-xs text-destructive">
+                  {message}
+                </p>
+              ))}
             </div>
           </>
         )}
@@ -273,6 +303,7 @@ export function CalendarBulkOperationsPage() {
                       <Button variant="secondary" onClick={() => removeEntryRow(row.rowId)}>
                         削除
                       </Button>
+                      {entryRowError(row.rowId) && <p className="mt-1 text-xs text-destructive">{entryRowError(row.rowId)}</p>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -285,6 +316,11 @@ export function CalendarBulkOperationsPage() {
             >
               行を追加
             </Button>
+            {ofAny('target_scope.entries').map((message) => (
+              <p key={message} className="mt-1 text-xs text-destructive">
+                {message}
+              </p>
+            ))}
           </div>
         )}
 
@@ -296,7 +332,7 @@ export function CalendarBulkOperationsPage() {
                 : `対象社員を1名以上、対象期間(開始・終了)を入力してください${operationType === 'calendar_apply' ? '(会社カレンダー適用は勤務形態も必須)' : ''}。`}
             </p>
           )}
-          {preview.error && <ErrorMessage error={preview.error} />}
+          {previewRest != null && <ErrorMessage error={previewRest} />}
           <FormActions>
             <Button isLoading={preview.isPending} disabled={!canPreview} onClick={handlePreview}>
               プレビューする

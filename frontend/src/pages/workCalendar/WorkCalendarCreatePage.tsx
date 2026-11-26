@@ -18,8 +18,25 @@ import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { useCreateHolidayCalendarSource, useHolidayCalendarSources } from '../../hooks/useHolidayCalendarSources'
 import { useCreateWorkCalendar } from '../../hooks/useWorkCalendars'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { isWorkCalendarCreateDirty } from './workCalendarCreateDirty'
 import type { WeekdayHolidayPattern, WeekdayHolidayPatternDayType } from '../../api/types'
+
+/** 会社カレンダーの作成で項目の下に出す422のキー。 */
+const CALENDAR_ERROR_KEYS = [
+  'name',
+  'week_starts_on',
+  'fiscal_year_start_month',
+  'fiscal_year_start_day',
+  'weekday_holiday_pattern',
+  'allows_daily_holiday_override',
+  'holiday_calendar_source_id',
+] as const
+
+/** 休日iCalendarソースの登録(展開したときだけ描く)で項目の下に出す422のキー。 */
+const SOURCE_ERROR_KEYS = ['name'] as const
+const SOURCE_URL_ERROR_KEYS = ['ics_url'] as const
+const SOURCE_FILE_ERROR_KEYS = ['ics_file'] as const
 
 const ICS_FILE_ACCEPT = '.ics,.ical,.ifb'
 
@@ -109,6 +126,13 @@ export function WorkCalendarCreatePage() {
   const [newSourceIcsUrl, setNewSourceIcsUrl] = useState('')
   const [newSourceIcsFile, setNewSourceIcsFile] = useState<File | undefined>(undefined)
 
+  const calendarErrors = fieldErrors(createCalendar.error, CALENDAR_ERROR_KEYS)
+  const sourceErrors = fieldErrors(createSource.error, [
+    ...(isRegisteringSource ? SOURCE_ERROR_KEYS : []),
+    ...(isRegisteringSource && newSourceMode === 'url' ? SOURCE_URL_ERROR_KEYS : []),
+    ...(isRegisteringSource && newSourceMode === 'upload' ? SOURCE_FILE_ERROR_KEYS : []),
+  ] as const)
+
   const patch = (next: Partial<typeof form>) => setForm((prev) => ({ ...prev, ...next }))
 
   const handleCreateSource = () => {
@@ -161,11 +185,11 @@ export function WorkCalendarCreatePage() {
 
       <Card>
         <FormLayout>
-        <FormField label="カレンダー名" htmlFor="create-calendar-name" required>
+        <FormField label="カレンダー名" htmlFor="create-calendar-name" required error={calendarErrors.of('name')}>
           <Input id="create-calendar-name" value={form.name} onChange={(e) => patch({ name: e.target.value })} />
         </FormField>
 
-        <FormField label="週の開始曜日" htmlFor="create-calendar-week-starts-on">
+        <FormField label="週の開始曜日" htmlFor="create-calendar-week-starts-on" error={calendarErrors.of('week_starts_on')}>
           <NativeSelect
             id="create-calendar-week-starts-on"
             value={form.weekStartsOn}
@@ -181,7 +205,11 @@ export function WorkCalendarCreatePage() {
         </FormField>
 
         <FormRow>
-          <FormField label="年度開始月" htmlFor="create-calendar-fiscal-year-start-month">
+          <FormField
+            label="年度開始月"
+            htmlFor="create-calendar-fiscal-year-start-month"
+            error={calendarErrors.of('fiscal_year_start_month')}
+          >
             <Input
               id="create-calendar-fiscal-year-start-month"
               type="number"
@@ -192,7 +220,11 @@ export function WorkCalendarCreatePage() {
             />
           </FormField>
 
-          <FormField label="年度開始日" htmlFor="create-calendar-fiscal-year-start-day">
+          <FormField
+            label="年度開始日"
+            htmlFor="create-calendar-fiscal-year-start-day"
+            error={calendarErrors.of('fiscal_year_start_day')}
+          >
             <Input
               id="create-calendar-fiscal-year-start-day"
               type="number"
@@ -237,6 +269,9 @@ export function WorkCalendarCreatePage() {
               </FormField>
             ))}
           </FormRow>
+          {calendarErrors.of('weekday_holiday_pattern') && (
+            <p className="mb-4 text-xs text-destructive">{calendarErrors.of('weekday_holiday_pattern')}</p>
+          )}
           <div className="mb-4">
             <label className="flex items-center gap-2 text-sm text-foreground">
               <Checkbox
@@ -249,12 +284,19 @@ export function WorkCalendarCreatePage() {
             <p className="mt-1 text-xs text-muted-foreground">
               この設定を有効にすると、会社カレンダーの各日ごとに休日区分を個別に変更できるようになります。
             </p>
+            {calendarErrors.of('allows_daily_holiday_override') && (
+              <p className="mt-1 text-xs text-destructive">{calendarErrors.of('allows_daily_holiday_override')}</p>
+            )}
           </div>
         </FormSection>
 
         <div className="mt-4" />
 
-        <FormField label="休日iCalendarソース" htmlFor="create-calendar-holiday-source">
+        <FormField
+          label="休日iCalendarソース"
+          htmlFor="create-calendar-holiday-source"
+          error={calendarErrors.of('holiday_calendar_source_id')}
+        >
           <NativeSelect
             id="create-calendar-holiday-source"
             value={form.holidaySourceId}
@@ -269,7 +311,7 @@ export function WorkCalendarCreatePage() {
           </NativeSelect>
         </FormField>
 
-        {createSource.error && <ErrorMessage error={createSource.error} />}
+        {sourceErrors.rest != null && <ErrorMessage error={sourceErrors.rest} />}
 
         {!isRegisteringSource ? (
           <div className="mb-4">
@@ -280,7 +322,7 @@ export function WorkCalendarCreatePage() {
         ) : (
           <div className="mb-4">
             <div>
-              <FormField label="名称" htmlFor="create-calendar-holiday-source-name" required>
+              <FormField label="名称" htmlFor="create-calendar-holiday-source-name" required error={sourceErrors.of('name')}>
                 <Input
                   id="create-calendar-holiday-source-name"
                   value={newSourceName}
@@ -314,7 +356,12 @@ export function WorkCalendarCreatePage() {
             </div>
 
             {newSourceMode === 'url' ? (
-              <FormField label="iCalendar URL" htmlFor="create-calendar-holiday-source-ics-url" required>
+              <FormField
+                label="iCalendar URL"
+                htmlFor="create-calendar-holiday-source-ics-url"
+                required
+                error={sourceErrors.of('ics_url')}
+              >
                 <Input
                   id="create-calendar-holiday-source-ics-url"
                   type="url"
@@ -323,7 +370,12 @@ export function WorkCalendarCreatePage() {
                 />
               </FormField>
             ) : (
-              <FormField label="iCalendarファイル" htmlFor="create-calendar-holiday-source-ics-file" required>
+              <FormField
+                label="iCalendarファイル"
+                htmlFor="create-calendar-holiday-source-ics-file"
+                required
+                error={sourceErrors.of('ics_file')}
+              >
                 <Input
                   id="create-calendar-holiday-source-ics-file"
                   type="file"
@@ -349,7 +401,7 @@ export function WorkCalendarCreatePage() {
         )}
 
         {!form.name && <p className="mb-2 text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
-        {createCalendar.error && <ErrorMessage error={createCalendar.error} />}
+        {calendarErrors.rest != null && <ErrorMessage error={calendarErrors.rest} />}
         <FormActions>
           <Button variant="secondary" onClick={() =>
               backTarget

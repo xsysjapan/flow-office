@@ -11,6 +11,7 @@ import { LeaveReturnedNotice } from '../../components/LeaveReturnedNotice/LeaveR
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { DateRangePicker, type DateRangeValue } from '../../components/DateRangePicker/DateRangePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -92,6 +93,15 @@ function CompensatoryLeaveRequestForm() {
   const isMultiDay = targetDates.length > 1
   const effectiveLeaveType: PaidLeaveType = isMultiDay ? 'full' : leaveType
 
+  // 描く項目と同じ条件で、項目の下に出す422のキーを組み立てる(複数日は取得単位・時間の入力を描かない)。
+  const { of, rest } = fieldErrors(createRequest.error, [
+    'target_date',
+    'reason',
+    ...(!isMultiDay ? (['leave_type'] as const) : []),
+    ...(!isMultiDay && leaveType === 'hourly' ? (['hours'] as const) : []),
+    ...(approvalRequired ? (['approver_user_id'] as const) : []),
+  ] as const)
+
   const canSubmit =
     targetDates.length > 0 &&
     (!approvalRequired || approverUserId) &&
@@ -155,7 +165,7 @@ function CompensatoryLeaveRequestForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      {createRequest.error && <ErrorMessage error={createRequest.error} />}
+      {rest != null && <ErrorMessage error={rest} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="対象日の指定方法" htmlFor="compensatory-leave-target-mode">
@@ -170,7 +180,7 @@ function CompensatoryLeaveRequestForm() {
         </FormField>
 
         {targetMode === 'dates' ? (
-          <FormField label="対象日" htmlFor="compensatory-leave-target-date" required>
+          <FormField label="対象日" htmlFor="compensatory-leave-target-date" required error={of('target_date')}>
             <div className="flex flex-col gap-2">
               <DatePicker id="compensatory-leave-target-date" value={undefined} onChange={addDate} />
               {selectedDates.length > 0 && (
@@ -196,7 +206,7 @@ function CompensatoryLeaveRequestForm() {
             </div>
           </FormField>
         ) : (
-          <FormField label="対象日(期間)" htmlFor="compensatory-leave-target-range" required>
+          <FormField label="対象日(期間)" htmlFor="compensatory-leave-target-range" required error={of('target_date')}>
             <DateRangePicker id="compensatory-leave-target-range" value={range} onChange={setRange} />
           </FormField>
         )}
@@ -206,7 +216,7 @@ function CompensatoryLeaveRequestForm() {
             複数日をまとめて申請する場合、取得単位は全休固定になります。
           </p>
         ) : (
-          <FormField label="取得単位" htmlFor="compensatory-leave-type" required>
+          <FormField label="取得単位" htmlFor="compensatory-leave-type" required error={of('leave_type')}>
             <NativeSelect
               id="compensatory-leave-type"
               value={leaveType}
@@ -222,7 +232,7 @@ function CompensatoryLeaveRequestForm() {
         )}
 
         {!isMultiDay && leaveType === 'hourly' && (
-          <FormField label="取得時間" htmlFor="compensatory-leave-hours" required>
+          <FormField label="取得時間" htmlFor="compensatory-leave-hours" required error={of('hours')}>
             <Input
               id="compensatory-leave-hours"
               type="number"
@@ -235,7 +245,7 @@ function CompensatoryLeaveRequestForm() {
         )}
 
         {approvalRequired ? (
-          <FormField label="承認者" htmlFor="compensatory-leave-approver" required>
+          <FormField label="承認者" htmlFor="compensatory-leave-approver" required error={of('approver_user_id')}>
             <UserPicker id="compensatory-leave-approver" value={approverUserId} onChange={setApproverUserId} />
           </FormField>
         ) : (
@@ -244,7 +254,7 @@ function CompensatoryLeaveRequestForm() {
           </p>
         )}
 
-        <FormField label="理由(任意)" htmlFor="compensatory-leave-reason">
+        <FormField label="理由(任意)" htmlFor="compensatory-leave-reason" error={of('reason')}>
           <Input id="compensatory-leave-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
         </FormField>
       </div>

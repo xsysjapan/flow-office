@@ -4,6 +4,7 @@ import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { FormField } from '../FormField/FormField'
 import { notify } from '../../lib/notify'
 import { Input } from '../ui/input'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 export interface RevokeGrantButtonProps {
   id: string
@@ -36,6 +37,7 @@ export function RevokeGrantButton({
   disabledReason,
 }: RevokeGrantButtonProps) {
   const [reason, setReason] = useState('')
+  const { of, rest } = fieldErrors(error, ['reason'] as const)
 
   if (disabled) {
     return (
@@ -52,7 +54,7 @@ export function RevokeGrantButton({
       description={description}
       confirmLabel="取消する"
       isPending={isPending}
-      error={error}
+      error={rest}
       onConfirm={async () => {
         await onRevoke(reason || undefined)
         notify.success(`${grantedOn}付与を取り消しました`)
@@ -61,7 +63,7 @@ export function RevokeGrantButton({
         if (open) setReason('')
       }}
     >
-      <FormField label="取消理由(任意)" htmlFor={id}>
+      <FormField label="取消理由(任意)" htmlFor={id} error={of('reason')}>
         <Input id={id} value={reason} onChange={(e) => setReason(e.target.value)} />
       </FormField>
     </ConfirmActionDialog>

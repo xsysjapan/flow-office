@@ -11,6 +11,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -74,6 +75,12 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
   const [expectedReturnAt, setExpectedReturnAt] = useState<string | undefined>(undefined)
   const [loanRequestId, setLoanRequestId] = useState<string | undefined>(undefined)
   const isApproval = asset.lending_method === 'approval'
+  // 描く項目と同じ条件で組み立てる(承認済みの申請の選択は、承認制で借用者を選んだときだけ描く)。
+  const { of, rest } = fieldErrors(lendAsset.error, [
+    'borrower_user_id',
+    'expected_return_at',
+    ...(isApproval && borrowerUserId ? (['loan_request_id'] as const) : []),
+  ] as const)
 
   const {
     data: approvedLoanRequests,
@@ -102,7 +109,7 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
       description="借用者を指定して貸与します。"
       confirmLabel="貸与する"
       isPending={lendAsset.isPending}
-      error={lendAsset.error}
+      error={rest}
       onConfirm={async () => {
         if (!borrowerUserId) throw new Error('借用者を選択してください。')
         if (isApproval && !loanRequestId) throw new Error('承認済みの貸出申請を選択してください。')
@@ -125,7 +132,7 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
         if (open) resetSelection()
       }}
     >
-      <FormField label="借用者" htmlFor="lend-borrower" required>
+      <FormField label="借用者" htmlFor="lend-borrower" required error={of('borrower_user_id')}>
         <UserPicker
           id="lend-borrower"
           value={borrowerUserId}
@@ -136,12 +143,12 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
           }}
         />
       </FormField>
-      <FormField label="返却予定日" htmlFor="lend-expected-return">
+      <FormField label="返却予定日" htmlFor="lend-expected-return" error={of('expected_return_at')}>
         <DatePicker id="lend-expected-return" value={expectedReturnAt} onChange={setExpectedReturnAt} />
       </FormField>
 
       {isApproval && borrowerUserId && (
-        <FormField label="承認済みの貸出申請" htmlFor="lend-loan-request" required>
+        <FormField label="承認済みの貸出申請" htmlFor="lend-loan-request" required error={of('loan_request_id')}>
           {isLoadingLoanRequests ? (
             <LoadingState />
           ) : !approvedLoanRequests || approvedLoanRequests.length === 0 ? (
@@ -184,7 +191,8 @@ function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
 
   const isPending = createRequest.isPending || submitRequest.isPending
-  const error = createRequest.error ?? submitRequest.error
+  // 同時に失敗するのは作成か提出のどちらか1つ(承認者のキーは両方に出る)。
+  const { of, rest } = fieldErrors(createRequest.error ?? submitRequest.error, ['approver_user_id'] as const)
 
   return (
     <ConfirmActionDialog
@@ -194,7 +202,7 @@ function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
       description="承認されると、承認者(または備品管理担当者)が貸与操作を行います。"
       confirmLabel="申請する"
       isPending={isPending}
-      error={error}
+      error={rest}
       onConfirm={async () => {
         if (!approverUserId) throw new Error('承認者を選択してください。')
         const created = await createRequest.mutateAsync({
@@ -218,7 +226,7 @@ function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
       <FormField label="利用目的" htmlFor="asset-loan-purpose">
         <Textarea id="asset-loan-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
       </FormField>
-      <FormField label="承認者" htmlFor="asset-loan-approver" required>
+      <FormField label="承認者" htmlFor="asset-loan-approver" required error={of('approver_user_id')}>
         <UserPicker
           id="asset-loan-approver"
           value={approverUserId}
@@ -253,6 +261,7 @@ function SelfBorrowButton({ asset, borrowerUserId }: { asset: Asset; borrowerUse
 function ReturnAssetDialog({ asset }: { asset: Asset }) {
   const returnAsset = useReturnAsset()
   const [returnNote, setReturnNote] = useState('')
+  const { of, rest } = fieldErrors(returnAsset.error, ['return_note'] as const)
 
   return (
     <ConfirmActionDialog
@@ -262,14 +271,14 @@ function ReturnAssetDialog({ asset }: { asset: Asset }) {
       description="返却済みとして記録します。"
       confirmLabel="返却する"
       isPending={returnAsset.isPending}
-      error={returnAsset.error}
+      error={rest}
       onConfirm={async () => {
         await returnAsset.mutateAsync({ id: asset.id, input: { return_note: returnNote || null } })
         notify.success(`${asset.name}を返却しました`)
         setReturnNote('')
       }}
     >
-      <FormField label="返却時の備考(任意)" htmlFor="return-note">
+      <FormField label="返却時の備考(任意)" htmlFor="return-note" error={of('return_note')}>
         <Input id="return-note" value={returnNote} onChange={(e) => setReturnNote(e.target.value)} />
       </FormField>
     </ConfirmActionDialog>
@@ -294,6 +303,7 @@ function LocationTextDialog({
   onConfirm: (locationText: string) => Promise<unknown>
 }) {
   const [locationText, setLocationText] = useState('')
+  const { of, rest } = fieldErrors(error, ['location_text'] as const)
 
   return (
     <ConfirmActionDialog
@@ -303,7 +313,7 @@ function LocationTextDialog({
       description={description}
       confirmLabel={confirmLabel}
       isPending={isPending}
-      error={error}
+      error={rest}
       onConfirm={async () => {
         if (!locationText.trim()) throw new Error('場所を入力してください。')
         await onConfirm(locationText)
@@ -313,7 +323,7 @@ function LocationTextDialog({
         if (open) setLocationText('')
       }}
     >
-      <FormField label="場所" htmlFor="location-text" required>
+      <FormField label="場所" htmlFor="location-text" required error={of('location_text')}>
         <Input id="location-text" value={locationText} onChange={(e) => setLocationText(e.target.value)} />
       </FormField>
     </ConfirmActionDialog>
@@ -340,6 +350,7 @@ function NoteDialog({
   onConfirm: (note: string | null) => Promise<unknown>
 }) {
   const [note, setNote] = useState('')
+  const { of, rest } = fieldErrors(error, ['note'] as const)
 
   return (
     <ConfirmActionDialog
@@ -349,7 +360,7 @@ function NoteDialog({
       description={description}
       confirmLabel={confirmLabel}
       isPending={isPending}
-      error={error}
+      error={rest}
       onConfirm={async () => {
         await onConfirm(note || null)
         setNote('')
@@ -358,7 +369,7 @@ function NoteDialog({
         if (open) setNote('')
       }}
     >
-      <FormField label="備考(任意)" htmlFor="note-text">
+      <FormField label="備考(任意)" htmlFor="note-text" error={of('note')}>
         <Textarea id="note-text" value={note} onChange={(e) => setNote(e.target.value)} />
       </FormField>
     </ConfirmActionDialog>
@@ -389,6 +400,7 @@ function ManagementTypeChangeDialog({ asset }: { asset: Asset }) {
 function LendingMethodChangeDialog({ asset }: { asset: Asset }) {
   const changeLendingMethod = useChangeAssetLendingMethod()
   const [lendingMethod, setLendingMethod] = useState(asset.lending_method ?? 'backoffice')
+  const { of, rest } = fieldErrors(changeLendingMethod.error, ['lending_method'] as const)
 
   return (
     <ConfirmActionDialog
@@ -398,7 +410,7 @@ function LendingMethodChangeDialog({ asset }: { asset: Asset }) {
       description="セルフ貸出方式へ変更する場合、通常配置場所が設定済みである必要があります。"
       confirmLabel="変更する"
       isPending={changeLendingMethod.isPending}
-      error={changeLendingMethod.error}
+      error={rest}
       onConfirm={async () => {
         await changeLendingMethod.mutateAsync({ id: asset.id, lendingMethod })
         notify.success(`${asset.name}の貸出方式を${assetLendingMethodLabel(lendingMethod)}に変更しました`)
@@ -407,7 +419,7 @@ function LendingMethodChangeDialog({ asset }: { asset: Asset }) {
         if (open) setLendingMethod(asset.lending_method ?? 'backoffice')
       }}
     >
-      <FormField label="貸出方式" htmlFor="lending-method-select" required>
+      <FormField label="貸出方式" htmlFor="lending-method-select" required error={of('lending_method')}>
         <NativeSelect
           id="lending-method-select"
           value={lendingMethod}

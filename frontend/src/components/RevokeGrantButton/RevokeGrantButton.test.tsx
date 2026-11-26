@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { ApiError } from '../../api/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { notify } from '../../lib/notify'
 import { RevokeGrantButton } from './RevokeGrantButton'
@@ -29,6 +30,32 @@ describe('RevokeGrantButton', () => {
 
     expect(onRevoke).toHaveBeenCalledWith('入力ミス')
     expect(notify.success).toHaveBeenCalledWith('2026-07-01付与を取り消しました')
+  })
+
+  it('shows each 422 message once under its field and the heading above the buttons', async () => {
+    render(
+      <RevokeGrantButton
+        id="revoke-reason"
+        grantedOn="2026-07-01"
+        title="付与を取り消しますか?"
+        description="この操作は元に戻せません。"
+        onRevoke={vi.fn()}
+        error={
+          new ApiError(422, '最初のエラーの文です。', {
+            reason: ['理由のエラー'],
+            unknown_key: ['その他のエラー'],
+          })
+        }
+      />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }))
+
+    for (const message of ['理由のエラー', 'その他のエラー']) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
   })
 
   it('renders a disabled button with a reason tooltip when disabled', () => {

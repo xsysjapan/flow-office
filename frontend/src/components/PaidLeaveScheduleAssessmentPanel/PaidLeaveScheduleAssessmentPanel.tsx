@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { EditPaidLeaveScheduleEntryInput } from '../../api/paidLeave'
 import type { PaidLeaveScheduleEntryDetail } from '../../api/types'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { paidLeaveScheduleCategoryLabel, paidLeaveScheduleStatusLabel } from '../../utils/statusLabels'
 import { Badge } from '../Badge/Badge'
 import { Button } from '../Button/Button'
@@ -105,6 +106,12 @@ export function PaidLeaveScheduleAssessmentPanel({
   const editReasonError = editReasonTouched && editReason.trim() === '' ? '修正理由を入力してください。' : undefined
   const isDirtyEdit = showEditStep && (editReason !== '' || hasEditChanges)
   const isDirty = isDirtyOverride || isDirtyEdit
+
+  // 入力欄を描く上書き・修正のフォームだけ、422の項目エラーを項目の下に出す(再判定は入力なし)。
+  const overrideErrors = fieldErrors(overrideError, ['final_result', 'reason'] as const)
+  const editErrors = fieldErrors(editError, [
+    ...(showEditStep ? (['category', 'candidate_grant_days', 'reason'] as const) : []),
+  ] as const)
 
   useEffect(() => {
     onDirtyChange?.(isDirty)
@@ -216,8 +223,8 @@ export function PaidLeaveScheduleAssessmentPanel({
 
       <div className="flex flex-col gap-2">
         <SectionHeading step={3}>判定結果を上書き</SectionHeading>
-        {Boolean(overrideError) && <ErrorMessage error={overrideError} fallback="上書きに失敗しました。" />}
-        <FormField label="上書き後の判定" htmlFor="schedule-override-final-result">
+        {overrideErrors.rest != null && <ErrorMessage error={overrideErrors.rest} fallback="上書きに失敗しました。" />}
+        <FormField label="上書き後の判定" htmlFor="schedule-override-final-result" error={overrideErrors.of('final_result')}>
           <NativeSelect
             id="schedule-override-final-result"
             value={finalResult}
@@ -227,7 +234,12 @@ export function PaidLeaveScheduleAssessmentPanel({
             <option value="NotEligible">対象外(NotEligible)</option>
           </NativeSelect>
         </FormField>
-        <FormField label="上書き理由" htmlFor="schedule-override-reason" required error={reasonError}>
+        <FormField
+          label="上書き理由"
+          htmlFor="schedule-override-reason"
+          required
+          error={reasonError ?? overrideErrors.of('reason')}
+        >
           <Textarea
             id="schedule-override-reason"
             value={reason}
@@ -257,8 +269,8 @@ export function PaidLeaveScheduleAssessmentPanel({
             {entry.is_manually_overridden && entry.manual_override_reason && (
               <p className="text-sm text-muted-foreground">修正理由: {entry.manual_override_reason}</p>
             )}
-            {Boolean(editError) && <ErrorMessage error={editError} fallback="区分・日数の修正に失敗しました。" />}
-            <FormField label="区分" htmlFor="schedule-edit-category">
+            {editErrors.rest != null && <ErrorMessage error={editErrors.rest} fallback="区分・日数の修正に失敗しました。" />}
+            <FormField label="区分" htmlFor="schedule-edit-category" error={editErrors.of('category')}>
               <NativeSelect
                 id="schedule-edit-category"
                 value={editCategory}
@@ -272,7 +284,11 @@ export function PaidLeaveScheduleAssessmentPanel({
                 ))}
               </NativeSelect>
             </FormField>
-            <FormField label="付与候補日数" htmlFor="schedule-edit-candidate-days" error={editDaysError}>
+            <FormField
+              label="付与候補日数"
+              htmlFor="schedule-edit-candidate-days"
+              error={editDaysError ?? editErrors.of('candidate_grant_days')}
+            >
               <Input
                 id="schedule-edit-candidate-days"
                 type="number"
@@ -282,7 +298,12 @@ export function PaidLeaveScheduleAssessmentPanel({
                 onChange={(e) => setEditDays(e.target.value)}
               />
             </FormField>
-            <FormField label="修正理由" htmlFor="schedule-edit-reason" required error={editReasonError}>
+            <FormField
+              label="修正理由"
+              htmlFor="schedule-edit-reason"
+              required
+              error={editReasonError ?? editErrors.of('reason')}
+            >
               <Textarea id="schedule-edit-reason" value={editReason} onChange={(e) => setEditReason(e.target.value)} />
             </FormField>
             <div>

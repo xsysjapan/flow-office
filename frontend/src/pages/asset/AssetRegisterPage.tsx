@@ -5,6 +5,7 @@ import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { CategoryCombobox } from '../../components/CategoryCombobox/CategoryCombobox'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormActions } from '../../components/FormActions/FormActions'
 import { FormField } from '../../components/FormField/FormField'
@@ -75,6 +76,16 @@ export function AssetRegisterPage() {
   const requiresDefaultLocation = isLending && lendingMethod === 'self_service'
   const autoNumberingRule = resolveAutoNumberingRule(category, numberRules.data ?? [])
   const isAutoNumbered = autoNumberingRule !== null
+  // 描く項目と同じ条件で、項目の下に出す422のキーを組み立てる(貸出方式・通常配置場所は貸出品のときだけ描く)。
+  const { of, rest } = fieldErrors(registerAsset.error, [
+    'asset_no',
+    'name',
+    'category',
+    'serial_number',
+    'management_type',
+    'notes',
+    ...(isLending ? (['lending_method', 'default_location_text'] as const) : []),
+  ] as const)
   const isValid =
     (isAutoNumbered || assetNo.trim() !== '') &&
     name.trim() !== '' &&
@@ -82,16 +93,22 @@ export function AssetRegisterPage() {
     (!requiresDefaultLocation || defaultLocationText.trim() !== '')
 
   async function handleSave() {
-    const asset = await registerAsset.mutateAsync({
-      asset_no: isAutoNumbered ? null : assetNo,
-      name,
-      category,
-      serial_number: serialNumber || null,
-      management_type: managementType,
-      lending_method: isLending ? lendingMethod : null,
-      default_location_text: isLending && defaultLocationText ? defaultLocationText : null,
-      notes: notes || null,
-    })
+    let asset: Awaited<ReturnType<typeof registerAsset.mutateAsync>>
+    try {
+      asset = await registerAsset.mutateAsync({
+        asset_no: isAutoNumbered ? null : assetNo,
+        name,
+        category,
+        serial_number: serialNumber || null,
+        management_type: managementType,
+        lending_method: isLending ? lendingMethod : null,
+        default_location_text: isLending && defaultLocationText ? defaultLocationText : null,
+        notes: notes || null,
+      })
+    } catch {
+      // 失敗は`registerAsset.error`として項目の下・ボタンの近くに出る。
+      return
+    }
     notify.success(`${name}を登録しました`)
     navigateAfterSave(`/assets/${asset.id}`, { state: keepBackState })
   }
@@ -101,7 +118,7 @@ export function AssetRegisterPage() {
       <BackLink />
       <Card title="備品を作成">
         <FormLayout>
-          <FormField label="管理番号" htmlFor="asset-no" required={!isAutoNumbered}>
+          <FormField label="管理番号" htmlFor="asset-no" required={!isAutoNumbered} error={of('asset_no')}>
             <Input
               id="asset-no"
               value={isAutoNumbered ? '' : assetNo}
@@ -111,10 +128,10 @@ export function AssetRegisterPage() {
               readOnly={isAutoNumbered}
             />
           </FormField>
-          <FormField label="名称" htmlFor="asset-name" required>
+          <FormField label="名称" htmlFor="asset-name" required error={of('name')}>
             <Input id="asset-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例: ThinkPad X1" />
           </FormField>
-          <FormField label="カテゴリ" htmlFor="asset-category" required>
+          <FormField label="カテゴリ" htmlFor="asset-category" required error={of('category')}>
             <CategoryCombobox
               id="asset-category"
               value={category}
@@ -123,11 +140,11 @@ export function AssetRegisterPage() {
               placeholder="例: ノートPC"
             />
           </FormField>
-          <FormField label="シリアル番号" htmlFor="asset-serial">
+          <FormField label="シリアル番号" htmlFor="asset-serial" error={of('serial_number')}>
             <Input id="asset-serial" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
           </FormField>
 
-          <FormField label="管理区分" htmlFor="asset-management-type" required>
+          <FormField label="管理区分" htmlFor="asset-management-type" required error={of('management_type')}>
             <NativeSelect
               id="asset-management-type"
               value={managementType}
@@ -142,7 +159,7 @@ export function AssetRegisterPage() {
           </FormField>
 
           {isLending && (
-            <FormField label="貸出方式" htmlFor="asset-lending-method" required>
+            <FormField label="貸出方式" htmlFor="asset-lending-method" required error={of('lending_method')}>
               <NativeSelect
                 id="asset-lending-method"
                 value={lendingMethod}
@@ -162,6 +179,7 @@ export function AssetRegisterPage() {
               label="通常配置場所"
               htmlFor="asset-default-location"
               required={requiresDefaultLocation}
+              error={of('default_location_text')}
               description={requiresDefaultLocation ? 'セルフ貸出方式では通常配置場所の設定が必須です。' : undefined}
             >
               <Input
@@ -173,14 +191,14 @@ export function AssetRegisterPage() {
             </FormField>
           )}
 
-          <FormField label="備考" htmlFor="asset-notes">
+          <FormField label="備考" htmlFor="asset-notes" error={of('notes')}>
             <Textarea id="asset-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
 
           {requiresDefaultLocation && !defaultLocationText && (
             <p className="mb-2 text-xs text-muted-foreground">通常配置場所を入力してください。</p>
           )}
-          {registerAsset.error && <ErrorMessage error={registerAsset.error} />}
+          {rest != null && <ErrorMessage error={rest} />}
           <FormActions>
             <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
               キャンセル

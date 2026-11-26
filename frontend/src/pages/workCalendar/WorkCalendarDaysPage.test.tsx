@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { WorkCalendar, WorkCalendarDay, WorkCalendarYear } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -167,6 +168,25 @@ describe('WorkCalendarDaysPage', () => {
       public_holiday_name: 'こどもの日',
       note: undefined,
     })
+  })
+
+  it('shows the day save 422 messages once, under the heading above the save button', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+    vi.spyOn(workCalendarsApi, 'putWorkCalendarDays').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        'days.0.day_type': ['日の区分のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    )
+    renderPage()
+    await screen.findByRole('button', { name: '2026-04-05 勤務日' })
+
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(await screen.findAllByText('日の区分のエラー')).toHaveLength(1)
+    expect(screen.getAllByText('その他のエラー')).toHaveLength(1)
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
   })
 
   it('warns before leaving the tab once a day is edited, and stops warning after saving', async () => {

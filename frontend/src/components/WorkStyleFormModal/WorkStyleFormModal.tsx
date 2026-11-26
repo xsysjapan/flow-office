@@ -14,6 +14,7 @@ import { NativeSelect } from '../ui/native-select'
 import { useCreateWorkStyle, useUpdateWorkStyle } from '../../hooks/useWorkStyles'
 import { useWorkCalendars } from '../../hooks/useWorkCalendars'
 import type { LegalHolidayRule, RoundingMode, WorkStyle } from '../../api/types'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 export const WORK_TIME_SYSTEM_OPTIONS = [
   { value: 'fixed', label: '通常勤務' },
@@ -43,6 +44,32 @@ export function parseRoundingSelectValue(value: string): { unitMinutes: string; 
   const [unitMinutes, mode] = value.split(':')
   return { unitMinutes, mode: mode as RoundingMode }
 }
+
+/** 項目の下に出す422のキー。モードで描く項目は、描く条件と同じ条件で`fields`に足す。 */
+const COMMON_ERROR_KEYS = [
+  'code',
+  'name',
+  'work_time_system',
+  'prescribed_daily_minutes',
+  'prescribed_weekly_minutes',
+  'workday_boundary_type',
+  'default_start_time',
+  'default_end_time',
+  'default_break_minutes',
+  'default_break_start_time',
+  'default_break_end_time',
+  'rounding_unit_minutes',
+  'rounding_mode',
+  'company_calendar_id',
+  'auto_break_enabled',
+  'is_shift_based',
+] as const
+const CUSTOM_BOUNDARY_ERROR_KEYS = ['workday_boundary_time'] as const
+const SHIFT_BASED_ERROR_KEYS = ['legal_holiday_rule', 'max_consecutive_work_days'] as const
+const FOUR_WEEKS_ERROR_KEYS = ['four_week_period_start_date'] as const
+const DISCRETIONARY_ERROR_KEYS = ['deemed_daily_minutes'] as const
+const FLEX_ERROR_KEYS = ['settlement_start_day', 'flexible_time_start', 'flexible_time_end', 'core_time_enabled'] as const
+const CORE_TIME_ERROR_KEYS = ['core_time_start', 'core_time_end'] as const
 
 function emptyFormState(workStyle: WorkStyle | undefined) {
   return {
@@ -110,6 +137,16 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
   const isFlex = form.workTimeSystem === 'flex'
   const isDiscretionary = form.workTimeSystem === 'discretionary'
 
+  const { of, rest } = fieldErrors(mutation.error, [
+    ...COMMON_ERROR_KEYS,
+    ...(form.workdayBoundaryType === 'custom' ? CUSTOM_BOUNDARY_ERROR_KEYS : []),
+    ...(form.isShiftBased ? SHIFT_BASED_ERROR_KEYS : []),
+    ...(form.isShiftBased && form.legalHolidayRule === 'four_weeks_four_days' ? FOUR_WEEKS_ERROR_KEYS : []),
+    ...(isDiscretionary ? DISCRETIONARY_ERROR_KEYS : []),
+    ...(isFlex ? FLEX_ERROR_KEYS : []),
+    ...(isFlex && form.coreTimeEnabled ? CORE_TIME_ERROR_KEYS : []),
+  ] as const)
+
   const handleSubmit = () => {
     const input = {
       code: form.code,
@@ -173,15 +210,15 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
         </DialogHeader>
 
         <div>
-          <FormField label="コード" htmlFor="work-style-code" required>
+          <FormField label="コード" htmlFor="work-style-code" required error={of('code')}>
             <Input id="work-style-code" value={form.code} onChange={(e) => patch({ code: e.target.value })} />
           </FormField>
 
-          <FormField label="名称" htmlFor="work-style-name" required>
+          <FormField label="名称" htmlFor="work-style-name" required error={of('name')}>
             <Input id="work-style-name" value={form.name} onChange={(e) => patch({ name: e.target.value })} />
           </FormField>
 
-          <FormField label="労働時間制" htmlFor="work-style-time-system" required>
+          <FormField label="労働時間制" htmlFor="work-style-time-system" required error={of('work_time_system')}>
             <NativeSelect
               id="work-style-time-system"
               value={form.workTimeSystem}
@@ -196,7 +233,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
             </NativeSelect>
           </FormField>
 
-          <FormField label="所定労働時間(分/日)" htmlFor="work-style-daily-minutes" required>
+          <FormField label="所定労働時間(分/日)" htmlFor="work-style-daily-minutes" required error={of('prescribed_daily_minutes')}>
             <Input
               id="work-style-daily-minutes"
               type="number"
@@ -205,7 +242,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
             />
           </FormField>
 
-          <FormField label="所定労働時間(分/週)" htmlFor="work-style-weekly-minutes" required>
+          <FormField label="所定労働時間(分/週)" htmlFor="work-style-weekly-minutes" required error={of('prescribed_weekly_minutes')}>
             <Input
               id="work-style-weekly-minutes"
               type="number"
@@ -217,6 +254,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
           <FormField
             label="作業日の区切り"
             htmlFor="work-style-day-boundary"
+            error={of('workday_boundary_type')}
             description="作業日基準でも1件の勤務実績は最大24時間です。"
             required
           >
@@ -232,7 +270,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
           </FormField>
 
           {form.workdayBoundaryType === 'custom' && (
-            <FormField label="作業日の開始時刻" htmlFor="work-style-day-boundary-time" required>
+            <FormField label="作業日の開始時刻" htmlFor="work-style-day-boundary-time" required error={of('workday_boundary_time')}>
               <TimePicker
                 id="work-style-day-boundary-time"
                 value={form.workdayBoundaryTime}
@@ -242,7 +280,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
           )}
 
           <FormRow>
-            <FormField label="標準開始時刻" htmlFor="work-style-start-time">
+            <FormField label="標準開始時刻" htmlFor="work-style-start-time" error={of('default_start_time')}>
               <TimePicker
                 id="work-style-start-time"
                 value={form.defaultStartTime}
@@ -250,7 +288,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               />
             </FormField>
 
-            <FormField label="標準終了時刻" htmlFor="work-style-end-time">
+            <FormField label="標準終了時刻" htmlFor="work-style-end-time" error={of('default_end_time')}>
               <TimePicker
                 id="work-style-end-time"
                 value={form.defaultEndTime}
@@ -259,7 +297,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
             </FormField>
           </FormRow>
 
-          <FormField label="標準休憩(分)" htmlFor="work-style-break-minutes">
+          <FormField label="標準休憩(分)" htmlFor="work-style-break-minutes" error={of('default_break_minutes')}>
             <Input
               id="work-style-break-minutes"
               type="number"
@@ -269,7 +307,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
           </FormField>
 
           <FormRow>
-            <FormField label="標準休憩開始時刻" htmlFor="work-style-break-start-time">
+            <FormField label="標準休憩開始時刻" htmlFor="work-style-break-start-time" error={of('default_break_start_time')}>
               <TimePicker
                 id="work-style-break-start-time"
                 value={form.defaultBreakStartTime}
@@ -277,7 +315,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               />
             </FormField>
 
-            <FormField label="標準休憩終了時刻" htmlFor="work-style-break-end-time">
+            <FormField label="標準休憩終了時刻" htmlFor="work-style-break-end-time" error={of('default_break_end_time')}>
               <TimePicker
                 id="work-style-break-end-time"
                 value={form.defaultBreakEndTime}
@@ -292,6 +330,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
           <FormField
             label="打刻の丸め単位"
             htmlFor="work-style-rounding-unit-minutes"
+            error={of('rounding_unit_minutes') ?? of('rounding_mode')}
             description="日次勤怠の入力画面で打刻内容を初期値として反映する際、この単位・方向に丸める。"
           >
             <NativeSelect
@@ -313,7 +352,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
             </NativeSelect>
           </FormField>
 
-          <FormField label="カレンダー" htmlFor="work-style-calendar" required={!isEditing}>
+          <FormField label="カレンダー" htmlFor="work-style-calendar" required={!isEditing} error={of('company_calendar_id')}>
             <NativeSelect
               id="work-style-calendar"
               value={form.calendarId}
@@ -340,6 +379,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               収まる場合に限り、標準休憩開始・終了時刻を自動でその日の休憩として記録する。実際に打刻・編集された
               休憩がある日には影響しない。
             </p>
+            {of('auto_break_enabled') && <p className="mt-1 text-xs text-destructive">{of('auto_break_enabled')}</p>}
           </div>
 
           <div className="mb-4">
@@ -347,6 +387,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               <Checkbox checked={form.isShiftBased} onCheckedChange={(checked) => patch({ isShiftBased: checked === true })} />
               シフト制
             </label>
+            {of('is_shift_based') && <p className="mt-1 text-xs text-destructive">{of('is_shift_based')}</p>}
           </div>
 
           {form.isShiftBased && (
@@ -354,6 +395,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               <FormField
                 label="法定休日の与え方"
                 htmlFor="work-style-legal-holiday-rule"
+                error={of('legal_holiday_rule')}
                 description="月次まとめ承認時に、この要件を満たしているか警告表示される(UC-C005)。"
               >
                 <NativeSelect
@@ -370,6 +412,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
                 <FormField
                   label="4週間の起算日"
                   htmlFor="work-style-four-week-start"
+                  error={of('four_week_period_start_date')}
                   description="就業規則で定めた4週間の起算日。"
                   required
                 >
@@ -384,6 +427,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               <FormField
                 label="連続勤務日数の上限(任意)"
                 htmlFor="work-style-max-consecutive-work-days"
+                error={of('max_consecutive_work_days')}
                 description="未設定ならチェックしない。3交代制シフト表の公開前確認(UC-C004)で警告に使う。"
               >
                 <Input
@@ -402,6 +446,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               <FormField
                 label="みなし労働時間(分/日)"
                 htmlFor="work-style-deemed-daily-minutes"
+                error={of('deemed_daily_minutes')}
                 description="裁量労働制の対象日は、実労働時間にかかわらずこの時間を給与計算上の労働時間として採用する。"
                 required
               >
@@ -421,6 +466,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               <FormField
                 label="清算期間の起算日(任意)"
                 htmlFor="work-style-settlement-start-day"
+                error={of('settlement_start_day')}
                 description="未設定なら毎月1日を起算日とする。"
               >
                 <Input
@@ -434,7 +480,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               </FormField>
 
               <FormRow>
-                <FormField label="勤務可能開始時刻" htmlFor="work-style-flexible-start">
+                <FormField label="勤務可能開始時刻" htmlFor="work-style-flexible-start" error={of('flexible_time_start')}>
                   <TimePicker
                     id="work-style-flexible-start"
                     value={form.flexibleTimeStart}
@@ -442,7 +488,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
                   />
                 </FormField>
 
-                <FormField label="勤務可能終了時刻" htmlFor="work-style-flexible-end">
+                <FormField label="勤務可能終了時刻" htmlFor="work-style-flexible-end" error={of('flexible_time_end')}>
                   <TimePicker
                     id="work-style-flexible-end"
                     value={form.flexibleTimeEnd}
@@ -459,12 +505,13 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
                   />
                   コアタイムあり
                 </label>
+                {of('core_time_enabled') && <p className="mt-1 text-xs text-destructive">{of('core_time_enabled')}</p>}
               </div>
 
               {form.coreTimeEnabled && (
                 <>
                   <FormRow>
-                    <FormField label="コアタイム開始時刻" htmlFor="work-style-core-time-start" required>
+                    <FormField label="コアタイム開始時刻" htmlFor="work-style-core-time-start" required error={of('core_time_start')}>
                       <TimePicker
                         id="work-style-core-time-start"
                         value={form.coreTimeStart}
@@ -472,7 +519,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
                       />
                     </FormField>
 
-                    <FormField label="コアタイム終了時刻" htmlFor="work-style-core-time-end" required>
+                    <FormField label="コアタイム終了時刻" htmlFor="work-style-core-time-end" required error={of('core_time_end')}>
                       <TimePicker
                         id="work-style-core-time-end"
                         value={form.coreTimeEnd}
@@ -489,7 +536,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
           )}
         </div>
 
-        {mutation.error && <ErrorMessage error={mutation.error} />}
+        {rest != null && <ErrorMessage error={rest} />}
 
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>

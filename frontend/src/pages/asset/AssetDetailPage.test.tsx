@@ -356,4 +356,137 @@ describe('AssetDetailPage', () => {
       expect(notify.success).toHaveBeenCalledWith('ThinkPad X1を承認者花子さんに貸与しました'),
     )
   })
+
+  describe('422 field errors', () => {
+    const unprocessable = (errors: Record<string, string>) =>
+      new ApiError(
+        422,
+        '最初のエラーの文です。',
+        Object.fromEntries([...Object.entries(errors), ['unknown_key', 'その他のエラー']].map(([k, v]) => [k, [v]])),
+      )
+
+    async function expectEachOnce(messages: string[]) {
+      for (const message of [...messages, 'その他のエラー']) {
+        expect(await screen.findAllByText(message)).toHaveLength(1)
+      }
+      expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+    }
+
+    async function pickApprover(label: string) {
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
+        data: [approver],
+        meta: { current_page: 1, last_page: 1, total: 1 },
+        links: { next: null, prev: null },
+      })
+      await userEvent.click(screen.getByLabelText(label))
+      await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+      await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+    }
+
+    it('shows the return note error under the field in the return dialog', async () => {
+      vi.spyOn(assetApi, 'getAsset').mockResolvedValue(lendingAsset)
+      vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+      vi.spyOn(assetApi, 'returnAsset').mockRejectedValue(unprocessable({ return_note: '備考のエラー' }))
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: '返却' }))
+      await userEvent.click(await screen.findByRole('button', { name: '返却する' }))
+
+      await expectEachOnce(['備考のエラー'])
+    })
+
+    it('shows the approver error under the field in the loan request dialog', async () => {
+      vi.spyOn(assetApi, 'getAsset').mockResolvedValue(approvalAsset)
+      vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+      vi.spyOn(workflowRequestsApi, 'createWorkflowRequest').mockRejectedValue(
+        unprocessable({ approver_user_id: '承認者のエラー' }),
+      )
+      renderPage('asset-approval')
+
+      await userEvent.click(await screen.findByRole('button', { name: '貸出申請' }))
+      await pickApprover('承認者')
+      await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+
+      await expectEachOnce(['承認者のエラー'])
+    })
+
+    it('shows the lend errors under the borrower, return date and loan request fields', async () => {
+      vi.spyOn(assetApi, 'getAsset').mockResolvedValue(approvalAsset)
+      vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+      vi.spyOn(assetApi, 'getAssetLoanRequests').mockResolvedValue([
+        {
+          id: 'loan-request-1',
+          asset_id: approvalAsset.id,
+          applicant_user_id: 'approver-1',
+          applicant: null,
+          approver_user_id: 'user-1',
+          approver: null,
+          status: 'approved',
+          purpose: 'リモート会議用',
+          submitted_at: '2026-08-01T00:00:00+09:00',
+          approved_at: '2026-08-02T00:00:00+09:00',
+          rejected_at: null,
+          rejection_reason: null,
+          withdrawn_at: null,
+          cancelled_at: null,
+          lent_at: null,
+        },
+      ])
+      vi.spyOn(assetApi, 'lendAsset').mockRejectedValue(
+        unprocessable({
+          borrower_user_id: '借用者のエラー',
+          expected_return_at: '返却予定日のエラー',
+          loan_request_id: '貸出申請のエラー',
+        }),
+      )
+      renderPage('asset-approval')
+
+      await userEvent.click(await screen.findByRole('button', { name: '貸与する' }))
+      await pickApprover('借用者')
+      await screen.findByText('利用目的: リモート会議用')
+      await userEvent.click(screen.getByRole('button', { name: '貸与する' }))
+
+      await expectEachOnce(['借用者のエラー', '返却予定日のエラー', '貸出申請のエラー'])
+    })
+
+    it('shows the lending method error under the field', async () => {
+      vi.spyOn(assetApi, 'getAsset').mockResolvedValue(approvalAsset)
+      vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+      vi.spyOn(assetApi, 'changeAssetLendingMethod').mockRejectedValue(
+        unprocessable({ lending_method: '貸出方式のエラー' }),
+      )
+      renderPage('asset-approval')
+
+      await userEvent.click(await screen.findByRole('button', { name: '貸出方式変更' }))
+      await userEvent.click(await screen.findByRole('button', { name: '変更する' }))
+
+      await expectEachOnce(['貸出方式のエラー'])
+    })
+
+    it('shows the location error under the field in the default location dialog', async () => {
+      vi.spyOn(assetApi, 'getAsset').mockResolvedValue(approvalAsset)
+      vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+      vi.spyOn(assetApi, 'setAssetDefaultLocation').mockRejectedValue(unprocessable({ location_text: '場所のエラー' }))
+      renderPage('asset-approval')
+
+      await userEvent.click(await screen.findByRole('button', { name: '通常配置場所を変更' }))
+      await userEvent.type(await screen.findByLabelText('場所'), '倉庫')
+      await userEvent.click(screen.getByRole('button', { name: '設定する' }))
+
+      await expectEachOnce(['場所のエラー'])
+    })
+
+    it('shows the note error under the field in the repair dialog', async () => {
+      vi.spyOn(assetApi, 'getAsset').mockResolvedValue(approvalAsset)
+      vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+      vi.spyOn(assetApi, 'startAssetRepair').mockRejectedValue(unprocessable({ note: '備考のエラー' }))
+      renderPage('asset-approval')
+
+      await userEvent.click(await screen.findByRole('button', { name: '修理開始' }))
+      await userEvent.click(await screen.findByRole('button', { name: '修理を開始する' }))
+
+      await expectEachOnce(['備考のエラー'])
+    })
+  })
 })

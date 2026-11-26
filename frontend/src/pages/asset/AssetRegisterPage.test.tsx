@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as assetApi from '../../api/asset'
 import * as assetNumberRulesApi from '../../api/assetNumberRules'
 import type { AssetNumberRule } from '../../api/assetNumberRules'
@@ -145,5 +146,67 @@ describe('AssetRegisterPage', () => {
     await waitFor(() => expect(rulesSpy).toHaveBeenCalled())
     expect(screen.getByLabelText('管理番号')).toBeEnabled()
     expect(screen.getByLabelText('管理番号')).not.toHaveAttribute('placeholder', '保存時に自動採番されます')
+  })
+
+  it('shows each 422 message once under its field (manual numbering, lending)', async () => {
+    vi.spyOn(assetApi, 'registerAsset').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        asset_no: ['管理番号のエラー'],
+        name: ['名称のエラー'],
+        category: ['カテゴリのエラー'],
+        serial_number: ['シリアルのエラー'],
+        management_type: ['管理区分のエラー'],
+        lending_method: ['貸出方式のエラー'],
+        default_location_text: ['通常配置場所のエラー'],
+        notes: ['備考のエラー'],
+        unknown_key: ['その他のエラー'],
+      }),
+    )
+    renderPage()
+
+    await userEvent.type(screen.getByLabelText('管理番号'), 'EQ-00999')
+    await userEvent.type(screen.getByLabelText('名称'), 'MacBook Air')
+    await userEvent.type(screen.getByLabelText('カテゴリ'), 'ノートPC')
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
+
+    for (const message of [
+      '管理番号のエラー',
+      '名称のエラー',
+      'カテゴリのエラー',
+      'シリアルのエラー',
+      '管理区分のエラー',
+      '貸出方式のエラー',
+      '通常配置場所のエラー',
+      '備考のエラー',
+      'その他のエラー',
+    ]) {
+      expect(await screen.findAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('keeps the lending keys in the heading list when they are not drawn (installation)', async () => {
+    vi.spyOn(assetApi, 'registerAsset').mockRejectedValue(
+      new ApiError(422, '最初のエラーの文です。', {
+        lending_method: ['貸出方式のエラー'],
+        default_location_text: ['通常配置場所のエラー'],
+        name: ['名称のエラー'],
+      }),
+    )
+    renderPage()
+
+    await userEvent.type(screen.getByLabelText('管理番号'), 'EQ-00999')
+    await userEvent.type(screen.getByLabelText('名称'), 'MacBook Air')
+    await userEvent.type(screen.getByLabelText('カテゴリ'), 'ノートPC')
+    await userEvent.selectOptions(screen.getByLabelText('管理区分'), '設置品')
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
+
+    // 描いていない項目のキーは、まとめての表示に残る(エラーが見えなくならない)。
+    expect(await screen.findAllByText('名称のエラー')).toHaveLength(1)
+    expect(screen.getAllByText('貸出方式のエラー')).toHaveLength(1)
+    expect(screen.getAllByText('通常配置場所のエラー')).toHaveLength(1)
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
   })
 })

@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import type { PaidLeaveScheduleEntryDetail } from '../../api/types'
 import { PaidLeaveScheduleAssessmentPanel, type PaidLeaveScheduleAssessmentPanelProps } from './PaidLeaveScheduleAssessmentPanel'
 
@@ -149,6 +150,55 @@ describe('PaidLeaveScheduleAssessmentPanel', () => {
       'href',
       '/admin/work-styles',
     )
+  })
+
+  it('shows each 422 message of the override once under its field and the heading above the form', () => {
+    render(
+      <PaidLeaveScheduleAssessmentPanel
+        entry={entry}
+        onReassess={vi.fn()}
+        onOverride={vi.fn()}
+        onEdit={vi.fn()}
+        overrideError={
+          new ApiError(422, '最初のエラーの文です。', {
+            final_result: ['判定のエラー'],
+            reason: ['理由のエラー'],
+            unknown_key: ['その他のエラー'],
+          })
+        }
+      />,
+    )
+
+    for (const message of ['判定のエラー', '理由のエラー', 'その他のエラー']) {
+      expect(screen.getAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+  })
+
+  it('shows each 422 message of the edit once under its field and the heading above the form', () => {
+    render(
+      <PaidLeaveScheduleAssessmentPanel
+        entry={entry}
+        onReassess={vi.fn()}
+        onOverride={vi.fn()}
+        onEdit={vi.fn()}
+        editError={
+          new ApiError(422, '最初のエラーの文です。', {
+            category: ['区分のエラー'],
+            candidate_grant_days: ['日数のエラー'],
+            reason: ['修正理由のエラー'],
+            unknown_key: ['その他のエラー'],
+          })
+        }
+      />,
+    )
+
+    for (const message of ['区分のエラー', '日数のエラー', '修正理由のエラー', 'その他のエラー']) {
+      expect(screen.getAllByText(message)).toHaveLength(1)
+    }
+    expect(screen.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+    expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
   })
 
   describe('区分・日数を修正(step 4)', () => {

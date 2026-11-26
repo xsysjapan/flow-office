@@ -539,4 +539,86 @@ describe('PaidLeavePolicyPage', () => {
       ]),
     )
   })
+
+  describe('422 field errors', () => {
+    async function expectEachOnce(scope: { findAllByText: typeof screen.findAllByText; getAllByText: typeof screen.getAllByText }, messages: string[]) {
+      for (const message of messages) {
+        expect(await scope.findAllByText(message)).toHaveLength(1)
+      }
+      expect(scope.getAllByText('入力内容を確認してください。')).toHaveLength(1)
+      expect(screen.queryByText('最初のエラーの文です。')).not.toBeInTheDocument()
+    }
+
+    it('shows the rule creation errors under each field and on the step row, without duplicating them above', async () => {
+      vi.spyOn(paidLeaveApi, 'createPaidLeaveGrantRule').mockRejectedValue(
+        new ApiError(422, '最初のエラーの文です。', {
+          name: ['ルール名のエラー'],
+          min_attendance_rate: ['出勤率のエラー'],
+          first_grant_after_months: ['初回のエラー'],
+          grant_cycle_months: ['サイクルのエラー'],
+          grant_cycle_type: ['付与方式のエラー'],
+          is_active: ['有効のエラー'],
+          'steps.0.grant_days': ['通常の行のエラー'],
+          unknown_key: ['その他のエラー'],
+        }),
+      )
+      renderPage([])
+
+      await userEvent.type(await screen.findByLabelText('ルール名'), '新ルール')
+      await screen.findByText('(この継続勤務月数の法定最低日数: 10日)')
+      await userEvent.click(screen.getByRole('button', { name: 'ルールを作成' }))
+
+      await expectEachOnce(screen, [
+        'ルール名のエラー',
+        '出勤率のエラー',
+        '初回のエラー',
+        'サイクルのエラー',
+        '付与方式のエラー',
+        '有効のエラー',
+        '通常の行のエラー',
+        'その他のエラー',
+      ])
+    })
+
+    it('shows the normal policy version errors under the row fields and the list', async () => {
+      vi.spyOn(paidLeaveApi, 'createPaidLeaveGrantPolicyVersion').mockRejectedValue(
+        new ApiError(422, '最初のエラーの文です。', {
+          rows: ['重複のエラー'],
+          'rows.0.continuous_service_months': ['月数のエラー'],
+          'rows.0.grant_days': ['日数のエラー'],
+          unknown_key: ['その他のエラー'],
+        }),
+      )
+      renderPage()
+
+      const normalSection = (await screen.findByText(/通常付与\(週所定労働日数5日以上/)).closest('div')!
+      await userEvent.click(within(normalSection).getByRole('button', { name: '新しいバージョンを作成' }))
+      const dialog = await screen.findByRole('dialog')
+      await within(dialog).findByLabelText('継続勤務(か月)')
+      await userEvent.click(within(dialog).getByRole('button', { name: '新しいバージョンを保存' }))
+
+      await expectEachOnce(within(dialog), ['重複のエラー', '月数のエラー', '日数のエラー', 'その他のエラー'])
+    })
+
+    it('shows the proportional policy version errors under the row fields and the list', async () => {
+      vi.spyOn(paidLeaveApi, 'createPaidLeaveProportionalGrantPolicyVersion').mockRejectedValue(
+        new ApiError(422, '最初のエラーの文です。', {
+          rows: ['重複のエラー'],
+          'rows.0.weekly_scheduled_days_category': ['区分のエラー'],
+          'rows.0.continuous_service_months': ['月数のエラー'],
+          'rows.0.grant_days': ['日数のエラー'],
+          unknown_key: ['その他のエラー'],
+        }),
+      )
+      renderPage()
+
+      const proportionalSection = (await screen.findByText(/比例付与\(週所定労働日数4日以下/)).closest('div')!
+      await userEvent.click(within(proportionalSection).getByRole('button', { name: '新しいバージョンを作成' }))
+      const dialog = await screen.findByRole('dialog')
+      await within(dialog).findByLabelText('週所定労働日数')
+      await userEvent.click(within(dialog).getByRole('button', { name: '新しいバージョンを保存' }))
+
+      await expectEachOnce(within(dialog), ['重複のエラー', '区分のエラー', '月数のエラー', '日数のエラー', 'その他のエラー'])
+    })
+  })
 })

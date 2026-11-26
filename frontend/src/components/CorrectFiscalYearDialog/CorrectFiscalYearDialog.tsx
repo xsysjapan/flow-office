@@ -7,6 +7,7 @@ import { FormField } from '../FormField/FormField'
 import { FormRow } from '../FormRow/FormRow'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
+import { fieldErrors } from '../../utils/fieldErrors'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 
 export interface CorrectFiscalYearDialogProps {
@@ -30,6 +31,7 @@ export function CorrectFiscalYearDialog({ year, companyCalendarId, onOpenChange,
   const [startsOn, setStartsOn] = useState('')
   const [endsOn, setEndsOn] = useState('')
   const [reason, setReason] = useState('')
+  const { of, rest } = fieldErrors(correctFiscalYear.error, ['fiscal_year', 'starts_on', 'ends_on', 'reason'] as const)
 
   // 呼び出し側はDialogを常時マウントしたまま`year`のnull/非nullで開閉を制御するため
   // (`WorkCalendarDaysPage`参照)、Radixの`onOpenChange`は開いた瞬間には発火しない。
@@ -86,7 +88,7 @@ export function CorrectFiscalYearDialog({ year, companyCalendarId, onOpenChange,
         </DialogHeader>
 
         <div>
-          <FormField label="年度番号" htmlFor="correct-fiscal-year">
+          <FormField label="年度番号" htmlFor="correct-fiscal-year" error={of('fiscal_year')}>
             <Input
               id="correct-fiscal-year"
               type="number"
@@ -95,7 +97,7 @@ export function CorrectFiscalYearDialog({ year, companyCalendarId, onOpenChange,
             />
           </FormField>
           <FormRow>
-            <FormField label="開始日" htmlFor="correct-starts-on">
+            <FormField label="開始日" htmlFor="correct-starts-on" error={of('starts_on')}>
               <Input
                 id="correct-starts-on"
                 type="date"
@@ -103,16 +105,16 @@ export function CorrectFiscalYearDialog({ year, companyCalendarId, onOpenChange,
                 onChange={(e) => setStartsOn(e.target.value)}
               />
             </FormField>
-            <FormField label="終了日" htmlFor="correct-ends-on">
+            <FormField label="終了日" htmlFor="correct-ends-on" error={of('ends_on')}>
               <Input id="correct-ends-on" type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
             </FormField>
           </FormRow>
-          <FormField label="訂正理由(任意)" htmlFor="correct-reason">
+          <FormField label="訂正理由(任意)" htmlFor="correct-reason" error={of('reason')}>
             <Textarea id="correct-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
           </FormField>
         </div>
 
-        {correctFiscalYear.error && <ErrorMessage error={correctFiscalYear.error} />}
+        {rest != null && <ErrorMessage error={rest} />}
 
         <DialogFooter>
           <Button variant="secondary" onClick={() => handleOpenChange(false)}>

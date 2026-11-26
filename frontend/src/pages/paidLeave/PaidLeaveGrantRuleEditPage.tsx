@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ApiError } from '../../api/client'
 import type { PaidLeaveGrantCycleType, PaidLeaveGrantRuleStep } from '../../api/types'
 import { BackLink } from '../../components/BackLink/BackLink'
 import { Button } from '../../components/Button/Button'
@@ -23,8 +22,25 @@ import { isPaidLeaveGrantRuleDirty } from './paidLeaveGrantRuleDirty'
 import { useBackTarget, useKeepBackState } from '../../navigation/backState'
 import { DEFAULT_FISCAL_YEAR_START, pickDefaultFiscalYearStart } from '../../lib/paidLeaveGrantRule'
 import { notify } from '../../lib/notify'
+import { fieldErrors } from '../../utils/fieldErrors'
 
 const LIST_PATH = '/admin/paid-leave'
+
+/** 項目の下に出す422のキー。`steps.{i}.*`は付与日数の表の行の下に出す。 */
+const FIELD_ERROR_KEYS = [
+  'name',
+  'min_attendance_rate',
+  'first_grant_after_months',
+  'grant_cycle_months',
+  'grant_cycle_type',
+  'is_active',
+  'steps.*.grant_category',
+  'steps.*.continuous_service_months',
+  'steps.*.grant_days',
+] as const
+
+/** 付与日数の表の行に出す項目(`steps.{i}.{項目}`)。 */
+const STEP_ROW_KEYS = ['grant_category', 'continuous_service_months', 'grant_days'] as const
 
 /**
  * 有給付与ルールの編集(spec.md論点15-1)。項目数が多く(基本設定4項目+付与方式+区分ごとの表)、
@@ -146,7 +162,7 @@ function PaidLeaveGrantRuleEditForm() {
       </div>
     )
 
-  const fieldErrors = updateRule.error instanceof ApiError ? updateRule.error.errors : undefined
+  const { of, ofRow, rest } = fieldErrors(updateRule.error, FIELD_ERROR_KEYS)
 
   return (
     <div className="flex flex-col gap-6">
@@ -164,11 +180,11 @@ function PaidLeaveGrantRuleEditForm() {
           />
         </div>
 
-          <FormField label="ルール名" htmlFor="edit-rule-name" required>
+          <FormField label="ルール名" htmlFor="edit-rule-name" required error={of('name')}>
             <Input id="edit-rule-name" value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
 
-          <FormField label="最低出勤率" htmlFor="edit-rule-min-attendance-rate">
+          <FormField label="最低出勤率" htmlFor="edit-rule-min-attendance-rate" error={of('min_attendance_rate')}>
             <Input
               id="edit-rule-min-attendance-rate"
               type="number"
@@ -177,7 +193,11 @@ function PaidLeaveGrantRuleEditForm() {
             />
           </FormField>
 
-          <FormField label="初回付与までの月数" htmlFor="edit-rule-first-grant-after-months">
+          <FormField
+            label="初回付与までの月数"
+            htmlFor="edit-rule-first-grant-after-months"
+            error={of('first_grant_after_months')}
+          >
             <Input
               id="edit-rule-first-grant-after-months"
               type="number"
@@ -186,7 +206,7 @@ function PaidLeaveGrantRuleEditForm() {
             />
           </FormField>
 
-          <FormField label="付与サイクル(月数)" htmlFor="edit-rule-grant-cycle-months">
+          <FormField label="付与サイクル(月数)" htmlFor="edit-rule-grant-cycle-months" error={of('grant_cycle_months')}>
             <Input
               id="edit-rule-grant-cycle-months"
               type="number"
@@ -200,18 +220,27 @@ function PaidLeaveGrantRuleEditForm() {
           onChange={setGrantCycleType}
           defaultFiscalYearStart={defaultFiscalYearStart}
         />
+        {of('grant_cycle_type') && <p className="-mt-2 mb-4 text-xs text-destructive">{of('grant_cycle_type')}</p>}
 
         <label className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
           <Checkbox checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
           有効
         </label>
+        {of('is_active') && <p className="-mt-2 mb-4 text-xs text-destructive">{of('is_active')}</p>}
         </FormLayout>
 
-        <PaidLeaveGrantStepsEditor steps={steps} onChange={setSteps} statutory={policies} fieldErrors={fieldErrors} />
+        <PaidLeaveGrantStepsEditor
+          steps={steps}
+          onChange={setSteps}
+          statutory={policies}
+          rowErrors={(index) =>
+            STEP_ROW_KEYS.map((key) => ofRow('steps', index, key)).filter((message): message is string => Boolean(message))
+          }
+        />
 
         <FormLayout>
         <p className="mb-4 text-xs text-muted-foreground">法定最低日数以上であれば自由に設定できます。</p>
-        {updateRule.error && <ErrorMessage error={updateRule.error} />}
+        {rest != null && <ErrorMessage error={rest} />}
         <FormActions>
           <Button variant="secondary" onClick={() =>
             backTarget
