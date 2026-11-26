@@ -1,6 +1,6 @@
 # unsaved-changes-guard-pages(ページのフォームの離脱警告)
 
-ステータス: レビュー中
+ステータス: 実装中
 
 ## 変更要望(原文)
 変更候補の判断 `docs/changesets/candidates-20261124.md` の #7:
