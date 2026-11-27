@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261127-form-error-visibility-fixes](./20261127-form-error-visibility-fixes/spec.md) | 入力が消える・エラーが見えない不具合3件(経費の初回の保存・備品の Dialog・働き方の自動生成) | 検討中 |
 | [20261126-form-field-aria](./20261126-form-field-aria/spec.md) | 必須・説明文・エラーを入力欄に属性で結ぶ(候補9) | 完了 |
 | [20261126-field-errors-near-fields](./20261126-field-errors-near-fields/spec.md) | 入力のエラーを項目の近くに出す(候補6) | 完了 |
 | [20261126-unsaved-changes-guard-pages](./20261126-unsaved-changes-guard-pages/spec.md) | ページのフォームの離脱警告(アプリ内の移動も止める。候補7) | 完了 |
