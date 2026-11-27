@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261127-attendance-day-leave-separate-actions](./20261127-attendance-day-leave-separate-actions/spec.md) | 勤怠の日の保存から休暇を外し、休暇の登録(各休暇の画面)と取消(休暇の行の「取消」)を別々の操作にする | 検討中 |
+| [20261127-attendance-day-leave-separate-actions](./20261127-attendance-day-leave-separate-actions/spec.md) | 勤怠の日の保存に残る休暇の処理を消し、休暇の申請・取消を「この日の操作」のメニューの別々の操作にそろえる | レビュー中 |
 | [20261127-form-error-visibility-fixes](./20261127-form-error-visibility-fixes/spec.md) | 入力が消える・エラーが見えない不具合3件(経費の初回の保存・備品の Dialog・働き方の自動生成) | レビュー中 |
 | [20261126-form-field-aria](./20261126-form-field-aria/spec.md) | 必須・説明文・エラーを入力欄に属性で結ぶ(候補9) | 完了 |
 | [20261126-field-errors-near-fields](./20261126-field-errors-near-fields/spec.md) | 入力のエラーを項目の近くに出す(候補6) | 完了 |
