@@ -254,6 +254,19 @@ AIやMCPサーバー側に重複実装しない。
 
 ### 連携の横断ルール
 
+- **入口は1つのCommand(設計原則17)**: API・MCP等の入口は、1回の呼び出しで1つのCommandだけをdispatchする。
+  複数の集約・文脈にまたがる変更は、入口で複数のCommandを並べず、そのCommandのイベントを起点とする同期Reactorの
+  連鎖で整合させる(全体が1トランザクションになり、途中の拒否で全体が戻る)。複数の変更を1回で受ける操作(まとめて
+  保存等)は、その単位を1つのCommand(とイベント)として設計する。承認の要否などの業務の判定は入口に置かず、
+  ドメイン(Handler・Aggregate・判定クラス)に置く。根拠: ユーザーの指示(2026-11-27)。
+  - 既存の例外(入口で複数のCommandを1つの`DB::transaction`で束ねている。順に是正する。2026-11-27時点):
+    - 休暇・シフト交換の承認不要の申請(申請→承認): `PaidLeaveController`・`SpecialLeaveController`・
+      `CompensatoryLeaveController`・`ShiftSwapRequestController`
+    - まとめて保存: `UserController::updateDetails`・`AccessControlController::updateRoleDefinition`
+    - 一括操作(同じCommandを複数件): `ExpenseClaimController::bulkAddItems`・`BackOfficeTaskController::bulkComplete`・
+      `PaidLeaveScheduleController`(出勤率の判定の一括実行)・`AttendanceController`(週の残業の振分)。
+      一括操作を1つのCommandにするか、例外として残すかは是正の変更セットで決める。
+
 - **同期実行と1トランザクション**: Reactorは同期実行する。1回の利用者操作から始まる連鎖全体を
   1トランザクションとし、途中のReactor/Handlerで例外が出れば全体を取り消して利用者にエラーを返す。
   業務ルール違反(締め済み・同じ日の休暇の衝突等)は、そのルールを持つ文脈が自分のCommand内で例外を

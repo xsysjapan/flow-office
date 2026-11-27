@@ -24,13 +24,21 @@ description: >-
 - [ ] 真偽値は modelの casts を `boolean` にして `true`/`false` で返す。計算値は `(bool)` で明示する
 - [ ] 一覧の付加情報は `meta` に載せる(例: `meta.status_counts`、`meta.assignee_counts`。変更セット `20261122-list-search-form-standard`)
 
+## 1回の呼び出しは1つのCommand(設計原則17)
+
+- [ ] Controllerは1回の呼び出しで1つのCommandだけをdispatchする。Controllerで複数のCommandを並べたり`DB::transaction`で
+      束ねたりしない。複数の集約・文脈にまたがる変更は、そのCommandのイベントを起点とする同期Reactorの連鎖で整合させる
+      (`docs/03-architecture.md` 3.10。根拠: ユーザーの指示(2026-11-27))
+- [ ] 承認の要否などの業務の判定はControllerに置かず、ドメインに置く(原則9)
+- [ ] 既存の違反(`docs/03-architecture.md` 3.10の「既存の例外」)を前例として真似しない
+
 ## まとめて保存のエンドポイント
 
-- [ ] 複数の項目をまとめて保存する画面には、まとめて保存のエンドポイントを作る(例: `PUT /users/{id}/details`、
-      `PUT /admin/access-control/roles/{role}/definition`)。本文は変更した項目だけ(キーが無い項目は変えない)
-- [ ] 1つの `DB::transaction` の中で、項目ごとの既存のコマンドを dispatch する。まとめて保存用の新しいイベントは作らない
-- [ ] 業務の規則で拒否されたら全て戻し、項目のキー付きの422(`errors.{項目キー}`)を返す。途中の状態が規則に
-      反しないよう、dispatch の順序を決める(例: 入社日と退社日)
+- [ ] 複数の項目をまとめて保存する画面には、まとめて保存のエンドポイントを作る。本文は変更した項目だけ(キーが無い項目は変えない)
+- [ ] まとめて保存の単位を1つのCommandとして設計する(上の節)。業務の規則で拒否されたら全て戻し、項目のキー付きの422
+      (`errors.{項目キー}`)を返す
+- [ ] 既存の`PUT /users/{id}/details`・`PUT /admin/access-control/roles/{role}/definition`は、Controllerで既存のCommandを
+      1つの`DB::transaction`で並べている(原則17の前の実装。是正の対象)
 - [ ] 項目ごとの既存のAPIは、API・MCPの互換のために残す
 
 ## OpenAPI
