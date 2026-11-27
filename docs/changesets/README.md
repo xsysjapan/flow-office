@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261127-attendance-day-leave-switch](./20261127-attendance-day-leave-switch/spec.md) | 勤怠の日の保存で承認不要の休暇を切り替える操作を、1つのCommandとイベントの連鎖で整合させる(原則17の最初の適用) | 検討中 |
 | [20261127-form-error-visibility-fixes](./20261127-form-error-visibility-fixes/spec.md) | 入力が消える・エラーが見えない不具合3件と勤怠の日の休暇の取消の順 | レビュー中 |
 | [20261126-form-field-aria](./20261126-form-field-aria/spec.md) | 必須・説明文・エラーを入力欄に属性で結ぶ(候補9) | 完了 |
 | [20261126-field-errors-near-fields](./20261126-field-errors-near-fields/spec.md) | 入力のエラーを項目の近くに出す(候補6) | 完了 |
