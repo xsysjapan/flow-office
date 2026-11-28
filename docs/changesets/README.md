@@ -14,6 +14,8 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261128-bulk-operations](./20261128-bulk-operations/spec.md) | 段階②: 一括操作を入口1回=1つのCommandで、全部か無しかで処理する(失敗した対象と理由を返す) | 検討中 |
+| [20261128-remaining-entrypoints](./20261128-remaining-entrypoints/spec.md) | 原則17・15の残りの入口(利用者・カレンダー・端末・グループと初期ロール・Feature の同期・経費の明細と添付)と休暇の取消の置き場所 | 検討中 |
 | [20261128-single-command-entrypoints](./20261128-single-command-entrypoints/spec.md) | 段階①: まとめて保存・承認不要の申請・週の残業の振分・再判定を、入口1回=1つのCommandにする(原則17の是正) | 完了 |
 | [20261127-attendance-day-leave-separate-actions](./20261127-attendance-day-leave-separate-actions/spec.md) | 勤怠の日の保存に残る休暇の処理を消し、休暇の申請・取消を「この日の操作」のメニューの別々の操作にそろえる | 完了 |
 | [20261127-form-error-visibility-fixes](./20261127-form-error-visibility-fixes/spec.md) | 入力が消える・エラーが見えない不具合3件(経費の初回の保存・備品の Dialog・働き方の自動生成) | 完了 |
