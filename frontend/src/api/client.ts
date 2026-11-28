@@ -3,18 +3,27 @@ import { clearCorrectionPending, isAllowedDuringCorrectionPending, setCorrection
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
 const TOKEN_STORAGE_KEY = 'flow-office.token'
 
+export interface ApiErrorItem {
+  id: string
+  label?: string
+  message: string
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly errors?: Record<string, string[]>
   /** APIが返す機械可読なコード(例: メンテナンス中の `maintenance`)。 */
   readonly code?: string
+  /** 一括操作の全部か無しか(`code === 'bulk_operation_rejected'`)で、処理できなかった対象の一覧。 */
+  readonly items?: ApiErrorItem[]
 
-  constructor(status: number, message: string, errors?: Record<string, string[]>, code?: string) {
+  constructor(status: number, message: string, errors?: Record<string, string[]>, code?: string, items?: ApiErrorItem[]) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.errors = errors
     this.code = code
+    this.items = items
   }
 
   /** データの作り直し中のメンテナンス(503 かつ code === 'maintenance')。 */
@@ -109,7 +118,18 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       ? (payload as { code: string }).code
       : undefined
 
-    const error = new ApiError(response.status, message, errors, code)
+    const rawItems = isJson && typeof payload === 'object' && payload && 'items' in payload
+      ? (payload as { items: unknown }).items
+      : undefined
+    const items = Array.isArray(rawItems)
+      ? rawItems.map((item: { id: unknown; label?: unknown; message?: unknown }) => ({
+          id: String(item.id),
+          label: typeof item.label === 'string' ? item.label : undefined,
+          message: String(item.message ?? ''),
+        }))
+      : undefined
+
+    const error = new ApiError(response.status, message, errors, code, items)
     if (error.isMaintenance) {
       window.dispatchEvent(new CustomEvent<string>(MAINTENANCE_EVENT, { detail: message }))
     }

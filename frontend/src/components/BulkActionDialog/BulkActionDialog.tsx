@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { ApiError } from '../../api/client'
 import { notify } from '../../lib/notify'
 import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 
@@ -14,6 +15,9 @@ export interface BulkActionResult {
   succeededIds: string[]
   failures: BulkActionFailure[]
 }
+
+export const BULK_REJECTED_NOTICE =
+  '選んだ対象のうち、処理できないものがあります。何も処理していません。対象を選び直してください。'
 
 export interface BulkActionDialogProps {
   open: boolean
@@ -40,6 +44,14 @@ export interface BulkActionDialogProps {
   onSucceeded: (succeededIds: string[]) => void
   /** 成功トーストの文言。 */
   successMessage: (count: number) => string
+  /**
+   * 結果の形。`partial`(既定)は件ごとの部分成功。`allOrNothing`は一括APIを1回呼ぶ形で、`onExecute`が
+   * 返れば全件成功として閉じる(`failures`は使わない)。`ApiError`の`code === 'bulk_operation_rejected'`なら
+   * 失敗した対象と理由の一覧を出し、選択は残す(`onSucceeded`を呼ばない)。それ以外のエラーは通常のエラー表示。
+   */
+  resultMode?: 'partial' | 'allOrNothing'
+  /** `allOrNothing`で、応答に表示名が無い対象の表示名(ID→表示名)。 */
+  itemLabels?: Record<string, string>
 }
 
 /**
@@ -60,16 +72,20 @@ export function BulkActionDialog({
   onExecute,
   onSucceeded,
   successMessage,
+  resultMode = 'partial',
+  itemLabels,
 }: BulkActionDialogProps) {
   const [isRunning, setIsRunning] = useState(false)
   const [result, setResult] = useState<BulkActionResult | null>(null)
   const [error, setError] = useState<unknown>(null)
+  const [rejected, setRejected] = useState<ApiError | null>(null)
 
   // 開き直すたびに前回の結果・エラーを消す
   useEffect(() => {
     if (open) {
       setResult(null)
       setError(null)
+      setRejected(null)
     }
   }, [open])
 
@@ -86,6 +102,12 @@ export function BulkActionDialog({
     setIsRunning(true)
     try {
       const executed = await onExecute()
+      if (resultMode === 'allOrNothing') {
+        onSucceeded(executed.succeededIds)
+        if (executed.succeededIds.length > 0) notify.success(successMessage(executed.succeededIds.length))
+        onOpenChange(false)
+        return
+      }
       if (executed.succeededIds.length > 0) onSucceeded(executed.succeededIds)
       if (executed.failures.length === 0) {
         if (executed.succeededIds.length > 0) notify.success(successMessage(executed.succeededIds.length))
@@ -94,10 +116,37 @@ export function BulkActionDialog({
         setResult(executed)
       }
     } catch (e) {
-      setError(e)
+      if (resultMode === 'allOrNothing' && e instanceof ApiError && e.code === 'bulk_operation_rejected') {
+        setRejected(e)
+      } else {
+        setError(e)
+      }
     } finally {
       setIsRunning(false)
     }
+  }
+
+  if (rejected) {
+    return (
+      <ConfirmActionDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title={resultTitle}
+        description={BULK_REJECTED_NOTICE}
+        confirmLabel="閉じる"
+        confirmVariant="secondary"
+        hideCancel
+        onConfirm={() => handleOpenChange(false)}
+      >
+        <ul className="list-disc pl-5 text-sm text-foreground">
+          {(rejected.items ?? []).map((item, index) => (
+            <li key={`${item.id}-${index}`}>
+              {item.label ?? itemLabels?.[item.id] ?? item.id}: {item.message}
+            </li>
+          ))}
+        </ul>
+      </ConfirmActionDialog>
+    )
   }
 
   if (result) {

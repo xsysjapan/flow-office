@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\EventSourcing\BulkOperationRejected;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Http\Middleware\BlockDuringReadModelRebuild;
 use App\Http\Middleware\CheckAbilitiesOrFullSession;
@@ -75,6 +76,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (DomainRuleException $e, Request $request) use ($isApiRequest) {
             if ($isApiRequest($request)) {
                 return response()->json(['message' => $e->getMessage()], 422);
+            }
+        });
+
+        // 一括操作の全部か無しか: 失敗した対象と理由の一覧を422で返す(入力検証の422とはcodeで見分ける)。
+        $exceptions->render(function (BulkOperationRejected $e, Request $request) use ($isApiRequest) {
+            if ($isApiRequest($request)) {
+                return response()->json($e->toResponseBody(), 422);
             }
         });
 

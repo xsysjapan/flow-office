@@ -12,10 +12,14 @@ function Harness({
   onExecute,
   onSucceeded = vi.fn(),
   confirmDisabled,
+  resultMode,
+  itemLabels,
 }: {
   onExecute: () => Promise<BulkActionResult>
   onSucceeded?: (ids: string[]) => void
   confirmDisabled?: boolean
+  resultMode?: 'partial' | 'allOrNothing'
+  itemLabels?: Record<string, string>
 }) {
   const [open, setOpen] = useState(true)
   return (
@@ -29,6 +33,8 @@ function Harness({
         description="完了すると担当者を変更できなくなります。"
         confirmLabel="3件を完了にする"
         confirmDisabled={confirmDisabled}
+        resultMode={resultMode}
+        itemLabels={itemLabels}
         onExecute={onExecute}
         onSucceeded={onSucceeded}
         successMessage={(count) => `${count}件のタスクを完了にしました`}
@@ -184,5 +190,92 @@ describe('BulkActionDialog', () => {
     await user.click(screen.getByRole('button', { name: '開く' }))
 
     expect(await screen.findByText('選択した3件を完了にしますか?')).toBeInTheDocument()
+  })
+
+  describe('allOrNothing', () => {
+    const rejectedError = () =>
+      new ApiError(
+        422,
+        '選んだ対象のうち、処理できないものがあります。',
+        { 'items.a': ['理由A'], 'items.b': ['理由B'] },
+        'bulk_operation_rejected',
+        [
+          { id: 'a', label: 'タスクA', message: '理由A' },
+          { id: 'b', message: '理由B' },
+        ],
+      )
+
+    it('closes as all succeeded when onExecute resolves', async () => {
+      const user = userEvent.setup()
+      const onSucceeded = vi.fn()
+      render(
+        <Harness
+          resultMode="allOrNothing"
+          onExecute={() => Promise.resolve({ succeededIds: ['a', 'b', 'c'], failures: [] })}
+          onSucceeded={onSucceeded}
+        />,
+      )
+
+      await user.click(screen.getByRole('button', { name: '3件を完了にする' }))
+
+      await waitFor(() => expect(screen.queryByText('選択した3件を完了にしますか?')).not.toBeInTheDocument())
+      expect(onSucceeded).toHaveBeenCalledWith(['a', 'b', 'c'])
+      expect(notify.success).toHaveBeenCalledWith('3件のタスクを完了にしました')
+    })
+
+    it('lists rejected items with labels and the notice, and keeps the selection', async () => {
+      const user = userEvent.setup()
+      const onSucceeded = vi.fn()
+      render(
+        <Harness
+          resultMode="allOrNothing"
+          itemLabels={{ b: 'タスクB(対応表)' }}
+          onExecute={() => Promise.reject(rejectedError())}
+          onSucceeded={onSucceeded}
+        />,
+      )
+
+      await user.click(screen.getByRole('button', { name: '3件を完了にする' }))
+
+      expect(
+        await screen.findByText('選んだ対象のうち、処理できないものがあります。何も処理していません。対象を選び直してください。'),
+      ).toBeInTheDocument()
+      expect(screen.getByText('タスクA: 理由A')).toBeInTheDocument()
+      expect(screen.getByText('タスクB(対応表): 理由B')).toBeInTheDocument()
+      expect(onSucceeded).not.toHaveBeenCalled()
+      expect(notify.success).not.toHaveBeenCalled()
+
+      await user.click(await findCloseButton())
+      await waitFor(() => expect(screen.queryByText('実行結果')).not.toBeInTheDocument())
+      expect(onSucceeded).not.toHaveBeenCalled()
+      expect(notify.success).not.toHaveBeenCalled()
+    })
+
+    it('falls back to the id when neither label nor mapping exists', async () => {
+      const user = userEvent.setup()
+      render(<Harness resultMode="allOrNothing" onExecute={() => Promise.reject(rejectedError())} />)
+
+      await user.click(screen.getByRole('button', { name: '3件を完了にする' }))
+
+      expect(await screen.findByText('b: 理由B')).toBeInTheDocument()
+    })
+
+    it('shows other errors like the normal error display', async () => {
+      const user = userEvent.setup()
+      const onSucceeded = vi.fn()
+      render(
+        <Harness
+          resultMode="allOrNothing"
+          onExecute={() => Promise.reject(new ApiError(422, '入力が正しくありません。'))}
+          onSucceeded={onSucceeded}
+        />,
+      )
+
+      await user.click(screen.getByRole('button', { name: '3件を完了にする' }))
+
+      expect(await screen.findByText('入力が正しくありません。')).toBeInTheDocument()
+      expect(screen.getByText('選択した3件を完了にしますか?')).toBeInTheDocument()
+      expect(onSucceeded).not.toHaveBeenCalled()
+    })
   })
 })

@@ -55,3 +55,25 @@ export const ErrorOnExecute: Story = {
   },
   play: execute,
 }
+
+/** 全部か無しか: 実行すると失敗した対象と理由の一覧、何も処理していない旨の文が出る */
+export const AllOrNothingRejected: Story = {
+  args: {
+    resultMode: 'allOrNothing',
+    itemLabels: { '2': '経費精算(鈴木)' },
+    onExecute: () =>
+      Promise.reject(
+        new ApiError(
+          422,
+          '選んだ対象のうち、処理できないものがあります。',
+          { 'items.2': ['承認済みのため取り消せません。'], 'items.3': ['対象が見つかりません。'] },
+          'bulk_operation_rejected',
+          [
+            { id: '2', message: '承認済みのため取り消せません。' },
+            { id: '3', label: '名刺申請(佐藤)', message: '対象が見つかりません。' },
+          ],
+        ),
+      ),
+  },
+  play: execute,
+}

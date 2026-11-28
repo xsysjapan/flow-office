@@ -163,4 +163,27 @@ describe('apiFetch', () => {
       expect(url.searchParams.get('page')).toBe('2')
     })
   })
+
+  it('exposes code and items of a bulk_operation_rejected response', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: '選んだ対象のうち、処理できないものがあります。',
+          code: 'bulk_operation_rejected',
+          errors: { 'items.3': ['理由C'] },
+          items: [{ id: 3, label: 'タスクC', message: '理由C' }, { id: 'x', message: '理由X' }],
+        }),
+        { status: 422, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    const error = await apiFetch('/bulk', { method: 'POST', body: {} }).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).code).toBe('bulk_operation_rejected')
+    expect((error as ApiError).items).toEqual([
+      { id: '3', label: 'タスクC', message: '理由C' },
+      { id: 'x', label: undefined, message: '理由X' },
+    ])
+  })
 })
