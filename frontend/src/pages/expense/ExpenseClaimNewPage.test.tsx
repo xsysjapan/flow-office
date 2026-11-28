@@ -1119,6 +1119,116 @@ describe('ExpenseClaimNewPage', () => {
     })
   })
 
+  describe('下書きを作った後の読み込み(入力の保持)', () => {
+    const unprocessable = new ApiError(422, '最初のエラーの文', { amount: ['金額のエラー'] })
+
+    it('keeps the route inputs of the batch table when the first save fails and the draft is being loaded', async () => {
+      vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockReturnValue(new Promise(() => undefined))
+      vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockRejectedValue(unprocessable)
+
+      // 表形式はまとめて登録(下書きはタイトルの手順で作られる)から入る。下書きの読み込みは終わらない。
+      vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+      renderPage()
+      await selectBulkEntryMode()
+      await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+      await userEvent.click(await screen.findByRole('button', { name: '行を追加' }))
+      await pickDate(userEvent.setup(), '1行目の日付', '2026-07-04')
+      await userEvent.type(screen.getByLabelText('1行目の金額'), '420')
+      await userEvent.type(screen.getByLabelText('1行目の出発地'), '自宅')
+      await userEvent.type(screen.getByLabelText('1行目の到着地'), '会社')
+      await userEvent.click(screen.getByRole('button', { name: /^明細を保存\(\d+件\)/ }))
+
+      expect(await screen.findByText('最初のエラーの文')).toBeInTheDocument()
+      expect(screen.getByLabelText('1行目の出発地')).toHaveValue('自宅')
+      expect(screen.getByLabelText('1行目の到着地')).toHaveValue('会社')
+      expect(screen.getByLabelText('1行目の金額')).toHaveValue(420)
+      expect(screen.getByRole('status')).toBeInTheDocument()
+    })
+
+    it('keeps the input and shows the fetch error at the saved items place when the draft fetch fails', async () => {
+      vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockRejectedValue(new ApiError(500, '取得エラーの文'))
+      vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockRejectedValue(unprocessable)
+
+      renderPage([transportCategory, lodgingCategory], '/expenses/new?category=lodging')
+      await screen.findByLabelText('利用日')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-10')
+      await userEvent.type(screen.getByLabelText('金額'), '12000')
+      await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
+      await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+
+      expect(await screen.findByText('取得エラーの文')).toBeInTheDocument()
+      expect(screen.getByLabelText('宿泊先名')).toHaveValue('ホテルABC')
+      expect(screen.getByLabelText('金額')).toHaveValue(12000)
+    })
+
+    it('replaces the whole page with the error when opening an existing draft fails to load', async () => {
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockRejectedValue(new ApiError(500, '取得エラーの文'))
+
+      renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+
+      expect(await screen.findByText('取得エラーの文')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '宿泊費' })).not.toBeInTheDocument()
+    })
+
+    it('keeps the bulk title step with its error and without a back button when the claim is created but the title fails', async () => {
+      const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockReturnValue(new Promise(() => undefined))
+      const updateTitle = vi
+        .spyOn(expenseClaimsApi, 'updateExpenseClaimTitle')
+        .mockRejectedValueOnce(new ApiError(422, '最初のエラーの文', { title: ['タイトルのエラー'] }))
+        .mockResolvedValue(draftClaim())
+
+      renderPage()
+      await userEvent.click(await screen.findByRole('button', { name: 'まとめて登録する' }))
+      await userEvent.type(await screen.findByLabelText('タイトル'), '出張精算')
+      await userEvent.click(screen.getByRole('button', { name: '次へ' }))
+
+      expect(await screen.findByText('タイトルのエラー')).toBeInTheDocument()
+      expect(screen.getByLabelText('タイトル')).toHaveValue('出張精算')
+      expect(screen.queryByRole('button', { name: '登録方法の選択に戻る' })).not.toBeInTheDocument()
+
+      // その場で再送信でき、下書きは作り直さない。成功すると区分の選択へ進む。
+      await userEvent.click(screen.getByRole('button', { name: '次へ' }))
+      await waitFor(() => expect(updateTitle).toHaveBeenCalledTimes(2))
+      expect(createClaim).toHaveBeenCalledTimes(1)
+      expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
+    })
+
+    it('ignores a failure of the suggested title after saving the first item', async () => {
+      vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+      vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockRejectedValue(new ApiError(500, 'タイトルの失敗'))
+      vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockResolvedValue({
+        id: 'item-1',
+        category_id: 2,
+        usage_date: '2026-07-10',
+        description: 'ホテルABC',
+        amount: 12000,
+        project_id: null,
+        evidence_type: 'receipt_required',
+        fact_reference_type: null,
+        fact_reference_id: null,
+        commuting_deduction_amount: null,
+      })
+      const unhandled = vi.fn()
+      process.on('unhandledRejection', unhandled)
+
+      renderPage([transportCategory, lodgingCategory], '/expenses/new?mode=individual&category=lodging')
+      await screen.findByLabelText('利用日')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-10')
+      await userEvent.type(screen.getByLabelText('金額'), '12000')
+      await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
+      await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+
+      await waitFor(() => expect(notify.success).toHaveBeenCalledWith('明細を保存しました'))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      process.off('unhandledRejection', unhandled)
+      expect(unhandled).not.toHaveBeenCalled()
+    })
+  })
+
   describe('422の項目エラー', () => {
     const savedItem = {
       id: 'item-1',
@@ -1162,12 +1272,12 @@ describe('ExpenseClaimNewPage', () => {
         unknown_key: ['未知のキーのエラー'],
       }
       vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
-      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
       vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
       vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
 
-      // 既存の下書きの編集(初回の保存では下書きの作成で画面が読み込み中に切り替わり、入力が作り直される)。
-      renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+      // 下書きの無い状態の初回の保存。作成の後の読み込みを遅らせ、読み込み中の間も入力が残ることを確かめる。
+      vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockReturnValue(new Promise(() => undefined))
+      renderPage([transportCategory, lodgingCategory], '/expenses/new?mode=individual')
       await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
       await screen.findByLabelText('利用日')
       await pickDate(userEvent.setup(), '利用日', '2026-07-10')
@@ -1177,8 +1287,13 @@ describe('ExpenseClaimNewPage', () => {
 
       expect(await screen.findByText('入力内容を確認してください。')).toBeInTheDocument()
       expectEachOnce(errors)
-      // 422のときは入力を残す(消さない)。
+      // 422のときは入力を残す(消さない)。取得中は保存済みの明細の場所だけが読み込み中になる。
       expect(screen.getByLabelText('宿泊先名')).toHaveValue('ホテルABC')
+      expect(screen.getByRole('status')).toBeInTheDocument()
+      // 離脱警告も効く(入力が残っているので、タブを閉じる・リロードの警告が有効)。
+      const beforeUnload = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(beforeUnload)
+      expect(beforeUnload.defaultPrevented).toBe(true)
     })
 
     it('shows the receipt file error under the receipt field of the single-item form', async () => {

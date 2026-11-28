@@ -489,4 +489,140 @@ describe('AssetDetailPage', () => {
       await expectEachOnce(['備考のエラー'])
     })
   })
+
+  describe('client validation errors in dialogs', () => {
+    const installationAsset: Asset = {
+      ...lendingAsset,
+      id: 'asset-inst',
+      management_type: 'installation',
+      lending_status: null,
+      installation_status: 'installed',
+      lending_method: null,
+      default_location_text: null,
+      current_loan: null,
+      current_loan_id: null,
+      current_placement: { location_text: '会議室A', started_at: '2026-08-01T00:00:00+09:00' },
+    }
+
+    function mockAsset(asset: Asset) {
+      vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)
+      vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+    }
+
+    async function pick(label: string) {
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
+        data: [approver],
+        meta: { current_page: 1, last_page: 1, total: 1 },
+        links: { next: null, prev: null },
+      })
+      await userEvent.click(screen.getByLabelText(label))
+      await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+      await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+    }
+
+    it('shows the borrower error in the lend dialog after submitting, and clears it when picked and on reopen', async () => {
+      mockAsset({ ...lendingAsset, id: 'asset-l', lending_status: 'available', current_loan_id: null, current_loan: null })
+      renderPage('asset-l')
+
+      await userEvent.click(await screen.findByRole('button', { name: '貸与する' }))
+      expect(screen.queryByText('借用者を選択してください。')).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: '貸与する' }))
+      expect(await screen.findByText('借用者を選択してください。')).toBeInTheDocument()
+
+      await pick('借用者')
+      await waitFor(() => expect(screen.queryByText('借用者を選択してください。')).not.toBeInTheDocument())
+    })
+
+    it('does not show the previous lend error when the dialog is reopened', async () => {
+      mockAsset({ ...lendingAsset, id: 'asset-l', lending_status: 'available', current_loan_id: null, current_loan: null })
+      renderPage('asset-l')
+
+      await userEvent.click(await screen.findByRole('button', { name: '貸与する' }))
+      await userEvent.click(screen.getByRole('button', { name: '貸与する' }))
+      expect(await screen.findByText('借用者を選択してください。')).toBeInTheDocument()
+      await userEvent.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: '貸与する' }))
+      expect(screen.queryByText('借用者を選択してください。')).not.toBeInTheDocument()
+    })
+
+    it('shows the loan request error in the lend dialog when none is selected', async () => {
+      mockAsset(approvalAsset)
+      vi.spyOn(assetApi, 'getAssetLoanRequests').mockResolvedValue([])
+      renderPage('asset-approval')
+
+      await userEvent.click(await screen.findByRole('button', { name: '貸与する' }))
+      await pick('借用者')
+      await userEvent.click(screen.getByRole('button', { name: '貸与する' }))
+
+      expect(await screen.findByText('承認済みの貸出申請を選択してください。')).toBeInTheDocument()
+      expect(screen.queryByText('借用者を選択してください。')).not.toBeInTheDocument()
+    })
+
+    it('shows the approver error in the loan request dialog and clears it when picked', async () => {
+      mockAsset(approvalAsset)
+      renderPage('asset-approval')
+
+      await userEvent.click(await screen.findByRole('button', { name: '貸出申請' }))
+      await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+      expect(await screen.findByText('承認者を選択してください。')).toBeInTheDocument()
+
+      await pick('承認者')
+      await waitFor(() => expect(screen.queryByText('承認者を選択してください。')).not.toBeInTheDocument())
+    })
+
+    it('shows the location error in the default location dialog and clears it on input', async () => {
+      mockAsset(approvalAsset)
+      renderPage('asset-approval')
+
+      await userEvent.click(await screen.findByRole('button', { name: '通常配置場所を変更' }))
+      await userEvent.click(screen.getByRole('button', { name: '設定する' }))
+      expect(await screen.findByText('場所を入力してください。')).toBeInTheDocument()
+
+      await userEvent.type(screen.getByLabelText('場所'), '倉庫')
+      await waitFor(() => expect(screen.queryByText('場所を入力してください。')).not.toBeInTheDocument())
+    })
+
+    it('shows the location error in the relocate dialog and not after reopening', async () => {
+      mockAsset(installationAsset)
+      renderPage('asset-inst')
+
+      await userEvent.click(await screen.findByRole('button', { name: '移設' }))
+      await userEvent.click(screen.getByRole('button', { name: '移設する' }))
+      expect(await screen.findByText('場所を入力してください。')).toBeInTheDocument()
+      await userEvent.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: '移設' }))
+      expect(screen.queryByText('場所を入力してください。')).not.toBeInTheDocument()
+    })
+
+    it('shows the location error in the install dialog', async () => {
+      mockAsset({ ...installationAsset, installation_status: 'stored', current_placement: null })
+      renderPage('asset-inst')
+
+      await userEvent.click(await screen.findByRole('button', { name: '設置' }))
+      await userEvent.click(screen.getByRole('button', { name: '設置する' }))
+      expect(await screen.findByText('場所を入力してください。')).toBeInTheDocument()
+    })
+
+    it('does not show a previous server error when the location dialog is reopened', async () => {
+      mockAsset(installationAsset)
+      vi.spyOn(assetApi, 'relocateAsset').mockRejectedValue(
+        new ApiError(422, 'x', { location_text: ['場所のサーバーエラー'] }),
+      )
+      renderPage('asset-inst')
+
+      await userEvent.click(await screen.findByRole('button', { name: '移設' }))
+      await userEvent.type(screen.getByLabelText('場所'), '倉庫')
+      await userEvent.click(screen.getByRole('button', { name: '移設する' }))
+      expect(await screen.findByText('場所のサーバーエラー')).toBeInTheDocument()
+      await userEvent.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: '移設' }))
+      expect(screen.queryByText('場所のサーバーエラー')).not.toBeInTheDocument()
+    })
+  })
 })

@@ -554,15 +554,41 @@ describe('WorkStylesPage', () => {
       await expectEachOnce(['社員のエラー', '年月のエラー', '働き方のエラー', 'その他のエラー'])
     })
 
-    it('shows the shift generation errors of the monthly assignment under the fields', async () => {
-      vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue({
-        id: 'monthly-assignment-3',
-        user_id: 'user-5',
-        year_month: '2026-11',
-        work_style_id: 'work-style-1',
-        work_style: { id: 'work-style-1', code: 'standard', name: '標準勤務' },
-        assigned_by_user_id: 'admin-1',
-      })
+    const assigned = {
+      id: 'monthly-assignment-3',
+      user_id: 'user-5',
+      year_month: '2026-11',
+      work_style_id: 'work-style-1',
+      work_style: { id: 'work-style-1', code: 'standard', name: '標準勤務' },
+      assigned_by_user_id: 'admin-1',
+    }
+    const generateFailedText = '働き方は保存しましたが、勤務予定の自動生成に失敗しました。'
+
+    async function saveWithGenerate() {
+      await userEvent.click(await screen.findByLabelText(/この働き方をもとに2026-11の勤務予定を自動生成する/))
+      await userEvent.click(screen.getByRole('button', { name: 'この内容で保存' }))
+    }
+
+    it('shows a generation error without a field key outside the confirmation, and clears it when the year month changes', async () => {
+      vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue(assigned)
+      vi.spyOn(employeeShiftAssignmentsApi, 'generateShiftAssignments').mockRejectedValue(
+        new ApiError(422, '生成のエラーの文です。', { rest: ['キー無しの生成エラー'] }),
+      )
+      renderPage()
+      await fillMonthlyForm()
+      await saveWithGenerate()
+
+      expect(await screen.findByText(generateFailedText)).toBeInTheDocument()
+      expect(screen.getAllByText('キー無しの生成エラー')).toHaveLength(1)
+      expect(screen.queryByText('変更内容の確認')).not.toBeInTheDocument()
+
+      await pickYearMonth(userEvent.setup(), '対象年月', '2026-12')
+      await waitFor(() => expect(screen.queryByText(generateFailedText)).not.toBeInTheDocument())
+      expect(screen.queryByText('キー無しの生成エラー')).not.toBeInTheDocument()
+    })
+
+    it('shows a keyed generation error (from) once in the whole error, not under the fields', async () => {
+      vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue(assigned)
       vi.spyOn(employeeShiftAssignmentsApi, 'generateShiftAssignments').mockRejectedValue(
         new ApiError(422, '最初のエラーの文です。', {
           user_id: ['社員のエラー'],
@@ -573,13 +599,31 @@ describe('WorkStylesPage', () => {
       )
       renderPage()
       await fillMonthlyForm()
-      await userEvent.click(await screen.findByLabelText(/この働き方をもとに2026-11の勤務予定を自動生成する/))
-      await userEvent.click(screen.getByRole('button', { name: 'この内容で保存' }))
+      await saveWithGenerate()
 
-      // 成功後に確認の表示を閉じる既存の動作のため、まとめての表示(確認の表示の中)は出ない。項目の下には出る。
-      for (const message of ['社員のエラー', '働き方のエラー', '開始のエラー']) {
-        expect(await screen.findAllByText(message)).toHaveLength(1)
+      expect(await screen.findByText(generateFailedText)).toBeInTheDocument()
+      // 項目の下にも出ると2件になる。エラー全体の1件だけであること。
+      for (const message of ['社員のエラー', '働き方のエラー', '開始のエラー', 'その他のエラー']) {
+        expect(screen.getAllByText(message)).toHaveLength(1)
       }
+      expect(screen.queryByText('変更内容の確認')).not.toBeInTheDocument()
+    })
+
+    it('shows a generating message while the shift generation is pending', async () => {
+      vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue(assigned)
+      let resolveGenerate: (value: never[]) => void = () => undefined
+      vi.spyOn(employeeShiftAssignmentsApi, 'generateShiftAssignments').mockReturnValue(
+        new Promise((resolve) => {
+          resolveGenerate = resolve
+        }),
+      )
+      renderPage()
+      await fillMonthlyForm()
+      await saveWithGenerate()
+
+      expect(await screen.findByText('勤務予定を生成しています。')).toBeInTheDocument()
+      resolveGenerate([])
+      await waitFor(() => expect(screen.queryByText('勤務予定を生成しています。')).not.toBeInTheDocument())
     })
   })
 })

@@ -368,29 +368,38 @@ function MonthlyWorkStyleAssignmentCard() {
 
   const monthlyFields = ['user_id', 'work_style_id', 'year_month', 'from', 'to'] as const
   const assignErrors = fieldErrors(assignForMonth.error, monthlyFields)
-  const generateErrors = fieldErrors(generateShifts.error, monthlyFields)
-  const errorOf = (key: (typeof monthlyFields)[number]) => assignErrors.of(key) ?? generateErrors.of(key)
+  // 項目の下には割当のエラーだけを出す。生成のエラーは保存のボタンの位置に、前置きの文とともに出す。
+  const errorOf = (key: (typeof monthlyFields)[number]) => assignErrors.of(key)
 
   const currentAssignment = history?.find((assignment) => assignment.year_month === yearMonth)
   const selectedWorkStyle = workStyles?.find((style) => style.id === workStyleId)
 
+  // 生成の結果(エラー)は次の操作で消す。生成中は始めたばかりの結果を捨てないため呼ばない。
+  const resetGenerateResult = () => {
+    if (!generateShifts.isPending) generateShifts.reset()
+  }
+
   const handleUserChange = (userId: string | undefined) => {
+    resetGenerateResult()
     setTargetUserId(userId)
     setIsConfirming(false)
   }
 
   const handleYearMonthChange = (value: string) => {
+    resetGenerateResult()
     setYearMonth(value)
     setIsConfirming(false)
   }
 
   const handleWorkStyleChange = (value: string) => {
+    resetGenerateResult()
     setWorkStyleId(value)
     setIsConfirming(false)
   }
 
   const handleSave = () => {
     if (!targetUserId || !yearMonth || !workStyleId) return
+    resetGenerateResult()
     assignForMonth.mutate(
       { user_id: targetUserId, year_month: yearMonth, work_style_id: workStyleId },
       {
@@ -451,6 +460,16 @@ function MonthlyWorkStyleAssignmentCard() {
         </FormField>
       </div>
 
+      {generateShifts.isPending && (
+        <p className="mb-4 text-sm text-muted-foreground">勤務予定を生成しています。</p>
+      )}
+      {generateShifts.error != null && (
+        <div className="mb-4">
+          <p className="mb-2 text-sm text-destructive">働き方は保存しましたが、勤務予定の自動生成に失敗しました。</p>
+          <ErrorMessage error={generateShifts.error} />
+        </div>
+      )}
+
       {!isConfirming ? (
         <FormActions>
           <Button disabled={!targetUserId || !yearMonth || !workStyleId} onClick={() => setIsConfirming(true)}>
@@ -496,7 +515,6 @@ function MonthlyWorkStyleAssignmentCard() {
 
         </div>
         {assignErrors.rest != null && <ErrorMessage error={assignErrors.rest} />}
-        {generateErrors.rest != null && <ErrorMessage error={generateErrors.rest} />}
         <FormActions>
           <Button variant="secondary" onClick={() => setIsConfirming(false)}>
             キャンセル

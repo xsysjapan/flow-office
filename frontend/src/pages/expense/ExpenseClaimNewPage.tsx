@@ -342,7 +342,8 @@ function BulkTitleStep({
 }: {
   onDraftChange: (title: string) => void
   onSubmit: (title: string) => void
-  onBack: () => void
+  /** 下書きを作った後(戻ると区分の選択へ進んでしまう)は渡さない。 */
+  onBack?: () => void
   isSubmitting: boolean
   error: unknown
 }) {
@@ -360,9 +361,11 @@ function BulkTitleStep({
     <Card
       title="申請タイトルを入力"
       actions={
-        <Button variant="secondary" size="sm" onClick={onBack}>
-          登録方法の選択に戻る
-        </Button>
+        onBack ? (
+          <Button variant="secondary" size="sm" onClick={onBack}>
+            登録方法の選択に戻る
+          </Button>
+        ) : undefined
       }
     >
       <FormLayout>
@@ -460,6 +463,8 @@ function ExpenseClaimNewContent() {
   const [singlePresetToken, setSinglePresetToken] = useState(0)
   const [bulkTitleDraft, setBulkTitleDraft] = useState('')
   const [singleFormDirty, setSingleFormDirty] = useState(false)
+  // まとめて登録のタイトルを確定した(下書きの作成とタイトルの更新が成功した)か。
+  const [bulkTitleDone, setBulkTitleDone] = useState(false)
 
   const createClaim = useCreateExpenseClaim()
   const startClaimTitle = useUpdateExpenseClaimTitle()
@@ -581,6 +586,7 @@ function ExpenseClaimNewContent() {
   const handleStartBulkClaim = async (title: string) => {
     const id = await ensureClaimId()
     await startClaimTitle.mutateAsync({ claimId: id, title })
+    setBulkTitleDone(true)
     notify.success('経費精算を作成しました')
   }
 
@@ -617,7 +623,9 @@ function ExpenseClaimNewContent() {
     )
     if (wasNewClaim && entryMode === 'individual') {
       const categoryName = categories?.find((category) => category.id === items[0].category_id)?.name
-      void startClaimTitle.mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, items[0].usage_date) })
+      void startClaimTitle
+        .mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, items[0].usage_date) })
+        .catch(() => undefined)
     }
     notify.success(`${createdItems.length}件の明細を保存しました`)
     reset([])
@@ -633,7 +641,9 @@ function ExpenseClaimNewContent() {
     }
     if (wasNewClaim && entryMode === 'individual') {
       const categoryName = categories?.find((category) => category.id === input.category_id)?.name
-      void startClaimTitle.mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, input.usage_date) })
+      void startClaimTitle
+        .mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, input.usage_date) })
+        .catch(() => undefined)
     }
     notify.success('明細を保存しました')
   }
@@ -672,8 +682,12 @@ function ExpenseClaimNewContent() {
     navigateAfterSave(`/expenses/${claimId}`)
   }
 
-  if (claimId && isLoadingClaim) return <LoadingState />
-  if (claimId && claimError) return <ErrorMessage error={claimError} fallback="経費精算の取得に失敗しました。" />
+  // 全体を置き換えるのは、画面を開いたときに既存の下書きを読み込む間・失敗したときだけ。この画面で
+  // 下書きを作った後の読み込み・再取得の失敗では、入力の部分を残し、保存済みの明細の場所に出す。
+  if (routeClaimId && isLoadingClaim) return <LoadingState />
+  if (routeClaimId && !claim && claimError) {
+    return <ErrorMessage error={claimError} fallback="経費精算の取得に失敗しました。" />
+  }
 
   if (claimId && claim && !isExpenseClaimEditable(claim.status)) {
     return (
@@ -694,17 +708,41 @@ function ExpenseClaimNewContent() {
   }
 
   // 「まとめて経費登録」は明細入力の前に申請タイトルを確定させる。
-  if (!claimId && entryMode === 'bulk') {
+  if (!routeClaimId && entryMode === 'bulk' && !bulkTitleDone) {
     return (
       <BulkTitleStep
         onDraftChange={setBulkTitleDraft}
-        onBack={() => void handleClearEntryMode()}
+        onBack={!claimId ? () => void handleClearEntryMode() : undefined}
         onSubmit={(title) => void handleStartBulkClaim(title).catch(() => undefined)}
         isSubmitting={createClaim.isPending || startClaimTitle.isPending}
         error={createClaim.error ?? startClaimTitle.error}
       />
     )
   }
+
+  // 保存済みの明細の場所。この画面で下書きを作った後の読み込み中・取得の失敗はここに出し、入力の部分は外さない。
+  const savedItemsSection = (
+    <>
+      {claimId && !claim && isLoadingClaim && <LoadingState />}
+      {claimId && claimError && <ErrorMessage error={claimError} fallback="経費精算の取得に失敗しました。" />}
+      {claim && (
+        <SavedItemsAndSubmit
+          claim={claim}
+          approverUserId={approverUserId}
+          approvalRequired={approvalRequired}
+          onApproverChange={setApproverUserId}
+          updateItem={updateItem}
+          deleteItem={deleteItem}
+          onSubmit={() => void handleSubmit().catch(() => undefined)}
+          submitClaim={submitClaim}
+          onDeleteClaim={() => {
+            deleteClaimMutation.mutate(claim.id, { onSuccess: navigateAfterDelete })
+          }}
+          deleteClaimMutation={deleteClaimMutation}
+        />
+      )}
+    </>
+  )
 
   if (!selectedCategory) {
     return (
@@ -717,22 +755,7 @@ function ExpenseClaimNewContent() {
           onBack={!claimId ? () => void handleClearEntryMode() : undefined}
         />
 
-        {claim && (
-          <SavedItemsAndSubmit
-            claim={claim}
-            approverUserId={approverUserId}
-            approvalRequired={approvalRequired}
-            onApproverChange={setApproverUserId}
-            updateItem={updateItem}
-            deleteItem={deleteItem}
-            onSubmit={() => void handleSubmit().catch(() => undefined)}
-            onDeleteClaim={() => {
-              deleteClaimMutation.mutate(claim.id, { onSuccess: navigateAfterDelete })
-            }}
-            deleteClaimMutation={deleteClaimMutation}
-            submitClaim={submitClaim}
-          />
-        )}
+        {savedItemsSection}
       </div>
     )
   }
@@ -792,7 +815,7 @@ function ExpenseClaimNewContent() {
                   <FormActions>
                     <Button
                       isLoading={createClaim.isPending || addItemsBulk.isPending || uploadAttachment.isPending}
-                      onClick={() => void handleSaveItems()}
+                      onClick={() => void handleSaveItems().catch(() => undefined)}
                     >
                       明細を保存({rows.length}件)
                     </Button>
@@ -836,22 +859,7 @@ function ExpenseClaimNewContent() {
         )}
       </Card>
 
-      {claim && (
-        <SavedItemsAndSubmit
-          claim={claim}
-          approverUserId={approverUserId}
-          approvalRequired={approvalRequired}
-          onApproverChange={setApproverUserId}
-          updateItem={updateItem}
-          deleteItem={deleteItem}
-          onSubmit={() => void handleSubmit().catch(() => undefined)}
-          submitClaim={submitClaim}
-          onDeleteClaim={() => {
-            deleteClaimMutation.mutate(claim.id, { onSuccess: navigateAfterDelete })
-          }}
-          deleteClaimMutation={deleteClaimMutation}
-        />
-      )}
+      {savedItemsSection}
     </div>
   )
 }

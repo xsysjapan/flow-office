@@ -74,6 +74,7 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
   const [borrowerName, setBorrowerName] = useState<string | undefined>(undefined)
   const [expectedReturnAt, setExpectedReturnAt] = useState<string | undefined>(undefined)
   const [loanRequestId, setLoanRequestId] = useState<string | undefined>(undefined)
+  const [submitted, setSubmitted] = useState(false)
   const isApproval = asset.lending_method === 'approval'
   // 描く項目と同じ条件で組み立てる(承認済みの申請の選択は、承認制で借用者を選んだときだけ描く)。
   const { of, rest } = fieldErrors(lendAsset.error, [
@@ -99,6 +100,7 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
     setBorrowerName(undefined)
     setExpectedReturnAt(undefined)
     setLoanRequestId(undefined)
+    setSubmitted(false)
   }
 
   return (
@@ -111,6 +113,7 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
       isPending={lendAsset.isPending}
       error={rest}
       onConfirm={async () => {
+        setSubmitted(true)
         if (!borrowerUserId) throw new Error('借用者を選択してください。')
         if (isApproval && !loanRequestId) throw new Error('承認済みの貸出申請を選択してください。')
         await lendAsset.mutateAsync({
@@ -129,10 +132,13 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
         resetSelection()
       }}
       onOpenChange={(open) => {
-        if (open) resetSelection()
+        if (open) {
+          resetSelection()
+          lendAsset.reset()
+        }
       }}
     >
-      <FormField label="借用者" htmlFor="lend-borrower" required error={of('borrower_user_id')}>
+      <FormField label="借用者" htmlFor="lend-borrower" required error={submitted && !borrowerUserId ? '借用者を選択してください。' : of('borrower_user_id')}>
         <UserPicker
           id="lend-borrower"
           value={borrowerUserId}
@@ -140,6 +146,7 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
             setBorrowerUserId(userId)
             setBorrowerName(user?.name)
             setLoanRequestId(undefined)
+            lendAsset.reset()
           }}
         />
       </FormField>
@@ -148,7 +155,9 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
       </FormField>
 
       {isApproval && borrowerUserId && (
-        <FormField label="承認済みの貸出申請" htmlFor="lend-loan-request" required error={of('loan_request_id')}>
+        <FormField label="承認済みの貸出申請" htmlFor="lend-loan-request" required
+          error={submitted && !loanRequestId ? '承認済みの貸出申請を選択してください。' : of('loan_request_id')}
+        >
           {isLoadingLoanRequests ? (
             <LoadingState />
           ) : !approvedLoanRequests || approvedLoanRequests.length === 0 ? (
@@ -189,6 +198,7 @@ function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
   const submitRequest = useSubmitWorkflowRequest()
   const [purpose, setPurpose] = useState('')
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
+  const [submitted, setSubmitted] = useState(false)
 
   const isPending = createRequest.isPending || submitRequest.isPending
   // 同時に失敗するのは作成か提出のどちらか1つ(承認者のキーは両方に出る)。
@@ -204,6 +214,7 @@ function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
       isPending={isPending}
       error={rest}
       onConfirm={async () => {
+        setSubmitted(true)
         if (!approverUserId) throw new Error('承認者を選択してください。')
         const created = await createRequest.mutateAsync({
           request_type_code: 'asset_loan',
@@ -215,18 +226,22 @@ function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
         notify.success(`${asset.name}の貸出を申請しました`)
         setPurpose('')
         setApproverUserId(undefined)
+        setSubmitted(false)
       }}
       onOpenChange={(open) => {
         if (open) {
           setPurpose('')
           setApproverUserId(undefined)
+          setSubmitted(false)
+          createRequest.reset()
+          submitRequest.reset()
         }
       }}
     >
       <FormField label="利用目的" htmlFor="asset-loan-purpose">
         <Textarea id="asset-loan-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
       </FormField>
-      <FormField label="承認者" htmlFor="asset-loan-approver" required error={of('approver_user_id')}>
+      <FormField label="承認者" htmlFor="asset-loan-approver" required error={submitted && !approverUserId ? '承認者を選択してください。' : of('approver_user_id')}>
         <UserPicker
           id="asset-loan-approver"
           value={approverUserId}
@@ -293,6 +308,7 @@ function LocationTextDialog({
   isPending,
   error,
   onConfirm,
+  onOpen,
 }: {
   triggerLabel: string
   title: string
@@ -301,8 +317,10 @@ function LocationTextDialog({
   isPending: boolean
   error: unknown
   onConfirm: (locationText: string) => Promise<unknown>
+  onOpen: () => void
 }) {
   const [locationText, setLocationText] = useState('')
+  const [submitted, setSubmitted] = useState(false)
   const { of, rest } = fieldErrors(error, ['location_text'] as const)
 
   return (
@@ -315,15 +333,23 @@ function LocationTextDialog({
       isPending={isPending}
       error={rest}
       onConfirm={async () => {
+        setSubmitted(true)
         if (!locationText.trim()) throw new Error('場所を入力してください。')
         await onConfirm(locationText)
         setLocationText('')
+        setSubmitted(false)
       }}
       onOpenChange={(open) => {
-        if (open) setLocationText('')
+        if (open) {
+          setLocationText('')
+          setSubmitted(false)
+          onOpen()
+        }
       }}
     >
-      <FormField label="場所" htmlFor="location-text" required error={of('location_text')}>
+      <FormField label="場所" htmlFor="location-text" required
+        error={submitted && !locationText.trim() ? '場所を入力してください。' : of('location_text')}
+      >
         <Input id="location-text" value={locationText} onChange={(e) => setLocationText(e.target.value)} />
       </FormField>
     </ConfirmActionDialog>
@@ -600,6 +626,7 @@ export function AssetDetailPage() {
                       confirmLabel="設定する"
                       isPending={setDefaultLocation.isPending}
                       error={setDefaultLocation.error}
+                      onOpen={setDefaultLocation.reset}
                       onConfirm={async (locationText) => {
                         await setDefaultLocation.mutateAsync({ id: asset.id, locationText })
                         notify.success(`${asset.name}の通常配置場所を設定しました`)
@@ -707,6 +734,7 @@ export function AssetDetailPage() {
                     confirmLabel="設置する"
                     isPending={installAsset.isPending}
                     error={installAsset.error}
+                    onOpen={installAsset.reset}
                     onConfirm={async (locationText) => { await installAsset.mutateAsync({ id: asset.id, locationText }); notify.success(`${asset.name}を設置しました`) }}
                   />
                   <ManagementTypeChangeDialog asset={asset} />
@@ -765,6 +793,7 @@ export function AssetDetailPage() {
                     confirmLabel="移設する"
                     isPending={relocateAsset.isPending}
                     error={relocateAsset.error}
+                    onOpen={relocateAsset.reset}
                     onConfirm={async (locationText) => { await relocateAsset.mutateAsync({ id: asset.id, locationText }); notify.success(`${asset.name}を移設しました`) }}
                   />
                   <ConfirmActionDialog

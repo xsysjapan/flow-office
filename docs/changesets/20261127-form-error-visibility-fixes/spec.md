@@ -146,4 +146,15 @@
 - 2026-11-27 ユーザーの判断(休暇の登録と取消は別々の操作。勤怠の日の保存から休暇の欄を外す)で、論点4を外し、変更セット`20261127-attendance-day-leave-separate-actions`へ移した。
 
 ## 実装結果
-未着手
+実装済み(2026-11-28、implementer。検証: `npx tsc -p tsconfig.app.json --noEmit` 通過、`npx vitest run --project unit` を担当3画面+expense配下で実行し 11ファイル174件通過、`npx oxlint` 変更ファイルで指摘なし。全件・E2Eは未実行)。
+
+- 経費の申請(`ExpenseClaimNewPage.tsx`): 全体の読み込み・エラーを `routeClaimId` のときだけに限定。作成後の読み込み・取得失敗は `savedItemsSection`(保存済みの明細の場所。区分の選択前と入力の2か所で共用)に LoadingState / ErrorMessage。`BulkTitleStep` は `!routeClaimId && entryMode === 'bulk' && !bulkTitleDone`、成功で `bulkTitleDone`、`claimId` があれば戻るボタン無し(`onBack` を任意に)。タイトルの自動提案2か所に `.catch(() => undefined)`。追加: 表形式の保存ボタンの `void handleSaveItems()` にも `.catch(() => undefined)`(明細追加が 422 のとき未処理の reject が出てテストが落ちたため。エラーは `addItemsBulk.error` で表示済み)。
+- 備品の詳細(`AssetDetailPage.tsx`): 3つの Dialog に `submitted`。開いたとき `submitted` を false にし mutation を reset(LocationTextDialog は `onOpen` prop、3か所のページ側が各 mutation の reset を渡す)。借用者の変更で申請の選択と lendAsset のエラーを消す。
+- 働き方の設定(`WorkStylesPage.tsx`): 生成のエラーは確認の表示の外に前置きの文+ErrorMessage、`errorOf` は割当のみ、生成中の文、`generateShifts.reset()` は4ハンドラ内(生成中は呼ばない)。
+- スキル: `ui-interaction-patterns` §2.19 の既存の行に追記。
+- 追加・変更したテスト: ExpenseClaimNewPage.test.tsx(describe「下書きを作った後の読み込み(入力の保持)」5件、単票 422 を `/expenses/new?mode=individual` + 取得を遅らせるモックに戻し、読み込み中の LoadingState と beforeunload の警告も確認)、AssetDetailPage.test.tsx(describe「client validation errors in dialogs」8件)、WorkStylesPage.test.tsx(生成のエラー3件。既存のキー付きの生成エラーのテストは「項目の下に出る」から「エラー全体に1件だけ」に変更)。
+- 仕様との差: 「表形式で下書きの無い状態の初回の保存」は到達できない(`entryMode` が未選択か個別だと表形式にならず、まとめて登録はタイトルの手順で先に下書きができる)。表形式のテストは、まとめて登録(下書きの取得が終わらない)から入り、明細の追加が 422 のとき出発地・到着地・金額が残ることを確かめた。
+- 横展開の grep(仕様確定事項4):
+  - 1(作成の後に state で id を付けて同じ画面に留まり読み込み中で入力を外す作り): 無し(`set*Id(` で id を付ける作成画面は `ExpenseClaimNewPage` だけ。他の `isLoading` の全体置き換えは `ExpenseEntryPresetEditPage` の `!isCreate && isLoading` のみで作成時は外さない)。
+  - 3(成功の中で別の mutation を呼び表示を閉じる作り): `WorkStylesPage` のみ(他は `TodayAttendancePanel` の onSuccess が通知のみ)。形は違うが候補として `pages/admin/GroupDetailPage.tsx:258-275`: グループ作成の onSuccess の中で `await createAssignment.mutateAsync(...)`(初期ロール)が失敗すると、グループは作成済みのまま遷移もエラー表示もされない(`createAssignment.error` を作成フォームで描いていない)。本変更では直していない(別の候補)。
+  - `void startClaimTitle.mutateAsync` は2か所とも対応。他の `void xxx.mutateAsync(` は無し。
