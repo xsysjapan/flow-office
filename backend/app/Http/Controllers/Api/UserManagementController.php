@@ -133,14 +133,16 @@ class UserManagementController extends Controller
 
     public function storeGroup(Request $r, CommandBus $bus): JsonResponse
     {
-        $d = $r->validate(['group_type_id' => ['required', 'integer'], 'name' => ['required', 'string', 'max:255'], 'code' => ['sometimes', 'string', 'max:100'], 'description' => ['nullable', 'string'], 'parent_group_id' => ['nullable', 'uuid']]);
+        $d = $r->validate(['group_type_id' => ['required', 'integer'], 'name' => ['required', 'string', 'max:255'], 'code' => ['sometimes', 'string', 'max:100'], 'description' => ['nullable', 'string'], 'parent_group_id' => ['nullable', 'uuid'], 'initial_role_id' => ['nullable', 'integer']]);
         if (! $this->hasGlobalAccess($r)) {
             abort_unless(isset($d['parent_group_id']), 403, 'スコープ付き管理者は管理対象内の親Groupを指定してください。');
             $this->assertGroupAllowed($r, $d['parent_group_id']);
         }
+        // 初期ロールの割当は全社のrole.assign(今の割当のAPIが全社の割当に要する権限と同じ)が要る。
+        abort_if(isset($d['initial_role_id']) && ! $this->access->hasGlobalPermission($r->user(), 'role.assign'), 403, '初期ロールを付けるには全社のロール割当の権限が必要です。');
         $id = (string) Str::uuid();
         $code = $d['code'] ?? 'GROUP_'.strtoupper(str_replace('-', '', $id));
-        $bus->dispatch(new CreateGroup($id, $d['group_type_id'], $d['name'], $code, $d['description'] ?? null, $d['parent_group_id'] ?? null, $r->user()->id));
+        $bus->dispatch(new CreateGroup($id, $d['group_type_id'], $d['name'], $code, $d['description'] ?? null, $d['parent_group_id'] ?? null, $r->user()->id, $d['initial_role_id'] ?? null));
 
         return response()->json(['id' => $id], 201);
     }

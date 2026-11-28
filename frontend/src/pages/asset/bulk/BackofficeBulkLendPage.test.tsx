@@ -5,8 +5,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../../api/asset'
+import { ApiError } from '../../../api/client'
 import type { Asset } from '../../../api/types'
 import { BackofficeBulkLendPage } from './BackofficeBulkLendPage'
+import { BULK_REJECTED_NOTICE } from '../../../components/BulkActionDialog/BulkActionDialog'
 import { notify } from '../../../lib/notify'
 
 vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn() } }))
@@ -170,9 +172,7 @@ describe('BackofficeBulkLendPage', () => {
     })
     const bulkSpy = vi.spyOn(assetApi, 'bulkAssetOperation').mockResolvedValue({
       operation: 'backoffice_lend',
-      results: [{ asset_id: 'asset-1', success: true, result: 'lent' }],
-      succeeded_count: 1,
-      failed_count: 0,
+      data: [{ asset_id: 'asset-1', result: 'done' }],
     })
 
     renderPage()
@@ -185,6 +185,7 @@ describe('BackofficeBulkLendPage', () => {
 
     await waitFor(() => expect(bulkSpy).toHaveBeenCalledWith(expect.objectContaining({ operation: 'backoffice_lend', asset_ids: ['asset-1'] })))
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('1件を貸与しました'))
+    expect(await screen.findByText('1件を貸与しました。')).toBeInTheDocument()
   })
 
   it('貸出不可の備品はエラー理由を表示しリストに追加されない', async () => {
@@ -209,5 +210,43 @@ describe('BackofficeBulkLendPage', () => {
 
     expect(await screen.findByText(/承認済みの貸出申請がありません/)).toBeInTheDocument()
     expect(screen.queryByText('EQ-00121')).not.toBeInTheDocument()
+  })
+
+  it('1件でも処理できないと何も確定せず、失敗した備品と理由を出して対象を残す', async () => {
+    vi.spyOn(assetApi, 'resolveAssetByScanInput').mockResolvedValue(asset)
+    vi.spyOn(assetApi, 'getAssetLoanEligibility').mockResolvedValue({
+      asset_id: 'asset-1',
+      management_type: 'lending',
+      lending_method: 'backoffice',
+      lending_status: 'available',
+      eligible: true,
+      requires_approval: false,
+      approved_loan_request_id: null,
+      reason: null,
+    })
+    const bulkSpy = vi.spyOn(assetApi, 'bulkAssetOperation').mockRejectedValue(
+      new ApiError(
+        422,
+        '選んだ対象のうち、処理できないものがあります。',
+        { 'items.asset-1': ['処理できない状態です。'] },
+        'bulk_operation_rejected',
+        [{ id: 'asset-1', message: '処理できない状態です。' }],
+      ),
+    )
+
+    renderPage()
+    await userEvent.type(screen.getByLabelText('貸出先'), 'x')
+    await userEvent.type(screen.getByLabelText('貸与対象に追加する備品'), 'EQ-00121')
+    await userEvent.click(screen.getByRole('button', { name: '追加' }))
+    await screen.findByText('ThinkPad X1')
+
+    await userEvent.click(screen.getByRole('button', { name: '1件を確定' }))
+
+    expect(bulkSpy).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
+    expect(screen.getByText('ThinkPad X1(EQ-00121): 処理できない状態です。')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+    // 何も確定していないので、対象は残る。
+    expect(screen.getByRole('button', { name: '1件を確定' })).toBeEnabled()
   })
 })

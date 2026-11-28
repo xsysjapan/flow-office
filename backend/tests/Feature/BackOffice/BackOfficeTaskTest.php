@@ -109,15 +109,19 @@ class BackOfficeTaskTest extends TestCase
 
         $this->actingAs($staff)->postJson('/api/backoffice-tasks/bulk-complete', [
             'task_ids' => $tasks->pluck('id')->all(),
-        ])->assertOk()->assertJsonCount(2);
+        ])->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('data.0.result', 'processed');
 
         foreach ($tasks as $task) {
             $this->assertDatabaseHas('backoffice_tasks', ['id' => $task->id, 'status' => 'completed']);
         }
 
-        $this->actingAs($staff)->postJson('/api/backoffice-tasks/bulk-complete', [
+        $rejected = $this->actingAs($staff)->postJson('/api/backoffice-tasks/bulk-complete', [
             'task_ids' => [$otherTask->id],
-        ])->assertUnprocessable();
+        ])->assertUnprocessable()->assertJsonPath('code', 'bulk_operation_rejected');
+        $this->assertSame(
+            ['自分に割り当てられていないタスクは一括完了できません。'],
+            $rejected->json('errors')["items.{$otherTask->id}"],
+        );
         $this->assertDatabaseHas('backoffice_tasks', ['id' => $otherTask->id, 'status' => 'processing']);
     }
 

@@ -4,7 +4,6 @@ namespace App\Domain\AccessControl\Handlers;
 
 use App\Domain\AccessControl\Aggregates\RoleAssignmentAggregate;
 use App\Domain\AccessControl\Commands\CreateRoleAssignment;
-use App\Domain\AccessControl\Services\GroupFeatureSyncService;
 use App\Domain\AccessControl\Services\PrivilegeAssignmentPolicy;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
@@ -14,11 +13,15 @@ use Illuminate\Support\Facades\DB;
 /** @implements CommandHandler<CreateRoleAssignment> */
 class CreateRoleAssignmentHandler implements CommandHandler
 {
-    public function __construct(private PrivilegeAssignmentPolicy $privilegePolicy, private GroupFeatureSyncService $groupFeatureSync) {}
+    public function __construct(private PrivilegeAssignmentPolicy $privilegePolicy) {}
 
     public function handle(Command $command): string
     {
         assert($command instanceof CreateRoleAssignment);
+        // Reactor発行(グループの初期ロール)は、割当の集約が作成済みなら何もしない(冪等)。
+        if ($command->viaReactor && RoleAssignmentAggregate::retrieve($command->assignmentId)->isCreated()) {
+            return $command->assignmentId;
+        }
         if ($command->scopeType === 'group' && ! $command->scopeGroupId) {
             throw new DomainRuleException('GROUPスコープでは対象グループが必須です。');
         } if ($command->scopeType !== 'group' && $command->scopeGroupId) {
@@ -42,10 +45,6 @@ class CreateRoleAssignmentHandler implements CommandHandler
             throw new DomainRuleException('有効な付与先を指定してください。');
         } $this->privilegePolicy->assertSelfAssignmentAllowed($command->actorUserId, $command->subjectType, $command->subjectId, $command->roleId);
         RoleAssignmentAggregate::retrieve($command->assignmentId)->create($command->subjectType, $command->subjectId, $command->roleId, $command->scopeType, $command->scopeGroupId, $command->includesDescendants, $command->startsAt, $command->endsAt, $command->actorUserId)->persist();
-
-        if ($command->subjectType === 'group') {
-            $this->groupFeatureSync->syncGroup($command->subjectId, $command->actorUserId);
-        }
 
         return $command->assignmentId;
     }

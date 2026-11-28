@@ -22,6 +22,13 @@ class GrantCompensatoryLeaveHandler implements CommandHandler
     {
         assert($command instanceof GrantCompensatoryLeave);
 
+        $aggregate = CompensatoryLeaveAccountAggregate::retrieve(CompensatoryLeaveAccountAggregate::streamIdFor($command->userId))
+            ->forUser($command->userId);
+
+        if ($command->idempotent && $aggregate->hasGrant($command->grantId)) {
+            return null;
+        }
+
         $holidayWork = CompensatoryHolidayWorkDay::query()
             ->where('user_id', $command->userId)
             ->whereDate('work_date', $command->workDate)
@@ -33,8 +40,7 @@ class GrantCompensatoryLeaveHandler implements CommandHandler
 
         $settings = SystemSetting::current();
 
-        CompensatoryLeaveAccountAggregate::retrieve(CompensatoryLeaveAccountAggregate::streamIdFor($command->userId))
-            ->forUser($command->userId)
+        $aggregate
             ->grantManually(
                 newGrantId: $command->grantId,
                 sourceWorkDate: $command->workDate,

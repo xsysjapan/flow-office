@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as workflowRequestsApi from '../../api/workflowRequests'
 import { ApiError } from '../../api/client'
+import { BULK_REJECTED_NOTICE } from '../../components/BulkActionDialog/BulkActionDialog'
 import type { Paginated, WorkflowRequest } from '../../api/types'
 import { notify } from '../../lib/notify'
 import { WorkflowRequestListPage } from './WorkflowRequestListPage'
@@ -171,7 +172,8 @@ describe('WorkflowRequestListPage', () => {
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockResolvedValue(withData)
-    const cancelSpy = vi.spyOn(workflowRequestsApi, 'cancelWorkflowRequest').mockResolvedValue(withData.data[0])
+    const bulkCancelSpy = vi.spyOn(workflowRequestsApi, 'bulkCancelWorkflowRequests').mockResolvedValue({ data: [] })
+    const cancelSpy = vi.spyOn(workflowRequestsApi, 'cancelWorkflowRequest')
 
     renderPage()
 
@@ -184,9 +186,10 @@ describe('WorkflowRequestListPage', () => {
     await userEvent.type(screen.getByPlaceholderText('取消理由'), '重複申請のため')
     await userEvent.click(screen.getByRole('button', { name: '2件を取り消す' }))
 
-    await waitFor(() => expect(cancelSpy).toHaveBeenCalledTimes(2))
-    expect(cancelSpy).toHaveBeenCalledWith('workflow-request-1', '重複申請のため')
-    expect(cancelSpy).toHaveBeenCalledWith('workflow-request-2', '重複申請のため')
+    // 一括取消のAPIを1回だけ呼ぶ(件ごとの取消APIは呼ばない)
+    await waitFor(() => expect(bulkCancelSpy).toHaveBeenCalledTimes(1))
+    expect(bulkCancelSpy).toHaveBeenCalledWith(['workflow-request-1', 'workflow-request-2'], '重複申請のため')
+    expect(cancelSpy).not.toHaveBeenCalled()
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2件の申請を取り消しました'))
     await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument())
   })
@@ -239,8 +242,14 @@ describe('WorkflowRequestListPage', () => {
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockResolvedValue(withData)
-    vi.spyOn(workflowRequestsApi, 'cancelWorkflowRequest').mockImplementation((id: string) =>
-      id === 'workflow-request-1' ? Promise.resolve(withData.data[0]) : Promise.reject(new ApiError(422, '取消できない状態です。')),
+    vi.spyOn(workflowRequestsApi, 'bulkCancelWorkflowRequests').mockRejectedValue(
+      new ApiError(
+        422,
+        '選んだ対象のうち、処理できないものがあります。',
+        { 'items.workflow-request-2': ['取消できない状態です。'] },
+        'bulk_operation_rejected',
+        [{ id: 'workflow-request-2', message: '取消できない状態です。' }],
+      ),
     )
 
     renderPage()
@@ -252,11 +261,13 @@ describe('WorkflowRequestListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '2件を取り消す' }))
 
     expect(await screen.findByText('取消の結果')).toBeInTheDocument()
+    expect(screen.getByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
     expect(screen.getByText('名刺の再作成: 取消できない状態です。')).toBeInTheDocument()
     await userEvent.click(screen.getAllByRole('button', { name: '閉じる' }).at(-1)!)
-    expect(notify.success).toHaveBeenCalledWith('1件の申請を取り消しました')
-    expect(await screen.findByText('1件を選択中')).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: 'タクシー代を選択' })).not.toBeChecked()
+    expect(notify.success).not.toHaveBeenCalled()
+    // 何も取り消されていないので、選択はそのまま残る
+    expect(await screen.findByText('2件を選択中')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'タクシー代を選択' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: '名刺の再作成を選択' })).toBeChecked()
   })
 

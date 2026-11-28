@@ -7,8 +7,7 @@ import type { WorkflowRequest } from '../api/types'
 /**
  * 統合承認画面(pages/approvals/ApprovalsPage)向け: 汎用申請一覧の1行(WorkflowRequest)を
  * subject_type(null/attendance_month/expense_claim)に応じて適切なドメインAPIへ振り分けて
- * 承認・差戻しする。subject_type!=nullの行は`/workflow-requests/{id}/approve`・`/return`を
- * 呼んではならない(汎用申請専用で、対象ドメインの実データを更新しない)ため、
+ * 1件ずつ承認・差戻しする(まとめて承認は`useBulkApproveWorkflowRequests`の一括API)。
  * `request.subject`(GET /workflow-requests/{id}のみに含まれる詳細)のidを使って
  * 対象ドメインの既存の承認・差戻しエンドポイントを呼ぶ。
  */

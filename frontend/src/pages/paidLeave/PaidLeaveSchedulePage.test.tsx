@@ -11,6 +11,7 @@ import type {
   PaidLeaveScheduleEntry,
   PaidLeaveScheduleEntryDetail,
 } from '../../api/types'
+import { BULK_REJECTED_NOTICE } from '../../components/BulkActionDialog/BulkActionDialog'
 import { notify } from '../../lib/notify'
 import { PaidLeaveSchedulePage } from './PaidLeaveSchedulePage'
 
@@ -346,9 +347,7 @@ describe('PaidLeaveSchedulePage', () => {
 
   it('shows the bulk grant bar only when eligible rows are selected, and submits the selected ids after confirmation', async () => {
     const bulkResult: PaidLeaveScheduleBulkGrantResponse = {
-      success_count: 1,
-      failure_count: 0,
-      results: [{ schedule_entry_id: 'entry-1', success: true, message: null, grant_id: 'grant-1' }],
+      data: [{ schedule_entry_id: 'entry-1', grant_id: 'grant-1' }],
     }
     const bulkSpy = vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeaveScheduleEntries').mockResolvedValue(bulkResult)
 
@@ -375,15 +374,17 @@ describe('PaidLeaveSchedulePage', () => {
     await waitFor(() => expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument())
   })
 
-  it('shows the failures in the result and keeps only the failed entries selected', async () => {
-    vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeaveScheduleEntries').mockResolvedValue({
-      success_count: 1,
-      failure_count: 1,
-      results: [
-        { schedule_entry_id: 'entry-1', success: true, message: null, grant_id: 'grant-1' },
-        { schedule_entry_id: 'entry-5', success: false, message: '既に付与済みです。', grant_id: null },
-      ],
-    } satisfies PaidLeaveScheduleBulkGrantResponse)
+  it('shows the rejected entries with a notice that nothing was granted, and keeps every selection', async () => {
+    vi.mocked(notify.success).mockClear()
+    vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeaveScheduleEntries').mockRejectedValue(
+      new ApiError(
+        422,
+        '選んだ対象のうち、処理できないものがあります。',
+        { 'items.entry-5': ['既に付与済みです。'] },
+        'bulk_operation_rejected',
+        [{ id: 'entry-5', message: '既に付与済みです。' }],
+      ),
+    )
 
     renderPage({ entries: [eligibleEntry, futureEntry] })
     await screen.findByText('山田花子')
@@ -394,14 +395,15 @@ describe('PaidLeaveSchedulePage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: '2件を付与する' }))
 
     expect(await within(dialog).findByText('一括付与の結果')).toBeInTheDocument()
+    expect(within(dialog).getByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
     expect(within(dialog).getByText('山田花子(2026-10-25): 既に付与済みです。')).toBeInTheDocument()
     await userEvent.click(within(dialog).getAllByRole('button', { name: '閉じる' }).at(-1)!)
-    expect(notify.success).toHaveBeenCalledWith('1件の有給を付与しました')
-    expect(await screen.findByText('1件を選択中')).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: '鈴木一郎を選択' })).not.toBeChecked()
+    expect(notify.success).not.toHaveBeenCalled()
+    // 何も付与されていないので、選択はそのまま残る。
+    expect(await screen.findByText('2件を選択中')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: '鈴木一郎を選択' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: '山田花子を選択' })).toBeChecked()
   })
-
   it('does not call the bulk grant API when the confirmation is cancelled', async () => {
     const bulkSpy = vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeaveScheduleEntries')
 
@@ -606,11 +608,9 @@ describe('PaidLeaveSchedulePage', () => {
 
   it('counts a selected pair as two entries in the bulk grant confirmation and submits both ids', async () => {
     const bulkSpy = vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeaveScheduleEntries').mockResolvedValue({
-      success_count: 2,
-      failure_count: 0,
-      results: [
-        { schedule_entry_id: 'pair-6', success: true, message: null, grant_id: 'g1' },
-        { schedule_entry_id: 'pair-18', success: true, message: null, grant_id: 'g2' },
+      data: [
+        { schedule_entry_id: 'pair-6', grant_id: 'g1' },
+        { schedule_entry_id: 'pair-18', grant_id: 'g2' },
       ],
     } satisfies PaidLeaveScheduleBulkGrantResponse)
 

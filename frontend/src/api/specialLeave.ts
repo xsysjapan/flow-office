@@ -9,6 +9,8 @@ import type {
   SpecialLeaveType,
   SpecialLeaveUsage,
   StoredEvent,
+  ManualBulkGrantResponse,
+  ManualGrantTargetInput,
 } from './types'
 
 export function fetchSpecialLeaveTypes(): Promise<SpecialLeaveType[]> {
@@ -81,6 +83,22 @@ export interface GrantSpecialLeaveInput {
 
 export function grantSpecialLeave(input: GrantSpecialLeaveInput): Promise<SpecialLeaveGrant> {
   return apiFetch('/special-leave/grants', { method: 'POST', body: input })
+}
+
+export type BulkGrantSpecialLeaveInput = ManualGrantTargetInput & {
+  /** 再送を二重付与にしない識別子(UUID)。付与IDはこの値と利用者IDから決まる。 */
+  request_id: string
+  special_leave_type_id: number
+  granted_on: string
+  /** 未指定の場合は失効しない付与になる。 */
+  expires_on?: string
+  granted_days: number
+  grant_reason?: string
+}
+
+/** 特別休暇の手動付与の一括(全部か無しか)。1人でも付与できないと422(`bulk_operation_rejected`)で何も付与しない。 */
+export function bulkGrantSpecialLeave(input: BulkGrantSpecialLeaveInput): Promise<ManualBulkGrantResponse> {
+  return apiFetch('/special-leave/grants/bulk', { method: 'POST', body: input })
 }
 
 /** 使用日数が0の付与のみ取消可能(422で拒否される場合がある)。 */

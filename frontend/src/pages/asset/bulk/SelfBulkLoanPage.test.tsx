@@ -5,7 +5,9 @@ import { MemoryRouter } from 'react-router-dom'
 import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../../api/asset'
+import { ApiError } from '../../../api/client'
 import type { Asset } from '../../../api/types'
+import { BULK_REJECTED_NOTICE } from '../../../components/BulkActionDialog/BulkActionDialog'
 import { notify } from '../../../lib/notify'
 
 vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn() } }))
@@ -137,9 +139,7 @@ describe('SelfBulkLoanPage', () => {
     vi.spyOn(assetApi, 'resolveAssetByScanInput').mockResolvedValue(asset)
     const bulkSpy = vi.spyOn(assetApi, 'bulkAssetOperation').mockResolvedValue({
       operation: 'self_loan',
-      results: [{ asset_id: 'asset-1', success: true, result: 'loaned' }],
-      succeeded_count: 1,
-      failed_count: 0,
+      data: [{ asset_id: 'asset-1', result: 'done' }],
     })
 
     renderPage()
@@ -151,7 +151,36 @@ describe('SelfBulkLoanPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '1件を確定' }))
 
     expect(bulkSpy).toHaveBeenCalledWith({ operation: 'self_loan', asset_ids: ['asset-1'] })
-    expect(await screen.findByText(/成功 1件/)).toBeInTheDocument()
+    expect(await screen.findByText('1件を借りました。')).toBeInTheDocument()
+    // 全件成功なので対象は空になる。
+    expect(screen.getByRole('button', { name: '0件を確定' })).toBeDisabled()
     expect(notify.success).toHaveBeenCalledWith('1件を借りました')
+  })
+
+  it('1件でも処理できないと何も確定せず、失敗した備品と理由を出して対象を残す', async () => {
+    vi.spyOn(assetApi, 'resolveAssetByScanInput').mockResolvedValue(asset)
+    const bulkSpy = vi.spyOn(assetApi, 'bulkAssetOperation').mockRejectedValue(
+      new ApiError(
+        422,
+        '選んだ対象のうち、処理できないものがあります。',
+        { 'items.asset-1': ['処理できない状態です。'] },
+        'bulk_operation_rejected',
+        [{ id: 'asset-1', message: '処理できない状態です。' }],
+      ),
+    )
+
+    renderPage()
+    await userEvent.type(screen.getByLabelText('貸出対象に追加する備品'), 'EQ-00121')
+    await userEvent.click(screen.getByRole('button', { name: '追加' }))
+    await screen.findByText('ThinkPad X1')
+
+    await userEvent.click(screen.getByRole('button', { name: '1件を確定' }))
+
+    expect(bulkSpy).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
+    expect(screen.getByText('ThinkPad X1(EQ-00121): 処理できない状態です。')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+    // 何も確定していないので、対象は残る。
+    expect(screen.getByRole('button', { name: '1件を確定' })).toBeEnabled()
   })
 })

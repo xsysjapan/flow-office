@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   assignBackOfficeTask,
+  bulkAssignBackOfficeTasks,
   bulkCompleteBackOfficeTasks,
   changeBackOfficeTaskStatus,
   fetchBackOfficeTask,
@@ -64,6 +65,16 @@ export function useBulkCompleteBackOfficeTasks() {
 
   return useMutation({
     mutationFn: (taskIds: string[]) => bulkCompleteBackOfficeTasks(taskIds),
+    onSuccess: () => invalidate(),
+  })
+}
+
+export function useBulkAssignBackOfficeTasks() {
+  const invalidate = useInvalidateBackOfficeTasks()
+
+  return useMutation({
+    mutationFn: ({ taskIds, assignedUserId }: { taskIds: string[]; assignedUserId: string }) =>
+      bulkAssignBackOfficeTasks(taskIds, assignedUserId),
     onSuccess: () => invalidate(),
   })
 }

@@ -13,10 +13,14 @@ class IssueAuthenticationKey implements Command
         public readonly string $userId,
         public readonly string $keyType,
         public readonly string $displayName,
-        public readonly string $rawKeyValue,
+        public readonly ?string $rawKeyValue,
         public readonly ?string $validFrom,
         public readonly ?string $validUntil,
         public readonly ?array $metadata,
         public readonly string $registeredByUserId,
+        // 入口・Reactorが決めるID(省略時はHandlerが作る)、ハッシュを直接受ける形(rawKeyValueの代わり)、Reactor経由か
+        public readonly ?string $authenticationKeyId = null,
+        public readonly ?string $keyHash = null,
+        public readonly bool $viaReactor = false,
     ) {}
 }

@@ -23,12 +23,19 @@ class CancelExpenseClaimHandler implements CommandHandler
 
         $claim = ExpenseClaim::query()->findOrFail($command->claimId);
 
-        if ($claim->employee_id !== $command->cancelledByUserId) {
-            throw new DomainRuleException('自分が作成した経費精算のみ取り消せます。');
-        }
+        if ($command->viaReactor) {
+            // Reactorからの取消は本人チェックを行わず、既に取消済み・取消不可なら何もせず正常終了する(冪等)。
+            if (! in_array($claim->status, ExpenseClaimStatus::cancellable(), true)) {
+                return $claim;
+            }
+        } else {
+            if ($claim->employee_id !== $command->cancelledByUserId) {
+                throw new DomainRuleException('自分が作成した経費精算のみ取り消せます。');
+            }
 
-        if (! in_array($claim->status, ExpenseClaimStatus::cancellable(), true)) {
-            throw new DomainRuleException('この経費精算は現在のステータスからは取り消せません。');
+            if (! in_array($claim->status, ExpenseClaimStatus::cancellable(), true)) {
+                throw new DomainRuleException('この経費精算は現在のステータスからは取り消せません。');
+            }
         }
 
         ExpenseClaimAggregate::retrieve($claim->id)

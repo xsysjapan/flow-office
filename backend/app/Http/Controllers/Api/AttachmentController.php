@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Attachment\Aggregates\AttachmentAggregate;
 use App\Domain\Attachment\Commands\UploadAttachment;
+use App\Domain\Attachment\Support\AttachmentFileRules;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttachmentResource;
@@ -32,11 +33,6 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class AttachmentController extends Controller
 {
     /**
-     * 申請種別マスタでサイズ/拡張子を設定できない owner_type(勤怠実績など)向けの既定値。
-     */
-    private const DEFAULT_MAX_SIZE_KB = 10240;
-
-    /**
      * @var array<string, class-string>
      */
     private const OWNER_TYPE_MAP = [
@@ -44,12 +40,6 @@ class AttachmentController extends Controller
         'attendance_day' => AttendanceDay::class,
         'expense_item' => ExpenseItem::class,
     ];
-
-    /**
-     * UC-X005: 経費明細の領収書添付。expense_categoriesは申請種別マスタのような
-     * サイズ/拡張子設定を持たないため、既定値のみを適用する。
-     */
-    private const EXPENSE_ITEM_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 
     #[OA\Get(
         path: '/attachments',
@@ -224,29 +214,22 @@ class AttachmentController extends Controller
      */
     private function assertWithinAttachmentLimits(WorkflowRequest|AttendanceDay|ExpenseItem $owner, int $fileSize, string $extension): void
     {
-        $maxSizeKb = self::DEFAULT_MAX_SIZE_KB;
+        $maxSizeKb = AttachmentFileRules::DEFAULT_MAX_SIZE_KB;
         $allowedExtensions = null;
 
         if ($owner instanceof WorkflowRequest) {
             $requestType = $owner->requestType;
-            $maxSizeKb = $requestType?->attachment_max_size_kb ?? self::DEFAULT_MAX_SIZE_KB;
+            $maxSizeKb = $requestType?->attachment_max_size_kb ?? AttachmentFileRules::DEFAULT_MAX_SIZE_KB;
             $allowedExtensions = $requestType?->attachment_allowed_extensions;
         }
 
         if ($owner instanceof ExpenseItem) {
-            $allowedExtensions = self::EXPENSE_ITEM_ALLOWED_EXTENSIONS;
+            $allowedExtensions = AttachmentFileRules::EXPENSE_ITEM_ALLOWED_EXTENSIONS;
         }
 
-        if ($fileSize > $maxSizeKb * 1024) {
-            throw ValidationException::withMessages([
-                'file' => ["ファイルサイズは{$maxSizeKb}KB以内にしてください。"],
-            ]);
-        }
-
-        if ($allowedExtensions !== null && ! in_array(strtolower($extension), array_map('strtolower', $allowedExtensions), true)) {
-            throw ValidationException::withMessages([
-                'file' => ['許可されていないファイル形式です(許可: '.implode(', ', $allowedExtensions).')。'],
-            ]);
+        $violation = AttachmentFileRules::violation($maxSizeKb, $allowedExtensions, $fileSize, $extension);
+        if ($violation !== null) {
+            throw ValidationException::withMessages(['file' => [$violation]]);
         }
     }
 }

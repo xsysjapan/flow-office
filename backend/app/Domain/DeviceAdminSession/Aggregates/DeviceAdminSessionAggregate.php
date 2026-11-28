@@ -19,6 +19,9 @@ class DeviceAdminSessionAggregate extends AggregateRoot
         string $source,
         string $startedAt,
         string $expiresAt,
+        ?string $registeredKeyType = null,
+        ?string $registeredKeyDisplayName = null,
+        ?string $registeredKeyHash = null,
     ): self {
         $this->recordThat(new DeviceAdminSessionStarted(
             deviceId: $deviceId,
@@ -27,6 +30,9 @@ class DeviceAdminSessionAggregate extends AggregateRoot
             source: $source,
             startedAt: $startedAt,
             expiresAt: $expiresAt,
+            registeredKeyType: $registeredKeyType,
+            registeredKeyDisplayName: $registeredKeyDisplayName,
+            registeredKeyHash: $registeredKeyHash,
         ));
 
         return $this;

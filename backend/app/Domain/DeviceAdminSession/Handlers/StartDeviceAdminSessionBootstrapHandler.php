@@ -3,6 +3,7 @@
 namespace App\Domain\DeviceAdminSession\Handlers;
 
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
+use App\Domain\AuthenticationKey\Services\AuthenticationKeyHasher;
 use App\Domain\DeviceAdminSession\Commands\StartDeviceAdminSessionBootstrap;
 use App\Domain\DeviceAdminSession\Services\DeviceAdminSessionOpener;
 use App\Domain\EventSourcing\Contracts\Command;
@@ -25,6 +26,7 @@ class StartDeviceAdminSessionBootstrapHandler implements CommandHandler
     public function __construct(
         private readonly DeviceAdminSessionOpener $opener,
         private readonly EffectiveAccessResolver $access,
+        private readonly AuthenticationKeyHasher $hasher,
     ) {}
 
     public function handle(Command $command): DeviceAdminSession
@@ -36,7 +38,15 @@ class StartDeviceAdminSessionBootstrapHandler implements CommandHandler
 
         $adminUser = $this->resolveTargetAdmin($device, $command->targetAdminUserId);
 
-        return $this->opener->open($device, $adminUser, DeviceAdminSessionSource::BOOTSTRAP, null);
+        return $this->opener->open(
+            $device,
+            $adminUser,
+            DeviceAdminSessionSource::BOOTSTRAP,
+            $command->authenticationKeyId,
+            $command->keyType,
+            $command->displayName,
+            $command->rawKeyValue !== null ? $this->hasher->hash($command->rawKeyValue) : null,
+        );
     }
 
     private function resolveTargetAdmin(Device $device, ?string $targetAdminUserId): User

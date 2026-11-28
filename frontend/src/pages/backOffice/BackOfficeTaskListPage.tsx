@@ -5,7 +5,7 @@ import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import { Badge } from '../../components/Badge/Badge'
 import { BulkActionBar } from '../../components/BulkActionBar/BulkActionBar'
-import { BulkActionDialog, type BulkActionFailure, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
+import { BulkActionDialog, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
@@ -25,7 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { BackOfficeTask, BackOfficeTaskAssigneeScope, BackOfficeTaskStatusFilter } from '../../api/types'
 import {
-  useAssignBackOfficeTask,
+  useBulkAssignBackOfficeTasks,
   useBackOfficeTasks,
   useBulkCompleteBackOfficeTasks,
 } from '../../hooks/useBackOfficeTasks'
@@ -178,7 +178,7 @@ export function BackOfficeTaskListPage() {
   const [bulkAssignee, setBulkAssignee] = useState<{ id: string; name: string } | undefined>(undefined)
 
   const tasksQuery = useBackOfficeTasks({ search: search || undefined, assignee, status, page })
-  const assignTask = useAssignBackOfficeTask()
+  const bulkAssign = useBulkAssignBackOfficeTasks()
   const bulkComplete = useBulkCompleteBackOfficeTasks()
 
   // 不正なassignee・status・pageは既定扱いにし、URLからもそのキーを消す(不正なときだけ動かしループさせない)
@@ -214,6 +214,7 @@ export function BackOfficeTaskListPage() {
   /** 担当者を変更するダイアログの対象。変更先がすでに担当者の行は「変更不要」として実行対象から外す。 */
   const assignTargets = dialogTasks.filter((task) => task.assignee?.id !== bulkAssignee?.id || !bulkAssignee)
   const unchangedCount = bulkAssignee ? dialogTasks.length - assignTargets.length : 0
+  const taskLabels = Object.fromEntries(dialogTasks.map((task) => [task.id, task.title]))
   const unassignedCount = dialogTasks.filter((task) => !task.assignee).length
   const assignedCount = dialogTasks.length - unassignedCount
 
@@ -300,24 +301,10 @@ export function BackOfficeTaskListPage() {
 
   async function executeBulkAssign(): Promise<BulkActionResult> {
     if (!bulkAssignee) return { succeededIds: [], failures: [] }
-    const results = await Promise.allSettled(
-      assignTargets.map((task) => assignTask.mutateAsync({ id: task.id, assignedUserId: bulkAssignee.id })),
-    )
-    const succeededIds: string[] = []
-    const failures: BulkActionFailure[] = []
-    results.forEach((result, index) => {
-      const task = assignTargets[index]
-      if (result.status === 'fulfilled') {
-        succeededIds.push(task.id)
-      } else {
-        failures.push({
-          id: task.id,
-          label: task.title,
-          message: result.reason instanceof ApiError ? result.reason.message : '担当者を変更できませんでした。',
-        })
-      }
-    })
-    return { succeededIds, failures }
+    // 担当者の一括変更のAPIへ1回送る(全部か無しか)。1件でも変更できないと422で何も変更されず、失敗の一覧が出る
+    const ids = assignTargets.map((task) => task.id)
+    await bulkAssign.mutateAsync({ taskIds: ids, assignedUserId: bulkAssignee.id })
+    return { succeededIds: ids, failures: [] }
   }
 
   async function executeBulkComplete(): Promise<BulkActionResult> {
@@ -437,6 +424,8 @@ export function BackOfficeTaskListPage() {
         confirmLabel={`${assignTargets.length}件の担当者を変更`}
         confirmDisabled={!bulkAssignee || assignTargets.length === 0}
         resultTitle="担当者の変更結果"
+        resultMode="allOrNothing"
+        itemLabels={taskLabels}
         onExecute={executeBulkAssign}
         onSucceeded={removeFromSelection}
         successMessage={(count) => `${count}件のタスクの担当者を${bulkAssignee?.name ?? ''}さんに変更しました`}
@@ -456,9 +445,11 @@ export function BackOfficeTaskListPage() {
         onOpenChange={setCompleteDialogOpen}
         title={`選択した${dialogTasks.length}件を完了にしますか?`}
         summary={`選択した${dialogTasks.length}件`}
-        description="完了すると担当者を変更できなくなります。申請種別の遷移ルールで完了にできないタスクが含まれていると、全件とも完了になりません。"
+        description="完了すると担当者を変更できなくなります。申請種別の遷移ルールで完了にできないタスクが含まれていると、何も完了になりません。"
         confirmLabel={`${dialogTasks.length}件を完了にする`}
         resultTitle="完了の結果"
+        resultMode="allOrNothing"
+        itemLabels={taskLabels}
         onExecute={executeBulkComplete}
         onSucceeded={removeFromSelection}
         successMessage={(count) => `${count}件のタスクを完了にしました`}

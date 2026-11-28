@@ -219,26 +219,24 @@ test.describe('シナリオ18: 付与予定の確認から一括付与まで', (
     await expect(sheet.getByRole('button', { name: '区分・日数を修正する' })).toHaveCount(0)
   })
 
-  test('一部失敗のケースはAPIで確認し、行ごとの失敗理由が返る', async ({ page }) => {
+  test('付与できない行が含まれると、APIは422で全体を拒否し、何も付与しない', async ({ page }) => {
     await loginAs(page, SCENARIO_USERS.hrStaff)
 
     const entries = await apiFetch<ScheduleEntryList>(page, '/paid-leave/schedule-entries')
     const ineligible = entries.data.find((entry) => entry.status !== 'Eligible')
     if (!ineligible) throw new Error('E2E setup: Eligible以外の付与予定が見つからない')
 
-    const result = await apiFetch<{
-      success_count: number
-      failure_count: number
-      results: Array<{ schedule_entry_id: string; success: boolean; message: string | null }>
-    }>(page, '/paid-leave/schedule-entries/bulk-grant', {
-      method: 'POST',
-      body: { schedule_entry_ids: [ineligible.id] },
-    })
+    // 全部か無しか: 1件でも付与できないと422(code: bulk_operation_rejected)。失敗した行と理由の一覧は
+    // backendのテストで確かめる(apiFetchはメッセージだけを例外にする)。
+    await expect(
+      apiFetch(page, '/paid-leave/schedule-entries/bulk-grant', {
+        method: 'POST',
+        body: { schedule_entry_ids: [ineligible.id] },
+      }),
+    ).rejects.toThrow(/failed \(422\): 選んだ対象のうち、処理できないものがあります。/)
 
-    expect(result.failure_count).toBeGreaterThan(0)
-    const failed = result.results.find((row) => row.schedule_entry_id === ineligible.id)
-    expect(failed?.success).toBe(false)
-    expect(failed?.message).toBeTruthy()
+    const after = await apiFetch<ScheduleEntryList>(page, '/paid-leave/schedule-entries')
+    expect(after.data.find((entry) => entry.id === ineligible.id)?.status).toBe(ineligible.status)
   })
 
   // 付与予定画面の「自動判定」カードの「今すぐ判定する」。受付(202)のあと、毎分のスケジュールの経路

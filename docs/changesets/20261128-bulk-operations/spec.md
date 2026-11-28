@@ -154,4 +154,11 @@
   - 低: 承認の一括は経費・月次も汎用と同じ(確認済み)、ID の distinct、成功の応答の形、docs/34。
 
 ## 実装結果
-未着手
+- バックオフィス・ワークフロー・論点4b(担当: BackOffice/Workflow):
+  - backend: `CompleteBackOfficeTasks`・`AssignBackOfficeTasks`・`CancelWorkflowRequests`・`ApproveWorkflowRequests`(各 Handler は `BulkItemRunner` で各件を既存の1件の Command で dispatch。連鎖で済んだ件は skipped)。API は `bulk-complete`(応答を `{data:[{id,result}]}` に変更)・`bulk-assign`・`workflow-requests/bulk-cancel`・`bulk-approve`(上限100・distinct)。
+  - 論点4b: `CancelExpenseClaimOnWorkflowRequestCancelledReactor`(ExpenseClaim)・`CancelShiftSwapRequestOnWorkflowRequestCancelledReactor`(ShiftSwap)を追加し、`CancelExpenseClaim`・`CancelShiftSwapRequest` に `viaReactor`・`initiatedByUserId` を追加(冪等)。
+  - frontend: BackOfficeTaskListPage・WorkflowRequestListPage・ApprovalsPage を一括 API 1回・`allOrNothing` に。テスト: backend `BackOfficeTaskBulkOperationsTest`・`WorkflowRequestBulkOperationsTest`(混在の業務シナリオ・兄弟含む)・`WorkflowRequestCancelPropagationTest`、既存の BackOfficeTask 系2件と画面3件を更新。docs/10・11 を更新。
+- 休暇の手動付与・付与予定の一括付与・備品の一括操作・返却の認可(担当: PaidLeaveAccount/SpecialLeave/CompensatoryLeaveAccount/PaidLeaveSchedule/Asset):
+  - backend: `GrantPaidLeaveToUsers`・`GrantSpecialLeaveToUsers`・`GrantCompensatoryLeaveToUsers`(各 Handler は `BulkItemRunner` で1件の付与を dispatch)、`POST /{paid-leave,special-leave,compensatory-leave}/grants/bulk`(上限500・distinct、有給・特別休暇はグループを入口で `GroupMemberExpander`(UserManagement。直接の所属・退職者除外・`group.view`)により `user_ids` に展開、代休は個人のみ)。付与 ID は `ManualGrantId`(request_id+利用者 ID の UUIDv5)で、1件の付与(`idempotent`)も `request_id` を受け、同じ ID は何もせず成功。
+  - `ApplyScheduledGrantsInBulk`(既存 bulk-grant を1 Command に。上限500。組の片方だけの選択は今どおり入口で422)。`ApplyScheduledGrantsHandler` の `Throwable` の捕捉・「付与は成功したが反映に失敗」の処理を削除(付与前の検査の失敗だけ `failed`)。`ApplyAssetBulkOperation`(既存 `/assets/bulk`。上限200・distinct。応答 `{operation, data:[{asset_id,result}]}`)。`ReturnAssetHandler` が借用者本人以外は全社 `asset.manage` を要する(単件・一括。`AuthorizationException`=403)。
+  - frontend: 手動付与3画面を `BulkActionDialog`(allOrNothing)に(`lib/bulkGrant.ts` 削除、`GrantTargetPicker` は group_id を送り `allowGroup=false` で代休は個人のみ)、`PaidLeaveSchedulePage`、備品の一括5画面(新部品 `BulkOperationError`)。docs/09・34、E2E scenario-15(422)・scenario-00(確認ダイアログ)を更新。テストは各 Command(全件成功・失敗の全件返却・上限・distinct・入口1回=1 Command)、グループ展開・再送の冪等、返却の認可を追加。

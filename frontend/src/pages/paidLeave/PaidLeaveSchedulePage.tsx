@@ -4,7 +4,7 @@ import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Badge } from '../../components/Badge/Badge'
 import { BulkActionBar } from '../../components/BulkActionBar/BulkActionBar'
-import { BulkActionDialog, type BulkActionFailure, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
+import { BulkActionDialog, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
@@ -251,24 +251,11 @@ export function PaidLeaveSchedulePage() {
     })
   }
 
-  /** 一括付与APIが返す1件ずつの結果を、一括操作ダイアログの結果型に詰める。 */
+  /** 選んだ行のIDを一括付与のAPIへ1回送る(全部か無しか)。1件でも付与できないと422で何も付与されず、
+   *  ダイアログが失敗の一覧を出して選択を残す。 */
   async function executeBulkGrant(): Promise<BulkActionResult> {
     const response = await bulkGrant.mutateAsync(bulkTargets.map((entry) => entry.id))
-    const succeededIds: string[] = []
-    const failures: BulkActionFailure[] = []
-    for (const target of bulkTargets) {
-      const result = response.results.find((r) => r.schedule_entry_id === target.id)
-      if (result?.success) {
-        succeededIds.push(target.id)
-      } else {
-        failures.push({
-          id: target.id,
-          label: `${target.user_name ?? target.user_id}(${target.scheduled_on ?? ''})`,
-          message: result?.message ?? '付与できませんでした。',
-        })
-      }
-    }
-    return { succeededIds, failures }
+    return { succeededIds: response.data.map((item) => item.schedule_entry_id), failures: [] }
   }
 
   const top = (
@@ -503,6 +490,10 @@ export function PaidLeaveSchedulePage() {
         description={BULK_GRANT_DESCRIPTION}
         confirmLabel={`${bulkTargets.length}件を付与する`}
         resultTitle="一括付与の結果"
+        resultMode="allOrNothing"
+        itemLabels={Object.fromEntries(
+          bulkTargets.map((target) => [target.id, `${target.user_name ?? target.user_id}(${target.scheduled_on ?? ''})`]),
+        )}
         onExecute={executeBulkGrant}
         onSucceeded={removeFromSelection}
         successMessage={(count) => `${count}件の有給を付与しました`}

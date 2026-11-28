@@ -44,7 +44,7 @@
 
 ## UC-L02: 備品をセルフ返却する
 
-**アクター**: 一般社員(Permission不要。他人による返却も許容する)
+**アクター**: 一般社員(借用者本人はPermission不要。他人の貸出の返却は`asset.manage`が要る。UC-L04)
 
 1. 社員が「返す」を押す
 2. `POST /assets/{asset}/return`を呼ぶ(`loan_id`省略時は`assets.current_loan_id`を使う)
@@ -67,8 +67,9 @@
 
 **アクター**: `asset.manage`権限保有者、または借用者本人(UC-L02と同一操作)
 
-UC-L02と同じ`POST /assets/{asset}/return`を使う。Permission不要のため、バックオフィスが
-借用者に代わって返却処理することもできる。
+UC-L02と同じ`POST /assets/{asset}/return`を使う。借用者本人でなければ、全社の`asset.manage`を要する
+(`ReturnAssetHandler`が検査し、単件・一括の両方に効く。権限が無ければ403、一括では失敗した備品として422で返る)。
+バックオフィスが借用者に代わって返却処理するには`asset.manage`が要る。
 
 ## UC-L05: QRコードで一括セルフ貸出する
 
@@ -84,10 +85,12 @@ UC-L02と同じ`POST /assets/{asset}/return`を使う。Permission不要のた�
    トグルが常に表示・有効になっており、オンにすると1件読み取ってもリーダーを開いたまま
    次のスキャンを続けられる(オフの場合は1件読み取るとリーダー・ポップアップが閉じる)
 2. 「確定」を押すと`POST /assets/bulk`を`operation=self_loan`・`asset_ids`配列で1回呼ぶ
-3. `AssetBulkOperationController`がループで各`asset_id`に`LendAsset`を発行する
-   (`borrower_user_id`は常に呼び出し本人。`lending_method`が`self_service`でない備品は
-   その備品だけ失敗として扱う)
-4. 成功/失敗を備品ごとの配列で返す(部分成功を許容)
+3. `AssetBulkOperationController`は1つの`ApplyAssetBulkOperation`を発行し、Handlerが各`asset_id`に
+   `LendAsset`を発行する(`borrower_user_id`は常に呼び出し本人。`lending_method`が`self_service`でない備品は
+   その備品の失敗として集める)
+4. **全部か無しか**(変更セット`20261128-bulk-operations`): 1件でも処理できない備品があれば何も記録せず、
+   422(`code: bulk_operation_rejected`、`items`に失敗した備品と理由)を返す。全件成功なら200で`data`(処理した備品)を返す。
+   対象は上限200件・重複なし
 
 ## UC-L06: QRコードで一括返却する
 

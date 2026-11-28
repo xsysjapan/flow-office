@@ -20,7 +20,11 @@ class UploadAttachmentHandler implements CommandHandler
     {
         assert($command instanceof UploadAttachment);
 
-        $attachmentId = (string) Str::uuid();
+        $attachmentId = $command->attachmentId ?? (string) Str::uuid();
+
+        if ($command->viaReactor && Attachment::query()->whereKey($attachmentId)->exists()) {
+            return Attachment::query()->findOrFail($attachmentId);
+        }
 
         AttachmentAggregate::retrieve($attachmentId)
             ->uploadAttachment(

@@ -120,6 +120,7 @@ export const createGroup = (input: {
   code?: string;
   description?: string;
   parent_group_id?: string;
+  initial_role_id?: number;
 }): Promise<{ id: string }> =>
   apiFetch("/admin/user-management/groups", { method: "POST", body: input });
 export const createGroupType = (input: {

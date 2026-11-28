@@ -64,6 +64,31 @@ export function approveWorkflowRequest(id: string): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}/approve`, { method: 'POST' })
 }
 
+/** 一括操作(全部か無しか)の成功の応答の1件。`skipped`は連鎖で既に済んでいて飛ばした件。 */
+export interface WorkflowBulkResultItem {
+  id: string
+  result: 'processed' | 'skipped'
+}
+
+/** 申請の一括承認(全部か無しか)。1件でも失敗すると422(`bulk_operation_rejected`)で何も承認しない。 */
+export function bulkApproveWorkflowRequests(workflowRequestIds: string[]): Promise<{ data: WorkflowBulkResultItem[] }> {
+  return apiFetch('/workflow-requests/bulk-approve', {
+    method: 'POST',
+    body: { workflow_request_ids: workflowRequestIds },
+  })
+}
+
+/** 自分の申請の一括取消(全部か無しか)。1件でも失敗すると422(`bulk_operation_rejected`)で何も取り消さない。 */
+export function bulkCancelWorkflowRequests(
+  workflowRequestIds: string[],
+  reason: string,
+): Promise<{ data: WorkflowBulkResultItem[] }> {
+  return apiFetch('/workflow-requests/bulk-cancel', {
+    method: 'POST',
+    body: { workflow_request_ids: workflowRequestIds, reason },
+  })
+}
+
 export function returnWorkflowRequest(id: string, comment: string): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}/return`, { method: 'POST', body: { comment } })
 }

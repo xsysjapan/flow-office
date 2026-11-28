@@ -19,7 +19,7 @@ class DeviceAdminSessionOpener
 {
     private const SESSION_MINUTES = 30;
 
-    public function open(Device $device, User $adminUser, string $source, ?string $authenticationKeyId): DeviceAdminSession
+    public function open(Device $device, User $adminUser, string $source, ?string $authenticationKeyId, ?string $registeredKeyType = null, ?string $registeredKeyDisplayName = null, ?string $registeredKeyHash = null): DeviceAdminSession
     {
         $aggregatesToPersist = [];
 
@@ -37,6 +37,9 @@ class DeviceAdminSessionOpener
             source: $source,
             startedAt: Carbon::now()->format('Y-m-d H:i:s'),
             expiresAt: Carbon::now()->addMinutes(self::SESSION_MINUTES)->format('Y-m-d H:i:s'),
+            registeredKeyType: $registeredKeyType,
+            registeredKeyDisplayName: $registeredKeyDisplayName,
+            registeredKeyHash: $registeredKeyHash,
         );
 
         DeviceAdminSessionAggregate::persistInTransaction(...$aggregatesToPersist);

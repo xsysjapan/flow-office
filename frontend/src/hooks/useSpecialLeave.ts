@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   adminCancelSpecialLeaveRequest,
+  bulkGrantSpecialLeave,
   cancelSpecialLeaveRequest,
   createSpecialLeaveGrantRule,
   createSpecialLeaveRequest,
@@ -20,6 +21,7 @@ import {
   changeSpecialLeaveGrantedDays,
   revokeSpecialLeaveGrant,
   updateSpecialLeaveType,
+  type BulkGrantSpecialLeaveInput,
   type CreateSpecialLeaveGrantRuleInput,
   type CreateSpecialLeaveRequestInput,
   type CreateSpecialLeaveTypeInput,
@@ -109,6 +111,18 @@ export function useGrantSpecialLeave() {
     mutationFn: (input: GrantSpecialLeaveInput) => grantSpecialLeave(input),
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: ['special-leave', 'grants', 'user', input.user_id] })
+    },
+  })
+}
+
+/** 特別休暇の手動付与の一括(全部か無しか)。付与一覧を無効化する。 */
+export function useBulkGrantSpecialLeave() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: BulkGrantSpecialLeaveInput) => bulkGrantSpecialLeave(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['special-leave', 'grants'] })
     },
   })
 }

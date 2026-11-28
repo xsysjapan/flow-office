@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
+import { BulkActionDialog, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { FormField } from '../../components/FormField/FormField'
-import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
+import { GrantTargetPicker } from '../../components/GrantTargetPicker/GrantTargetPicker'
 import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -18,77 +19,49 @@ import {
   useAdminCancelCompensatoryLeaveRequest,
   useCompensatoryLeaveGrantsForUser,
   useCompensatoryLeaveUsagesForUser,
-  useGrantCompensatoryLeave,
+  useBulkGrantCompensatoryLeave,
   useRevokeCompensatoryLeaveGrant,
 } from '../../hooks/useCompensatoryLeave'
-import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
 import { notify } from '../../lib/notify'
 import { isValidUuidParam } from '../../utils/searchParamValidators'
 
-function ResultSummary({ results, labels }: { results: BulkGrantResult[]; labels: Record<string, string> }) {
-  const failures = results.filter((r) => !r.success)
-  return (
-    <div className="mt-4 rounded-md border border-border p-3 text-sm">
-      <p className="font-medium text-foreground">
-        {results.length - failures.length}件成功 / {failures.length}件失敗
-      </p>
-      {failures.length > 0 && (
-        <ul className="mt-2 list-disc pl-4 text-destructive">
-          {failures.map((failure) => (
-            <li key={failure.userId}>
-              {labels[failure.userId] ?? failure.userId}: {failure.message}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
 function ManualGrantCard() {
   const [targetIds, setTargetIds] = useState<string[]>([])
-  const [targetMode, setTargetMode] = useState<GrantTargetMode>('individual')
   const [targetLabels, setTargetLabels] = useState<Record<string, string>>({})
   const [workDate, setWorkDate] = useState('')
   const [expiresOn, setExpiresOn] = useState('')
   const [grantReason, setGrantReason] = useState('')
-  const [results, setResults] = useState<BulkGrantResult[] | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  // 対象選択(GrantTargetPicker)は、一部失敗があったときだけ失敗分だけに絞ってリセットする。
-  // 全件成功時は選択を保ったままにし、直後に付与状況が表示され続けるようにする。
-  const [resetSignal, setResetSignal] = useState<BulkGrantResult[] | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  // 再送を二重付与にしない識別子。確認ダイアログを開くたびに作り、同じダイアログでの再実行(通信エラー後など)では同じ値を送る。
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID())
 
-  const grantCompensatoryLeave = useGrantCompensatoryLeave()
+  const bulkGrant = useBulkGrantCompensatoryLeave()
   const revokeGrant = useRevokeCompensatoryLeaveGrant()
 
-  const singleTargetUserId = targetMode === 'individual' && targetIds.length === 1 ? targetIds[0] : undefined
+  const singleTargetUserId = targetIds.length === 1 ? targetIds[0] : undefined
   const { data: userGrants, isLoading: isLoadingUserGrants } = useCompensatoryLeaveGrantsForUser(singleTargetUserId ?? '')
 
-  const failedIds = results?.filter((r) => !r.success).map((r) => r.userId) ?? []
+  const openGrantDialog = () => {
+    setRequestId(crypto.randomUUID())
+    setDialogOpen(true)
+  }
 
-  const handleGrant = async () => {
-    if (targetIds.length === 0 || !workDate) return
-    setIsSubmitting(true)
-    setResults(null)
-    const outcomes = await runBulkGrant(targetIds, (userId) =>
-      grantCompensatoryLeave.mutateAsync({
-        user_id: userId,
-        work_date: workDate,
-        expires_on: expiresOn || undefined,
-        grant_reason: grantReason || undefined,
-      }),
-    )
-    setIsSubmitting(false)
-    setResults(outcomes)
-    const successCount = outcomes.filter((o) => o.success).length
-    if (successCount > 0) notify.success(`${successCount}名に代休を付与しました`)
-    if (outcomes.every((o) => o.success)) {
-      setWorkDate('')
-      setExpiresOn('')
-      setGrantReason('')
-    } else {
-      setResetSignal(outcomes)
-    }
+  /** 全部か無しか: 一括のAPIを1回呼ぶ。1人でも付与できないと422で何も付与されず、ダイアログが失敗の一覧を出して選択を残す。 */
+  async function executeGrant(): Promise<BulkActionResult> {
+    const response = await bulkGrant.mutateAsync({
+      request_id: requestId,
+      user_ids: targetIds,
+      work_date: workDate,
+      expires_on: expiresOn || undefined,
+      grant_reason: grantReason || undefined,
+    })
+    return { succeededIds: response.data.map((item) => item.user_id), failures: [] }
+  }
+
+  const clearForm = () => {
+    setWorkDate('')
+    setExpiresOn('')
+    setGrantReason('')
   }
 
   return (
@@ -96,13 +69,11 @@ function ManualGrantCard() {
       <FormField label="付与対象" htmlFor="compensatory-leave-grant-target-users" required>
         <GrantTargetPicker
           idPrefix="compensatory-leave-grant-target"
-          onResolvedChange={(ids, mode, labels) => {
-            setTargetMode(mode)
+          allowGroup={false}
+          onResolvedChange={(ids, _mode, labels) => {
             setTargetIds(ids)
             setTargetLabels(labels)
           }}
-          resetSignal={resetSignal}
-          resetIndividualIds={failedIds}
         />
       </FormField>
 
@@ -129,15 +100,11 @@ function ManualGrantCard() {
       </div>
 
       <p className="mt-2 text-xs text-muted-foreground">
-        付与日数はサーバー側で実績日から自動的に算出されます。指定した日が休日出勤の実績でない場合は付与に失敗します。
+        付与日数はサーバー側で実績日から自動的に算出されます。指定した日が休日出勤の実績でない人が1人でもいると、誰にも付与されません。
       </p>
 
       <div className="mt-4 flex flex-col items-start gap-1">
-        <Button
-          isLoading={isSubmitting}
-          disabled={targetIds.length === 0 || !workDate}
-          onClick={() => void handleGrant()}
-        >
+        <Button disabled={targetIds.length === 0 || !workDate} onClick={openGrantDialog}>
           {targetIds.length}名に付与する
         </Button>
         {targetIds.length === 0 ? (
@@ -147,7 +114,20 @@ function ManualGrantCard() {
         ) : null}
       </div>
 
-      {results && <ResultSummary results={results} labels={targetLabels} />}
+      <BulkActionDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={`${targetIds.length}名に代休を付与しますか?`}
+        summary={`${targetIds.length}名に、休日出勤の実績日${workDate}分の代休を付与します。`}
+        description="付与日数は実績日から自動的に算出されます。1人でも付与できないと、誰にも付与しません。"
+        confirmLabel="付与する"
+        resultTitle="付与の結果"
+        resultMode="allOrNothing"
+        itemLabels={targetLabels}
+        onExecute={executeGrant}
+        onSucceeded={clearForm}
+        successMessage={(count) => `${count}名に代休を付与しました`}
+      />
 
       {singleTargetUserId !== undefined && (
         <div className="mt-6">

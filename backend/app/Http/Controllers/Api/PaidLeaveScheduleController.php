@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
-use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
+use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrantsInBulk;
 use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\OverrideScheduleAssessment;
 use App\Domain\PaidLeaveSchedule\Commands\ReassessScheduleEntry;
@@ -277,11 +277,9 @@ class PaidLeaveScheduleController extends Controller
     }
 
     /**
-     * 一括付与(依頼書§39)。複数社員のエントリを一括で受け付け、社員(Aggregate)単位で
-     * `ApplyScheduledGrants`を発行する。既存`ManualGrantCard`の`runBulkGrant`/
-     * `ResultSummary`パターン(全体件数+行単位の成功/失敗)を踏襲したレスポンス形状にする
-     * (spec.md論点15-6)。Eligible以外のエントリはCommandHandler側で当該エントリのみ
-     * 失敗として扱われ、他のエントリには影響しない。
+     * 一括付与(依頼書§39)。複数社員のエントリを受け付け、1つのCommand(`ApplyScheduledGrantsInBulk`)で処理する。
+     * 全部か無しか: 1件でも付与できないエントリがあれば何も記録せず、422(code: bulk_operation_rejected)で
+     * 失敗したエントリと理由を返す(docs/changesets/20261128-bulk-operations)。
      */
     #[OA\Post(
         path: '/paid-leave/schedule-entries/bulk-grant',
@@ -289,13 +287,13 @@ class PaidLeaveScheduleController extends Controller
         summary: '選択したScheduleエントリを一括付与する',
         tags: ['有給休暇付与予定'],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['schedule_entry_ids'], properties: [new OA\Property(property: 'schedule_entry_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))])),
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error(まとめて付与する2件の片方だけが指定された場合を含む)')],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error(まとめて付与する2件の片方だけが指定された場合を含む)/処理できないエントリがある(何も記録しない。code: bulk_operation_rejected)')],
     )]
     public function bulkGrant(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'schedule_entry_ids' => ['required', 'array', 'min:1'],
-            'schedule_entry_ids.*' => ['required', 'string', 'exists:paid_leave_schedule_entries,id'],
+            'schedule_entry_ids' => ['required', 'array', 'min:1', 'max:500'],
+            'schedule_entry_ids.*' => ['required', 'string', 'distinct', 'exists:paid_leave_schedule_entries,id'],
         ]);
 
         $entries = PaidLeaveScheduleEntry::query()
@@ -319,42 +317,16 @@ class PaidLeaveScheduleController extends Controller
             }
         }
 
-        $results = [];
-        $successCount = 0;
-        $failureCount = 0;
-
-        foreach ($entries as $userId => $userEntries) {
-            $outcome = $commandBus->dispatch(new ApplyScheduledGrants(
-                userId: (string) $userId,
-                scheduleEntryIds: $userEntries->pluck('id')->all(),
-                operatorUserId: $request->user()->id,
-            ));
-
-            foreach ($outcome['granted'] as $granted) {
-                $results[] = [
-                    'schedule_entry_id' => $granted['scheduleEntryId'],
-                    'success' => true,
-                    'message' => null,
-                    'grant_id' => $granted['grantId'],
-                ];
-                $successCount++;
-            }
-
-            foreach ($outcome['failed'] as $failed) {
-                $results[] = [
-                    'schedule_entry_id' => $failed['scheduleEntryId'],
-                    'success' => false,
-                    'message' => $failed['reason'],
-                    'grant_id' => null,
-                ];
-                $failureCount++;
-            }
-        }
+        $outcome = $commandBus->dispatch(new ApplyScheduledGrantsInBulk(
+            scheduleEntryIds: array_values($data['schedule_entry_ids']),
+            operatorUserId: $request->user()->id,
+        ));
 
         return response()->json([
-            'success_count' => $successCount,
-            'failure_count' => $failureCount,
-            'results' => $results,
+            'data' => array_map(fn (array $granted) => [
+                'schedule_entry_id' => $granted['scheduleEntryId'],
+                'grant_id' => $granted['grantId'],
+            ], $outcome['granted']),
         ]);
     }
 

@@ -35,6 +35,7 @@
 - `external_identity.unlinked`
 - `user.field_authority_changed`
 - `group.created` / `group.updated` / `group.inactivated`
+  (`group.created`のpayloadの最後に任意項目`initialRoleId`(int|null、既定null。旧形式は欠落時null)を持つ。AccessControl文脈のReactorが、あれば全社・配下を含まない・期間なしの`role_assignment.created`を記録させる。Projectorは割当を作らない)
 - `group_type.created` / `group_type.updated` / `group_type.inactivated`
   (`group_type.created`のpayloadに`isSystem`(bool、既定false。旧形式は欠落時false)を持ち、`group_types.is_system`へ反映する)
 - `membership.added` / `membership.removed` / `membership.primary_changed`
@@ -46,11 +47,11 @@
 - `role.created` / `role.updated` / `role.inactivated`
   (`role.created`のpayloadに`isSystem`(bool、既定false。旧形式は欠落時false)を持ち、`roles.is_system`へ反映する)
 - `role.permissions_changed`
-- `role.features_changed`(Role→Feature自動適用のFeatureマスタ変更。保存後にそのRoleを保持する
-  全グループへ`GroupFeatureSyncService`が`group_feature_assignments`を差分同期する)
+- `role.features_changed`(Role→Feature自動適用のFeatureマスタ変更。AccessControl文脈のReactorがこのイベントを受け、そのRoleを保持する
+  全グループへ`SyncGroupFeatures`を発行し、`feature.assigned_to_group`・`feature.removed_from_group`を差分だけ記録する)
 - `role_assignment.created` / `role_assignment.updated` / `role_assignment.removed`
-  (`subject_type='group'`の場合、保存後に`GroupFeatureSyncService`が対象グループの
-  `group_feature_assignments`を差分同期する)
+  (`subject_type='group'`の場合、AccessControl文脈のReactorが対象グループへ`SyncGroupFeatures`を発行し、
+  Feature割当を差分同期する。更新・削除のイベントには付与先が無いので、割当の行から引く)
 - 注記: 上記のうち`group.created`・`group.updated`・`group_type.created`・`group_type.updated`・`role.created`・
   `role.updated`・`role.permissions_changed`・`role.features_changed`・`role_assignment.created`・
   `feature.assigned_to_group`・`feature.removed_from_group`・`membership.added`・`external_identity.linked`・
@@ -216,6 +217,9 @@
 - `device.settings_updated` (設置場所・自動反映する勤務形態区分など端末設定の変更)
 - `device_admin_session.started` (UC-D006: 管理者ICカードをかざす、またはブートストラップ
   経路により端末が管理者モードになった)
+  ブートストラップ経路で認証キーを同時に登録するときは、任意の項目`registered_key_type`・`registered_key_display_name`・
+  `registered_key_hash`(ハッシュのみ。生の値は入れない)と、`authentication_key_id`(入口が作る認証キーのID)を持つ。
+  認証キーの文脈のReactorがこれを受けて`authentication_key.issued`を同じIDで記録する(冪等。旧イベントは項目なし)。
 - `device_admin_session.ended` (UC-D006: 管理者モードの明示的な終了、または新しいセッション
   による置き換え)
 
@@ -494,7 +498,10 @@ docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
 
 ## Attachment / Notification / Export (横断)
 
-- `attachment.uploaded`
+- `attachment.uploaded`(経費の明細の追加に添付が付くときは、`expense_claim.item_added`の`attachments`(添付の参照の一覧。
+  `attachmentId`・`storedPath`・`fileName`・`mimeType`・`fileSize`・`uploadedByUserId`)を添付の文脈のReactor
+  `UploadAttachmentsOnExpenseItemAddedReactor`が受け、`attachmentId`を指定して記録する。`item_added`の`attachments`は
+  任意の項目(最後。旧イベントは空)。同じ添付のIDが既にあれば何もしない)
 - `attachment.downloaded` (UC-F002: 閲覧ログを監査ログに残す)
 - `notification.queued` (payloadに`recipientUserId`/`notificationType`/`subjectType`/
   `subjectId`/`title`/`summary`/`detailUrl`を持つ。docs/13-usecases-notification.md)

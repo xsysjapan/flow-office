@@ -39,14 +39,37 @@ export interface SaveExpenseItemInput {
   attributes?: Record<string, unknown>
 }
 
-export function addExpenseItem(claimId: string, input: SaveExpenseItemInput): Promise<ExpenseItem> {
-  return apiFetch(`/expense-claims/${claimId}/items`, { method: 'POST', body: input })
+/** 明細1件の追加。添付(領収書等)があれば、同じ1回の送信(multipart)で送る(`files[]`。`attributes`はJSONの文字列)。 */
+export function addExpenseItem(claimId: string, input: SaveExpenseItemInput, files: File[] = []): Promise<ExpenseItem> {
+  if (files.length === 0) {
+    return apiFetch(`/expense-claims/${claimId}/items`, { method: 'POST', body: input })
+  }
+  const formData = new FormData()
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || value === null) continue
+    formData.append(key, key === 'attributes' ? JSON.stringify(value) : String(value))
+  }
+  for (const file of files) formData.append('files[]', file)
+  return apiFetch(`/expense-claims/${claimId}/items`, { method: 'POST', body: formData })
 }
 
 /** UC-X006/X007/X008: 表形式一括入力・移動経路分解・テンプレート複数日生成のいずれも
  *  複数明細をまとめて送るこのエンドポイントに集約する。 */
-export function addExpenseItemsBulk(claimId: string, items: SaveExpenseItemInput[]): Promise<ExpenseItem[]> {
-  return apiFetch(`/expense-claims/${claimId}/items/bulk`, { method: 'POST', body: { items } })
+export function addExpenseItemsBulk(
+  claimId: string,
+  items: SaveExpenseItemInput[],
+  /** 行(`items`の添字)ごとの添付。ファイルがあれば、明細と同じ1回の送信(multipart。`items`はJSONの文字列、`files[{行}][]`)で送る。 */
+  filesByRow: File[][] = [],
+): Promise<ExpenseItem[]> {
+  if (!filesByRow.some((files) => files && files.length > 0)) {
+    return apiFetch(`/expense-claims/${claimId}/items/bulk`, { method: 'POST', body: { items } })
+  }
+  const formData = new FormData()
+  formData.append('items', JSON.stringify(items))
+  filesByRow.forEach((files, row) => {
+    for (const file of files ?? []) formData.append(`files[${row}][]`, file)
+  })
+  return apiFetch(`/expense-claims/${claimId}/items/bulk`, { method: 'POST', body: formData })
 }
 
 export function updateExpenseItem(

@@ -94,6 +94,12 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         return $this->userId;
     }
 
+    /** 指定の付与IDの付与が既に記録されているか(手動付与の再送を冪等にするため)。 */
+    public function hasGrant(string $grantId): bool
+    {
+        return isset($this->grants[$grantId]);
+    }
+
     public function grant(
         string $grantId,
         string $grantedOn,

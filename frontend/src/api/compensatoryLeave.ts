@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { CompensatoryLeaveGrant, CompensatoryLeaveRequest, CompensatoryLeaveUsage, Paginated, PaidLeaveType, StoredEvent } from './types'
+import type { CompensatoryLeaveGrant, CompensatoryLeaveRequest, ManualBulkGrantResponse, CompensatoryLeaveUsage, Paginated, PaidLeaveType, StoredEvent } from './types'
 
 /** UC相当: 自分の代休残数(付与)を取得する。付与は休日出勤の勤怠実績から自動導出されるため、付与のCRUDは無い。 */
 export function fetchMyCompensatoryLeaveGrants(): Promise<CompensatoryLeaveGrant[]> {
@@ -66,6 +66,21 @@ export interface GrantCompensatoryLeaveInput {
 /** 管理者による代休の手動付与。日数はサーバーが実績から導出するため入力しない。 */
 export function grantCompensatoryLeave(input: GrantCompensatoryLeaveInput): Promise<CompensatoryLeaveGrant> {
   return apiFetch('/compensatory-leave/grants', { method: 'POST', body: input })
+}
+
+export interface BulkGrantCompensatoryLeaveInput {
+  /** 再送を二重付与にしない識別子(UUID)。付与IDはこの値と利用者IDから決まる。 */
+  request_id: string
+  /** 個人の指定だけ(代休はグループの指定を受けない)。 */
+  user_ids: string[]
+  work_date: string
+  expires_on?: string
+  grant_reason?: string
+}
+
+/** 代休の手動付与の一括(全部か無しか)。1人でも付与できないと422(`bulk_operation_rejected`)で何も付与しない。 */
+export function bulkGrantCompensatoryLeave(input: BulkGrantCompensatoryLeaveInput): Promise<ManualBulkGrantResponse> {
+  return apiFetch('/compensatory-leave/grants/bulk', { method: 'POST', body: input })
 }
 
 export function fetchCompensatoryLeaveGrantsForUser(userId: string): Promise<CompensatoryLeaveGrant[]> {

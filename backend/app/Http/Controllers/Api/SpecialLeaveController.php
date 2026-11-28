@@ -4,14 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\EventSourcing\ManualGrantId;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
 use App\Domain\SpecialLeave\Commands\CancelSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
+use App\Domain\SpecialLeave\Commands\GrantSpecialLeaveToUsers;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RevokeSpecialLeaveGrant;
 use App\Domain\SpecialLeaveAccount\Aggregates\SpecialLeaveAccountAggregate;
 use App\Domain\SpecialLeaveAccount\Commands\ChangeSpecialLeaveGrantAmount;
+use App\Domain\UserManagement\Services\GroupMemberExpander;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -236,7 +239,7 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.grants.store',
         summary: '特別休暇を手動付与する',
         tags: ['特別休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'special_leave_type_id', 'granted_on', 'granted_days'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'special_leave_type_id', 'granted_on', 'granted_days'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true), new OA\Property(property: 'request_id', type: 'string', format: 'uuid', nullable: true, description: '再送を二重付与にしないための識別子(付与IDを request_id と user_id から決める)')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function grant(Request $request, CommandBus $commandBus): JsonResponse
@@ -248,7 +251,11 @@ class SpecialLeaveController extends Controller
             'expires_on' => ['nullable', 'date', 'after:granted_on'],
             'granted_days' => ['required', 'numeric', 'min:0.5'],
             'grant_reason' => ['nullable', 'string'],
+            'request_id' => ['nullable', 'uuid'],
         ]);
+
+        // request_idがあれば付与IDを request_id と利用者IDから決め、同じ request_id の再送は何もせず成功にする。
+        $requestId = $data['request_id'] ?? null;
 
         $grant = $commandBus->dispatch(new GrantSpecialLeave(
             userId: $data['user_id'],
@@ -257,9 +264,56 @@ class SpecialLeaveController extends Controller
             expiresOn: $data['expires_on'] ?? null,
             grantedDays: (float) $data['granted_days'],
             grantReason: $data['grant_reason'] ?? null,
+            grantId: $requestId !== null ? ManualGrantId::for('special_leave', $requestId, $data['user_id']) : null,
+            idempotent: $requestId !== null,
         ));
 
         return (new SpecialLeaveGrantResource($grant->load('specialLeaveType')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 特別休暇を複数の利用者へ手動付与する(1つのCommand。全部か無しか: 1人でも付与できなければ何も記録せず、
+     * 422(code: bulk_operation_rejected)で失敗した利用者と理由を返す)。対象は`user_ids`か`group_id`(実行した時点の
+     * 直接の所属のメンバー。退職者を除く。`group.view`を要する)。同じ`request_id`の再送は二重にならず成功する。
+     */
+    #[OA\Post(
+        path: '/special-leave/grants/bulk',
+        operationId: 'specialLeave.grants.bulkStore',
+        summary: '特別休暇を複数の利用者へ手動付与する(全部か無しか)',
+        tags: ['特別休暇'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['request_id', 'special_leave_type_id', 'granted_on', 'granted_days'], properties: [new OA\Property(property: 'request_id', type: 'string', format: 'uuid'), new OA\Property(property: 'user_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), new OA\Property(property: 'group_id', type: 'string', format: 'uuid'), new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response(全員に付与)'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error/付与できない利用者がいる(何も記録しない。code: bulk_operation_rejected)')],
+    )]
+    public function bulkGrant(Request $request, CommandBus $commandBus, GroupMemberExpander $groupMembers): JsonResponse
+    {
+        $data = $request->validate([
+            'request_id' => ['required', 'uuid'],
+            'user_ids' => ['required_without:group_id', 'prohibits:group_id', 'array', 'min:1', 'max:500'],
+            'user_ids.*' => ['string', 'distinct', 'exists:users,id'],
+            'group_id' => ['required_without:user_ids', 'string', 'exists:groups,id'],
+            'special_leave_type_id' => ['required', 'integer', 'exists:special_leave_types,id'],
+            'granted_on' => ['required', 'date'],
+            'expires_on' => ['nullable', 'date', 'after:granted_on'],
+            'granted_days' => ['required', 'numeric', 'min:0.5'],
+            'grant_reason' => ['nullable', 'string'],
+        ]);
+
+        $labels = $groupMembers->resolveTargets($request->user(), $data['group_id'] ?? null, $data['user_ids'] ?? null, 500);
+
+        $commandBus->dispatch(new GrantSpecialLeaveToUsers(
+            requestId: $data['request_id'],
+            userIds: array_keys($labels),
+            specialLeaveTypeId: $data['special_leave_type_id'],
+            grantedOn: $data['granted_on'],
+            expiresOn: $data['expires_on'] ?? null,
+            grantedDays: (float) $data['granted_days'],
+            grantReason: $data['grant_reason'] ?? null,
+            userLabels: $labels,
+        ));
+
+        return response()->json([
+            'data' => array_map(fn (string $userId) => ['user_id' => $userId, 'user_name' => $labels[$userId]], array_keys($labels)),
+        ]);
     }
 
     /**

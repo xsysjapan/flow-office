@@ -2,32 +2,24 @@
 
 namespace App\Domain\AccessControl\Services;
 
-use App\Domain\AccessControl\Commands\AssignFeatureToGroup;
-use App\Domain\AccessControl\Commands\RemoveFeatureFromGroup;
-use App\Domain\AccessControl\Handlers\AssignFeatureToGroupHandler;
-use App\Domain\AccessControl\Handlers\RemoveFeatureFromGroupHandler;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Role→Feature自動適用: グループへの有効なRole割当から導かれるFeatureの集合を
- * `group_feature_assignments` に差分同期する。全消し全入れではなく、追加分だけ
- * AssignFeatureToGroup、不要分だけRemoveFeatureFromGroupを既存のCommandHandler経由で
- * 呼び出す(docs/03-architecture.md「EventStoreを正とする」原則に従い、直接
- * group_feature_assignmentsを書き換えない)。
+ * Role→Feature自動適用の差分の計算: グループへの有効なRole割当から導かれるFeatureの集合と、
+ * `group_feature_assignments` の今の集合の差を求める。記録はSyncGroupFeaturesHandler(グループのFeature集約)が行い、
+ * 発行はAccessControlのReactorが行う。期間外・削除済みの割当は導かれる集合に含めない(ロールの状態の変更・期間の到来・グループの再有効化では再計算しない)。
  */
 class GroupFeatureSyncService
 {
-    public function __construct(
-        private readonly AssignFeatureToGroupHandler $assignFeatureToGroupHandler,
-        private readonly RemoveFeatureFromGroupHandler $removeFeatureFromGroupHandler,
-    ) {}
-
-    public function syncGroup(string $groupId, ?string $actorUserId = null): void
+    /**
+     * @return array{add: list<int>, remove: list<int>}
+     */
+    public function diffForGroup(string $groupId): array
     {
         if (! DB::table('groups')->where('id', $groupId)->where('status', 'active')->exists()) {
-            return;
+            return ['add' => [], 'remove' => []];
         }
 
         $targetFeatureIds = $this->effectiveFeatureIdsForGroup($groupId);
@@ -37,29 +29,26 @@ class GroupFeatureSyncService
             ->map(fn ($id) => (int) $id)
             ->all();
 
-        $toAdd = array_diff($targetFeatureIds, $currentFeatureIds);
-        $toRemove = array_diff($currentFeatureIds, $targetFeatureIds);
-
-        foreach ($toAdd as $featureId) {
-            $this->assignFeatureToGroupHandler->handle(new AssignFeatureToGroup($groupId, $featureId, $actorUserId));
-        }
-
-        foreach ($toRemove as $featureId) {
-            $this->removeFeatureFromGroupHandler->handle(new RemoveFeatureFromGroup($groupId, $featureId, $actorUserId));
-        }
+        return [
+            'add' => array_values(array_diff($targetFeatureIds, $currentFeatureIds)),
+            'remove' => array_values(array_diff($currentFeatureIds, $targetFeatureIds)),
+        ];
     }
 
-    public function syncGroupsForRole(int $roleId, ?string $actorUserId = null): void
+    /**
+     * ロールを今有効に持つグループのID。
+     *
+     * @return list<string>
+     */
+    public function groupIdsForRole(int $roleId): array
     {
-        $groupIds = $this->activeRoleAssignments()
+        return $this->activeRoleAssignments()
             ->where('role_assignments.role_id', $roleId)
             ->where('role_assignments.subject_type', 'group')
             ->distinct()
-            ->pluck('role_assignments.subject_id');
-
-        foreach ($groupIds as $groupId) {
-            $this->syncGroup((string) $groupId, $actorUserId);
-        }
+            ->pluck('role_assignments.subject_id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
     }
 
     /**

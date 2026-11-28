@@ -73,8 +73,8 @@ export function useAddExpenseItem() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ claimId, input }: { claimId: string; input: SaveExpenseItemInput }) =>
-      addExpenseItem(claimId, input),
+    mutationFn: ({ claimId, input, files }: { claimId: string; input: SaveExpenseItemInput; files?: File[] }) =>
+      addExpenseItem(claimId, input, files),
     onSuccess: (_data, { claimId }) => invalidateClaimQueries(queryClient, claimId),
   })
 }
@@ -83,8 +83,8 @@ export function useAddExpenseItemsBulk() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ claimId, items }: { claimId: string; items: SaveExpenseItemInput[] }) =>
-      addExpenseItemsBulk(claimId, items),
+    mutationFn: ({ claimId, items, filesByRow }: { claimId: string; items: SaveExpenseItemInput[]; filesByRow?: File[][] }) =>
+      addExpenseItemsBulk(claimId, items, filesByRow),
     onSuccess: (_data, { claimId }) => invalidateClaimQueries(queryClient, claimId),
   })
 }

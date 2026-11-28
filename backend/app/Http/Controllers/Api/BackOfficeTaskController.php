@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\BackOffice\Commands\AssignBackOfficeTask;
+use App\Domain\BackOffice\Commands\AssignBackOfficeTasks;
 use App\Domain\BackOffice\Commands\ChangeBackOfficeTaskStatus;
+use App\Domain\BackOffice\Commands\CompleteBackOfficeTasks;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BackOfficeTaskResource;
@@ -11,11 +13,10 @@ use App\Models\BackOfficeTask;
 use App\Models\BackOfficeTaskStatus;
 use App\Models\WorkflowRequest;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 /**
@@ -122,50 +123,71 @@ class BackOfficeTaskController extends Controller
     #[OA\Post(
         path: '/backoffice-tasks/bulk-complete',
         operationId: 'backofficeTasks.bulkComplete',
-        summary: '自分の担当タスクを一括で完了する',
+        summary: '自分の担当タスクを一括で完了する(全部か無しか)',
+        description: '完了済みのタスクは飛ばす(result: skipped)。1件でも完了できないタスクがあれば何も完了せず、422(code: bulk_operation_rejected)で対象ごとの理由を返す。',
         tags: ['バックオフィス処理'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['task_ids'], properties: [new OA\Property(property: 'task_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))])),
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['task_ids'], properties: [new OA\Property(property: 'task_ids', type: 'array', maxItems: 100, items: new OA\Items(type: 'string', format: 'uuid'))])),
+        responses: [new OA\Response(response: 200, description: '処理したタスクの一覧'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: '入力の検証エラー、または処理できないタスクがある(bulk_operation_rejected)')],
     )]
-    public function bulkComplete(Request $request, CommandBus $commandBus): AnonymousResourceCollection
+    public function bulkComplete(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
             'task_ids' => ['required', 'array', 'min:1', 'max:100'],
             'task_ids.*' => ['required', 'string', 'distinct', 'exists:backoffice_tasks,id'],
         ]);
 
-        $taskIds = $data['task_ids'];
+        $result = $commandBus->dispatch(new CompleteBackOfficeTasks(
+            backOfficeTaskIds: $data['task_ids'],
+            completedByUserId: $request->user()->id,
+            comment: '一覧から一括完了',
+        ));
 
-        DB::transaction(function () use ($request, $commandBus, $taskIds): void {
-            $tasks = BackOfficeTask::query()
-                ->whereIn('id', $taskIds)
-                ->where('assigned_user_id', $request->user()->id)
-                ->lockForUpdate()
-                ->get();
+        return $this->bulkResponse($result);
+    }
 
-            if ($tasks->count() !== count($taskIds)) {
-                throw ValidationException::withMessages([
-                    'task_ids' => ['自分に割り当てられていないタスクは一括完了できません。'],
-                ]);
-            }
+    #[OA\Post(
+        path: '/backoffice-tasks/bulk-assign',
+        operationId: 'backofficeTasks.bulkAssign',
+        summary: 'タスクの担当者を一括で変更する(全部か無しか)',
+        description: '1件でも変更できないタスクがあれば何も変更せず、422(code: bulk_operation_rejected)で対象ごとの理由を返す。',
+        tags: ['バックオフィス処理'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['task_ids', 'assigned_user_id'], properties: [
+            new OA\Property(property: 'task_ids', type: 'array', maxItems: 100, items: new OA\Items(type: 'string', format: 'uuid')),
+            new OA\Property(property: 'assigned_user_id', type: 'string', format: 'uuid'),
+        ])),
+        responses: [new OA\Response(response: 200, description: '処理したタスクの一覧'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: '入力の検証エラー、または処理できないタスクがある(bulk_operation_rejected)')],
+    )]
+    public function bulkAssign(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'task_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'task_ids.*' => ['required', 'string', 'distinct', 'exists:backoffice_tasks,id'],
+            'assigned_user_id' => ['required', 'string', 'exists:users,id'],
+        ]);
 
-            foreach ($tasks as $task) {
-                if ($task->status === BackOfficeTaskStatus::COMPLETED) {
-                    continue;
-                }
+        $result = $commandBus->dispatch(new AssignBackOfficeTasks(
+            backOfficeTaskIds: $data['task_ids'],
+            assignedUserId: $data['assigned_user_id'],
+            assignedByUserId: $request->user()->id,
+        ));
 
-                $commandBus->dispatch(new ChangeBackOfficeTaskStatus(
-                    backOfficeTaskId: $task->id,
-                    newStatus: BackOfficeTaskStatus::COMPLETED,
-                    changedByUserId: $request->user()->id,
-                    comment: '一覧から一括完了',
-                ));
-            }
-        });
+        return $this->bulkResponse($result);
+    }
 
-        return BackOfficeTaskResource::collection(
-            BackOfficeTask::query()->with('assignee')->whereIn('id', $taskIds)->get()
-        );
+    /**
+     * @param  array{processed: list<int|string>, skipped: list<int|string>}  $result
+     */
+    private function bulkResponse(array $result): JsonResponse
+    {
+        $data = [];
+        foreach ($result['processed'] as $id) {
+            $data[] = ['id' => $id, 'result' => 'processed'];
+        }
+        foreach ($result['skipped'] as $id) {
+            $data[] = ['id' => $id, 'result' => 'skipped'];
+        }
+
+        return response()->json(['data' => $data]);
     }
 
     /**

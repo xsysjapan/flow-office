@@ -216,6 +216,12 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         return $this;
     }
 
+    /** 指定の付与IDの付与が既に記録されているか(手動付与の再送を冪等にするため)。 */
+    public function hasGrant(string $grantId): bool
+    {
+        return isset($this->grants[$grantId]);
+    }
+
     /**
      * 管理者が休日出勤の対象日を指定して代休を手動付与する。作成と同時に確定する。
      * 移植元: `GrantCompensatoryLeaveHandler::handle`(休日出勤の判定・換算の部分)。

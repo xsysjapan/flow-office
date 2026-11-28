@@ -173,7 +173,7 @@ class AssetLendingTest extends TestCase
         $result = $this->bus()->dispatch(new ReturnAsset(
             assetId: $asset->id,
             loanId: $loaned->current_loan_id,
-            returnedByUserId: $backoffice->id,
+            returnedByUserId: $borrower->id,
             returnNote: '問題なし',
         ));
 
@@ -182,7 +182,7 @@ class AssetLendingTest extends TestCase
 
         $loan = AssetLoan::query()->findOrFail($loaned->current_loan_id);
         $this->assertNotNull($loan->returned_at);
-        $this->assertSame($backoffice->id, $loan->returned_by_user_id);
+        $this->assertSame($borrower->id, $loan->returned_by_user_id);
     }
 
     public function test_return_succeeds_even_without_a_default_location_for_backoffice_managed_assets(): void
@@ -192,7 +192,7 @@ class AssetLendingTest extends TestCase
         $asset = $this->registerLendingAsset($backoffice, AssetLendingMethod::BACKOFFICE, null);
         $loaned = $this->bus()->dispatch(new LendAsset($asset->id, $borrower->id, $backoffice->id));
 
-        $result = $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $backoffice->id));
+        $result = $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $borrower->id));
 
         $this->assertSame(AssetLendingStatus::AVAILABLE, $result->lending_status);
     }
@@ -203,11 +203,11 @@ class AssetLendingTest extends TestCase
         $borrower = User::factory()->create();
         $asset = $this->registerLendingAsset($backoffice);
         $loaned = $this->bus()->dispatch(new LendAsset($asset->id, $borrower->id, $backoffice->id));
-        $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $backoffice->id));
+        $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $borrower->id));
 
         $this->expectException(DomainRuleException::class);
         // 既に返却済みの同じloanIdをもう一度返却しようとする。
-        $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $backoffice->id));
+        $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $borrower->id));
     }
 
     public function test_repair_lifecycle_returns_asset_to_available(): void

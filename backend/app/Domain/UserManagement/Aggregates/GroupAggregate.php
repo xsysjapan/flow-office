@@ -8,9 +8,9 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 class GroupAggregate extends AggregateRoot
 {
-    public function create(int $typeId, string $name, string $code, ?string $description, ?string $parentId, ?string $actor): self
+    public function create(int $typeId, string $name, string $code, ?string $description, ?string $parentId, ?string $actor, ?int $initialRoleId = null): self
     {
-        $this->recordThat(new GroupCreated($typeId, $name, $code, $description, $parentId, $actor));
+        $this->recordThat(new GroupCreated($typeId, $name, $code, $description, $parentId, $actor, $initialRoleId));
 
         return $this;
     }

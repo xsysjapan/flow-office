@@ -228,7 +228,7 @@ class ReadModelRebuildAfterDeletionScenarioTest extends TestCase
         ));
         $this->bus()->dispatch(new SetAssetDefaultLocation($asset->id, '本社1F', $admin->id));
         $loaned = $this->bus()->dispatch(new LendAsset($asset->id, $borrower->id, $admin->id));
-        $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $admin->id));
+        $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $borrower->id));
         $this->bus()->dispatch(new ChangeAssetManagementType($asset->id, AssetManagementType::INSTALLATION, $admin->id));
         $this->bus()->dispatch(new InstallAsset($asset->id, '2F会議室', $admin->id));
         $this->bus()->dispatch(new RelocateAsset($asset->id, '3F倉庫', $admin->id));

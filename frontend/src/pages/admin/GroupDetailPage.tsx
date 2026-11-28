@@ -47,7 +47,12 @@ import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { isGroupFormDirty, type GroupFormValues } from './groupDetailDirty'
 import { fieldErrors } from '../../utils/fieldErrors'
 
-type GroupErrorKey = "group_type_id" | "name" | "parent_group_id" | "status";
+type GroupErrorKey =
+  | "group_type_id"
+  | "name"
+  | "parent_group_id"
+  | "status"
+  | "initial_role_id";
 type MembershipErrorKey = "user_id" | "effective_at" | "note" | "items.*.is_primary";
 
 const emptyGroupForm: GroupFormValues = {
@@ -140,7 +145,7 @@ function GroupDetailForm() {
 
   const mutation = isNew ? createGroup : updateGroup;
   const fields: GroupErrorKey[] = isNew
-    ? ["group_type_id", "name", "parent_group_id"]
+    ? ["group_type_id", "name", "parent_group_id", "initial_role_id"]
     : ["name", "parent_group_id", "status"];
   const { of, rest } = fieldErrors(mutation.error, fields);
   const parentCandidates = groups.data?.filter(
@@ -219,6 +224,7 @@ function GroupDetailForm() {
             <FormField
               label="作成時に割り当てるRole(任意)"
               htmlFor="group-detail-initial-role"
+              error={of("initial_role_id")}
             >
               <NativeSelect
                 id="group-detail-initial-role"
@@ -251,24 +257,15 @@ function GroupDetailForm() {
                       group_type_id: Number(form.group_type_id),
                       name: form.name,
                       parent_group_id: form.parent_group_id || undefined,
+                      initial_role_id: form.initial_role_id
+                        ? Number(form.initial_role_id)
+                        : undefined,
                     },
                     {
                       // 作成後は更新時と同じ「詳細画面に留まる」挙動に揃えるため、一覧ではなく
                       // 作成されたグループ自身の詳細画面(このページ)へ遷移する(SKILL.md §2.6)。
-                      onSuccess: async (data) => {
+                      onSuccess: (data) => {
                         const newGroupId = (data as { id: string }).id;
-                        if (form.initial_role_id) {
-                          await createAssignment.mutateAsync({
-                            subject_type: "group",
-                            subject_id: newGroupId,
-                            role_id: Number(form.initial_role_id),
-                            scope_type: "global",
-                            scope_group_id: null,
-                            includes_descendants: false,
-                            starts_at: null,
-                            ends_at: null,
-                          });
-                        }
                         notify.success("グループを作成しました");
                         navigateAfterSave(`/admin/groups/${newGroupId}`, {
                           replace: true,

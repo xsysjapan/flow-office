@@ -17,5 +17,9 @@ class GrantSpecialLeave implements Command
         public readonly ?string $expiresOn,
         public readonly float $grantedDays,
         public readonly ?string $grantReason,
+        /** 付与IDの指定(省略時は新規UUID)。手動付与は`request_id`と利用者IDから決めたIDを渡す。 */
+        public readonly ?string $grantId = null,
+        /** true: 同じ付与IDの付与が既にあれば何もせず(通知もせず)既存の付与を返す(再送を冪等にする)。 */
+        public readonly bool $idempotent = false,
     ) {}
 }

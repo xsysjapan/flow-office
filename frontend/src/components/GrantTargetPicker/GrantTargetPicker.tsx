@@ -11,9 +11,17 @@ export type GrantTargetMode = 'individual' | 'group'
 
 export interface GrantTargetPickerProps {
   idPrefix: string
-  /** モードに関わらず、確定した付与対象のユーザーIDリスト(重複排除済み)と、
-   *  各IDの表示ラベル(氏名・メールアドレス。結果表示用)を渡す。 */
-  onResolvedChange: (userIds: string[], mode: GrantTargetMode, labels: Record<string, string>) => void
+  /** 確定した付与対象を渡す。個人のモードはユーザーIDリスト(重複排除済み)、グループのモードは選んだ
+   *  `groupId`(送信時にサーバーが、実行した時点の直接の所属・退職者を除いて展開する)を送る。`userIds`・`labels`
+   *  (氏名・メールアドレス)は、グループのモードでは確認用の表示(現在の所属メンバー)に使う。 */
+  onResolvedChange: (
+    userIds: string[],
+    mode: GrantTargetMode,
+    labels: Record<string, string>,
+    groupId: string | undefined,
+  ) => void
+  /** `false`でグループの指定を出さない(個人の指定だけ。代休)。既定は`true`。 */
+  allowGroup?: boolean
   /** 値が変わるたびに、選択状態を「個人を指定」モード・`resetIndividualIds`(省略時は空)へ
    *  リセットする。一括付与後、全成功なら空へ、一部失敗なら失敗した対象だけを残して
    *  再送しやすくする用途。 */
@@ -24,14 +32,15 @@ export interface GrantTargetPickerProps {
 /**
  * 有給/特別休暇/代休の手動付与フォームで共通利用する対象選択UI。
  * 「個人を指定」(複数選択)と「グループを指定」(所属メンバー全員)を切り替えられる。
- * どちらのモードでも、確定した対象ユーザーIDのリストを親フォームへ渡す
- * (親フォームはどちらのモードだったかを意識せずに送信できる)。
+ * 個人のモードはユーザーIDのリスト、グループのモードは`groupId`を親フォームへ渡す
+ * (グループの展開は、付与のAPIを実行したときにサーバーが行う)。
  */
 export function GrantTargetPicker({
   idPrefix,
   onResolvedChange,
   resetSignal,
   resetIndividualIds,
+  allowGroup = true,
 }: GrantTargetPickerProps) {
   // FormFieldの中では、表示中の入力にFormFieldのid(htmlFor)を当てる(グループのモードでも結ばれるように)。
   const formFieldId = useContext(FormFieldContext)?.id
@@ -61,9 +70,9 @@ export function GrantTargetPicker({
       : Object.fromEntries((groupMembers ?? []).map((member) => [member.user_id, `${member.name}(${member.email})`]))
 
   useEffect(() => {
-    onResolvedChange(resolvedIds, mode, resolvedLabels)
+    onResolvedChange(resolvedIds, mode, resolvedLabels, mode === 'group' ? groupId : undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, individualIds, individualLabels, groupMembers])
+  }, [mode, individualIds, individualLabels, groupMembers, groupId])
 
   return (
     <div className="flex flex-col gap-3">
@@ -77,15 +86,17 @@ export function GrantTargetPicker({
         >
           個人を指定
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={mode === 'group' ? 'primary' : 'secondary'}
-          aria-pressed={mode === 'group'}
-          onClick={() => setMode('group')}
-        >
-          グループを指定
-        </Button>
+        {allowGroup && (
+          <Button
+            type="button"
+            size="sm"
+            variant={mode === 'group' ? 'primary' : 'secondary'}
+            aria-pressed={mode === 'group'}
+            onClick={() => setMode('group')}
+          >
+            グループを指定
+          </Button>
+        )}
       </div>
 
       {mode === 'individual' ? (
@@ -112,7 +123,10 @@ export function GrantTargetPicker({
             ) : (
               <div className="rounded-md border border-border">
                 <p className="border-b border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground">
-                  このグループの{groupMembers?.length ?? 0}名に付与されます
+                  このグループの所属メンバーが対象です(現在{groupMembers?.length ?? 0}名)
+                </p>
+                <p className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
+                  付与は、実行した時点の直接の所属メンバーに行います。退職者は対象から除かれます。
                 </p>
                 <ul className="max-h-48 divide-y divide-border overflow-y-auto">
                   {(groupMembers ?? []).map((member) => (

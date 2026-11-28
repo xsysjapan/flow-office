@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
 import { ApiError } from '../../api/client'
+import { BULK_REJECTED_NOTICE } from '../../components/BulkActionDialog/BulkActionDialog'
 import * as usersApi from '../../api/users'
 import type { BackOfficeTask, BackOfficeTaskSearchResult, Paginated, User } from '../../api/types'
 import { notify } from '../../lib/notify'
@@ -300,7 +301,7 @@ describe('BackOfficeTaskListPage', () => {
     ]
     vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
     vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginate([me]))
-    const assignSpy = vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockResolvedValue(tasks[0])
+    const assignSpy = vi.spyOn(backOfficeTasksApi, 'bulkAssignBackOfficeTasks').mockResolvedValue({ data: [] })
 
     renderPage()
 
@@ -326,9 +327,9 @@ describe('BackOfficeTaskListPage', () => {
     expect(screen.getByText('選択した2件(未割り当て1件・割り当て済み1件。変更不要0件)')).toBeInTheDocument()
     await userEvent.click(dialog().getByRole('button', { name: '2件の担当者を変更' }))
 
-    await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(2))
-    expect(assignSpy).toHaveBeenCalledWith('task-unassigned', 'me-1')
-    expect(assignSpy).toHaveBeenCalledWith('task-assigned', 'me-1')
+    // 一括の担当変更のAPIを1回だけ呼ぶ(件ごとのAPIは呼ばない)
+    await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(1))
+    expect(assignSpy).toHaveBeenCalledWith(['task-unassigned', 'task-assigned'], 'me-1')
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('2件のタスクの担当者を自分 太郎さんに変更しました'))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.queryByText('2件を選択中')).not.toBeInTheDocument()
@@ -341,7 +342,7 @@ describe('BackOfficeTaskListPage', () => {
     ]
     vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
     vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginate([colleague, me]))
-    const assignSpy = vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockResolvedValue(tasks[0])
+    const assignSpy = vi.spyOn(backOfficeTasksApi, 'bulkAssignBackOfficeTasks').mockResolvedValue({ data: [] })
 
     renderPage(['/backoffice-tasks?assignee=all'])
 
@@ -355,7 +356,7 @@ describe('BackOfficeTaskListPage', () => {
 
     await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(1))
     // 担当者が既に花子のタスクAは対象外。タスクBだけを変更する
-    expect(assignSpy).toHaveBeenCalledWith('task-b', 'assignee-1')
+    expect(assignSpy).toHaveBeenCalledWith(['task-b'], 'assignee-1')
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('1件のタスクの担当者を担当者花子さんに変更しました'))
   })
 
@@ -374,17 +375,21 @@ describe('BackOfficeTaskListPage', () => {
     expect(dialog().getByRole('button', { name: '0件の担当者を変更' })).toBeDisabled()
   })
 
-  it('shows the failures inside the dialog on partial failure and keeps only the failed rows selected', async () => {
+  it('shows every failure with its reason, says nothing was processed and keeps the whole selection when the bulk assign is rejected', async () => {
     const tasks = [
       makeTask({ id: 'task-ok', title: '成功するタスク' }),
       makeTask({ id: 'task-ng', title: '失敗するタスク' }),
     ]
     vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
     vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginate([colleague]))
-    vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockImplementation((id) =>
-      id === 'task-ng'
-        ? Promise.reject(new ApiError(422, '完了・取消済みのタスクは担当者を変更できません。'))
-        : Promise.resolve(tasks[0]),
+    vi.spyOn(backOfficeTasksApi, 'bulkAssignBackOfficeTasks').mockRejectedValue(
+      new ApiError(
+        422,
+        '選んだ対象のうち、処理できないものがあります。',
+        { 'items.task-ng': ['完了・取消済みのタスクは担当者を変更できません。'] },
+        'bulk_operation_rejected',
+        [{ id: 'task-ng', label: '失敗するタスク', message: '完了・取消済みのタスクは担当者を変更できません。' }],
+      ),
     )
 
     renderPage()
@@ -395,55 +400,20 @@ describe('BackOfficeTaskListPage', () => {
     await pickAssignee('担当者花子(hanako@example.com)', '花子')
     await userEvent.click(dialog().getByRole('button', { name: '2件の担当者を変更' }))
 
-    expect(
-      await screen.findByText('1件のタスクの担当者を担当者花子さんに変更しました。1件はできませんでした。'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
     expect(screen.getByText('失敗するタスク: 完了・取消済みのタスクは担当者を変更できません。')).toBeInTheDocument()
-    expect(screen.getByText('できなかった1件は選択したままです。')).toBeInTheDocument()
     expect(notify.success).not.toHaveBeenCalled()
-    // 成功分は選択から外れ、失敗分だけ残る
-    expect(screen.getByText('1件を選択中')).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: '成功するタスクを選択', hidden: true })).not.toBeChecked()
+    // 何も確定していないので、選択はそのまま残る
+    expect(screen.getByText('2件を選択中')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: '成功するタスクを選択', hidden: true })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: '失敗するタスクを選択', hidden: true })).toBeChecked()
 
     const closeButtons = screen.getAllByRole('button', { name: '閉じる' })
     await userEvent.click(closeButtons[closeButtons.length - 1])
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(notify.success).toHaveBeenCalledWith('1件のタスクの担当者を担当者花子さんに変更しました')
-  })
-
-  it('does not allow selecting completed or cancelled tasks for bulk assignment', async () => {
-    const tasks = [
-      makeTask({ id: 'task-open', title: '未完了のタスク' }),
-      makeTask({ id: 'task-done', title: '完了のタスク', status: 'completed', assignee: colleague }),
-      makeTask({ id: 'task-cancelled', title: '取消のタスク', status: 'cancelled', assignee: colleague }),
-    ]
-    vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
-
-    renderPage(['/backoffice-tasks?assignee=all&status=all'])
-
-    expect(await screen.findByRole('checkbox', { name: '完了のタスクを選択' })).toBeDisabled()
-    expect(screen.getByRole('checkbox', { name: '取消のタスクを選択' })).toBeDisabled()
-    expect(screen.getByRole('checkbox', { name: '未完了のタスクを選択' })).toBeEnabled()
-  })
-
-  it('disables bulk completion with a reason when the selection contains others or unassigned tasks', async () => {
-    const tasks = [
-      makeTask({ id: 'my-task-1', title: '自分の確認1', status: 'processing', assignee: me }),
-      makeTask({ id: 'other-task-1', title: '他人の確認1', status: 'processing', assignee: colleague }),
-      makeTask({ id: 'free-task-1', title: '未割当の確認1', status: 'not_started' }),
-    ]
-    vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
-
-    renderPage(['/backoffice-tasks?assignee=all'])
-
-    await userEvent.click(await screen.findByRole('checkbox', { name: '自分の確認1を選択' }))
-    expect(screen.getByRole('button', { name: '完了にする' })).toBeEnabled()
-
-    await userEvent.click(screen.getByRole('checkbox', { name: '他人の確認1を選択' }))
-    expect(screen.getByRole('button', { name: '完了にする' })).toBeDisabled()
-    expect(screen.getByText('自分のタスクのみ完了にできます')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+    expect(screen.getByText('2件を選択中')).toBeInTheDocument()
   })
 
   it('bulk-completes my own tasks after the confirmation dialog and notifies', async () => {
@@ -452,7 +422,7 @@ describe('BackOfficeTaskListPage', () => {
       makeTask({ id: 'my-task-2', title: '月次勤怠確認2', status: 'in_review', assignee: me }),
     ]
     vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
-    const completeSpy = vi.spyOn(backOfficeTasksApi, 'bulkCompleteBackOfficeTasks').mockResolvedValue(tasks)
+    const completeSpy = vi.spyOn(backOfficeTasksApi, 'bulkCompleteBackOfficeTasks').mockResolvedValue({ data: [] })
 
     renderPage(['/backoffice-tasks?assignee=me'])
 
@@ -464,7 +434,7 @@ describe('BackOfficeTaskListPage', () => {
     expect(await screen.findByText('選択した2件を完了にしますか?')).toBeInTheDocument()
     expect(
       screen.getByText(
-        '完了すると担当者を変更できなくなります。申請種別の遷移ルールで完了にできないタスクが含まれていると、全件とも完了になりません。',
+        '完了すると担当者を変更できなくなります。申請種別の遷移ルールで完了にできないタスクが含まれていると、何も完了になりません。',
       ),
     ).toBeInTheDocument()
     expect(completeSpy).not.toHaveBeenCalled()
@@ -477,11 +447,18 @@ describe('BackOfficeTaskListPage', () => {
     expect(screen.queryByText('2件を選択中')).not.toBeInTheDocument()
   })
 
-  it('shows the API reason inside the dialog and keeps the selection when bulk completion fails as a whole', async () => {
+  it('lists the rejected tasks by title and keeps the selection when bulk completion is rejected', async () => {
     const tasks = [makeTask({ id: 'my-task-1', title: '月次勤怠確認1', status: 'processing', assignee: me })]
     vi.mocked(backOfficeTasksApi.fetchBackOfficeTasks).mockResolvedValue(searchResult(tasks))
     vi.spyOn(backOfficeTasksApi, 'bulkCompleteBackOfficeTasks').mockRejectedValue(
-      new ApiError(422, '「処理中」から「完了」へは変更できません。'),
+      new ApiError(
+        422,
+        '選んだ対象のうち、処理できないものがあります。',
+        { 'items.my-task-1': ['この処理区分では [processing] から [completed] への変更は許可されていません。'] },
+        'bulk_operation_rejected',
+        // 応答に表示名が無い場合は、画面が持つタスクのタイトルで表示する
+        [{ id: 'my-task-1', message: 'この処理区分では [processing] から [completed] への変更は許可されていません。' }],
+      ),
     )
 
     renderPage(['/backoffice-tasks?assignee=me'])
@@ -490,10 +467,12 @@ describe('BackOfficeTaskListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '完了にする' }))
     await userEvent.click(dialog().getByRole('button', { name: '1件を完了にする' }))
 
-    expect(await dialog().findByText('「処理中」から「完了」へは変更できません。')).toBeInTheDocument()
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByText('1件を選択中')).toBeInTheDocument()
+    expect(await screen.findByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
+    expect(
+      screen.getByText('月次勤怠確認1: この処理区分では [processing] から [completed] への変更は許可されていません。'),
+    ).toBeInTheDocument()
     expect(notify.success).not.toHaveBeenCalled()
+    expect(screen.getByText('1件を選択中')).toBeInTheDocument()
   })
 
   it('clears the selection when the tab changes', async () => {

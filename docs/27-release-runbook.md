@@ -329,6 +329,24 @@ SELECT COUNT(*) AS paid_leave_usages_is_confirmed_mismatch FROM paid_leave_usage
 
 検証(手順7)では、同じSQLを新しいコード・新しい列名で実行する(左の列を対応表の新列名に置き換える。`paid_leave_usages`の`confirmed`の行は無い)。
 
+### 3.9 月次勤怠の承認・差戻しをワークフローだけにする(変更セット `20261128-remaining-entrypoints` 論点8)のリリース手順
+
+承認・差戻しの入口(`POST /attendance-months/{id}/approve`・`/return`)から、ワークフローの申請を持たない月を直接承認する分岐を外す。
+ワークフローの申請が無い月は422「この月の申請が見つかりません。」になる(データ移行はしない)。リリースの前に、本番で
+「提出済みでワークフローの申請が無い月」が0件であることを確かめる。
+
+```sql
+SELECT COUNT(*) AS submitted_without_workflow
+FROM attendance_months m
+WHERE m.status = 'submitted'
+  AND NOT EXISTS (
+    SELECT 1 FROM workflow_requests w
+    WHERE w.subject_type = 'attendance_month' AND w.subject_id = m.id AND w.status = 'submitted'
+  );
+```
+
+0でなければ、先にその月を(旧コードのまま)承認してもらってからリリースする。
+
 ## 4. frontend/ のデプロイ手順
 
 ```

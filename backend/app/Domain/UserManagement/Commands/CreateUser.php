@@ -10,5 +10,6 @@ final class CreateUser implements Command
         public readonly string $userId,
         public readonly array $attributes,
         public readonly string $createdByUserId,
+        public readonly ?string $groupId = null,
     ) {}
 }

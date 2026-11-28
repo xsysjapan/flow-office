@@ -50,6 +50,15 @@ Feature構成)は、画面末尾の「保存」1つでまとめて保存する(`
 - 働き方の月ごとの割当は行の追加・削除の操作のため、まとめて保存に含めず、別のセクションで操作する
 - 項目ごとの既存APIは、API・MCPの互換のために残す
 
+グループの作成(`POST /admin/user-management/groups`)は、任意の`initial_role_id`で初期ロールを1回で付けられる。
+`CreateGroup`の1つのCommandで`group.created`(最後の任意項目`initialRoleId`)を記録し、AccessControl文脈のReactorが
+`CreateRoleAssignment`(`viaReactor`)を発行して、全社(global)・配下を含まない・期間なしの割当を作る(割当のIDはグループの
+IDから決まるuuid5で、作成済みなら何もしない)。権限は`group.create`に加え、初期ロールがあるときは全社の`role.assign`が要る
+(無ければ403)。割当が拒否されるとグループの作成ごと戻り、理由は`initial_role_id`の項目のエラー(422)になる。
+グループへのFeatureの同期は、Role割当の作成・更新・削除とロールのFeature変更(`role.features_changed`)をReactorが受け、
+対象のグループごとに`SyncGroupFeatures`を発行して行う(差分だけをグループのFeature集約へ記録。差分が無ければ何もしない)。
+運用コマンド`access-control:resync-group-features`(管理画面の運用コマンドから実行)も同じCommandを発行する。
+
 人事向けユーザー詳細にはFeature・Role・Permission・付与元・個別停止・外部ID・認証キーを
 表示しない。これらはシステム向けの独立画面に配置し、人事担当者には対応Permissionを付与せず、
 直URLとAPIの双方で拒否する。

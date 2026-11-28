@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import * as paidLeaveApi from '../../api/paidLeave'
+import * as groupsApi from '../../api/groups'
 import * as usersApi from '../../api/users'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type {
@@ -20,6 +21,7 @@ import type {
 } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { PaidLeavePolicyPage } from './PaidLeavePolicyPage'
+import { BULK_REJECTED_NOTICE } from '../../components/BulkActionDialog/BulkActionDialog'
 import { notify } from '../../lib/notify'
 
 vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
@@ -240,50 +242,110 @@ describe('PaidLeavePolicyPage', () => {
     expect(within(screen.getByRole('tabpanel')).getByText('週4日の法定最低日数は7日です。')).toBeInTheDocument()
   })
 
-  it('grants paid leave to the selected user', async () => {
+  describe('manual bulk grant (all or nothing)', () => {
     const paginatedUsers: Paginated<User> = {
       data: [targetUser],
       meta: { current_page: 1, last_page: 1, total: 1 },
       links: { next: null, prev: null },
     }
-    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
-    vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantsForUser').mockResolvedValue([])
-    vi.spyOn(paidLeaveApi, 'grantPaidLeave').mockResolvedValue({
-      id: 'grant-1',
-      user_id: '11111111-1111-4111-8111-111111111111',
-      granted_on: '2026-07-01',
-      expires_on: '2027-06-30',
-      granted_days: 10,
-      used_days: 0,
-      remaining_days: 10,
-      grant_reason: null,
-      status: 'active',
-      revoked_at: null,
-      revoked_by_user_id: null,
-      revoke_reason: null,
-    } as PaidLeaveGrant)
 
-    renderPage()
+    async function fillForm() {
+      await userEvent.click(document.getElementById('grant-target-users')!)
+      await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+      await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+      await pickDate(userEvent.setup(), '付与日', '2026-07-01')
+      await pickDate(userEvent.setup(), '失効日', '2027-06-30')
+      await userEvent.type(screen.getByLabelText('付与日数', { selector: '#grant-granted-days' }), '10')
+    }
 
-    await userEvent.click(document.getElementById('grant-target-users')!)
-    await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
-    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
-    await pickDate(userEvent.setup(), '付与日', '2026-07-01')
-    await pickDate(userEvent.setup(), '失効日', '2027-06-30')
-    await userEvent.type(screen.getByLabelText('付与日数', { selector: '#grant-granted-days' }), '10')
-    await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
+    it('calls the bulk API once with the selected users and a request_id after the confirmation', async () => {
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+      vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantsForUser').mockResolvedValue([])
+      const bulkSpy = vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeave').mockResolvedValue({
+        data: [{ user_id: '11111111-1111-4111-8111-111111111111', user_name: '対象社員' }],
+      })
 
-    await waitFor(() =>
-      expect(paidLeaveApi.grantPaidLeave).toHaveBeenCalledWith({
-        user_id: '11111111-1111-4111-8111-111111111111',
-        granted_on: '2026-07-01',
-        expires_on: '2027-06-30',
-        granted_days: 10,
-        grant_reason: undefined,
-      }),
-    )
-    expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
-    expect(notify.success).toHaveBeenCalledWith('1名に有給を付与しました')
+      renderPage()
+      await fillForm()
+      await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(bulkSpy).not.toHaveBeenCalled()
+      await userEvent.click(within(dialog).getByRole('button', { name: '付与する' }))
+
+      await waitFor(() =>
+        expect(bulkSpy).toHaveBeenCalledWith({
+          request_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+          user_ids: ['11111111-1111-4111-8111-111111111111'],
+          granted_on: '2026-07-01',
+          expires_on: '2027-06-30',
+          granted_days: 10,
+          grant_reason: undefined,
+        }),
+      )
+      expect(bulkSpy).toHaveBeenCalledTimes(1)
+      expect(notify.success).toHaveBeenCalledWith('1名に有給を付与しました')
+    })
+
+    it('shows the rejected users with the notice and keeps the form and the selection, resending the same request_id', async () => {
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+      vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantsForUser').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeave').mockRejectedValue(
+        new ApiError(
+          422,
+          '選んだ対象のうち、処理できないものがあります。',
+          {},
+          'bulk_operation_rejected',
+          [{ id: '11111111-1111-4111-8111-111111111111', label: '対象社員', message: '付与日が最新の付与より前です。' }],
+        ),
+      )
+
+      renderPage()
+      await fillForm()
+      await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: '付与する' }))
+
+      expect(await within(dialog).findByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
+      expect(within(dialog).getByText('対象社員: 付与日が最新の付与より前です。')).toBeInTheDocument()
+      expect(notify.success).not.toHaveBeenCalled()
+      await userEvent.click(within(dialog).getAllByRole('button', { name: '閉じる' }).at(-1)!)
+
+      // 何も付与されていないので、対象と入力はそのまま残る。
+      expect(screen.getByRole('button', { name: '1名に付与する' })).toBeEnabled()
+      expect(screen.getByLabelText('付与日数', { selector: '#grant-granted-days' })).toHaveValue(10)
+    })
+
+    it('sends group_id (not the members) when a group is specified', async () => {
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+      vi.spyOn(groupsApi, 'fetchGroups').mockResolvedValue([{ id: 'group-1', name: '営業部' }])
+      vi.spyOn(groupsApi, 'fetchGroupMembers').mockResolvedValue([
+        { user_id: 'member-1', name: '営業一郎', email: 'ichiro@example.com', membership_kind: 'primary', is_primary: true },
+        { user_id: 'member-2', name: '営業二郎', email: 'jiro@example.com', membership_kind: 'primary', is_primary: true },
+      ])
+      const bulkSpy = vi.spyOn(paidLeaveApi, 'bulkGrantPaidLeave').mockResolvedValue({
+        data: [
+          { user_id: 'member-1', user_name: '営業一郎' },
+          { user_id: 'member-2', user_name: '営業二郎' },
+        ],
+      })
+      bulkSpy.mockClear()
+
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'グループを指定' }))
+      await userEvent.selectOptions(await screen.findByRole('combobox', { name: /付与対象/ }), 'group-1')
+      await pickDate(userEvent.setup(), '付与日', '2026-07-01')
+      await pickDate(userEvent.setup(), '失効日', '2027-06-30')
+      await userEvent.type(screen.getByLabelText('付与日数', { selector: '#grant-granted-days' }), '10')
+      await userEvent.click(screen.getByRole('button', { name: 'グループの所属メンバーに付与する' }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: '付与する' }))
+
+      await waitFor(() => expect(bulkSpy).toHaveBeenCalledTimes(1))
+      const sent = bulkSpy.mock.calls[0][0]
+      expect(sent).toMatchObject({ group_id: 'group-1', granted_on: '2026-07-01', expires_on: '2027-06-30', granted_days: 10 })
+      expect(sent).not.toHaveProperty('user_ids')
+      expect(notify.success).toHaveBeenCalledWith('2名に有給を付与しました')
+    })
   })
 
   describe('revoke button of the target user grants', () => {

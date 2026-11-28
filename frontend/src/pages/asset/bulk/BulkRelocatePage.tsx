@@ -6,9 +6,9 @@ import { useAuth } from '../../../auth/useAuth'
 import type { AssetBulkOperationResult } from '../../../api/asset'
 import type { Asset } from '../../../api/types'
 import { AssetPicker } from '../../../components/AssetPicker/AssetPicker'
-import { Badge } from '../../../components/Badge/Badge'
 import { Button } from '../../../components/Button/Button'
 import { Card } from '../../../components/Card/Card'
+import { BulkOperationError } from '../../../components/BulkOperationError/BulkOperationError'
 import { ErrorMessage } from '../../../components/ErrorMessage/ErrorMessage'
 import { notify } from '../../../lib/notify'
 import { FormActions } from '../../../components/FormActions/FormActions'
@@ -68,14 +68,19 @@ export function BulkRelocatePage() {
 
   async function handleConfirm() {
     if (!locationText.trim()) return
-    const res = await bulkOperation.mutateAsync({
-      operation: 'relocate',
-      asset_ids: targets.map((t) => t.id),
-      location_text: locationText.trim(),
-    })
-    setResult(res)
-    if (res.succeeded_count > 0) notify.success(`${res.succeeded_count}件を移設しました`)
-    setTargets((prev) => prev.filter((t) => !res.results.some((r) => r.asset_id === t.id && r.success)))
+    setResult(null)
+    try {
+      const res = await bulkOperation.mutateAsync({
+        operation: 'relocate',
+        asset_ids: targets.map((t) => t.id),
+        location_text: locationText.trim(),
+      })
+      setResult(res)
+      notify.success(`${res.data.length}件を移設しました`)
+      setTargets([])
+    } catch {
+      // 失敗(全部か無しかの拒否を含む)は bulkOperation.error として画面に出る。選択は残す。
+    }
   }
 
   return (
@@ -138,21 +143,17 @@ export function BulkRelocatePage() {
 
           <FormLayout>
             {result && (
-              <div className="mb-4 flex flex-col gap-2 rounded-md border border-border p-4">
-                <p className="text-sm font-medium text-foreground">
-                  成功 {result.succeeded_count}件 / 失敗 {result.failed_count}件
-                </p>
-                <ul className="flex flex-col gap-1 text-sm">
-                  {result.results.map((r) => (
-                    <li key={r.asset_id} className="flex items-center gap-2">
-                      <Badge tone={r.success ? 'success' : 'danger'}>{r.success ? '成功' : '失敗'}</Badge>
-                      <span className="text-muted-foreground">{r.success ? '移設しました。' : r.error}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <p className="mb-4 text-sm font-medium text-foreground">
+                {result.data.length}件を移設しました。
+              </p>
             )}
-            {bulkOperation.error && <ErrorMessage error={bulkOperation.error} fallback="一括移設に失敗しました。" />}
+            {bulkOperation.error && (
+              <BulkOperationError
+                error={bulkOperation.error}
+                labels={Object.fromEntries(targets.map((t) => [t.id, `${t.name}(${t.asset_no})`]))}
+                fallback="一括移設に失敗しました。"
+              />
+            )}
             <FormActions>
               <Button variant="secondary" onClick={() => navigate(backTarget?.to ?? '/assets', { state: backTarget?.state, replace: true })}>
                 キャンセル

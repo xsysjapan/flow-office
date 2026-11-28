@@ -808,8 +808,11 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
    付与ごとに行います。」を示す。選んだ行に付与予定日前の行(`scheduled_on`が今日より後で、まだ到来していない行)が
    含まれる場合は、その件数と「出勤率の判定期間にまだ経過していない日が含まれています」旨の警告を
    加える。付与予定日前の行を含む場合も付与は可能である(警告のみ)
-3. 確定すると`POST /paid-leave/schedule-entries/bulk-grant`(`schedule_entry_ids`)を実行する
-4. 社員ごとに`ApplyScheduledGrants` Commandが発行され、エントリごとに`PaidLeaveAccountAggregate::grant()`
+3. 確定すると`POST /paid-leave/schedule-entries/bulk-grant`(`schedule_entry_ids`。上限500件・重複なし)を実行する。
+   入口は1つの`ApplyScheduledGrantsInBulk` Commandを発行する(変更セット`20261128-bulk-operations`)。
+   **全部か無しか**: 1件でも付与できない行があれば何も記録せず、422(`code: bulk_operation_rejected`、`items`に失敗した行と理由)を返す。
+   全件付与できたら200で`data`(`schedule_entry_id`・`grant_id`)を返す
+4. Handlerが社員ごとに`ApplyScheduledGrants` Commandを(セーブポイントの中で)発行し、エントリごとに`PaidLeaveAccountAggregate::grant()`
    (UC-P002と共通のGrant発行経路)が成功した後、`PaidLeaveScheduleEntryGranted`イベントで
    当該エントリのステータスを`Granted`へ遷移し、`grant_id`(付与された`paid_leave_grants.id`)を設定する
 5. 対象社員の`paid_leave_balances`(UC-P007と同じ経路)に反映される
@@ -822,7 +825,8 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 まとめて付与する2件(組。UC-P002の「まとめて付与する2件(組)の規則」)は、片方だけを選べない。APIは、組の片方だけが
 指定されたら422(「まとめて付与する2件は、同時に選んでください。」)を返し、何も付与しない。付与は1回の`ApplyScheduledGrants`で
 2件を続けて行い、有給口座の付与は2件のイベントを1回のpersist(`GrantPaidLeaves`)で記録する。片方の付与に失敗したら、
-もう片方も付与しない(2行とも失敗として返す)。
+もう片方も付与しない(2行とも失敗として返し、一括の全体も戻る)。付与の後の失敗(付与予定側への反映の失敗等)は
+失敗として集めずに例外として投げ、付与も含めて全体を戻す(「付与は成功したが反映に失敗」の部分成功は無い)。
 
 `Eligible`以外のエントリが選択に混入していた場合や、1件のAggregate例外が他のエントリの
 処理を止めないよう、エントリ単位で成功/失敗を収集し、レスポンスに部分失敗を含めて返す
@@ -946,6 +950,23 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 常に押せず、理由「代休の日数は休日出勤の勤怠から決まるため、ここでは変更できません。勤怠を修正してください。」を示す。
 取消ボタンは確定済み(`confirmed`)の付与だけ押せる(APIの「確定済みのみ取消可」と同じ)。下書き(`draft`)は押せず、
 理由「月次の提出で確定する前の代休は取り消せません。」を示す(下書きと消化済みの両方に当たる場合は下書きの理由)。
+
+### 休暇の手動付与の一括(有給・特別休暇・代休。変更セット`20261128-bulk-operations`)
+
+人事担当者・管理者(`leave.manage`)が複数の利用者へ手動付与する画面は、利用者ごとにAPIを呼ばず、専用のAPIを1回呼ぶ
+(`POST /{paid-leave,special-leave,compensatory-leave}/grants/bulk`。入口は1つの`GrantPaidLeaveToUsers`・
+`GrantSpecialLeaveToUsers`・`GrantCompensatoryLeaveToUsers` Commandを発行し、Handlerが利用者ごとに1件の付与のCommandを発行する)。
+
+- **全部か無しか**: 1人でも付与できないと何も記録せず、422(`code: bulk_operation_rejected`、`items`に失敗した利用者の表示名と理由)を返す。
+  成功は200で`data`(`user_id`・`user_name`)。対象は上限500人・重複なし。
+- **対象の指定**: `user_ids`(個人)。有給・特別休暇は`group_id`(グループ)も指定できる。グループは、APIを実行した時点の
+  そのグループへの直接の所属(子グループは含めない。退職者を除く)を、入口で利用者管理の参照のサービス(`GroupMemberExpander`)が
+  利用者IDへ展開してからCommandへ渡す(休暇の文脈が所属のテーブルを読まない)。グループの指定には`group.view`を要する。
+  上限は展開した後の件数で検査する。**代休はグループの指定を受けない**(休日出勤の実績が利用者ごとに要り、全部か無しかでは
+  グループの指定がほぼ必ず失敗するため)。
+- **二重付与の防止**: 画面が送る`request_id`(UUID)と利用者IDから付与IDを決める(UUIDv5。`ManualGrantId`)。同じ付与IDの付与が
+  既にあれば何もせず成功とする(再送で二重にならず、「何も処理していない」の誤表示も出ない)。1件の付与のAPI
+  (`POST /{paid-leave,special-leave,compensatory-leave}/grants`)も任意の`request_id`を受けて同じく決める(無ければ今どおり採番)。
 
 ### 代休の手動付与・管理者直接取消
 

@@ -17,5 +17,9 @@ class DeviceAdminSessionStarted extends ShouldBeStored
         public readonly string $source,
         public readonly string $startedAt,
         public readonly string $expiresAt,
+        // ブートストラップ経路で同時に登録する認証キー(認証キーの文脈のReactorが受ける。生の値は入れない)。旧イベントはnull
+        public readonly ?string $registeredKeyType = null,
+        public readonly ?string $registeredKeyDisplayName = null,
+        public readonly ?string $registeredKeyHash = null,
     ) {}
 }

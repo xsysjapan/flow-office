@@ -160,6 +160,11 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   await pickDate(page, "失効日", `${fiscalYear + 2}-03-31`, { exact: true });
   await page.locator("#grant-granted-days").fill("5");
   await page.getByRole("button", { name: /名に付与する$/ }).click();
+  // 全部か無しかの一括付与は、確認ダイアログを経て実行する。
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "付与する", exact: true })
+    .click();
   await expect(
     page.getByText(`${fiscalYear}-04-01 〜 ${fiscalYear + 2}-03-31`),
   ).toBeVisible();

@@ -4,6 +4,8 @@ namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Aggregates\CompanyCalendarAggregate;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
+use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
+use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Models\CompanyCalendar;
@@ -16,6 +18,8 @@ use Illuminate\Support\Str;
  */
 class CreateCompanyCalendarHandler implements CommandHandler
 {
+    public function __construct(private readonly CommandBus $commandBus) {}
+
     public function handle(Command $command): CompanyCalendar
     {
         assert($command instanceof CreateCompanyCalendar);
@@ -44,7 +48,19 @@ class CreateCompanyCalendarHandler implements CommandHandler
             $aggregate->changeDefault(null, $command->createdByUserId);
         }
 
+        // カレンダーを先に persist する(年度の検査・作成がカレンダーの ReadModel を読むため)。
         $aggregate->persist();
+
+        if ($command->fiscalYear !== null) {
+            $this->commandBus->dispatch(new CreateCompanyCalendarYear(
+                companyCalendarId: $id,
+                fiscalYear: $command->fiscalYear,
+                startsOn: (string) $command->startsOn,
+                endsOn: (string) $command->endsOn,
+                generatedFrom: 'manual',
+                createdByUserId: $command->createdByUserId,
+            ));
+        }
 
         return CompanyCalendar::query()->findOrFail($id);
     }

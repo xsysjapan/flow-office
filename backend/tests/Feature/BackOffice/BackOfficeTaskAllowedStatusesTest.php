@@ -168,8 +168,8 @@ class BackOfficeTaskAllowedStatusesTest extends TestCase
         $bulk = $this->actingAs($staff)->postJson('/api/backoffice-tasks/bulk-complete', [
             'task_ids' => [$task->id],
         ])->assertOk();
-        $this->assertNotEmpty($bulk->json());
-        foreach ($bulk->json() as $item) {
+        $this->assertNotEmpty($bulk->json('data'));
+        foreach ($bulk->json('data') as $item) {
             $this->assertArrayNotHasKey('allowed_next_statuses', $item);
         }
     }

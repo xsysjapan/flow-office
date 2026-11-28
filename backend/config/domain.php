@@ -9,6 +9,7 @@ use App\Domain\AccessControl\Commands\CreateRole;
 use App\Domain\AccessControl\Commands\CloneRole;
 use App\Domain\AccessControl\Commands\CreateRoleAssignment;
 use App\Domain\AccessControl\Commands\RemoveFeatureFromGroup;
+use App\Domain\AccessControl\Commands\SyncGroupFeatures;
 use App\Domain\AccessControl\Commands\RemoveRoleAssignment;
 use App\Domain\AccessControl\Commands\RemoveUserFeatureSuspension;
 use App\Domain\AccessControl\Commands\SuspendUserFeature;
@@ -23,6 +24,7 @@ use App\Domain\AccessControl\Handlers\CloneRoleHandler;
 use App\Domain\AccessControl\Handlers\CreateRoleHandler;
 use App\Domain\AccessControl\Handlers\UpdateRoleDefinitionHandler;
 use App\Domain\AccessControl\Handlers\RemoveFeatureFromGroupHandler;
+use App\Domain\AccessControl\Handlers\SyncGroupFeaturesHandler;
 use App\Domain\AccessControl\Handlers\RemoveRoleAssignmentHandler;
 use App\Domain\AccessControl\Handlers\RemoveUserFeatureSuspensionHandler;
 use App\Domain\AccessControl\Handlers\SuspendUserFeatureHandler;
@@ -34,6 +36,7 @@ use App\Domain\Asset\Commands\CompleteAssetRepair;
 use App\Domain\Asset\Commands\DeleteAsset;
 use App\Domain\Asset\Commands\DisposeAsset;
 use App\Domain\Asset\Commands\InstallAsset;
+use App\Domain\Asset\Commands\ApplyAssetBulkOperation;
 use App\Domain\Asset\Commands\LendAsset;
 use App\Domain\Asset\Commands\RecoverAssetFromLost;
 use App\Domain\Asset\Commands\RegisterAsset;
@@ -51,6 +54,7 @@ use App\Domain\Asset\Handlers\CompleteAssetRepairHandler;
 use App\Domain\Asset\Handlers\DeleteAssetHandler;
 use App\Domain\Asset\Handlers\DisposeAssetHandler;
 use App\Domain\Asset\Handlers\InstallAssetHandler;
+use App\Domain\Asset\Handlers\ApplyAssetBulkOperationHandler;
 use App\Domain\Asset\Handlers\LendAssetHandler;
 use App\Domain\Asset\Handlers\RecoverAssetFromLostHandler;
 use App\Domain\Asset\Handlers\RegisterAssetHandler;
@@ -126,6 +130,7 @@ use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
 use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
+use App\Domain\Attendance\Commands\RegenerateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\SyncHolidayCalendarSource;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendar;
@@ -193,6 +198,7 @@ use App\Domain\Attendance\Handlers\SetDefaultCompanyCalendarHandler;
 use App\Domain\Attendance\Handlers\SetDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\RegenerateCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\SyncHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\UnpublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\UpdateCompanyCalendarDaysHandler;
@@ -207,12 +213,16 @@ use App\Domain\AuthenticationKey\Commands\IssueAuthenticationKey;
 use App\Domain\AuthenticationKey\Handlers\DisableAuthenticationKeyHandler;
 use App\Domain\AuthenticationKey\Handlers\IssueAuthenticationKeyHandler;
 use App\Domain\BackOffice\Commands\AssignBackOfficeTask;
+use App\Domain\BackOffice\Commands\AssignBackOfficeTasks;
 use App\Domain\BackOffice\Commands\ChangeBackOfficeTaskStatus;
+use App\Domain\BackOffice\Commands\CompleteBackOfficeTasks;
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromAttendanceMonthApproval;
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromExpenseClaimApproval;
 use App\Domain\BackOffice\Handlers\AssignBackOfficeTaskHandler;
+use App\Domain\BackOffice\Handlers\AssignBackOfficeTasksHandler;
 use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
+use App\Domain\BackOffice\Handlers\CompleteBackOfficeTasksHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromAttendanceMonthApprovalHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromExpenseClaimApprovalHandler;
@@ -232,6 +242,7 @@ use App\Domain\CompensatoryLeaveAccount\Commands\ConfirmCompensatoryLeaveGrantsF
 use App\Domain\CompensatoryLeaveAccount\Commands\ConfirmCompensatoryLeaveUsage;
 use App\Domain\CompensatoryLeaveAccount\Commands\DesignateCompensatoryLeaveUsage;
 use App\Domain\CompensatoryLeaveAccount\Commands\GrantCompensatoryLeave;
+use App\Domain\CompensatoryLeaveAccount\Commands\GrantCompensatoryLeaveToUsers;
 use App\Domain\CompensatoryLeaveAccount\Commands\RequestCompensatoryLeaveGrantCancellation;
 use App\Domain\CompensatoryLeaveAccount\Commands\RevokeCompensatoryLeaveAccountGrant;
 use App\Domain\CompensatoryLeaveAccount\Commands\SyncCompensatoryLeaveAccountGrant;
@@ -241,6 +252,7 @@ use App\Domain\CompensatoryLeaveAccount\Handlers\ConfirmCompensatoryLeaveGrantsF
 use App\Domain\CompensatoryLeaveAccount\Handlers\ConfirmCompensatoryLeaveUsageHandler;
 use App\Domain\CompensatoryLeaveAccount\Handlers\DesignateCompensatoryLeaveUsageHandler;
 use App\Domain\CompensatoryLeaveAccount\Handlers\GrantCompensatoryLeaveHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\GrantCompensatoryLeaveToUsersHandler;
 use App\Domain\CompensatoryLeaveAccount\Handlers\RequestCompensatoryLeaveGrantCancellationHandler;
 use App\Domain\CompensatoryLeaveAccount\Handlers\RevokeCompensatoryLeaveAccountGrantHandler;
 use App\Domain\CompensatoryLeaveAccount\Handlers\SyncCompensatoryLeaveAccountGrantHandler;
@@ -325,6 +337,7 @@ use App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeaves;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeaveToUsers;
 use App\Domain\PaidLeaveAccount\Commands\RaisePaidLeaveGrantWarning;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Domain\PaidLeaveAccount\Handlers\AllocateUnallocatedPaidLeaveUsagesHandler;
@@ -336,9 +349,11 @@ use App\Domain\PaidLeaveAccount\Handlers\ConfirmPaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\DesignatePaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeaveHandler as PaidLeaveAccountGrantPaidLeaveHandler;
 use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeavesHandler;
+use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeaveToUsersHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RaisePaidLeaveGrantWarningHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RevokePaidLeaveGrantHandler as PaidLeaveAccountRevokePaidLeaveGrantHandler;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
+use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrantsInBulk;
 use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
 use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\OverrideScheduleAssessment;
@@ -346,6 +361,7 @@ use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Commands\ReassessScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
 use App\Domain\PaidLeaveSchedule\Handlers\ApplyScheduledGrantsHandler;
+use App\Domain\PaidLeaveSchedule\Handlers\ApplyScheduledGrantsInBulkHandler;
 use App\Domain\PaidLeaveSchedule\Handlers\EnsureFutureScheduleGeneratedHandler;
 use App\Domain\PaidLeaveSchedule\Handlers\ManuallyEditScheduleEntryHandler;
 use App\Domain\PaidLeaveSchedule\Handlers\OverrideScheduleAssessmentHandler;
@@ -364,6 +380,7 @@ use App\Domain\SpecialLeave\Commands\ApproveSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\CancelSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\GrantScheduledSpecialLeave;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
+use App\Domain\SpecialLeave\Commands\GrantSpecialLeaveToUsers;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
 use App\Domain\SpecialLeave\Commands\ResubmitSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\ReturnSpecialLeaveRequest;
@@ -372,6 +389,7 @@ use App\Domain\SpecialLeave\Handlers\ApproveSpecialLeaveRequestHandler;
 use App\Domain\SpecialLeave\Handlers\CancelSpecialLeaveRequestHandler;
 use App\Domain\SpecialLeave\Handlers\GrantScheduledSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
+use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveToUsersHandler;
 use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\ResubmitSpecialLeaveRequestHandler;
 use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
@@ -451,13 +469,17 @@ use App\Domain\UserManagement\Handlers\UpdateMembershipChangeHandler;
 use App\Domain\UserManagement\Handlers\UpdateUserDetailsHandler;
 use App\Domain\UserManagement\Handlers\UpdateUserProfileHandler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
+use App\Domain\Workflow\Commands\ApproveWorkflowRequests;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
+use App\Domain\Workflow\Commands\CancelWorkflowRequests;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\RejectWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Domain\Workflow\Handlers\ApproveWorkflowRequestHandler;
+use App\Domain\Workflow\Handlers\ApproveWorkflowRequestsHandler;
 use App\Domain\Workflow\Handlers\CancelWorkflowRequestHandler;
+use App\Domain\Workflow\Handlers\CancelWorkflowRequestsHandler;
 use App\Domain\Workflow\Handlers\DraftWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\RejectWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\ReturnWorkflowRequestHandler;
@@ -479,6 +501,7 @@ return [
         CreateGroup::class => CreateGroupHandler::class,
         AddMembership::class => AddMembershipHandler::class,
         AssignFeatureToGroup::class => AssignFeatureToGroupHandler::class,
+        SyncGroupFeatures::class => SyncGroupFeaturesHandler::class,
         CreateRoleAssignment::class => CreateRoleAssignmentHandler::class,
         ScheduleMembershipChange::class => ScheduleMembershipChangeHandler::class,
         ApplyMembershipChange::class => ApplyMembershipChangeHandler::class,
@@ -520,6 +543,7 @@ return [
         SetAssetDefaultLocation::class => SetAssetDefaultLocationHandler::class,
         LendAsset::class => LendAssetHandler::class,
         ReturnAsset::class => ReturnAssetHandler::class,
+        ApplyAssetBulkOperation::class => ApplyAssetBulkOperationHandler::class,
         InstallAsset::class => InstallAssetHandler::class,
         RelocateAsset::class => RelocateAssetHandler::class,
         RemoveAssetFromInstallation::class => RemoveAssetFromInstallationHandler::class,
@@ -574,12 +598,16 @@ return [
         ReturnWorkflowRequest::class => ReturnWorkflowRequestHandler::class,
         CancelWorkflowRequest::class => CancelWorkflowRequestHandler::class,
         RejectWorkflowRequest::class => RejectWorkflowRequestHandler::class,
+        CancelWorkflowRequests::class => CancelWorkflowRequestsHandler::class,
+        ApproveWorkflowRequests::class => ApproveWorkflowRequestsHandler::class,
 
         CreateBackOfficeTaskFromApproval::class => CreateBackOfficeTaskFromApprovalHandler::class,
         CreateBackOfficeTaskFromExpenseClaimApproval::class => CreateBackOfficeTaskFromExpenseClaimApprovalHandler::class,
         CreateBackOfficeTaskFromAttendanceMonthApproval::class => CreateBackOfficeTaskFromAttendanceMonthApprovalHandler::class,
         AssignBackOfficeTask::class => AssignBackOfficeTaskHandler::class,
         ChangeBackOfficeTaskStatus::class => ChangeBackOfficeTaskStatusHandler::class,
+        CompleteBackOfficeTasks::class => CompleteBackOfficeTasksHandler::class,
+        AssignBackOfficeTasks::class => AssignBackOfficeTasksHandler::class,
 
         DraftExpenseClaim::class => DraftExpenseClaimHandler::class,
         AddExpenseItem::class => AddExpenseItemHandler::class,
@@ -624,6 +652,7 @@ return [
         RegisterHolidayCalendarSource::class => RegisterHolidayCalendarSourceHandler::class,
         UpdateHolidayCalendarSource::class => UpdateHolidayCalendarSourceHandler::class,
         SyncHolidayCalendarSource::class => SyncHolidayCalendarSourceHandler::class,
+        RegenerateCompanyCalendarYear::class => RegenerateCompanyCalendarYearHandler::class,
         DisableHolidayCalendarSource::class => DisableHolidayCalendarSourceHandler::class,
         DeleteHolidayCalendarSource::class => DeleteHolidayCalendarSourceHandler::class,
         RevertLastHolidayCalendarSync::class => RevertLastHolidayCalendarSyncHandler::class,
@@ -677,6 +706,7 @@ return [
 
         GrantPaidLeave::class => PaidLeaveAccountGrantPaidLeaveHandler::class,
         GrantPaidLeaves::class => GrantPaidLeavesHandler::class,
+        GrantPaidLeaveToUsers::class => GrantPaidLeaveToUsersHandler::class,
         ChangePaidLeaveGrantAmount::class => ChangePaidLeaveGrantAmountHandler::class,
         ChangePaidLeaveGrantDate::class => ChangePaidLeaveGrantDateHandler::class,
         ChangePaidLeaveGrantExpiry::class => ChangePaidLeaveGrantExpiryHandler::class,
@@ -696,8 +726,10 @@ return [
         OverrideScheduleAssessment::class => OverrideScheduleAssessmentHandler::class,
         ManuallyEditScheduleEntry::class => ManuallyEditScheduleEntryHandler::class,
         ApplyScheduledGrants::class => ApplyScheduledGrantsHandler::class,
+        ApplyScheduledGrantsInBulk::class => ApplyScheduledGrantsInBulkHandler::class,
 
         GrantSpecialLeave::class => GrantSpecialLeaveHandler::class,
+        GrantSpecialLeaveToUsers::class => GrantSpecialLeaveToUsersHandler::class,
         GrantScheduledSpecialLeave::class => GrantScheduledSpecialLeaveHandler::class,
         RequestSpecialLeave::class => RequestSpecialLeaveHandler::class,
         ApproveSpecialLeaveRequest::class => ApproveSpecialLeaveRequestHandler::class,
@@ -725,6 +757,7 @@ return [
 
         SyncCompensatoryLeaveAccountGrant::class => SyncCompensatoryLeaveAccountGrantHandler::class,
         GrantCompensatoryLeave::class => GrantCompensatoryLeaveHandler::class,
+        GrantCompensatoryLeaveToUsers::class => GrantCompensatoryLeaveToUsersHandler::class,
         ConfirmCompensatoryLeaveGrantsForPeriod::class => ConfirmCompensatoryLeaveGrantsForPeriodHandler::class,
         RevokeCompensatoryLeaveAccountGrant::class => RevokeCompensatoryLeaveAccountGrantHandler::class,
         RequestCompensatoryLeaveGrantCancellation::class => RequestCompensatoryLeaveGrantCancellationHandler::class,

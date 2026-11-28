@@ -76,6 +76,12 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         return UserManagementStreamId::for('special_leave_account', $userId);
     }
 
+    /** 指定の付与IDの付与が既に記録されているか(手動付与の再送を冪等にするため)。 */
+    public function hasGrant(string $grantId): bool
+    {
+        return isset($this->grants[$grantId]);
+    }
+
     /**
      * 付与を登録する。旧来の特別休暇付与と同じく、日数・日付の妥当性は
      * 検証しない(現行にもルールが無いため。報告の確認事項を参照)。

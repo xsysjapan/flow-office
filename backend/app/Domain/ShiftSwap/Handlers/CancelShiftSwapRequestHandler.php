@@ -21,12 +21,19 @@ class CancelShiftSwapRequestHandler implements CommandHandler
 
         $request = ShiftSwapRequest::query()->findOrFail($command->shiftSwapRequestId);
 
-        if ($request->user_id !== $command->cancelledByUserId) {
-            throw new DomainRuleException('自分の振替休日申請のみ取消できます。');
-        }
+        if ($command->viaReactor) {
+            // Reactorからの取消は本人チェックを行わず、提出済み以外なら何もせず正常終了する(冪等)。
+            if ($request->status !== ShiftSwapRequestStatus::SUBMITTED) {
+                return $request;
+            }
+        } else {
+            if ($request->user_id !== $command->cancelledByUserId) {
+                throw new DomainRuleException('自分の振替休日申請のみ取消できます。');
+            }
 
-        if ($request->status !== ShiftSwapRequestStatus::SUBMITTED) {
-            throw new DomainRuleException('提出済み(未承認)の振替休日申請のみ取消できます。');
+            if ($request->status !== ShiftSwapRequestStatus::SUBMITTED) {
+                throw new DomainRuleException('提出済み(未承認)の振替休日申請のみ取消できます。');
+            }
         }
 
         ShiftSwapRequestAggregate::retrieve($request->id)

@@ -1,6 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   approveWorkflowRequest,
+  bulkApproveWorkflowRequests,
+  bulkCancelWorkflowRequests,
   cancelWorkflowRequest,
   createWorkflowRequest,
   fetchMyWorkflowRequests,
@@ -121,5 +123,33 @@ export function useCancelWorkflowRequest() {
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => cancelWorkflowRequest(id, reason),
     onSuccess: (_data, { id }) => invalidate(id),
+  })
+}
+
+/** 申請の一括取消(全部か無しか)。経費・振替休日・月次勤怠などの業務側も取消の連鎖で更新されるため、一覧・詳細を広く無効化する。 */
+export function useBulkCancelWorkflowRequests() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ ids, reason }: { ids: string[]; reason: string }) => bulkCancelWorkflowRequests(ids, reason),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['workflow-requests'] })
+      void queryClient.invalidateQueries({ queryKey: ['expense-claims'] })
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'months'] })
+    },
+  })
+}
+
+/** 承認の一括(全部か無しか)。業務側(月次勤怠・経費・休暇等)も承認の連鎖で更新される。 */
+export function useBulkApproveWorkflowRequests() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (ids: string[]) => bulkApproveWorkflowRequests(ids),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['workflow-requests'] })
+      void queryClient.invalidateQueries({ queryKey: ['expense-claims'] })
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'months'] })
+    },
   })
 }

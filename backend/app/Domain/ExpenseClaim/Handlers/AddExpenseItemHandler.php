@@ -49,7 +49,7 @@ class AddExpenseItemHandler implements CommandHandler
         $attributes = ExpenseItemAttributesValidator::validate($category, $command->attributes);
         $paymentBearer = $command->paymentBearer ?? ExpenseItem::PAYMENT_BEARER_EMPLOYEE;
 
-        $itemId = (string) Str::uuid();
+        $itemId = $command->itemId ?? (string) Str::uuid();
 
         ExpenseClaimAggregate::retrieve($claim->id)
             ->addItem(
@@ -65,6 +65,7 @@ class AddExpenseItemHandler implements CommandHandler
                 commutingDeductionAmount: $command->commutingDeductionAmount,
                 paymentBearer: $paymentBearer,
                 attributes: $attributes,
+                attachments: $command->attachments,
             )
             ->persist();
 

@@ -82,7 +82,7 @@ Feature・Permissionの定義自体の唯一の情報源は`AccessControlCatalog
 
 Roleに紐づくFeatureマスタ(`role_features`)を持ち、グループへのRole割当(作成・更新・削除)や
 Role自体のFeature変更(`ChangeRoleFeatures`)が起きるたびに、そのグループの`group_feature_assignments`
-がRoleの保有Featureの和集合へ自動同期される(`GroupFeatureSyncService`、Role→Feature自動適用)。
+がRoleの保有Featureの和集合へ自動同期される(Role→Feature自動適用。Reactorが`SyncGroupFeatures`を発行する)。
 差分だけを追加・削除し、既存の割当を全消し全入れしない。ユーザー個人への直接RoleAssignmentは
 引き続きFeatureを補完しない(対象外。今回自動適用されるのはグループへのRole割当のみ)。
 
@@ -294,7 +294,7 @@ Featureはグループにだけ付与し、複数グループの結果を和集�
 
 Roleに紐づくFeatureマスタ`RoleFeature`(`role_features`テーブル)を持ち、グループへのRole割当時に
 そのグループの有効Feature(`GroupFeatureAssignment`)へRole保有Featureが自動同期される
-(Role→Feature自動適用、`GroupFeatureSyncService`)。ユーザー個人への直接Role割当は
+(Role→Feature自動適用。Reactorが`SyncGroupFeatures`を発行する)。ユーザー個人への直接Role割当は
 引き続きFeatureを補完しない。
 
 ## 31.8 Role・Permission・Scope

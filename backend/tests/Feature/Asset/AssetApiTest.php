@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Asset;
 
+use App\Domain\Asset\Commands\ApplyAssetBulkOperation;
+use App\Domain\Asset\Commands\InstallAsset;
 use App\Domain\Asset\Commands\LendAsset;
 use App\Domain\Asset\Commands\RegisterAsset;
 use App\Domain\EventSourcing\CommandBus;
@@ -14,6 +16,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Support\AssertsSingleTopLevelCommand;
 use Tests\TestCase;
 
 /**
@@ -22,6 +25,7 @@ use Tests\TestCase;
  */
 class AssetApiTest extends TestCase
 {
+    use AssertsSingleTopLevelCommand;
     use RefreshDatabase;
 
     private function bus(): CommandBus
@@ -304,9 +308,81 @@ class AssetApiTest extends TestCase
         $response->assertJsonPath('lending_status', 'available');
     }
 
-    // --- 一括操作: 部分成功 ---
+    // --- 返却の認可(他人の貸出の返却は全社のasset.manageを要する) ---
 
-    public function test_bulk_self_return_handles_partial_success(): void
+    public function test_returning_someone_elses_loan_requires_asset_manage(): void
+    {
+        $manager = User::factory()->create();
+        $this->grantAssetManage($manager);
+        $borrower = User::factory()->create();
+        $other = User::factory()->create();
+        $asset = $this->registerAsset($manager, AssetLendingMethod::SELF_SERVICE, '3階ロッカーA');
+        $this->bus()->dispatch(new LendAsset($asset->id, $borrower->id, $borrower->id));
+
+        // 借用者ではない一般の利用者は返却できない(単件)。
+        $this->actingAs($other)->postJson("/api/assets/{$asset->id}/return", [])->assertForbidden();
+        $this->assertSame('loaned', $asset->refresh()->lending_status);
+
+        // 管理者は他人の貸出を返却できる。
+        $this->actingAs($manager)->postJson("/api/assets/{$asset->id}/return", [])
+            ->assertOk()->assertJsonPath('lending_status', 'available');
+    }
+
+    public function test_bulk_return_of_someone_elses_loan_requires_asset_manage_and_is_all_or_nothing(): void
+    {
+        $manager = User::factory()->create();
+        $this->grantAssetManage($manager);
+        $borrower = User::factory()->create();
+        $other = User::factory()->create();
+        $asset = $this->registerAsset($manager, AssetLendingMethod::SELF_SERVICE, '3階ロッカーA', 'ノートPC1');
+        $this->bus()->dispatch(new LendAsset($asset->id, $borrower->id, $borrower->id));
+
+        $response = $this->actingAs($other)->postJson('/api/assets/bulk', [
+            'operation' => 'return',
+            'asset_ids' => [$asset->id],
+        ]);
+
+        $response->assertUnprocessable();
+        $response->assertJsonPath('code', 'bulk_operation_rejected');
+        $this->assertNotEmpty($response->json('errors')["items.{$asset->id}"]);
+        $this->assertSame('loaned', $asset->refresh()->lending_status);
+
+        $this->actingAs($manager)->postJson('/api/assets/bulk', [
+            'operation' => 'return',
+            'asset_ids' => [$asset->id],
+        ])->assertOk();
+        $this->assertSame('available', $asset->refresh()->lending_status);
+    }
+
+    // --- 一括操作: 全部か無しか ---
+
+    public function test_bulk_self_return_succeeds_for_all_with_a_single_command(): void
+    {
+        $manager = User::factory()->create();
+        $this->grantAssetManage($manager);
+        $employee = User::factory()->create();
+        $assets = [];
+        foreach (['ノートPC1', 'ノートPC2'] as $name) {
+            $asset = $this->registerAsset($manager, AssetLendingMethod::SELF_SERVICE, '3階ロッカーA', $name);
+            $this->bus()->dispatch(new LendAsset($asset->id, $employee->id, $employee->id));
+            $assets[] = $asset;
+        }
+
+        $bus = $this->recordCommands();
+        $response = $this->actingAs($employee)->postJson('/api/assets/bulk', [
+            'operation' => 'self_return',
+            'asset_ids' => array_map(fn ($a) => $a->id, $assets),
+        ]);
+
+        $response->assertOk();
+        $this->assertCount(2, $response->json('data'));
+        $this->assertSingleTopLevelCommand($bus, ApplyAssetBulkOperation::class);
+        foreach ($assets as $asset) {
+            $this->assertSame('available', $asset->refresh()->lending_status);
+        }
+    }
+
+    public function test_bulk_self_return_with_a_failure_records_nothing_and_reports_every_failure(): void
     {
         $manager = User::factory()->create();
         $this->grantAssetManage($manager);
@@ -314,21 +390,65 @@ class AssetApiTest extends TestCase
 
         $loanedAsset = $this->registerAsset($manager, AssetLendingMethod::SELF_SERVICE, '3階ロッカーA', 'ノートPC1');
         $this->bus()->dispatch(new LendAsset($loanedAsset->id, $employee->id, $employee->id));
+        $notLoanedA = $this->registerAsset($manager, AssetLendingMethod::SELF_SERVICE, '3階ロッカーA', 'ノートPC2');
+        $notLoanedB = $this->registerAsset($manager, AssetLendingMethod::SELF_SERVICE, '3階ロッカーA', 'ノートPC3');
 
-        $notLoanedAsset = $this->registerAsset($manager, AssetLendingMethod::SELF_SERVICE, '3階ロッカーA', 'ノートPC2');
+        $eventCountBefore = DB::table('stored_events')->count();
 
         $response = $this->actingAs($employee)->postJson('/api/assets/bulk', [
             'operation' => 'self_return',
-            'asset_ids' => [$loanedAsset->id, $notLoanedAsset->id],
+            'asset_ids' => [$loanedAsset->id, $notLoanedA->id, $notLoanedB->id],
         ]);
 
-        $response->assertOk();
-        $response->assertJsonPath('succeeded_count', 1);
-        $response->assertJsonPath('failed_count', 1);
+        $response->assertUnprocessable();
+        $response->assertJsonPath('code', 'bulk_operation_rejected');
+        $failedIds = array_column($response->json('items'), 'id');
+        $this->assertEqualsCanonicalizing([$notLoanedA->id, $notLoanedB->id], $failedIds);
+        $this->assertNotEmpty($response->json('errors')["items.{$notLoanedA->id}"]);
 
-        $results = $response->json('results');
-        $this->assertTrue(collect($results)->firstWhere('asset_id', $loanedAsset->id)['success']);
-        $this->assertFalse(collect($results)->firstWhere('asset_id', $notLoanedAsset->id)['success']);
+        // 返却できた側も確定しない。
+        $this->assertSame($eventCountBefore, DB::table('stored_events')->count());
+        $this->assertSame('loaned', $loanedAsset->refresh()->lending_status);
+    }
+
+    public function test_bulk_rejects_duplicate_and_too_many_asset_ids(): void
+    {
+        $employee = User::factory()->create();
+        $id = (string) Str::uuid();
+
+        $this->actingAs($employee)->postJson('/api/assets/bulk', [
+            'operation' => 'self_return', 'asset_ids' => [$id, $id],
+        ])->assertUnprocessable()->assertJsonValidationErrors(['asset_ids.0', 'asset_ids.1']);
+
+        $this->actingAs($employee)->postJson('/api/assets/bulk', [
+            'operation' => 'self_return',
+            'asset_ids' => array_map(fn () => (string) Str::uuid(), range(1, 201)),
+        ])->assertUnprocessable()->assertJsonValidationErrors(['asset_ids']);
+    }
+
+    public function test_bulk_relocate_moves_every_asset_in_one_operation(): void
+    {
+        $manager = User::factory()->create();
+        $this->grantAssetManage($manager);
+        $assets = [];
+        foreach (['モニター1', 'モニター2'] as $name) {
+            $asset = $this->bus()->dispatch(new RegisterAsset(
+                assetNo: 'EQ-'.uniqid(), name: $name, category: 'ディスプレイ', serialNumber: null,
+                managementType: AssetManagementType::INSTALLATION, lendingMethod: null, defaultLocationText: null,
+                notes: null, registeredByUserId: $manager->id,
+            ));
+            $this->bus()->dispatch(new InstallAsset($asset->id, '第1会議室', $manager->id));
+            $assets[] = $asset;
+        }
+        [$a, $b] = $assets;
+
+        $bus = $this->recordCommands();
+        $this->actingAs($manager)->postJson('/api/assets/bulk', [
+            'operation' => 'relocate', 'asset_ids' => [$a->id, $b->id], 'location_text' => '5階倉庫',
+        ])->assertOk()->assertJsonCount(2, 'data');
+        $this->assertSingleTopLevelCommand($bus, ApplyAssetBulkOperation::class);
+        $this->assertSame('5階倉庫', $a->fresh()->currentPlacement()->location_text);
+        $this->assertSame('5階倉庫', $b->fresh()->currentPlacement()->location_text);
     }
 
     public function test_bulk_backoffice_lend_requires_asset_manage_permission(): void

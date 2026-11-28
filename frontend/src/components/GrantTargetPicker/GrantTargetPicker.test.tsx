@@ -54,9 +54,12 @@ describe('GrantTargetPicker', () => {
     await userEvent.click(await screen.findByRole('option', { name: '対象太郎(taro@example.com)' }))
 
     await waitFor(() =>
-      expect(onResolvedChange).toHaveBeenLastCalledWith(['user-1'], 'individual', {
-        'user-1': '対象太郎(taro@example.com)',
-      }),
+      expect(onResolvedChange).toHaveBeenLastCalledWith(
+        ['user-1'],
+        'individual',
+        { 'user-1': '対象太郎(taro@example.com)' },
+        undefined,
+      ),
     )
   })
 
@@ -67,12 +70,18 @@ describe('GrantTargetPicker', () => {
     await userEvent.selectOptions(await screen.findByRole('combobox'), 'group-1')
 
     await waitFor(() =>
-      expect(onResolvedChange).toHaveBeenLastCalledWith(['member-1', 'member-2'], 'group', {
-        'member-1': '営業一郎(ichiro@example.com)',
-        'member-2': '営業二郎(jiro@example.com)',
-      }),
+      expect(onResolvedChange).toHaveBeenLastCalledWith(
+        ['member-1', 'member-2'],
+        'group',
+        {
+          'member-1': '営業一郎(ichiro@example.com)',
+          'member-2': '営業二郎(jiro@example.com)',
+        },
+        'group-1',
+      ),
     )
-    expect(screen.getByText('このグループの2名に付与されます')).toBeInTheDocument()
+    expect(screen.getByText('このグループの所属メンバーが対象です(現在2名)')).toBeInTheDocument()
+    expect(screen.getByText(/付与は、実行した時点の直接の所属メンバーに行います。退職者は対象から除かれます。/)).toBeInTheDocument()
   })
 
   it('warns when the selected group has no members', async () => {
@@ -81,8 +90,22 @@ describe('GrantTargetPicker', () => {
     await userEvent.click(screen.getByRole('button', { name: 'グループを指定' }))
     await userEvent.selectOptions(await screen.findByRole('combobox'), 'group-1')
 
-    await waitFor(() => expect(onResolvedChange).toHaveBeenLastCalledWith([], 'group', {}))
+    await waitFor(() => expect(onResolvedChange).toHaveBeenLastCalledWith([], 'group', {}, 'group-1'))
     expect(await screen.findByText(/所属メンバーがいません/)).toBeInTheDocument()
+  })
+
+  it('hides the group mode when allowGroup is false', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(groupsApi, 'fetchGroups').mockResolvedValue(groups)
+    render(
+      <QueryClientProvider client={queryClient}>
+        <GrantTargetPicker idPrefix="grant" onResolvedChange={vi.fn()} allowGroup={false} />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByRole('button', { name: '個人を指定' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'グループを指定' })).not.toBeInTheDocument()
   })
 
   function renderNamed(props: Partial<GrantTargetPickerProps> = {}) {
@@ -120,9 +143,12 @@ describe('GrantTargetPicker', () => {
 
     expect(await screen.findByRole('button', { name: '対象太郎(taro@example.com)を選択解除' })).toBeInTheDocument()
     await waitFor(() =>
-      expect(onResolvedChange).toHaveBeenLastCalledWith(['user-1'], 'individual', {
-        'user-1': '対象太郎(taro@example.com)',
-      }),
+      expect(onResolvedChange).toHaveBeenLastCalledWith(
+        ['user-1'],
+        'individual',
+        { 'user-1': '対象太郎(taro@example.com)' },
+        undefined,
+      ),
     )
   })
 })

@@ -14,5 +14,10 @@ class StartDeviceAdminSessionBootstrap implements Command
     public function __construct(
         public readonly string $deviceId,
         public readonly ?string $targetAdminUserId,
+        // 同時に登録する認証キー(入口が作るID。生の値はHandlerでハッシュにし、イベントにはハッシュだけを入れる)
+        public readonly ?string $authenticationKeyId = null,
+        public readonly ?string $keyType = null,
+        public readonly ?string $displayName = null,
+        public readonly ?string $rawKeyValue = null,
     ) {}
 }

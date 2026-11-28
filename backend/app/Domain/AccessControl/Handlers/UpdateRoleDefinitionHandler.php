@@ -4,7 +4,6 @@ namespace App\Domain\AccessControl\Handlers;
 
 use App\Domain\AccessControl\Aggregates\RoleAggregate;
 use App\Domain\AccessControl\Commands\UpdateRoleDefinition;
-use App\Domain\AccessControl\Services\GroupFeatureSyncService;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -23,8 +22,6 @@ use Ramsey\Uuid\Uuid;
  */
 class UpdateRoleDefinitionHandler implements CommandHandler
 {
-    public function __construct(private readonly GroupFeatureSyncService $groupFeatureSync) {}
-
     public function handle(Command $c): string
     {
         assert($c instanceof UpdateRoleDefinition);
@@ -92,10 +89,6 @@ class UpdateRoleDefinitionHandler implements CommandHandler
             $recordBasic();
         }
         $aggregate->persist();
-
-        if ($featureIds !== null) {
-            $this->groupFeatureSync->syncGroupsForRole($c->roleId, $c->actorUserId);
-        }
 
         return (string) $c->roleId;
     }

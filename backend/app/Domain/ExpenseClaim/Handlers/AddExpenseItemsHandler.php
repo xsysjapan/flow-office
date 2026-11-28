@@ -66,7 +66,7 @@ class AddExpenseItemsHandler implements CommandHandler
                 throw ValidationException::withMessages(["items.{$index}.attributes" => $e->getMessage()]);
             }
 
-            $itemId = (string) Str::uuid();
+            $itemId = $input['item_id'] ?? (string) Str::uuid();
             $itemIds[] = $itemId;
 
             $aggregate->addItem(
@@ -82,6 +82,7 @@ class AddExpenseItemsHandler implements CommandHandler
                 commutingDeductionAmount: $input['commuting_deduction_amount'] ?? 0,
                 paymentBearer: $input['payment_bearer'] ?? ExpenseItem::PAYMENT_BEARER_EMPLOYEE,
                 attributes: $attributes,
+                attachments: $input['attachments'] ?? [],
             );
         }
 

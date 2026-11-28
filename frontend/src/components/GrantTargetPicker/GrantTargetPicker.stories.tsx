@@ -29,7 +29,7 @@ const members: GroupMember[] = [
   { user_id: 'member-2', name: '営業二郎', email: 'jiro@example.com', membership_kind: 'primary', is_primary: true },
 ]
 
-function withSeeded() {
+function withSeeded(allowGroup = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['users', 'search', '', 100, ''], paginatedUsers)
   queryClient.setQueryData(['groups', 'list'], groups)
@@ -38,7 +38,7 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <GrantTargetPicker idPrefix="grant" onResolvedChange={fn()} />
+        <GrantTargetPicker idPrefix="grant" onResolvedChange={fn()} allowGroup={allowGroup} />
       </QueryClientProvider>
     )
   }
@@ -55,4 +55,10 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   args: { idPrefix: 'grant', onResolvedChange: fn() },
   render: withSeeded(),
+}
+
+/** 代休: グループの指定を出さない(個人の指定だけ)。 */
+export const IndividualOnly: Story = {
+  args: { idPrefix: 'grant', onResolvedChange: fn(), allowGroup: false },
+  render: withSeeded(false),
 }

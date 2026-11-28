@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\EventSourcing\ManualGrantId;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
@@ -11,7 +12,9 @@ use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use App\Domain\PaidLeaveAccount\Commands\ChangePaidLeaveGrantAmount;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeaveToUsers;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
+use App\Domain\UserManagement\Services\GroupMemberExpander;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -464,7 +467,7 @@ class PaidLeaveController extends Controller
         operationId: 'paidLeave.grants.store',
         summary: '有給を手動付与する',
         tags: ['有給休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'granted_on', 'expires_on', 'granted_days'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date'), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'granted_on', 'expires_on', 'granted_days'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date'), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true), new OA\Property(property: 'request_id', type: 'string', format: 'uuid', nullable: true, description: '再送を二重付与にしないための識別子(付与IDを request_id と user_id から決める)')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function grant(Request $request, CommandBus $commandBus): JsonResponse
@@ -475,7 +478,11 @@ class PaidLeaveController extends Controller
             'expires_on' => ['required', 'date', 'after:granted_on'],
             'granted_days' => ['required', 'numeric', 'min:0.5'],
             'grant_reason' => ['nullable', 'string'],
+            'request_id' => ['nullable', 'uuid'],
         ]);
+
+        // request_idがあれば付与IDを request_id と利用者IDから決め、同じ request_id の再送は何もせず成功にする。
+        $requestId = $data['request_id'] ?? null;
 
         $grantId = $commandBus->dispatch(new GrantPaidLeave(
             userId: $data['user_id'],
@@ -483,11 +490,56 @@ class PaidLeaveController extends Controller
             expiresOn: $data['expires_on'],
             grantedDays: (float) $data['granted_days'],
             grantReason: $data['grant_reason'] ?? null,
+            grantId: $requestId !== null ? ManualGrantId::for('paid_leave', $requestId, $data['user_id']) : null,
+            idempotent: $requestId !== null,
         ));
 
         $grant = PaidLeaveGrant::query()->findOrFail($grantId);
 
         return (new PaidLeaveGrantResource($grant))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 有給を複数の利用者へ手動付与する(1つのCommand。全部か無しか: 1人でも付与できなければ何も記録せず、
+     * 422(code: bulk_operation_rejected)で失敗した利用者と理由を返す)。対象は`user_ids`か`group_id`(実行した時点の
+     * 直接の所属のメンバー。退職者を除く。`group.view`を要する)。同じ`request_id`の再送は二重にならず成功する。
+     */
+    #[OA\Post(
+        path: '/paid-leave/grants/bulk',
+        operationId: 'paidLeave.grants.bulkStore',
+        summary: '有給を複数の利用者へ手動付与する(全部か無しか)',
+        tags: ['有給休暇'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['request_id', 'granted_on', 'expires_on', 'granted_days'], properties: [new OA\Property(property: 'request_id', type: 'string', format: 'uuid'), new OA\Property(property: 'user_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), new OA\Property(property: 'group_id', type: 'string', format: 'uuid'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date'), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response(全員に付与)'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error/付与できない利用者がいる(何も記録しない。code: bulk_operation_rejected)')],
+    )]
+    public function bulkGrant(Request $request, CommandBus $commandBus, GroupMemberExpander $groupMembers): JsonResponse
+    {
+        $data = $request->validate([
+            'request_id' => ['required', 'uuid'],
+            'user_ids' => ['required_without:group_id', 'prohibits:group_id', 'array', 'min:1', 'max:500'],
+            'user_ids.*' => ['string', 'distinct', 'exists:users,id'],
+            'group_id' => ['required_without:user_ids', 'string', 'exists:groups,id'],
+            'granted_on' => ['required', 'date'],
+            'expires_on' => ['required', 'date', 'after:granted_on'],
+            'granted_days' => ['required', 'numeric', 'min:0.5'],
+            'grant_reason' => ['nullable', 'string'],
+        ]);
+
+        $labels = $groupMembers->resolveTargets($request->user(), $data['group_id'] ?? null, $data['user_ids'] ?? null, 500);
+
+        $commandBus->dispatch(new GrantPaidLeaveToUsers(
+            requestId: $data['request_id'],
+            userIds: array_keys($labels),
+            grantedOn: $data['granted_on'],
+            expiresOn: $data['expires_on'],
+            grantedDays: (float) $data['granted_days'],
+            grantReason: $data['grant_reason'] ?? null,
+            userLabels: $labels,
+        ));
+
+        return response()->json([
+            'data' => array_map(fn (string $userId) => ['user_id' => $userId, 'user_name' => $labels[$userId]], array_keys($labels)),
+        ]);
     }
 
     /**

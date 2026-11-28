@@ -17,5 +17,7 @@ class GrantCompensatoryLeave implements Command
         public readonly string $grantId,
         public readonly ?string $expiresOn = null,
         public readonly ?string $grantReason = null,
+        /** true: 同じ付与IDの付与が既にあれば何もせず正常終了する(手動付与の再送を冪等にする)。 */
+        public readonly bool $idempotent = false,
     ) {}
 }

@@ -172,7 +172,7 @@ describe("GroupDetailPage", () => {
     expect(await screen.findByRole("heading", { name: "新規グループ" })).toBeInTheDocument();
   });
 
-  it("assigns the selected initial role to the newly created group", async () => {
+  it("sends the selected initial role in the single create request", async () => {
     const newGroup: ManagedGroup = {
       ...parent,
       id: "group-new",
@@ -185,9 +185,9 @@ describe("GroupDetailPage", () => {
     vi.spyOn(userManagementApi, "fetchGroupTypes").mockResolvedValue([
       groupType,
     ]);
-    vi.spyOn(userManagementApi, "createGroup").mockResolvedValue({
-      id: "group-new",
-    });
+    const createGroupSpy = vi
+      .spyOn(userManagementApi, "createGroup")
+      .mockResolvedValue({ id: "group-new" });
     vi.spyOn(accessControlApi, "fetchAccessRoles").mockResolvedValue([role]);
     vi.spyOn(accessControlApi, "fetchRoleAssignments").mockResolvedValue([]);
     const createAssignmentSpy = vi
@@ -221,16 +221,58 @@ describe("GroupDetailPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "作成" }));
 
     await waitFor(() =>
-      expect(createAssignmentSpy).toHaveBeenCalledWith(
+      expect(createGroupSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          subject_type: "group",
-          subject_id: "group-new",
-          role_id: 3,
-          scope_type: "global",
+          name: "新規グループ",
+          initial_role_id: 3,
         }),
         expect.anything(),
       ),
     );
+    expect(createAssignmentSpy).not.toHaveBeenCalled();
+  });
+
+  it("shows a rejected initial role under its field and stays on the page", async () => {
+    vi.spyOn(userManagementApi, "fetchManagedGroups").mockResolvedValue([
+      parent,
+      group,
+    ]);
+    vi.spyOn(userManagementApi, "fetchGroupTypes").mockResolvedValue([
+      groupType,
+    ]);
+    vi.spyOn(userManagementApi, "createGroup").mockRejectedValue(
+      new ApiError(422, "入力内容を確認してください。", {
+        initial_role_id: ["有効なRoleを指定してください。"],
+      }),
+    );
+    vi.spyOn(accessControlApi, "fetchAccessRoles").mockResolvedValue([role]);
+    vi.spyOn(accessControlApi, "fetchRoleAssignments").mockResolvedValue([]);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/admin/groups/new"]}>
+          <Routes>
+            <Route path="/admin/groups/:id" element={<GroupDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "基本情報" })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("グループ種別"), "1");
+    await userEvent.type(screen.getByLabelText("名称"), "新規グループ");
+    await userEvent.selectOptions(
+      screen.getByLabelText("作成時に割り当てるRole(任意)"),
+      "3",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "作成" }));
+
+    expect(
+      await screen.findByText("有効なRoleを指定してください。"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "基本情報" })).toBeInTheDocument();
   });
 
   it("updates individual fields including the parent group", async () => {

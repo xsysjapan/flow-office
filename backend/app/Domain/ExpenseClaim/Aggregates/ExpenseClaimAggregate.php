@@ -53,6 +53,7 @@ class ExpenseClaimAggregate extends AggregateRoot
         int $commutingDeductionAmount,
         string $paymentBearer,
         ?array $attributes,
+        array $attachments = [],
     ): self {
         $this->recordThat(new ExpenseItemAdded(
             itemId: $itemId,
@@ -67,6 +68,7 @@ class ExpenseClaimAggregate extends AggregateRoot
             commutingDeductionAmount: $commutingDeductionAmount,
             paymentBearer: $paymentBearer,
             attributes: $attributes,
+            attachments: $attachments,
         ));
 
         return $this;

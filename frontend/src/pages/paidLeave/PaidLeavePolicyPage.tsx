@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useForwardState } from '../../navigation/backState'
 import { Badge } from '../../components/Badge/Badge'
+import { BulkActionDialog, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
@@ -25,14 +26,13 @@ import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet'
 import { useQueryClient } from '@tanstack/react-query'
-import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
 import {
   useAdminCancelPaidLeaveRequest,
   useCreatePaidLeaveGrantPolicyVersion,
   useCreatePaidLeaveGrantRule,
   useCreatePaidLeaveProportionalGrantPolicyVersion,
   useDeletePaidLeaveGrantRule,
-  useGrantPaidLeave,
+  useBulkGrantPaidLeave,
   usePaidLeaveGrantPolicies,
   usePaidLeaveGrantRules,
   usePaidLeaveGrantRuleTargetUsers,
@@ -696,75 +696,53 @@ function PaidLeaveGrantRulesCard() {
   )
 }
 
-function ResultSummary({ results, labels }: { results: BulkGrantResult[]; labels: Record<string, string> }) {
-  const failures = results.filter((r) => !r.success)
-  return (
-    <div className="mt-4 rounded-md border border-border p-3 text-sm">
-      <p className="font-medium text-foreground">
-        {results.length - failures.length}件成功 / {failures.length}件失敗
-      </p>
-      {failures.length > 0 && (
-        <ul className="mt-2 list-disc pl-4 text-destructive">
-          {failures.map((failure) => (
-            <li key={failure.userId}>
-              {labels[failure.userId] ?? failure.userId}: {failure.message}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
 function ManualGrantCard() {
   const [targetIds, setTargetIds] = useState<string[]>([])
   const [targetMode, setTargetMode] = useState<GrantTargetMode>('individual')
+  const [targetGroupId, setTargetGroupId] = useState<string | undefined>(undefined)
   const [targetLabels, setTargetLabels] = useState<Record<string, string>>({})
   const [grantedOn, setGrantedOn] = useState('')
   const [expiresOn, setExpiresOn] = useState('')
   const [grantedDays, setGrantedDays] = useState('')
   const [grantReason, setGrantReason] = useState('')
-  const [results, setResults] = useState<BulkGrantResult[] | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  // 対象選択(GrantTargetPicker)は、一部失敗があったときだけ失敗分だけに絞ってリセットする。
-  // 全件成功時は選択を保ったままにし、直後に付与状況が表示され続けるようにする
-  // (resetSignalは値の変化だけを見るため、変えたくない場合はstateを更新しない)。
-  const [resetSignal, setResetSignal] = useState<BulkGrantResult[] | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  // 再送を二重付与にしない識別子。確認ダイアログを開くたびに作り、同じダイアログでの再実行(通信エラー後など)では同じ値を送る。
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID())
 
-  const grantPaidLeave = useGrantPaidLeave()
+  const bulkGrant = useBulkGrantPaidLeave()
   const revokeGrant = useRevokePaidLeaveGrant()
   const changeGrantedDays = useChangePaidLeaveGrantedDays()
 
   const singleTargetUserId = targetMode === 'individual' && targetIds.length === 1 ? targetIds[0] : undefined
   const { data: userGrants, isLoading: isLoadingUserGrants } = usePaidLeaveGrantsForUser(singleTargetUserId ?? '')
 
-  const failedIds = results?.filter((r) => !r.success).map((r) => r.userId) ?? []
+  const isGroupTarget = targetMode === 'group'
+  const hasTarget = isGroupTarget ? targetGroupId !== undefined && targetIds.length > 0 : targetIds.length > 0
+  const targetSummary = isGroupTarget ? 'グループの所属メンバー' : `${targetIds.length}名`
 
-  const handleGrant = async () => {
-    if (targetIds.length === 0 || !grantedOn || !expiresOn || !grantedDays) return
-    setIsSubmitting(true)
-    setResults(null)
-    const outcomes = await runBulkGrant(targetIds, (userId) =>
-      grantPaidLeave.mutateAsync({
-        user_id: userId,
-        granted_on: grantedOn,
-        expires_on: expiresOn,
-        granted_days: Number(grantedDays),
-        grant_reason: grantReason || undefined,
-      }),
-    )
-    setIsSubmitting(false)
-    setResults(outcomes)
-    const successCount = outcomes.filter((o) => o.success).length
-    if (successCount > 0) notify.success(`${successCount}名に有給を付与しました`)
-    if (outcomes.every((o) => o.success)) {
-      setGrantedOn('')
-      setExpiresOn('')
-      setGrantedDays('')
-      setGrantReason('')
-    } else {
-      setResetSignal(outcomes)
-    }
+  const openGrantDialog = () => {
+    setRequestId(crypto.randomUUID())
+    setDialogOpen(true)
+  }
+
+  /** 全部か無しか: 一括のAPIを1回呼ぶ。1人でも付与できないと422で何も付与されず、ダイアログが失敗の一覧を出して選択を残す。 */
+  async function executeGrant(): Promise<BulkActionResult> {
+    const response = await bulkGrant.mutateAsync({
+      request_id: requestId,
+      ...(isGroupTarget && targetGroupId !== undefined ? { group_id: targetGroupId } : { user_ids: targetIds }),
+      granted_on: grantedOn,
+      expires_on: expiresOn,
+      granted_days: Number(grantedDays),
+      grant_reason: grantReason || undefined,
+    })
+    return { succeededIds: response.data.map((item) => item.user_id), failures: [] }
+  }
+
+  const clearForm = () => {
+    setGrantedOn('')
+    setExpiresOn('')
+    setGrantedDays('')
+    setGrantReason('')
   }
 
   return (
@@ -772,13 +750,12 @@ function ManualGrantCard() {
       <FormField label="付与対象" htmlFor="grant-target-users" required>
         <GrantTargetPicker
           idPrefix="grant-target"
-          onResolvedChange={(ids, mode, labels) => {
+          onResolvedChange={(ids, mode, labels, groupId) => {
             setTargetMode(mode)
             setTargetIds(ids)
             setTargetLabels(labels)
+            setTargetGroupId(groupId)
           }}
-          resetSignal={resetSignal}
-          resetIndividualIds={failedIds}
         />
       </FormField>
 
@@ -811,14 +788,10 @@ function ManualGrantCard() {
       </div>
 
       <div className="mt-4 flex flex-col items-start gap-1">
-        <Button
-          isLoading={isSubmitting}
-          disabled={targetIds.length === 0 || !grantedOn || !expiresOn || !grantedDays}
-          onClick={() => void handleGrant()}
-        >
-          {targetIds.length}名に付与する
+        <Button disabled={!hasTarget || !grantedOn || !expiresOn || !grantedDays} onClick={openGrantDialog}>
+          {isGroupTarget ? 'グループの所属メンバーに付与する' : `${targetIds.length}名に付与する`}
         </Button>
-        {targetIds.length === 0 ? (
+        {!hasTarget ? (
           <p className="text-xs text-muted-foreground">付与対象を選択してください。</p>
         ) : !grantedOn ? (
           <p className="text-xs text-muted-foreground">付与日を選択してください。</p>
@@ -829,7 +802,24 @@ function ManualGrantCard() {
         ) : null}
       </div>
 
-      {results && <ResultSummary results={results} labels={targetLabels} />}
+      <BulkActionDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={`${targetSummary}に有給を付与しますか?`}
+        summary={`${targetSummary}に、付与日${grantedOn}・失効日${expiresOn}で${grantedDays}日の有給を付与します。`}
+        description={
+          isGroupTarget
+            ? '付与は、実行した時点のグループの直接の所属メンバー(退職者を除く)に行います。1人でも付与できないと、誰にも付与しません。'
+            : '1人でも付与できないと、誰にも付与しません。'
+        }
+        confirmLabel="付与する"
+        resultTitle="付与の結果"
+        resultMode="allOrNothing"
+        itemLabels={targetLabels}
+        onExecute={executeGrant}
+        onSucceeded={clearForm}
+        successMessage={(count) => `${count}名に有給を付与しました`}
+      />
 
       {singleTargetUserId !== undefined && (
         <div className="mt-6">

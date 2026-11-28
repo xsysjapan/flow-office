@@ -1,13 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import * as compensatoryLeaveApi from '../../api/compensatoryLeave'
 import * as usersApi from '../../api/users'
 import type { CompensatoryLeaveGrant, CompensatoryLeaveUsage, Paginated, User } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { CompensatoryLeaveAdminPage } from './CompensatoryLeaveAdminPage'
+import { BULK_REJECTED_NOTICE } from '../../components/BulkActionDialog/BulkActionDialog'
 import { notify } from '../../lib/notify'
 
 vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn() } }))
@@ -39,7 +41,14 @@ describe('CompensatoryLeaveAdminPage', () => {
     vi.mocked(notify.success).mockClear()
   })
 
-  it('grants compensatory leave for the specified work date', async () => {
+  async function fillForm() {
+    await userEvent.click(screen.getByLabelText('付与対象'))
+    await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await pickDate(userEvent.setup(), '休日出勤の実績日', '2026-08-01')
+  }
+
+  function mockUsers() {
     const paginatedUsers: Paginated<User> = {
       data: [targetUser],
       meta: { current_page: 1, last_page: 1, total: 1 },
@@ -47,42 +56,60 @@ describe('CompensatoryLeaveAdminPage', () => {
     }
     vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(compensatoryLeaveApi, 'fetchCompensatoryLeaveGrantsForUser').mockResolvedValue([])
-    vi.spyOn(compensatoryLeaveApi, 'grantCompensatoryLeave').mockResolvedValue({
-      id: 'grant-1',
-      user_id: '11111111-1111-4111-8111-111111111111',
-      source: 'manual',
-      attendance_day_id: 'day-1',
-      work_date: '2026-08-01',
-      status: 'confirmed',
-      granted_days: 1,
-      granted_minutes: null,
-      used_days: 0,
-      used_minutes: null,
-      remaining_days: 1,
-      remaining_minutes: null,
-      confirmed_at: '2026-08-16T00:00:00Z',
-      expires_on: null,
-      grant_reason: null,
-    } as CompensatoryLeaveGrant)
+  }
+
+  it('grants compensatory leave in one bulk call for the specified work date after the confirmation', async () => {
+    mockUsers()
+    const bulkSpy = vi.spyOn(compensatoryLeaveApi, 'bulkGrantCompensatoryLeave').mockResolvedValue({
+      data: [{ user_id: '11111111-1111-4111-8111-111111111111', user_name: '対象社員' }],
+    })
 
     renderPage()
-
-    await userEvent.click(screen.getByLabelText('付与対象'))
-    await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
-    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
-    await pickDate(userEvent.setup(), '休日出勤の実績日', '2026-08-01')
+    await fillForm()
     await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(bulkSpy).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getByRole('button', { name: '付与する' }))
 
     await waitFor(() =>
-      expect(compensatoryLeaveApi.grantCompensatoryLeave).toHaveBeenCalledWith({
-        user_id: '11111111-1111-4111-8111-111111111111',
+      expect(bulkSpy).toHaveBeenCalledWith({
+        request_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        user_ids: ['11111111-1111-4111-8111-111111111111'],
         work_date: '2026-08-01',
         expires_on: undefined,
         grant_reason: undefined,
       }),
     )
-    expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
+    expect(bulkSpy).toHaveBeenCalledTimes(1)
     expect(notify.success).toHaveBeenCalledWith('1名に代休を付与しました')
+  })
+
+  it('shows the rejected users with the notice and keeps the selection when the bulk grant is rejected', async () => {
+    mockUsers()
+    vi.spyOn(compensatoryLeaveApi, 'bulkGrantCompensatoryLeave').mockRejectedValue(
+      new ApiError(422, '選んだ対象のうち、処理できないものがあります。', {}, 'bulk_operation_rejected', [
+        { id: '11111111-1111-4111-8111-111111111111', label: '対象社員', message: '指定日の勤怠実績が見つからないため、代休を付与できません。' },
+      ]),
+    )
+
+    renderPage()
+    await fillForm()
+    await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: '付与する' }))
+
+    expect(await within(dialog).findByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
+    expect(within(dialog).getByText('対象社員: 指定日の勤怠実績が見つからないため、代休を付与できません。')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getAllByRole('button', { name: '閉じる' }).at(-1)!)
+    expect(screen.getByRole('button', { name: '1名に付与する' })).toBeEnabled()
+  })
+
+  it('does not offer the group mode (individual selection only)', () => {
+    mockUsers()
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: 'グループを指定' })).not.toBeInTheDocument()
   })
 
   it('shows the selected users usage records from the ?userId= URL query param', async () => {

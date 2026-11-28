@@ -8,6 +8,10 @@ use App\Domain\EventSourcing\Contracts\Command;
  * UC-X004〜UC-X008: 経費明細を1件追加する。表形式一括入力・移動経路一括入力・テンプレートからの
  * まとめて追加はいずれもこのコマンドを複数回発行する形に統一する
  * (docs/30-usecases-expense.md「実装上のポイント」)。
+ *
+ * `itemId`・`attachments`は入口が先に決めた明細のIDと、保存済みの添付の参照
+ * (attachmentId・storedPath・fileName・mimeType・fileSize・uploadedByUserId の配列の一覧)。
+ * 添付の記録は添付の文脈のReactorが行う。
  */
 class AddExpenseItem implements Command
 {
@@ -25,5 +29,7 @@ class AddExpenseItem implements Command
         public readonly int $commutingDeductionAmount = 0,
         public readonly ?string $paymentBearer = null,
         public readonly ?array $attributes = null,
+        public readonly ?string $itemId = null,
+        public readonly array $attachments = [],
     ) {}
 }

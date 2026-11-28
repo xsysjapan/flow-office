@@ -174,6 +174,8 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/workflow-requests/to-approve', [WorkflowRequestController::class, 'indexToApprove'])->middleware('permission:approval.execute');
     Route::get('/workflow-requests/{workflowRequest}', [WorkflowRequestController::class, 'show']);
     Route::post('/workflow-requests', [WorkflowRequestController::class, 'store']);
+    Route::post('/workflow-requests/bulk-cancel', [WorkflowRequestController::class, 'bulkCancel']);
+    Route::post('/workflow-requests/bulk-approve', [WorkflowRequestController::class, 'bulkApprove'])->middleware('permission:approval.execute');
     Route::post('/workflow-requests/{workflowRequest}/submit', [WorkflowRequestController::class, 'submit']);
     Route::post('/workflow-requests/{workflowRequest}/approve', [WorkflowRequestController::class, 'approve'])->middleware('permission:approval.execute');
     Route::post('/workflow-requests/{workflowRequest}/return', [WorkflowRequestController::class, 'return'])->middleware('permission:approval.execute');
@@ -260,6 +262,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::middleware(['feature:backoffice.tasks', 'permission:backoffice_task.execute,any'])->group(function () {
         Route::get('/backoffice-tasks', [BackOfficeTaskController::class, 'index']);
         Route::post('/backoffice-tasks/bulk-complete', [BackOfficeTaskController::class, 'bulkComplete']);
+        Route::post('/backoffice-tasks/bulk-assign', [BackOfficeTaskController::class, 'bulkAssign']);
         Route::get('/backoffice-tasks/{backOfficeTask}', [BackOfficeTaskController::class, 'show']);
         Route::post('/backoffice-tasks/{backOfficeTask}/assign', [BackOfficeTaskController::class, 'assign']);
         Route::post('/backoffice-tasks/{backOfficeTask}/status', [BackOfficeTaskController::class, 'changeStatus']);
@@ -438,6 +441,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/paid-leave/history/user/{userId}', [PaidLeaveController::class, 'historyForUser']);
         Route::get('/paid-leave/usages/user/{userId}', [PaidLeaveController::class, 'usagesForUser']);
         Route::post('/paid-leave/grants', [PaidLeaveController::class, 'grant']);
+        Route::post('/paid-leave/grants/bulk', [PaidLeaveController::class, 'bulkGrant']);
         Route::put('/paid-leave/grants/{grant}/granted-days', [PaidLeaveController::class, 'changeGrantedDays']);
         Route::post('/paid-leave/grants/{grant}/revoke', [PaidLeaveController::class, 'revoke']);
         Route::post('/paid-leave/requests/{paidLeaveRequest}/admin-cancel', [PaidLeaveController::class, 'adminCancelRequest']);
@@ -478,6 +482,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/special-leave/history/user/{userId}', [SpecialLeaveController::class, 'historyForUser']);
         Route::get('/special-leave/usages/user/{userId}', [SpecialLeaveController::class, 'usagesForUser']);
         Route::post('/special-leave/grants', [SpecialLeaveController::class, 'grant']);
+        Route::post('/special-leave/grants/bulk', [SpecialLeaveController::class, 'bulkGrant']);
         Route::put('/special-leave/grants/{grant}/granted-days', [SpecialLeaveController::class, 'changeGrantedDays']);
         Route::post('/special-leave/grants/{grant}/revoke', [SpecialLeaveController::class, 'revoke']);
         Route::post('/special-leave/requests/{specialLeaveRequest}/admin-cancel', [SpecialLeaveController::class, 'adminCancelRequest']);
@@ -501,6 +506,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/compensatory-leave/history/user/{userId}', [CompensatoryLeaveController::class, 'historyForUser']);
         Route::get('/compensatory-leave/usages/user/{userId}', [CompensatoryLeaveController::class, 'usagesForUser']);
         Route::post('/compensatory-leave/grants', [CompensatoryLeaveController::class, 'grant']);
+        Route::post('/compensatory-leave/grants/bulk', [CompensatoryLeaveController::class, 'bulkGrant']);
         Route::post('/compensatory-leave/grants/{grant}/revoke', [CompensatoryLeaveController::class, 'revoke']);
         Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/admin-cancel', [CompensatoryLeaveController::class, 'adminCancelRequest']);
     });

@@ -10,9 +10,11 @@ import {
   fetchMyCompensatoryLeaveGrants,
   fetchMyCompensatoryLeaveHistory,
   fetchMyCompensatoryLeaveRequests,
+  bulkGrantCompensatoryLeave,
   grantCompensatoryLeave,
   revokeCompensatoryLeaveGrant,
   type CreateCompensatoryLeaveRequestInput,
+  type BulkGrantCompensatoryLeaveInput,
   type GrantCompensatoryLeaveInput,
   type FetchMyCompensatoryLeaveRequestsParams,
 } from '../api/compensatoryLeave'
@@ -39,6 +41,18 @@ export function useGrantCompensatoryLeave() {
     mutationFn: (input: GrantCompensatoryLeaveInput) => grantCompensatoryLeave(input),
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: ['compensatory-leave', 'grants', 'user', input.user_id] })
+    },
+  })
+}
+
+/** 代休の手動付与の一括(全部か無しか)。付与一覧を無効化する。 */
+export function useBulkGrantCompensatoryLeave() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: BulkGrantCompensatoryLeaveInput) => bulkGrantCompensatoryLeave(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['compensatory-leave', 'grants'] })
     },
   })
 }

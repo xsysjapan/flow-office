@@ -23,5 +23,7 @@ class ExpenseItemAdded extends ShouldBeStored
         public readonly int $commutingDeductionAmount,
         public readonly string $paymentBearer,
         public readonly ?array $attributes,
+        /** 一緒に追加する添付の参照(添付の文脈のReactorが記録する)。旧イベントは空 */
+        public readonly array $attachments = [],
     ) {}
 }

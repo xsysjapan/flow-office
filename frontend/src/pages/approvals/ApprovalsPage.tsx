@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApprovalDetailPanel } from '../../components/ApprovalDetailPanel/ApprovalDetailPanel'
 import { Badge } from '../../components/Badge/Badge'
 import { BulkActionBar } from '../../components/BulkActionBar/BulkActionBar'
-import { BulkActionDialog, type BulkActionFailure, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
+import { BulkActionDialog, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
@@ -20,12 +20,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
-import { ApiError } from '../../api/client'
-import { fetchWorkflowRequest, type FetchWorkflowRequestsToApproveOptions } from '../../api/workflowRequests'
+import type { FetchWorkflowRequestsToApproveOptions } from '../../api/workflowRequests'
 import { useSearchParamsKeepingBackState } from '../../navigation/backState'
 import { notify } from '../../lib/notify'
 import { useApproveApprovalItem, useReturnApprovalItem } from '../../hooks/useApprovals'
-import { useWorkflowRequest, useWorkflowRequestsToApprove } from '../../hooks/useWorkflowRequests'
+import { useBulkApproveWorkflowRequests, useWorkflowRequest, useWorkflowRequestsToApprove } from '../../hooks/useWorkflowRequests'
 import { isValidPageParam } from '../../utils/searchParamValidators'
 import { attendanceMonthStatusLabel, expenseClaimStatusLabel, workflowRequestStatusLabel } from '../../utils/statusLabels'
 
@@ -194,6 +193,7 @@ export function ApprovalsPage() {
   } = useWorkflowRequest(selectedId ?? '')
   const approveItem = useApproveApprovalItem()
   const returnItem = useReturnApprovalItem()
+  const bulkApprove = useBulkApproveWorkflowRequests()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
@@ -258,32 +258,12 @@ export function ApprovalsPage() {
     })
   }
 
-  /** 選択した各申請の実データ(subject)を個別に取得したうえで、一覧のsubject_summaryだけでは
-   *  判別できない対象ドメインの承認API(useApproveApprovalItem)へ1件ずつ振り分ける。
-   *  バックエンドに一括承認エンドポイントは存在しないため、Promise.allSettledでのクライアント側
-   *  ファンアウトで実現し、詳細取得の失敗も承認の失敗と同じ内訳に入れる。 */
+  /** 選んだワークフローの申請のIDをまとめて一括承認のAPIへ1回送る(全部か無しか)。業務側(月次勤怠・経費・休暇等)は
+   *  バックエンドが承認の連鎖で更新する。1件でも処理できないと422で何も承認されず、ダイアログが失敗の一覧を出す。 */
   async function executeBulkApprove(): Promise<BulkActionResult> {
-    const results = await Promise.allSettled(
-      bulkTargets.map(async (target) => {
-        const detail = await fetchWorkflowRequest(target.id)
-        return approveItem.mutateAsync(detail)
-      }),
-    )
-    const succeededIds: string[] = []
-    const failures: BulkActionFailure[] = []
-    results.forEach((result, index) => {
-      const target = bulkTargets[index]
-      if (result.status === 'fulfilled') {
-        succeededIds.push(target.id)
-      } else {
-        failures.push({
-          id: target.id,
-          label: target.title,
-          message: result.reason instanceof ApiError ? result.reason.message : '承認できませんでした。',
-        })
-      }
-    })
-    return { succeededIds, failures }
+    const ids = bulkTargets.map((target) => target.id)
+    await bulkApprove.mutateAsync(ids)
+    return { succeededIds: ids, failures: [] }
   }
 
   // 初回読み込みのみ画面全体をLoadingにする(以降はplaceholderDataで前の結果を残す)。取得エラーは表の場所に出す
@@ -450,6 +430,8 @@ export function ApprovalsPage() {
         description="承認すると取り消せません。申請者に承認の通知が届きます。"
         confirmLabel={`${bulkTargets.length}件を承認する`}
         resultTitle="承認の結果"
+        resultMode="allOrNothing"
+        itemLabels={Object.fromEntries(bulkTargets.map((target) => [target.id, target.title]))}
         onExecute={executeBulkApprove}
         onSucceeded={removeFromSelection}
         successMessage={(count) => `${count}件の申請を承認しました`}

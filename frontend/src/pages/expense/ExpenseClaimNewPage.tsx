@@ -43,7 +43,6 @@ import {
 import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useApplyExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/useExpenseEntryPresets'
-import { useUploadAttachment } from '../../hooks/useAttachments'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { EXPENSE_CLAIM_NEW_INITIAL, isExpenseClaimNewDirty } from './expenseClaimNewDirty'
 import { notify } from '../../lib/notify'
@@ -306,7 +305,7 @@ const BULK_ROW_ERROR_KEYS = [
   'payment_bearer',
   'attributes',
 ] as const
-const BULK_ROW_ERROR_FIELDS = BULK_ROW_ERROR_KEYS.map((key) => `items.*.${key}`)
+const BULK_ROW_ERROR_FIELDS = [...BULK_ROW_ERROR_KEYS.map((key) => `items.*.${key}`), 'files.*', 'files.*.*']
 
 /** 経費精算を開始する最初の分岐。1件をすぐ登録したいのか(タイトルは登録内容から
  *  自動的に提案する)、複数件をまとめて1つの申請にしたいのか(先にタイトルを決める)を
@@ -551,7 +550,6 @@ function ExpenseClaimNewContent() {
   const deleteClaimMutation = useDeleteExpenseClaim()
   const deleteItem = useDeleteExpenseItem()
   const submitClaim = useSubmitExpenseClaim(claimId ?? '')
-  const uploadAttachment = useUploadAttachment()
 
   // まだ保存されていない入力だけを比べる(保存済みの明細の追加・削除は即時にAPIへ保存される)。
   const isDirty = isExpenseClaimNewDirty(EXPENSE_CLAIM_NEW_INITIAL, {
@@ -630,13 +628,12 @@ function ExpenseClaimNewContent() {
     })
     const wasNewClaim = !claimId
     const id = await ensureClaimId()
-    const createdItems = await addItemsBulk.mutateAsync({ claimId: id, items })
-    await Promise.all(
-      createdItems.map((item, index) => {
-        const file = rowFiles[validRows[index].rowId]
-        return file ? uploadAttachment.mutateAsync({ ownerType: 'expense_item', ownerId: item.id, file }) : undefined
-      }),
-    )
+    // 明細と添付は1回の送信で記録する(添付だけ失敗して明細が残る、がない)。
+    const filesByRow = validRows.map((row) => {
+      const file = rowFiles[row.rowId]
+      return file ? [file] : []
+    })
+    const createdItems = await addItemsBulk.mutateAsync({ claimId: id, items, filesByRow })
     if (wasNewClaim && entryMode === 'individual') {
       const categoryName = categories?.find((category) => category.id === items[0].category_id)?.name
       void startClaimTitle
@@ -651,10 +648,7 @@ function ExpenseClaimNewContent() {
   const handleSaveSingleItem = async (input: SaveExpenseItemInput, receiptFile: File | null) => {
     const wasNewClaim = !claimId
     const id = await ensureClaimId()
-    const createdItem = await addItem.mutateAsync({ claimId: id, input })
-    if (receiptFile) {
-      await uploadAttachment.mutateAsync({ ownerType: 'expense_item', ownerId: createdItem.id, file: receiptFile })
-    }
+    await addItem.mutateAsync({ claimId: id, input, files: receiptFile ? [receiptFile] : [] })
     if (wasNewClaim && entryMode === 'individual') {
       const categoryName = categories?.find((category) => category.id === input.category_id)?.name
       void startClaimTitle
@@ -783,7 +777,7 @@ function ExpenseClaimNewContent() {
   const showBatchTable = selectedCategory.entry_mode === 'batch' && entryMode !== 'individual'
 
   // 1件入力フォーム(batchの表形式ではない側)の項目エラー。フォームが描く項目と同じ条件で振り分ける。
-  const addItemErrors = fieldErrors(addItem.error, ['usage_date', 'amount', 'payment_bearer'])
+  const addItemErrors = fieldErrors(addItem.error, ['usage_date', 'amount', 'payment_bearer', 'files.*'])
   // まとめて登録の422は`items.{i}.{項目}`。送信の本文は`handleSaveItems`が絞り込んだ行(日付と金額がある行)なので、
   // 添字を画面の行(rowId)へ戻して、その行の下に出す。
   const bulkErrors = fieldErrors(addItemsBulk.error, BULK_ROW_ERROR_FIELDS)
@@ -791,11 +785,10 @@ function ExpenseClaimNewContent() {
   rows
     .filter((row) => row.usage_date && row.amount)
     .forEach((row, index) => {
-      bulkRowErrors[row.rowId] = BULK_ROW_ERROR_KEYS.map((key) => bulkErrors.ofRow('items', index, key)).find(
+      bulkRowErrors[row.rowId] = [...BULK_ROW_ERROR_KEYS.map((key) => bulkErrors.ofRow('items', index, key)), bulkErrors.ofAny(`files.${index}`)[0]].find(
         (message) => message !== undefined,
       )
     })
-  const receiptErrors = fieldErrors(uploadAttachment.error, ['file'])
 
   return (
     <div className="flex flex-col gap-6">
@@ -839,10 +832,9 @@ function ExpenseClaimNewContent() {
               <div className="mt-4">
                 <FormLayout>
                   {bulkErrors.rest != null && <ErrorMessage error={bulkErrors.rest} />}
-                  {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
                   <FormActions>
                     <Button
-                      isLoading={createClaim.isPending || addItemsBulk.isPending || uploadAttachment.isPending}
+                      isLoading={createClaim.isPending || addItemsBulk.isPending}
                       onClick={() => void handleSaveItems().catch(() => undefined)}
                     >
                       明細を保存({rows.length}件)
@@ -855,7 +847,6 @@ function ExpenseClaimNewContent() {
         ) : (
           <>
             {addItemErrors.rest != null && <ErrorMessage error={addItemErrors.rest} />}
-            {receiptErrors.rest != null && <ErrorMessage error={receiptErrors.rest} />}
 
             <div className="mb-4">
               <SinglePresetPicker
@@ -872,7 +863,7 @@ function ExpenseClaimNewContent() {
               categoryId={selectedCategory.id}
               fieldDefinitions={selectedCategory.field_definitions}
               onSubmit={handleSaveSingleItem}
-              isSubmitting={createClaim.isPending || addItem.isPending || uploadAttachment.isPending}
+              isSubmitting={createClaim.isPending || addItem.isPending}
               presetItem={singlePresetItem}
               presetApplyToken={singlePresetToken}
               onDirtyChange={setSingleFormDirty}
@@ -880,7 +871,7 @@ function ExpenseClaimNewContent() {
                 usage_date: addItemErrors.of('usage_date'),
                 amount: addItemErrors.of('amount'),
                 payment_bearer: addItemErrors.of('payment_bearer'),
-                file: receiptErrors.of('file'),
+                file: addItemErrors.ofAny('files')[0],
               }}
             />
           </>

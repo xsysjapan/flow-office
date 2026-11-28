@@ -1108,20 +1108,18 @@ export interface PaidLeaveScheduleAssessmentRunStatus {
   latest_run: PaidLeaveScheduleAssessmentRun | null;
 }
 
-/** 一括付与1件分の結果。 */
-export interface PaidLeaveScheduleBulkGrantResult {
-  schedule_entry_id: string;
-  success: boolean;
-  message: string | null;
-  grant_id: string | null;
+/** 付与予定の一括付与(全部か無しか)の成功の応答。1件でも付与できないと422(`bulk_operation_rejected`)で何も付与しない。 */
+export interface PaidLeaveScheduleBulkGrantResponse {
+  data: { schedule_entry_id: string; grant_id: string }[];
 }
 
-/** 一括付与の実行結果(`ManualGrantCard`の`ResultSummary`パターンに合わせた全体件数+行単位内訳)。 */
-export interface PaidLeaveScheduleBulkGrantResponse {
-  success_count: number;
-  failure_count: number;
-  results: PaidLeaveScheduleBulkGrantResult[];
+/** 休暇の手動付与の一括(全部か無しか)の成功の応答。付与した利用者(グループの指定は展開後)。 */
+export interface ManualBulkGrantResponse {
+  data: { user_id: string; user_name: string }[];
 }
+
+/** 休暇の手動付与の一括の対象の指定。グループは送信時にサーバーが展開する(実行時点の直接の所属・退職者を除く)。 */
+export type ManualGrantTargetInput = { user_ids: string[] } | { group_id: string };
 
 /** 付与ルールの対象条件にマッチする社員の軽量一覧(対象社員セクション用)。 */
 export interface PaidLeaveGrantRuleTargetUser {

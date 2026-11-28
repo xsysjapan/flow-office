@@ -9,6 +9,18 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 class RoleAssignmentAggregate extends AggregateRoot
 {
+    private bool $created = false;
+
+    public function isCreated(): bool
+    {
+        return $this->created;
+    }
+
+    protected function applyRoleAssignmentCreated(RoleAssignmentCreated $event): void
+    {
+        $this->created = true;
+    }
+
     public function create(string $subjectType, string $subjectId, int $roleId, string $scopeType, ?string $scopeGroupId, bool $includesDescendants, ?string $startsAt, ?string $endsAt, ?string $actor): self
     {
         $this->recordThat(new RoleAssignmentCreated($subjectType, $subjectId, $roleId, $scopeType, $scopeGroupId, $includesDescendants, $startsAt, $endsAt, $actor));

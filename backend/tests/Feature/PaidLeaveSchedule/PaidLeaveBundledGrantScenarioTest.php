@@ -141,8 +141,7 @@ class PaidLeaveBundledGrantScenarioTest extends TestCase
         $response = $this->actingAs($admin)->postJson('/api/paid-leave/schedule-entries/bulk-grant', ['schedule_entry_ids' => [$id18, $id6]]);
 
         $response->assertOk();
-        $this->assertSame(2, $response->json('success_count'));
-        $this->assertSame(0, $response->json('failure_count'));
+        $this->assertEqualsCanonicalizing([$id6, $id18], array_column($response->json('data'), 'schedule_entry_id'));
 
         $grants = PaidLeaveGrant::query()->where('user_id', $user->id)->orderBy('granted_days')->get();
         $this->assertCount(2, $grants);
@@ -169,9 +168,10 @@ class PaidLeaveBundledGrantScenarioTest extends TestCase
 
         $response = $this->actingAs($admin)->postJson('/api/paid-leave/schedule-entries/bulk-grant', ['schedule_entry_ids' => [$id6, $id18]]);
 
-        $response->assertOk();
-        $this->assertSame(0, $response->json('success_count'));
-        $this->assertSame(2, $response->json('failure_count'));
+        // 全部か無しか: 422で、失敗した行と理由を返す(何も確定しない)。
+        $response->assertUnprocessable();
+        $response->assertJsonPath('code', 'bulk_operation_rejected');
+        $this->assertEqualsCanonicalizing([$id6, $id18], array_column($response->json('items'), 'id'));
 
         // 有給口座には、先に記録した1件だけ。6か月側(1件目)の付与も記録されない。
         $this->assertSame(

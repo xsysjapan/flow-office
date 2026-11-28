@@ -7,12 +7,15 @@ use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
 use App\Domain\CompensatoryLeaveAccount\Aggregates\CompensatoryLeaveAccountAggregate;
 use App\Domain\CompensatoryLeaveAccount\Commands\ApproveCompensatoryLeaveGrantCancellation;
 use App\Domain\CompensatoryLeaveAccount\Commands\GrantCompensatoryLeave;
+use App\Domain\CompensatoryLeaveAccount\Commands\GrantCompensatoryLeaveToUsers;
 use App\Domain\CompensatoryLeaveAccount\Commands\RequestCompensatoryLeaveGrantCancellation;
 use App\Domain\CompensatoryLeaveAccount\Commands\RevokeCompensatoryLeaveAccountGrant;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\EventSourcing\ManualGrantId;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
+use App\Domain\UserManagement\Services\GroupMemberExpander;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -97,7 +100,7 @@ class CompensatoryLeaveController extends Controller
         operationId: 'compensatoryLeave.grants.store',
         summary: '代休を手動付与する',
         tags: ['代休'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_date'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_date', type: 'string', format: 'date', description: '実際に休日出勤した日'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_date'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_date', type: 'string', format: 'date', description: '実際に休日出勤した日'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'grant_reason', type: 'string', nullable: true), new OA\Property(property: 'request_id', type: 'string', format: 'uuid', nullable: true, description: '再送を二重付与にしないための識別子(付与IDを request_id と user_id から決める)')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function grant(Request $request, CommandBus $commandBus): JsonResponse
@@ -107,9 +110,14 @@ class CompensatoryLeaveController extends Controller
             'work_date' => ['required', 'date'],
             'expires_on' => ['nullable', 'date', 'after:work_date'],
             'grant_reason' => ['nullable', 'string'],
+            'request_id' => ['nullable', 'uuid'],
         ]);
 
-        $grantId = (string) Str::uuid();
+        // request_idがあれば付与IDを request_id と利用者IDから決め、同じ request_id の再送は何もせず成功にする(無ければ採番)。
+        $requestId = $data['request_id'] ?? null;
+        $grantId = $requestId !== null
+            ? ManualGrantId::for('compensatory_leave', $requestId, $data['user_id'])
+            : (string) Str::uuid();
 
         $commandBus->dispatch(new GrantCompensatoryLeave(
             userId: $data['user_id'],
@@ -117,9 +125,50 @@ class CompensatoryLeaveController extends Controller
             grantId: $grantId,
             expiresOn: $data['expires_on'] ?? null,
             grantReason: $data['grant_reason'] ?? null,
+            idempotent: $requestId !== null,
         ));
 
         return (new CompensatoryLeaveGrantResource(CompensatoryLeaveGrant::query()->findOrFail($grantId)))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 代休を複数の利用者へ手動付与する(1つのCommand。全部か無しか: 1人でも付与できなければ何も記録せず、
+     * 422(code: bulk_operation_rejected)で失敗した利用者と理由を返す)。対象は個人の指定(`user_ids`)だけ
+     * (休日出勤の実績が利用者ごとに要るため、グループの指定は無い)。同じ`request_id`の再送は二重にならず成功する。
+     */
+    #[OA\Post(
+        path: '/compensatory-leave/grants/bulk',
+        operationId: 'compensatoryLeave.grants.bulkStore',
+        summary: '代休を複数の利用者へ手動付与する(全部か無しか)',
+        tags: ['代休'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['request_id', 'user_ids', 'work_date'], properties: [new OA\Property(property: 'request_id', type: 'string', format: 'uuid'), new OA\Property(property: 'user_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), new OA\Property(property: 'work_date', type: 'string', format: 'date', description: '実際に休日出勤した日'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response(全員に付与)'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error/付与できない利用者がいる(何も記録しない。code: bulk_operation_rejected)')],
+    )]
+    public function bulkGrant(Request $request, CommandBus $commandBus, GroupMemberExpander $groupMembers): JsonResponse
+    {
+        $data = $request->validate([
+            'request_id' => ['required', 'uuid'],
+            'user_ids' => ['required', 'array', 'min:1', 'max:500'],
+            'user_ids.*' => ['string', 'distinct', 'exists:users,id'],
+            'work_date' => ['required', 'date'],
+            'expires_on' => ['nullable', 'date', 'after:work_date'],
+            'grant_reason' => ['nullable', 'string'],
+        ]);
+
+        $labels = $groupMembers->resolveTargets($request->user(), null, $data['user_ids'], 500);
+
+        $commandBus->dispatch(new GrantCompensatoryLeaveToUsers(
+            requestId: $data['request_id'],
+            userIds: array_keys($labels),
+            workDate: $data['work_date'],
+            expiresOn: $data['expires_on'] ?? null,
+            grantReason: $data['grant_reason'] ?? null,
+            userLabels: $labels,
+        ));
+
+        return response()->json([
+            'data' => array_map(fn (string $userId) => ['user_id' => $userId, 'user_name' => $labels[$userId]], array_keys($labels)),
+        ]);
     }
 
     /**

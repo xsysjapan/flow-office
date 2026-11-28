@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useEffect, useRef } from 'react'
 import {
   adminCancelPaidLeaveRequest,
+  bulkGrantPaidLeave,
   bulkGrantPaidLeaveScheduleEntries,
   cancelPaidLeaveRequest,
   createPaidLeaveGrantPolicyVersion,
@@ -33,6 +34,7 @@ import {
   type CreatePaidLeaveGrantRuleInput,
   type CreatePaidLeaveRequestInput,
   type EditPaidLeaveScheduleEntryInput,
+  type BulkGrantPaidLeaveInput,
   type GrantPaidLeaveInput,
   type OverridePaidLeaveScheduleAssessmentInput,
   type PaidLeaveScheduleEntriesParams,
@@ -162,6 +164,18 @@ export function useGrantPaidLeave() {
     mutationFn: (input: GrantPaidLeaveInput) => grantPaidLeave(input),
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grants', 'user', input.user_id] })
+    },
+  })
+}
+
+/** 有給の手動付与の一括(全部か無しか)。対象の利用者(グループは展開後)の付与一覧を無効化する。 */
+export function useBulkGrantPaidLeave() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: BulkGrantPaidLeaveInput) => bulkGrantPaidLeave(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grants'] })
     },
   })
 }

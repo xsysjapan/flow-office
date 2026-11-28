@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
+use App\Domain\Attachment\Support\AttachmentFileRules;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\ExpenseClaim\Commands\AddExpenseItem;
@@ -31,7 +32,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
+use RuntimeException;
+use Throwable;
 
 /**
  * UC-X010〜UC-X012: 経費精算の作成・明細編集・申請・承認・差戻し・取消。
@@ -137,7 +144,7 @@ class ExpenseClaimController extends Controller
     #[OA\Post(
         path: '/expense-claims/{expenseClaim}/items',
         operationId: 'expenseClaims.addItem',
-        summary: '経費明細を1件追加する',
+        summary: '経費明細を1件追加する(領収書等の添付を files[] で一緒に送れる。multipartのとき attributes はJSONの文字列)',
         tags: ['経費精算'],
         parameters: [new OA\Parameter(name: 'expenseClaim', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['category_id', 'amount'], properties: [new OA\Property(property: 'category_id', type: 'integer'), new OA\Property(property: 'amount', type: 'integer')])),
@@ -147,9 +154,33 @@ class ExpenseClaimController extends Controller
     {
         $this->authorizeOwnership($request, $expenseClaim);
 
-        $data = $this->validatedItem($request);
+        $input = $request->all();
+        if (isset($input['attributes']) && is_string($input['attributes'])) {
+            $decoded = json_decode($input['attributes'], true);
+            $input['attributes'] = is_array($decoded) ? $decoded : $input['attributes'];
+        }
 
-        $item = $commandBus->dispatch($this->makeAddCommand($expenseClaim->id, $request->user()->id, $data));
+        $data = validator($input, [
+            ...$this->itemRules(),
+            'files' => ['nullable', 'array'],
+            'files.*' => ['file'],
+        ])->validate();
+
+        $files = array_values($request->file('files', []));
+        $this->assertAttachmentFilesAcceptable($files, 'files');
+
+        $itemId = (string) Str::uuid();
+        $storedPaths = [];
+
+        try {
+            $attachments = $this->storeAttachmentFiles($itemId, $files, $request->user()->id, $storedPaths);
+
+            $item = $commandBus->dispatch($this->makeAddCommand($expenseClaim->id, $request->user()->id, $data, $itemId, $attachments));
+        } catch (Throwable $e) {
+            Storage::disk('local')->delete($storedPaths);
+
+            throw $e;
+        }
 
         return (new ExpenseItemResource($item))->response()->setStatusCode(Response::HTTP_CREATED);
     }
@@ -157,7 +188,7 @@ class ExpenseClaimController extends Controller
     #[OA\Post(
         path: '/expense-claims/{expenseClaim}/items/bulk',
         operationId: 'expenseClaims.bulkAddItems',
-        summary: '複数の経費明細を一括追加する(表形式入力・移動経路一括入力・テンプレート適用共通)',
+        summary: '複数の経費明細を一括追加する(表形式入力・移動経路一括入力・テンプレート適用共通。添付は multipart で items をJSONの文字列、ファイルを files[{行の番号}][] で送る)',
         tags: ['経費精算'],
         parameters: [new OA\Parameter(name: 'expenseClaim', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['items'], properties: [new OA\Property(property: 'items', type: 'array', items: new OA\Items(type: 'object'))])),
@@ -167,17 +198,56 @@ class ExpenseClaimController extends Controller
     {
         $this->authorizeOwnership($request, $expenseClaim);
 
+        if (is_string($request->input('items'))) {
+            $decoded = json_decode($request->input('items'), true);
+            $request->merge(['items' => is_array($decoded) ? $decoded : null]);
+        }
+
         $payload = $request->validate([
             'items' => ['required', 'array', 'min:1'],
             'items.*' => ['array'],
             ...$this->itemRules('items.*.'),
+            'files' => ['nullable', 'array'],
+            'files.*' => ['array'],
+            'files.*.*' => ['file'],
         ]);
 
-        $items = $commandBus->dispatch(new AddExpenseItems(
-            claimId: $expenseClaim->id,
-            addedByUserId: $request->user()->id,
-            items: array_values($payload['items']),
-        ));
+        $rows = array_values($payload['items']);
+        $filesByRow = $request->file('files', []);
+
+        foreach (array_keys($filesByRow) as $row) {
+            if (! ctype_digit((string) $row) || (int) $row >= count($rows)) {
+                throw ValidationException::withMessages(['files' => ['添付の行の番号が明細の行数を超えています。']]);
+            }
+        }
+
+        foreach ($filesByRow as $row => $files) {
+            $this->assertAttachmentFilesAcceptable(array_values($files), "files.{$row}");
+        }
+
+        $storedPaths = [];
+
+        try {
+            foreach ($rows as $row => $input) {
+                $rows[$row]['item_id'] = (string) Str::uuid();
+                $rows[$row]['attachments'] = $this->storeAttachmentFiles(
+                    $rows[$row]['item_id'],
+                    array_values($filesByRow[$row] ?? []),
+                    $request->user()->id,
+                    $storedPaths,
+                );
+            }
+
+            $items = $commandBus->dispatch(new AddExpenseItems(
+                claimId: $expenseClaim->id,
+                addedByUserId: $request->user()->id,
+                items: $rows,
+            ));
+        } catch (Throwable $e) {
+            Storage::disk('local')->delete($storedPaths);
+
+            throw $e;
+        }
 
         return ExpenseItemResource::collection($items)->response()->setStatusCode(Response::HTTP_CREATED);
     }
@@ -477,7 +547,7 @@ class ExpenseClaimController extends Controller
     /**
      * @param  array<string, mixed>  $data
      */
-    private function makeAddCommand(string $claimId, string $addedByUserId, array $data): AddExpenseItem
+    private function makeAddCommand(string $claimId, string $addedByUserId, array $data, ?string $itemId = null, array $attachments = []): AddExpenseItem
     {
         return new AddExpenseItem(
             claimId: $claimId,
@@ -493,6 +563,62 @@ class ExpenseClaimController extends Controller
             commutingDeductionAmount: $data['commuting_deduction_amount'] ?? 0,
             paymentBearer: $data['payment_bearer'] ?? null,
             attributes: $data['attributes'] ?? null,
+            itemId: $itemId,
+            attachments: $attachments,
         );
+    }
+
+    /**
+     * 添付の大きさ・拡張子の規則(添付の文脈の判定クラス)を、ファイルを保存する前に確かめる。
+     * 1つでも違反なら422で、何も保存しない。
+     *
+     * @param  list<UploadedFile>  $files
+     */
+    private function assertAttachmentFilesAcceptable(array $files, string $keyPrefix): void
+    {
+        $errors = [];
+
+        foreach ($files as $index => $file) {
+            $violation = AttachmentFileRules::expenseItemViolation((int) $file->getSize(), $file->getClientOriginalExtension());
+            if ($violation !== null) {
+                $errors["{$keyPrefix}.{$index}"] = [$violation];
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    /**
+     * ファイルを attachments/expense_items/{明細のID} に保存し、Commandへ渡す添付の参照を返す。
+     * 保存したパスは $storedPaths に積む(失敗時に入口が消す)。
+     *
+     * @param  list<UploadedFile>  $files
+     * @param  list<string>  $storedPaths
+     * @return list<array{attachmentId: string, storedPath: string, fileName: string, mimeType: string, fileSize: int, uploadedByUserId: string}>
+     */
+    private function storeAttachmentFiles(string $itemId, array $files, string $userId, array &$storedPaths): array
+    {
+        $references = [];
+
+        foreach ($files as $file) {
+            $storedPath = $file->store('attachments/expense_items/'.$itemId, 'local');
+            if ($storedPath === false) {
+                throw new RuntimeException('添付ファイルを保存できませんでした。');
+            }
+            $storedPaths[] = $storedPath;
+
+            $references[] = [
+                'attachmentId' => (string) Str::uuid(),
+                'storedPath' => $storedPath,
+                'fileName' => $file->getClientOriginalName(),
+                'mimeType' => $file->getClientMimeType(),
+                'fileSize' => (int) $file->getSize(),
+                'uploadedByUserId' => $userId,
+            ];
+        }
+
+        return $references;
     }
 }

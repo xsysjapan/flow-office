@@ -11,13 +11,12 @@ use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
 use App\Domain\UserManagement\Support\UserManagementStreamId;
 use Illuminate\Support\Carbon;
-use Throwable;
 
 /**
  * 管理者の一括付与操作。対象各Scheduleエントリについて`GrantPaidLeaves`を発行し、
  * Schedule側をGrantedへ遷移させる(依頼書§39)。
- * Eligible以外のエントリが混じっていた場合は当該エントリのみ失敗として扱う
- * (一括操作の他の対象を巻き込まない)。
+ * Eligible以外のエントリが混じっていた場合は当該エントリを失敗(`failed`)として返す。付与の後の失敗
+ * (付与予定側への反映の失敗等)は集めずに例外として投げ、付与も含めて戻す(部分成功にしない)。
  * 渡された行は(付与予定日, 名目の継続勤務月数)の順に並べ替えてから付与する(同じ日の行は名目の月数の小さい順。
  * 月数がnullの行は同じ日の中で先)。付与IDは行IDから決めたUUIDv5にし、同じ行の再実行で二重に付与しない
  * (有給口座が同じ付与IDを拒否する)。
@@ -51,11 +50,9 @@ class ApplyScheduledGrantsHandler implements CommandHandler
                 continue;
             }
 
-            $grantIds = null;
+            $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($command->userId))->forUser($command->userId);
 
             try {
-                $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($command->userId))->forUser($command->userId);
-
                 $grants = [];
                 foreach ($scheduleEntryIds as $scheduleEntryId) {
                     $entry = $aggregate->entry($scheduleEntryId);
@@ -76,51 +73,24 @@ class ApplyScheduledGrantsHandler implements CommandHandler
 
                 // まとめて付与する2件は、有給口座の1回のpersistで記録する(片方だけが付与されない)。
                 $grantIds = $this->commandBus->dispatch(new GrantPaidLeaves(userId: $command->userId, grants: $grants));
-
-                // 有給口座(GrantPaidLeaves)と付与予定は別のストリームなので、上で取った`$aggregate`のまま確定できる。
-                // 組の2件は1回のpersistで記録する。
-                foreach ($scheduleEntryIds as $index => $scheduleEntryId) {
-                    $aggregate->grantEntry($scheduleEntryId, $grantIds[$index], $command->operatorUserId);
-                }
-                $aggregate->persist();
-
-                foreach ($scheduleEntryIds as $index => $scheduleEntryId) {
-                    $granted[] = ['scheduleEntryId' => $scheduleEntryId, 'grantId' => $grantIds[$index]];
-                }
             } catch (DomainRuleException $e) {
-                if ($grantIds !== null) {
-                    // GrantPaidLeaves(実際の付与)は既に成功しており、Schedule側の
-                    // grantEntry()だけが失敗した(例: 状態不整合)。付与自体を取り消す
-                    // 手段は無い(依頼書の設計上、付与取消は別の専用操作)ため、
-                    // サイレントに握りつぶさず必ずログへ残し、Schedule側の紐付けが
-                    // 手動対応待ちであることが分かるメッセージにする。
-                    report($e);
-                    foreach ($scheduleEntryIds as $index => $scheduleEntryId) {
-                        $failed[] = [
-                            'scheduleEntryId' => $scheduleEntryId,
-                            'reason' => "付与(grant_id={$grantIds[$index]})は成功しましたが、Scheduleエントリへの反映に失敗しました。手動確認が必要です: {$e->getMessage()}",
-                        ];
-                    }
-
-                    continue;
-                }
-
+                // 付与の前の検査の失敗だけを、当該エントリの失敗として集める(付与の後の失敗は集めずに投げる)。
                 foreach ($scheduleEntryIds as $scheduleEntryId) {
                     $failed[] = ['scheduleEntryId' => $scheduleEntryId, 'reason' => $e->getMessage()];
                 }
-            } catch (Throwable $e) {
-                report($e);
 
-                foreach ($scheduleEntryIds as $index => $scheduleEntryId) {
-                    if ($grantIds !== null) {
-                        $failed[] = [
-                            'scheduleEntryId' => $scheduleEntryId,
-                            'reason' => "付与(grant_id={$grantIds[$index]})は成功しましたが、Scheduleエントリへの反映に失敗しました。手動確認が必要です: {$e->getMessage()}",
-                        ];
-                    } else {
-                        $failed[] = ['scheduleEntryId' => $scheduleEntryId, 'reason' => '予期しないエラーが発生しました。管理者へ連絡してください。'];
-                    }
-                }
+                continue;
+            }
+
+            // 有給口座(GrantPaidLeaves)と付与予定は別のストリームなので、上で取った`$aggregate`のまま確定できる。
+            // 組の2件は1回のpersistで記録する。ここでの失敗は付与の記録と同じトランザクションごと戻すため、集めずに投げる。
+            foreach ($scheduleEntryIds as $index => $scheduleEntryId) {
+                $aggregate->grantEntry($scheduleEntryId, $grantIds[$index], $command->operatorUserId);
+            }
+            $aggregate->persist();
+
+            foreach ($scheduleEntryIds as $index => $scheduleEntryId) {
+                $granted[] = ['scheduleEntryId' => $scheduleEntryId, 'grantId' => $grantIds[$index]];
             }
         }
 

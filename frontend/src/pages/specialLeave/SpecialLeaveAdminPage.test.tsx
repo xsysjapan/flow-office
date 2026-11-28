@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import * as specialLeaveApi from '../../api/specialLeave'
+import * as groupsApi from '../../api/groups'
 import * as usersApi from '../../api/users'
 import type {
   Paginated,
@@ -15,6 +16,7 @@ import type {
   SpecialLeaveUsage,
   User,
 } from '../../api/types'
+import { BULK_REJECTED_NOTICE } from '../../components/BulkActionDialog/BulkActionDialog'
 import { notify } from '../../lib/notify'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { SpecialLeaveAdminPage } from './SpecialLeaveAdminPage'
@@ -205,7 +207,7 @@ describe('SpecialLeaveAdminPage', () => {
     )
   })
 
-  it('grants special leave to the selected user without an expiry date', async () => {
+  it('grants special leave in one bulk call (without an expiry date) after the confirmation', async () => {
     const paginatedUsers: Paginated<User> = {
       data: [targetUser],
       meta: { current_page: 1, last_page: 1, total: 1 },
@@ -213,22 +215,9 @@ describe('SpecialLeaveAdminPage', () => {
     }
     vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantsForUser').mockResolvedValue([])
-    vi.spyOn(specialLeaveApi, 'grantSpecialLeave').mockResolvedValue({
-      id: 'grant-1',
-      user_id: '11111111-1111-4111-8111-111111111111',
-      special_leave_type_id: birthdayType.id,
-      special_leave_type_name: birthdayType.name,
-      granted_on: '2026-07-01',
-      expires_on: null,
-      granted_days: 3,
-      used_days: 0,
-      remaining_days: 3,
-      grant_reason: null,
-      status: 'active',
-      revoked_at: null,
-      revoked_by_user_id: null,
-      revoke_reason: null,
-    } as SpecialLeaveGrant)
+    const bulkSpy = vi.spyOn(specialLeaveApi, 'bulkGrantSpecialLeave').mockResolvedValue({
+      data: [{ user_id: '11111111-1111-4111-8111-111111111111', user_name: '対象社員' }],
+    })
 
     renderPage()
     await screen.findByText('誕生日休暇: 誕生日休暇ルール')
@@ -240,10 +229,14 @@ describe('SpecialLeaveAdminPage', () => {
     await pickDate(userEvent.setup(), '付与日', '2026-07-01')
     await userEvent.type(screen.getAllByLabelText('付与日数')[1], '3')
     await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(bulkSpy).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getByRole('button', { name: '付与する' }))
 
     await waitFor(() =>
-      expect(specialLeaveApi.grantSpecialLeave).toHaveBeenCalledWith({
-        user_id: '11111111-1111-4111-8111-111111111111',
+      expect(bulkSpy).toHaveBeenCalledWith({
+        request_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        user_ids: ['11111111-1111-4111-8111-111111111111'],
         special_leave_type_id: birthdayType.id,
         granted_on: '2026-07-01',
         expires_on: undefined,
@@ -251,6 +244,69 @@ describe('SpecialLeaveAdminPage', () => {
         grant_reason: undefined,
       }),
     )
+    expect(bulkSpy).toHaveBeenCalledTimes(1)
+    expect(notify.success).toHaveBeenCalledWith('1名に特別休暇を付与しました')
+  })
+
+  it('shows the rejected users with the notice and keeps the selection when the bulk grant is rejected', async () => {
+    const paginatedUsers: Paginated<User> = {
+      data: [targetUser],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantsForUser').mockResolvedValue([])
+    vi.spyOn(specialLeaveApi, 'bulkGrantSpecialLeave').mockRejectedValue(
+      new ApiError(422, '選んだ対象のうち、処理できないものがあります。', {}, 'bulk_operation_rejected', [
+        { id: '11111111-1111-4111-8111-111111111111', label: '対象社員', message: 'この利用者には付与できません。' },
+      ]),
+    )
+
+    renderPage()
+    await screen.findByText('誕生日休暇: 誕生日休暇ルール')
+    await userEvent.click(screen.getByLabelText('付与対象'))
+    await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.selectOptions(screen.getAllByLabelText('特別休暇の種類')[1], '誕生日休暇')
+    await pickDate(userEvent.setup(), '付与日', '2026-07-01')
+    await userEvent.type(screen.getAllByLabelText('付与日数')[1], '3')
+    await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: '付与する' }))
+
+    expect(await within(dialog).findByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
+    expect(within(dialog).getByText('対象社員: この利用者には付与できません。')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getAllByRole('button', { name: '閉じる' }).at(-1)!)
+    expect(screen.getByRole('button', { name: '1名に付与する' })).toBeEnabled()
+  })
+
+  it('sends group_id when a group is specified', async () => {
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({ data: [targetUser], meta: { current_page: 1, last_page: 1, total: 1 }, links: { next: null, prev: null } })
+    vi.spyOn(groupsApi, 'fetchGroups').mockResolvedValue([{ id: 'group-1', name: '営業部' }])
+    vi.spyOn(groupsApi, 'fetchGroupMembers').mockResolvedValue([
+      { user_id: 'member-1', name: '営業一郎', email: 'ichiro@example.com', membership_kind: 'primary', is_primary: true },
+    ])
+    const bulkSpy = vi.spyOn(specialLeaveApi, 'bulkGrantSpecialLeave').mockResolvedValue({
+      data: [{ user_id: 'member-1', user_name: '営業一郎' }],
+    })
+    bulkSpy.mockClear()
+
+    renderPage()
+    await screen.findByText('誕生日休暇: 誕生日休暇ルール')
+    await userEvent.click(screen.getByRole('button', { name: 'グループを指定' }))
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: /付与対象/ }), 'group-1')
+    await userEvent.selectOptions(screen.getAllByLabelText('特別休暇の種類')[1], '誕生日休暇')
+    await pickDate(userEvent.setup(), '付与日', '2026-07-01')
+    await userEvent.type(screen.getAllByLabelText('付与日数')[1], '3')
+    await userEvent.click(screen.getByRole('button', { name: 'グループの所属メンバーに付与する' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: '付与する' }))
+
+    await waitFor(() => expect(bulkSpy).toHaveBeenCalledTimes(1))
+    const sent = bulkSpy.mock.calls[0][0]
+    expect(sent).toMatchObject({ group_id: 'group-1', special_leave_type_id: birthdayType.id, granted_days: 3 })
+    expect(sent).not.toHaveProperty('user_ids')
   })
 
   it('shows the selected users usage records from the ?userId= URL query param', async () => {

@@ -51,7 +51,7 @@ class AssetDeletionTest extends TestCase
         $borrower = User::factory()->create();
         $asset = $this->registerLendingAsset($backoffice);
         $loaned = $this->bus()->dispatch(new LendAsset($asset->id, $borrower->id, $backoffice->id));
-        $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $backoffice->id));
+        $this->bus()->dispatch(new ReturnAsset($asset->id, $loaned->current_loan_id, $borrower->id));
 
         $this->bus()->dispatch(new DeleteAsset($asset->id, $backoffice->id));
 

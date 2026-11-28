@@ -5,7 +5,9 @@ import { MemoryRouter } from 'react-router-dom'
 import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../../api/asset'
+import { ApiError } from '../../../api/client'
 import type { Asset } from '../../../api/types'
+import { BULK_REJECTED_NOTICE } from '../../../components/BulkActionDialog/BulkActionDialog'
 import { notify } from '../../../lib/notify'
 
 vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn() } }))
@@ -127,9 +129,7 @@ describe('BulkRelocatePage', () => {
     vi.spyOn(assetApi, 'resolveAssetByScanInput').mockResolvedValue(asset)
     const bulkSpy = vi.spyOn(assetApi, 'bulkAssetOperation').mockResolvedValue({
       operation: 'relocate',
-      results: [{ asset_id: 'asset-1', success: true, result: 'relocated' }],
-      succeeded_count: 1,
-      failed_count: 0,
+      data: [{ asset_id: 'asset-1', result: 'done' }],
     })
 
     renderPage()
@@ -147,7 +147,9 @@ describe('BulkRelocatePage', () => {
       asset_ids: ['asset-1'],
       location_text: '3階会議室B',
     })
-    expect(await screen.findByText(/成功 1件/)).toBeInTheDocument()
+    expect(await screen.findByText('1件を移設しました。')).toBeInTheDocument()
+    // 全件成功なので対象は空になる。
+    expect(screen.getByRole('button', { name: '0件を確定' })).toBeDisabled()
     expect(notify.success).toHaveBeenCalledWith('1件を移設しました')
   })
 
@@ -161,5 +163,33 @@ describe('BulkRelocatePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '追加' }))
 
     expect(await screen.findByText(/設置備品ではないため移設できません/)).toBeInTheDocument()
+  })
+
+  it('1件でも処理できないと何も確定せず、失敗した備品と理由を出して対象を残す', async () => {
+    vi.spyOn(assetApi, 'resolveAssetByScanInput').mockResolvedValue(asset)
+    const bulkSpy = vi.spyOn(assetApi, 'bulkAssetOperation').mockRejectedValue(
+      new ApiError(
+        422,
+        '選んだ対象のうち、処理できないものがあります。',
+        { 'items.asset-1': ['処理できない状態です。'] },
+        'bulk_operation_rejected',
+        [{ id: 'asset-1', message: '処理できない状態です。' }],
+      ),
+    )
+
+    renderPage()
+    await userEvent.type(screen.getByLabelText('移設先'), '3階会議室B')
+    await userEvent.type(screen.getByLabelText('移設対象に追加する備品'), 'EQ-00200')
+    await userEvent.click(screen.getByRole('button', { name: '追加' }))
+    await screen.findByText('プロジェクター')
+
+    await userEvent.click(screen.getByRole('button', { name: '1件を確定' }))
+
+    expect(bulkSpy).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
+    expect(screen.getByText('プロジェクター(EQ-00200): 処理できない状態です。')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+    // 何も確定していないので、対象は残る。
+    expect(screen.getByRole('button', { name: '1件を確定' })).toBeEnabled()
   })
 })

@@ -6,7 +6,9 @@ use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\Leave\Support\LeaveUsageQuery;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
+use App\Domain\Workflow\Commands\ApproveWorkflowRequests;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
+use App\Domain\Workflow\Commands\CancelWorkflowRequests;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\RejectWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -617,5 +619,76 @@ class WorkflowRequestController extends Controller
         ));
 
         return new WorkflowRequestResource($workflowRequest->refresh()->load(['requestType', 'applicant', 'approver']));
+    }
+
+    #[OA\Post(
+        path: '/workflow-requests/bulk-cancel',
+        operationId: 'workflowRequests.bulkCancel',
+        summary: '自分の申請を一括で取り消す(全部か無しか)',
+        description: '1件でも取り消せない申請があれば何も取り消さず、422(code: bulk_operation_rejected)で対象ごとの理由を返す。',
+        tags: ['汎用申請'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['workflow_request_ids', 'reason'], properties: [
+            new OA\Property(property: 'workflow_request_ids', type: 'array', maxItems: 100, items: new OA\Items(type: 'string', format: 'uuid')),
+            new OA\Property(property: 'reason', type: 'string'),
+        ])),
+        responses: [new OA\Response(response: 200, description: '処理した申請の一覧'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: '入力の検証エラー、または処理できない申請がある(bulk_operation_rejected)')],
+    )]
+    public function bulkCancel(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'workflow_request_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'workflow_request_ids.*' => ['required', 'string', 'distinct', 'exists:workflow_requests,id'],
+            'reason' => ['required', 'string'],
+        ]);
+
+        $result = $commandBus->dispatch(new CancelWorkflowRequests(
+            workflowRequestIds: $data['workflow_request_ids'],
+            cancelledByUserId: $request->user()->id,
+            reason: $data['reason'],
+        ));
+
+        return $this->bulkResponse($result);
+    }
+
+    #[OA\Post(
+        path: '/workflow-requests/bulk-approve',
+        operationId: 'workflowRequests.bulkApprove',
+        summary: '申請を一括で承認する(全部か無しか)',
+        description: '1件でも承認できない申請があれば何も承認せず、422(code: bulk_operation_rejected)で対象ごとの理由を返す。業務側の承認は承認イベントを受けるReactorの連鎖で行われる。',
+        tags: ['汎用申請'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['workflow_request_ids'], properties: [
+            new OA\Property(property: 'workflow_request_ids', type: 'array', maxItems: 100, items: new OA\Items(type: 'string', format: 'uuid')),
+        ])),
+        responses: [new OA\Response(response: 200, description: '処理した申請の一覧'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: '入力の検証エラー、または処理できない申請がある(bulk_operation_rejected)')],
+    )]
+    public function bulkApprove(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'workflow_request_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'workflow_request_ids.*' => ['required', 'string', 'distinct', 'exists:workflow_requests,id'],
+        ]);
+
+        $result = $commandBus->dispatch(new ApproveWorkflowRequests(
+            workflowRequestIds: $data['workflow_request_ids'],
+            approvedByUserId: $request->user()->id,
+        ));
+
+        return $this->bulkResponse($result);
+    }
+
+    /**
+     * @param  array{processed: list<int|string>, skipped: list<int|string>}  $result
+     */
+    private function bulkResponse(array $result): JsonResponse
+    {
+        $data = [];
+        foreach ($result['processed'] as $id) {
+            $data[] = ['id' => $id, 'result' => 'processed'];
+        }
+        foreach ($result['skipped'] as $id) {
+            $data[] = ['id' => $id, 'result' => 'skipped'];
+        }
+
+        return response()->json(['data' => $data]);
     }
 }

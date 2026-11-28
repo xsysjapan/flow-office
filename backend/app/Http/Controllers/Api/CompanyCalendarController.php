@@ -10,12 +10,12 @@ use App\Domain\Attendance\Commands\DeleteCompanyCalendar;
 use App\Domain\Attendance\Commands\DeleteCompanyCalendarYear;
 use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
+use App\Domain\Attendance\Commands\RegenerateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
 use App\Domain\Attendance\Commands\SyncHolidayCalendarSource;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendar;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
-use App\Domain\Attendance\Services\CalendarWeekdayPatternDayGenerator;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CompanyCalendarDayResource;
@@ -28,7 +28,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
@@ -114,18 +113,10 @@ class CompanyCalendarController extends Controller
             weekdayHolidayPattern: $data['weekday_holiday_pattern'] ?? null,
             holidayCalendarSourceId: $data['holiday_calendar_source_id'] ?? null,
             allowsDailyHolidayOverride: $data['allows_daily_holiday_override'] ?? null,
+            fiscalYear: $data['fiscal_year'] ?? null,
+            startsOn: $data['starts_on'] ?? null,
+            endsOn: $data['ends_on'] ?? null,
         ));
-
-        if (array_key_exists('fiscal_year', $data) && $data['fiscal_year'] !== null) {
-            $commandBus->dispatch(new CreateCompanyCalendarYear(
-                companyCalendarId: $calendar->id,
-                fiscalYear: $data['fiscal_year'],
-                startsOn: $data['starts_on'],
-                endsOn: $data['ends_on'],
-                generatedFrom: 'manual',
-                createdByUserId: $request->user()->id,
-            ));
-        }
 
         return (new CompanyCalendarResource($calendar->refresh()))->response()->setStatusCode(201);
     }
@@ -427,33 +418,10 @@ class CompanyCalendarController extends Controller
     )]
     public function regenerateYear(Request $request, CompanyCalendarYear $companyCalendarYear, CommandBus $commandBus): AnonymousResourceCollection
     {
-        if ($companyCalendarYear->status !== 'draft') {
-            throw ValidationException::withMessages([
-                'status' => ['公開済みのカレンダー年度は再作成できません。'],
-            ]);
-        }
-
-        $companyCalendar = $companyCalendarYear->companyCalendar;
-
-        $days = app(CalendarWeekdayPatternDayGenerator::class)->generate(
-            Carbon::parse($companyCalendarYear->starts_on),
-            Carbon::parse($companyCalendarYear->ends_on),
-            $companyCalendar->effectiveWeekdayHolidayPattern(),
-        );
-
-        $commandBus->dispatch(new UpdateCompanyCalendarDays(
+        $commandBus->dispatch(new RegenerateCompanyCalendarYear(
             companyCalendarYearId: $companyCalendarYear->id,
-            days: $days,
             updatedByUserId: $request->user()->id,
         ));
-
-        if ($companyCalendar->holiday_calendar_source_id !== null) {
-            $commandBus->dispatch(new SyncHolidayCalendarSource(
-                holidayCalendarSourceId: $companyCalendar->holiday_calendar_source_id,
-                syncedByUserId: $request->user()->id,
-                companyCalendarYearId: $companyCalendarYear->id,
-            ));
-        }
 
         return CompanyCalendarDayResource::collection($companyCalendarYear->days()->orderBy('date')->get());
     }

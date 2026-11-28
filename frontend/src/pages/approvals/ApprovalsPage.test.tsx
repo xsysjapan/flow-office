@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
+import { BULK_REJECTED_NOTICE } from '../../components/BulkActionDialog/BulkActionDialog'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseClaimsApi from '../../api/expenseClaims'
@@ -404,7 +405,7 @@ describe('ApprovalsPage', () => {
     expect(screen.getByLabelText('2026-07 月次勤怠を選択')).toBeInTheDocument()
   })
 
-  it('bulk-approves selected rows, calling the approve mutation once per selected id and clearing selection', async () => {
+  it('bulk-approves selected rows by calling the bulk approve API once with the workflow request ids and clears the selection', async () => {
     const user = userEvent.setup()
     const secondGenericRequest: WorkflowRequest = {
       ...genericRequest,
@@ -417,10 +418,10 @@ describe('ApprovalsPage', () => {
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
-    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockImplementation((id: string) =>
-      Promise.resolve(id === genericRequest.id ? genericRequest : secondGenericRequest),
-    )
-    const approveWorkflowRequest = vi.spyOn(workflowRequestsApi, 'approveWorkflowRequest').mockResolvedValue({} as never)
+    // 件ごとの詳細取得・承認のAPIは呼ばない
+    const fetchDetail = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest')
+    const approveWorkflowRequest = vi.spyOn(workflowRequestsApi, 'approveWorkflowRequest')
+    const bulkApprove = vi.spyOn(workflowRequestsApi, 'bulkApproveWorkflowRequests').mockResolvedValue({ data: [] })
 
     renderPage()
 
@@ -433,17 +434,18 @@ describe('ApprovalsPage', () => {
     await user.click(screen.getByRole('button', { name: 'まとめて承認する' }))
     expect(await screen.findByText('選択した2件を承認しますか?')).toBeInTheDocument()
     expect(screen.getByText('承認すると取り消せません。申請者に承認の通知が届きます。')).toBeInTheDocument()
-    expect(approveWorkflowRequest).not.toHaveBeenCalled()
+    expect(bulkApprove).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: '2件を承認する' }))
 
-    await waitFor(() => expect(approveWorkflowRequest).toHaveBeenCalledTimes(2))
-    expect(approveWorkflowRequest).toHaveBeenCalledWith(genericRequest.id)
-    expect(approveWorkflowRequest).toHaveBeenCalledWith(secondGenericRequest.id)
+    await waitFor(() => expect(bulkApprove).toHaveBeenCalledTimes(1))
+    expect(bulkApprove).toHaveBeenCalledWith([genericRequest.id, secondGenericRequest.id])
+    expect(approveWorkflowRequest).not.toHaveBeenCalled()
+    expect(fetchDetail).not.toHaveBeenCalled()
     await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument())
     expect(notify.success).toHaveBeenCalledWith('2件の申請を承認しました')
   })
 
-  it('shows failures (including detail fetch errors) in the result and keeps only the failed rows selected', async () => {
+  it('shows the rejected rows with the reasons, says nothing was approved and keeps the whole selection', async () => {
     const user = userEvent.setup()
     const secondGenericRequest: WorkflowRequest = {
       ...genericRequest,
@@ -456,12 +458,16 @@ describe('ApprovalsPage', () => {
       links: { next: null, prev: null },
     }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
-    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockImplementation((id: string) =>
-      id === genericRequest.id
-        ? Promise.resolve(genericRequest)
-        : Promise.reject(new ApiError(404, '申請が見つかりません。')),
+    vi.spyOn(workflowRequestsApi, 'bulkApproveWorkflowRequests').mockRejectedValue(
+      new ApiError(
+        422,
+        '選んだ対象のうち、処理できないものがあります。',
+        { 'items.workflow-request-generic-2': ['提出済みの申請のみ承認できます。'] },
+        'bulk_operation_rejected',
+        // 応答に表示名が無い場合は、画面が持つ申請のタイトルで表示する
+        [{ id: 'workflow-request-generic-2', message: '提出済みの申請のみ承認できます。' }],
+      ),
     )
-    vi.spyOn(workflowRequestsApi, 'approveWorkflowRequest').mockResolvedValue({} as never)
 
     renderPage()
 
@@ -472,9 +478,11 @@ describe('ApprovalsPage', () => {
     await user.click(await screen.findByRole('button', { name: '2件を承認する' }))
 
     expect(await screen.findByText('承認の結果')).toBeInTheDocument()
-    expect(screen.getByText('交通費申請: 申請が見つかりません。')).toBeInTheDocument()
-    expect(screen.getByText('1件を選択中')).toBeInTheDocument()
-    expect(screen.getByLabelText('名刺作成申請を選択')).not.toBeChecked()
+    expect(screen.getByText(BULK_REJECTED_NOTICE)).toBeInTheDocument()
+    expect(screen.getByText('交通費申請: 提出済みの申請のみ承認できます。')).toBeInTheDocument()
+    expect(notify.success).not.toHaveBeenCalled()
+    expect(screen.getByText('2件を選択中')).toBeInTheDocument()
+    expect(screen.getByLabelText('名刺作成申請を選択')).toBeChecked()
     expect(screen.getByLabelText('交通費申請を選択')).toBeChecked()
   })
 

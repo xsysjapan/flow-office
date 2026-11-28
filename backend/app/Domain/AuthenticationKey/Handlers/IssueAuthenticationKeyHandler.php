@@ -34,7 +34,17 @@ class IssueAuthenticationKeyHandler implements CommandHandler
             throw new DomainRuleException('不正な認証キー種別です。');
         }
 
-        $keyHash = $this->hasher->hash($command->rawKeyValue);
+        $aggregateUuid = $command->authenticationKeyId ?? (string) Str::uuid();
+
+        // Reactor経由は冪等: そのIDの認証キーが発行済みなら何もしない(他のキーとの重複は下で拒否する)。
+        if ($command->viaReactor && AuthenticationKey::query()->whereKey($aggregateUuid)->exists()) {
+            return AuthenticationKey::query()->findOrFail($aggregateUuid);
+        }
+
+        $keyHash = $command->keyHash ?? ($command->rawKeyValue !== null ? $this->hasher->hash($command->rawKeyValue) : null);
+        if ($keyHash === null) {
+            throw new DomainRuleException('認証キーの値が指定されていません。');
+        }
 
         $duplicated = AuthenticationKey::query()
             ->where('key_type', $command->keyType)
@@ -45,8 +55,6 @@ class IssueAuthenticationKeyHandler implements CommandHandler
         if ($duplicated) {
             throw new DomainRuleException('この認証キーは既に他のユーザーに登録されています。');
         }
-
-        $aggregateUuid = (string) Str::uuid();
 
         AuthenticationKeyAggregate::retrieve($aggregateUuid)
             ->issue(

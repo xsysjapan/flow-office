@@ -22,7 +22,7 @@ class AdminCommandTest extends TestCase
 
         $commands = collect($response->json('data'))->keyBy('name');
         $this->assertSame(
-            ['attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'events:fix-calendar-bulk-operation-target-ids', 'events:fix-rebuild-determinism', 'events:fix-user-settings-at-replay', 'events:rename-boolean-properties', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
+            ['access-control:resync-group-features', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'events:fix-calendar-bulk-operation-target-ids', 'events:fix-rebuild-determinism', 'events:fix-user-settings-at-replay', 'events:rename-boolean-properties', 'paid-leave:schedule:reapply-policy', 'paid-leave:schedule:rebuild', 'read-models:rebuild'],
             $commands->keys()->sort()->values()->all(),
         );
         $this->assertSame('year-month', $commands['attendance:recalculate-month-snapshots']['parameters'][0]['name']);

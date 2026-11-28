@@ -11,6 +11,8 @@ import type {
   PaidLeaveProportionalGrantPolicyStep,
   PaidLeaveRequest,
   PaidLeaveScheduleAssessmentRunStatus,
+  ManualBulkGrantResponse,
+  ManualGrantTargetInput,
   PaidLeaveScheduleBulkGrantResponse,
   PaidLeaveScheduleEntry,
   PaidLeaveScheduleEntryDetail,
@@ -99,6 +101,20 @@ export interface GrantPaidLeaveInput {
 
 export function grantPaidLeave(input: GrantPaidLeaveInput): Promise<PaidLeaveGrant> {
   return apiFetch('/paid-leave/grants', { method: 'POST', body: input })
+}
+
+export type BulkGrantPaidLeaveInput = ManualGrantTargetInput & {
+  /** 再送を二重付与にしない識別子(UUID)。付与IDはこの値と利用者IDから決まる。 */
+  request_id: string
+  granted_on: string
+  expires_on: string
+  granted_days: number
+  grant_reason?: string
+}
+
+/** 有給の手動付与の一括(全部か無しか)。1人でも付与できないと422(`bulk_operation_rejected`)で何も付与しない。 */
+export function bulkGrantPaidLeave(input: BulkGrantPaidLeaveInput): Promise<ManualBulkGrantResponse> {
+  return apiFetch('/paid-leave/grants/bulk', { method: 'POST', body: input })
 }
 
 /** 最新の非取消付与の付与日数を変更する(最新でない・充当済みを下回る場合は422)。 */
@@ -239,7 +255,7 @@ export function editPaidLeaveScheduleEntry(
   }).then((res) => res.data)
 }
 
-/** 選択したEligibleエントリを一括付与する(spec.md論点15-6、既存ManualGrantCardのResultSummaryパターンを踏襲)。 */
+/** 選択したEligibleエントリを一括付与する(全部か無しか)。1件でも付与できないと422(`bulk_operation_rejected`)で何も付与しない。 */
 export function bulkGrantPaidLeaveScheduleEntries(scheduleEntryIds: string[]): Promise<PaidLeaveScheduleBulkGrantResponse> {
   return apiFetch('/paid-leave/schedule-entries/bulk-grant', {
     method: 'POST',

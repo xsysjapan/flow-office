@@ -46,6 +46,12 @@
 5. バックオフィスタスクが必要な申請種別ならタスクを作成する
 6. 申請者へ通知する
 
+承認一覧からの「まとめて承認」は、選んだワークフローの申請のIDを一括承認のAPI(`POST /workflow-requests/bulk-approve`。
+上限100件・IDの重複不可・`approval.execute`)へ1回送り、1つのCommand(`ApproveWorkflowRequests`)が各件を`ApproveWorkflowRequest`で
+承認する。業務側(月次勤怠・経費・休暇・振替休日・備品)の承認は、今までどおりワークフローの承認イベントを受けるReactorの連鎖で行う。
+全部か無しか: 1件でも承認できないと何も承認せず、422(`code: bulk_operation_rejected`)で失敗した対象と理由の一覧を返す。
+開始時点で提出済みだった申請が、同じ一括の前の件の連鎖(まとめ申請の兄弟)で承認済みになっていたら成功として飛ばす。
+
 ## UC-W003-2: 承認者が申請を却下する
 
 `workflow_requests`本体が持つ汎用機能(全申請種別で共通利用可能。
@@ -90,7 +96,14 @@ Command/Event自体は全申請種別で汎用的に使えるが、却下ボタ�
 業務側を持つ申請の取消は、業務側(休暇の申請など)から行う。業務側の取消が申請中のワークフローを
 取り消す(`CancelWorkflowRequestOn{PaidLeave,SpecialLeave,CompensatoryLeave}RequestCancelledReactor`。
 `viaReactor`のため申請者本人の確認は行わず、取消済み・承認済みのワークフローは何もしない)。
-逆に、申請中・差戻し中のワークフローが取り消されると、業務側の申請も取り消す。
+逆に、申請中・差戻し中のワークフローが取り消されると、業務側の申請も取り消す(休暇・備品・月次勤怠に加え、
+経費精算は`CancelExpenseClaimOnWorkflowRequestCancelledReactor`、振替休日は
+`CancelShiftSwapRequestOnWorkflowRequestCancelledReactor`が`viaReactor`で取り消す。取消済み・取消不可の業務側は何もしない)。
+
+申請一覧からの「まとめて取消」は一括取消のAPI(`POST /workflow-requests/bulk-cancel`。上限100件・IDの重複不可)へ1回送り、
+1つのCommand(`CancelWorkflowRequests`)が各件を`CancelWorkflowRequest`(申請者本人の確認を含む)で取り消す。
+全部か無しか: 1件でも取り消せないと何も取り消さず、422(`bulk_operation_rejected`)で失敗した対象と理由の一覧を返す。
+同じ一括の連鎖で既に取消済みになった件は成功として飛ばす。
 
 ## 実装上のポイント
 

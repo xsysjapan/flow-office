@@ -19,7 +19,13 @@ class GrantPaidLeaveHandler implements CommandHandler
 
         $grantId = $command->grantId ?? (string) Str::uuid();
 
-        PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId)
+        $aggregate = PaidLeaveAccountAggregate::retrieve(PaidLeaveAccountAggregate::streamIdFor($command->userId))->forUser($command->userId);
+
+        if ($command->idempotent && $aggregate->hasGrant($grantId)) {
+            return $grantId;
+        }
+
+        $aggregate
             ->grant(
                 grantId: $grantId,
                 grantedOn: $command->grantedOn,

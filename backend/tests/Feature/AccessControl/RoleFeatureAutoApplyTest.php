@@ -5,13 +5,16 @@ namespace Tests\Feature\AccessControl;
 use App\Domain\AccessControl\Commands\ChangeRoleFeatures;
 use App\Domain\AccessControl\Commands\CreateRoleAssignment;
 use App\Domain\AccessControl\Commands\RemoveRoleAssignment;
-use App\Domain\AccessControl\Services\GroupFeatureSyncService;
+use App\Domain\AccessControl\Commands\SyncGroupFeatures;
+use App\Domain\AccessControl\Commands\UpdateRoleAssignment;
 use App\Domain\EventSourcing\CommandBus;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 class RoleFeatureAutoApplyTest extends TestCase
@@ -131,11 +134,79 @@ class RoleFeatureAutoApplyTest extends TestCase
         $existing = DB::table('group_feature_assignments')->where('group_id', $this->groupId)->where('feature_id', $this->featureAId)->first();
         $this->assertNotNull($existing);
 
-        // Re-run sync directly; the existing row should not be recreated (assigned relation stays untouched).
-        app(GroupFeatureSyncService::class)->syncGroup($this->groupId, $this->admin->id);
+        // Re-run the sync command; no diff means nothing is recorded and the existing row stays untouched.
+        $eventsBefore = EloquentStoredEvent::query()->count();
+        $bus->dispatch(new SyncGroupFeatures($this->groupId, $this->admin->id));
+        $this->assertSame($eventsBefore, EloquentStoredEvent::query()->count());
 
         $afterSync = DB::table('group_feature_assignments')->where('group_id', $this->groupId)->where('feature_id', $this->featureAId)->first();
         $this->assertEquals($existing->created_at, $afterSync->created_at);
         $this->assertSame([$this->featureAId], $this->groupFeatureIds());
+    }
+
+    public function test_sync_records_the_whole_diff_on_the_group_access_aggregate(): void
+    {
+        $bus = app(CommandBus::class);
+        $bus->dispatch(new ChangeRoleFeatures($this->roleId, [$this->featureAId], $this->admin->id));
+        $bus->dispatch(new CreateRoleAssignment(
+            (string) Str::uuid(), 'group', $this->groupId, $this->roleId, 'group', $this->groupId, false, null, null, $this->admin->id
+        ));
+        $aggregateUuid = \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_URL, 'group-access:'.$this->groupId)->toString();
+        $this->assertSame(
+            ['feature.assigned_to_group'],
+            EloquentStoredEvent::query()->where('aggregate_uuid', $aggregateUuid)->orderBy('id')->pluck('event_class')->all(),
+        );
+
+        $bus->dispatch(new ChangeRoleFeatures($this->roleId, [$this->featureBId], $this->admin->id));
+
+        $this->assertSame(
+            ['feature.assigned_to_group', 'feature.assigned_to_group', 'feature.removed_from_group'],
+            EloquentStoredEvent::query()->where('aggregate_uuid', $aggregateUuid)->orderBy('id')->pluck('event_class')->all(),
+        );
+        $this->assertSame([$this->featureBId], $this->groupFeatureIds());
+    }
+
+    public function test_updating_assignment_to_an_ended_period_removes_the_group_features(): void
+    {
+        $bus = app(CommandBus::class);
+        $bus->dispatch(new ChangeRoleFeatures($this->roleId, [$this->featureAId], $this->admin->id));
+        $assignmentId = (string) Str::uuid();
+        $bus->dispatch(new CreateRoleAssignment(
+            $assignmentId, 'group', $this->groupId, $this->roleId, 'group', $this->groupId, false, null, null, $this->admin->id
+        ));
+        $this->assertSame([$this->featureAId], $this->groupFeatureIds());
+
+        $bus->dispatch(new UpdateRoleAssignment($assignmentId, 'group', $this->groupId, false, null, now()->subDay()->toISOString(), $this->admin->id));
+
+        $this->assertSame([], $this->groupFeatureIds());
+    }
+
+    public function test_user_subject_assignment_does_not_sync_any_group(): void
+    {
+        $bus = app(CommandBus::class);
+        $bus->dispatch(new ChangeRoleFeatures($this->roleId, [$this->featureAId], $this->admin->id));
+        $bus->dispatch(new CreateRoleAssignment(
+            (string) Str::uuid(), 'user', $this->admin->id, $this->roleId, 'group', $this->groupId, false, null, null, $this->admin->id
+        ));
+
+        $this->assertSame([], $this->groupFeatureIds());
+    }
+
+    public function test_resync_command_records_only_the_missing_difference_and_is_idempotent(): void
+    {
+        $bus = app(CommandBus::class);
+        $bus->dispatch(new ChangeRoleFeatures($this->roleId, [$this->featureAId], $this->admin->id));
+        $bus->dispatch(new CreateRoleAssignment(
+            (string) Str::uuid(), 'group', $this->groupId, $this->roleId, 'group', $this->groupId, false, null, null, $this->admin->id
+        ));
+        // 割当の行だけ欠けた状態(イベントを経ない手動の差)を作り、再同期で埋まることを確かめる。
+        DB::table('group_feature_assignments')->where('group_id', $this->groupId)->delete();
+
+        Artisan::call('access-control:resync-group-features');
+        $this->assertSame([$this->featureAId], $this->groupFeatureIds());
+
+        $eventsBefore = EloquentStoredEvent::query()->count();
+        Artisan::call('access-control:resync-group-features');
+        $this->assertSame($eventsBefore, EloquentStoredEvent::query()->count());
     }
 }

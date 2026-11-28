@@ -213,8 +213,8 @@ export function disposeAsset(id: string, note?: string | null): Promise<Asset> {
 
 /**
  * QR一括操作(spec「一括QR操作API」/論点8)。`POST /assets/bulk`を1回だけ呼び、対象
- * asset_id配列をまとめて送る。バックエンドは1備品=1Aggregateとしてループで処理するため、
- * 部分成功(一部だけ失敗)がありうる。
+ * asset_id配列をまとめて送る。全部か無しか: 1件でも処理できないと422(`bulk_operation_rejected`)で何も記録せず、
+ * 失敗した備品と理由が`ApiError.items`に入る(上限200件・重複なし)。
  */
 export type AssetBulkOperationType = 'self_loan' | 'self_return' | 'backoffice_lend' | 'return' | 'relocate'
 
@@ -229,16 +229,14 @@ export interface AssetBulkOperationInput {
 
 export interface AssetBulkOperationResultItem {
   asset_id: string
-  success: boolean
-  result?: string
-  error?: string
+  /** `loaned` / `returned` / `relocated` */
+  result: string
 }
 
+/** 全件成功の応答(`data`は処理した備品)。 */
 export interface AssetBulkOperationResult {
   operation: AssetBulkOperationType
-  results: AssetBulkOperationResultItem[]
-  succeeded_count: number
-  failed_count: number
+  data: AssetBulkOperationResultItem[]
 }
 
 export function bulkAssetOperation(input: AssetBulkOperationInput): Promise<AssetBulkOperationResult> {

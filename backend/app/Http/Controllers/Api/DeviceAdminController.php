@@ -11,6 +11,7 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AuthenticationKeyResource;
 use App\Http\Resources\UserResource;
+use App\Models\AuthenticationKey;
 use App\Models\AuthenticationKeyType;
 use App\Models\Device;
 use App\Models\DeviceAdminSession;
@@ -18,6 +19,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
@@ -82,21 +84,17 @@ class DeviceAdminController extends Controller
             'raw_key_value' => ['required', 'string'],
         ]);
 
+        // 認証キーのIDは入口で作る(認証キーの文脈のReactorが同じIDで発行する)。
+        $keyId = (string) Str::uuid();
         $session = $commandBus->dispatch(new StartDeviceAdminSessionBootstrap(
             deviceId: $device->id,
             targetAdminUserId: $data['admin_user_id'] ?? null,
-        ));
-
-        $key = $commandBus->dispatch(new IssueAuthenticationKey(
-            userId: $session->admin_user_id,
+            authenticationKeyId: $keyId,
             keyType: $data['key_type'],
             displayName: $data['display_name'],
             rawKeyValue: $data['raw_key_value'],
-            validFrom: null,
-            validUntil: null,
-            metadata: null,
-            registeredByUserId: $session->admin_user_id,
         ));
+        $key = AuthenticationKey::query()->findOrFail($keyId);
 
         return response()->json([
             'admin_session' => $this->sessionResponse($session),

@@ -7,10 +7,11 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
+use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrantsInBulk;
 use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
 use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
-use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Commands\ReassessScheduleEntry;
+use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
 use App\Domain\PaidLeaveSchedule\Handlers\ApplyScheduledGrantsHandler;
 use App\Models\PaidLeaveGrant;
@@ -259,7 +260,7 @@ class PaidLeaveScheduleControllerTest extends TestCase
         ]);
 
         $response->assertOk();
-        $this->assertSame(2, $response->json('success_count'));
+        $this->assertSame(2, count($response->json('data')));
 
         $grants = PaidLeaveGrant::query()->where('user_id', $user->id)->get();
         $this->assertCount(2, $grants);
@@ -304,7 +305,7 @@ class PaidLeaveScheduleControllerTest extends TestCase
         ));
     }
 
-    public function test_bulk_grant_reports_per_entry_success_and_failure(): void
+    public function test_bulk_grant_is_all_or_nothing_and_reports_the_failed_entries(): void
     {
         $admin = $this->admin();
         $eligibleUser = User::factory()->create();
@@ -342,26 +343,82 @@ class PaidLeaveScheduleControllerTest extends TestCase
             automaticResult: PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE,
         ));
 
+        $bus = $this->recordCommands();
         $response = $this->actingAs($admin)->postJson('/api/paid-leave/schedule-entries/bulk-grant', [
             'schedule_entry_ids' => [$eligibleEntryId, $notEligibleEntryId],
         ]);
 
-        $response->assertOk();
-        $this->assertSame(1, $response->json('success_count'));
-        $this->assertSame(1, $response->json('failure_count'));
+        // 1件でも付与できなければ、全体を戻して422(失敗した行と理由)を返す。入口1回=1つのCommand。
+        $response->assertUnprocessable();
+        $response->assertJsonPath('code', 'bulk_operation_rejected');
+        $this->assertSame([$notEligibleEntryId], array_column($response->json('items'), 'id'));
+        $this->assertNotEmpty($response->json('errors')["items.{$notEligibleEntryId}"]);
+        $this->assertSingleTopLevelCommand($bus, ApplyScheduledGrantsInBulk::class);
 
-        $results = collect($response->json('results'))->keyBy('schedule_entry_id');
-        $this->assertTrue($results[$eligibleEntryId]['success']);
-        $this->assertFalse($results[$notEligibleEntryId]['success']);
-
+        // 付与できた側も確定しない(部分成功にしない)。
+        $this->assertSame(0, PaidLeaveGrant::query()->count());
         $this->assertSame(
-            PaidLeaveScheduleAggregate::STATUS_GRANTED,
+            PaidLeaveScheduleAggregate::STATUS_ELIGIBLE,
             PaidLeaveScheduleEntry::query()->findOrFail($eligibleEntryId)->status,
         );
         $this->assertSame(
             PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE,
             PaidLeaveScheduleEntry::query()->findOrFail($notEligibleEntryId)->status,
         );
+    }
+
+    public function test_bulk_grant_succeeds_for_all_entries_of_several_users_with_a_single_command(): void
+    {
+        $admin = $this->admin();
+        $entryIds = [];
+        foreach ([User::factory()->create(), User::factory()->create()] as $user) {
+            $entryId = (string) Str::uuid();
+            $this->createEntry($user->id, $entryId, '2026-10-01');
+            $this->bus()->dispatch(new RunAttendanceRateAssessment(
+                userId: $user->id, scheduleEntryId: $entryId, assessmentId: (string) Str::uuid(),
+                periodStart: '2026-04-01', periodEnd: '2026-10-01', denominatorDays: 20, attendanceDays: 18, excludedDays: 0,
+                attendanceRate: 90.0, policyVersion: 'v1', automaticResult: PaidLeaveScheduleAggregate::STATUS_ELIGIBLE,
+            ));
+            $entryIds[] = $entryId;
+        }
+
+        $bus = $this->recordCommands();
+        $response = $this->actingAs($admin)->postJson('/api/paid-leave/schedule-entries/bulk-grant', ['schedule_entry_ids' => $entryIds]);
+
+        $response->assertOk();
+        $this->assertEqualsCanonicalizing($entryIds, array_column($response->json('data'), 'schedule_entry_id'));
+        $this->assertSingleTopLevelCommand($bus, ApplyScheduledGrantsInBulk::class);
+        $this->assertSame(2, PaidLeaveGrant::query()->count());
+        foreach ($entryIds as $entryId) {
+            $this->assertSame(PaidLeaveScheduleAggregate::STATUS_GRANTED, PaidLeaveScheduleEntry::query()->findOrFail($entryId)->status);
+        }
+    }
+
+    public function test_bulk_grant_reports_every_failed_entry_and_rejects_duplicates_and_too_many(): void
+    {
+        $admin = $this->admin();
+        $ids = [];
+        foreach ([User::factory()->create(), User::factory()->create()] as $user) {
+            $entryId = (string) Str::uuid();
+            $this->createEntry($user->id, $entryId, '2026-10-01');
+            $ids[] = $entryId;
+        }
+
+        // どちらもEligibleでない: 失敗がすべて返る。
+        $response = $this->actingAs($admin)->postJson('/api/paid-leave/schedule-entries/bulk-grant', ['schedule_entry_ids' => $ids]);
+        $response->assertUnprocessable();
+        $response->assertJsonPath('code', 'bulk_operation_rejected');
+        $this->assertEqualsCanonicalizing($ids, array_column($response->json('items'), 'id'));
+
+        // 重複は検証で拒否。
+        $this->actingAs($admin)->postJson('/api/paid-leave/schedule-entries/bulk-grant', ['schedule_entry_ids' => [$ids[0], $ids[0]]])
+            ->assertUnprocessable()->assertJsonValidationErrors(['schedule_entry_ids.0', 'schedule_entry_ids.1']);
+
+        // 上限(500)を超えたら検証で拒否。
+        $tooMany = array_map(fn () => (string) Str::uuid(), range(1, 501));
+        $this->actingAs($admin)->postJson('/api/paid-leave/schedule-entries/bulk-grant', ['schedule_entry_ids' => $tooMany])
+            ->assertUnprocessable()->assertJsonValidationErrors(['schedule_entry_ids']);
+        $this->assertSame(0, PaidLeaveGrant::query()->count());
     }
 
     public function test_admin_can_patch_category_and_candidate_grant_days(): void

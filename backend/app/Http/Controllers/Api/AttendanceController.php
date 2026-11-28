@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
 use App\Domain\Attendance\Commands\AllocateWeeklyOvertime;
-use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
@@ -15,7 +14,6 @@ use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\GeneratePatternAttendanceDays;
 use App\Domain\Attendance\Commands\ReopenClosedAttendanceMonth;
-use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\RevertApprovedAttendanceMonth;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Services\AttendanceApproverAccess;
@@ -29,6 +27,7 @@ use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
 use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Export\Services\AttendanceExportScope;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
@@ -886,13 +885,10 @@ class AttendanceController extends Controller
     {
         $workflowRequest = $this->submittedWorkflowRequestFor($attendanceMonth);
 
-        if ($workflowRequest !== null) {
-            $commandBus->dispatch(new ApproveWorkflowRequest($workflowRequest->id, $request->user()->id));
-        } else {
-            // 提出経路の変更前に提出された月次勤怠(対応するworkflow_requestが無い行)は、
-            // 承認できなくならないよう従来通り直接承認する。
-            $commandBus->dispatch(new ApproveAttendanceMonth($attendanceMonth->id, $request->user()->id));
+        if ($workflowRequest === null) {
+            throw new DomainRuleException('この月の申請が見つかりません。');
         }
+        $commandBus->dispatch(new ApproveWorkflowRequest($workflowRequest->id, $request->user()->id));
 
         return new AttendanceMonthResource($attendanceMonth->refresh()->load('approver'));
     }
@@ -912,19 +908,17 @@ class AttendanceController extends Controller
 
         $workflowRequest = $this->submittedWorkflowRequestFor($attendanceMonth);
 
-        if ($workflowRequest !== null) {
-            $commandBus->dispatch(new ReturnWorkflowRequest($workflowRequest->id, $request->user()->id, $data['comment']));
-        } else {
-            $commandBus->dispatch(new ReturnAttendanceMonth($attendanceMonth->id, $request->user()->id, $data['comment']));
+        if ($workflowRequest === null) {
+            throw new DomainRuleException('この月の申請が見つかりません。');
         }
+        $commandBus->dispatch(new ReturnWorkflowRequest($workflowRequest->id, $request->user()->id, $data['comment']));
 
         return new AttendanceMonthResource($attendanceMonth->refresh()->load('approver'));
     }
 
     /**
      * 月次勤怠に紐づく提出済みのworkflow_request(申請本体)を取得する。提出経路が
-     * DraftWorkflowRequest起点になっているため通常は必ず存在するが、変更前に提出された
-     * 行のために null を返せるようにしている。
+     * DraftWorkflowRequest起点になっているため必ず存在する。無ければnullを返し、呼び出し側が422にする。
      */
     private function submittedWorkflowRequestFor(AttendanceMonth $attendanceMonth): ?WorkflowRequest
     {

@@ -549,7 +549,7 @@ describe('ExpenseClaimNewPage', () => {
     await waitFor(() =>
       expect(addItemsBulk).toHaveBeenCalledWith('claim-1', [
         expect.objectContaining({ usage_date: '2026-07-04', amount: 420, category_id: 1 }),
-      ]),
+      ], [[]]),
     )
     // タイトル確定時に作成した下書きをそのまま使い、明細保存のたびに再作成しない。
     expect(createClaim).toHaveBeenCalledTimes(1)
@@ -579,6 +579,32 @@ describe('ExpenseClaimNewPage', () => {
     expect(await screen.findByText('2行目: 金額のエラー')).toBeInTheDocument()
     expect(screen.queryByText('金額のエラー')).not.toBeInTheDocument()
     expect(screen.queryByRole('listitem')).not.toBeInTheDocument()
+  })
+
+  it('shows the bulk save 422 for a receipt (files.1.0) under that row and keeps the input', async () => {
+    vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockRejectedValue(
+      new ApiError(422, '入力内容を確認してください。', { 'files.1.0': ['ファイルのエラー'] }),
+    )
+
+    renderPage()
+    await selectBulkEntryMode()
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+
+    await userEvent.click(await screen.findByRole('button', { name: '行を追加' }))
+    await userEvent.click(screen.getByRole('button', { name: '行を追加' }))
+    await pickDate(userEvent.setup(), '1行目の日付', '2026-07-04')
+    await pickDate(userEvent.setup(), '2行目の日付', '2026-07-05')
+    await userEvent.type(screen.getByLabelText('1行目の金額'), '420')
+    await userEvent.type(screen.getByLabelText('2行目の金額'), '300')
+    await userEvent.upload(screen.getByLabelText('2行目の領収書'), new File(['x'], 'bad.exe'))
+
+    await userEvent.click(screen.getByRole('button', { name: /^明細を保存\(\d+件\)/ }))
+
+    expect(await screen.findByText('2行目: ファイルのエラー')).toBeInTheDocument()
+    expect(screen.getByLabelText('2行目の金額')).toHaveValue(300)
   })
 
   it('shows the single-item form for a single-entry category without creating a draft claim yet', async () => {
@@ -630,13 +656,13 @@ describe('ExpenseClaimNewPage', () => {
         usage_date: '2026-07-10',
         amount: 12000,
         description: 'ホテルABC',
-      })),
+      }), []),
     )
 
     expect(await screen.findByLabelText('宿泊先名')).toHaveValue('')
   })
 
-  it('uploads a receipt selected on the single-item form right after the item is created', async () => {
+  it('sends a receipt selected on the single-item form together with the item in one request', async () => {
     vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
@@ -652,14 +678,7 @@ describe('ExpenseClaimNewPage', () => {
       fact_reference_id: null,
       commuting_deduction_amount: null,
     })
-    const uploadAttachment = vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue({
-      id: 'attachment-1',
-      file_name: 'receipt.png',
-      file_size: 5,
-      mime_type: 'image/png',
-      uploaded_by: 'applicant-1',
-      created_at: '2026-07-10T00:00:00Z',
-    })
+    const uploadAttachment = vi.spyOn(attachmentsApi, 'uploadAttachment')
 
     renderPage()
     await selectIndividualEntryMode()
@@ -674,13 +693,14 @@ describe('ExpenseClaimNewPage', () => {
     await userEvent.upload(screen.getByLabelText('領収書(任意)'), file)
     await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
 
-    await waitFor(() => expect(expenseClaimsApi.addExpenseItem).toHaveBeenCalled())
     await waitFor(() =>
-      expect(uploadAttachment).toHaveBeenCalledWith('expense_item', 'item-1', file),
+      expect(expenseClaimsApi.addExpenseItem).toHaveBeenCalledWith('claim-1', expect.objectContaining({ amount: 12000 }), [file]),
     )
+    // 添付は別のAPIでは送らない(明細と1回で送る)。
+    expect(uploadAttachment).not.toHaveBeenCalled()
   })
 
-  it('uploads receipts selected per row on the batch table right after the items are created, matching them by row order', async () => {
+  it('sends receipts selected per row on the batch table together with the items in one request, matched by row order', async () => {
     vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
@@ -710,14 +730,7 @@ describe('ExpenseClaimNewPage', () => {
         commuting_deduction_amount: null,
       },
     ])
-    const uploadAttachment = vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue({
-      id: 'attachment-1',
-      file_name: 'receipt.png',
-      file_size: 5,
-      mime_type: 'image/png',
-      uploaded_by: 'applicant-1',
-      created_at: '2026-07-10T00:00:00Z',
-    })
+    const uploadAttachment = vi.spyOn(attachmentsApi, 'uploadAttachment')
 
     renderPage()
     await selectBulkEntryMode()
@@ -737,9 +750,10 @@ describe('ExpenseClaimNewPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /^明細を保存\(\d+件\)/ }))
 
-    await waitFor(() => expect(expenseClaimsApi.addExpenseItemsBulk).toHaveBeenCalled())
-    await waitFor(() => expect(uploadAttachment).toHaveBeenCalledWith('expense_item', 'item-1', file1))
-    expect(uploadAttachment).toHaveBeenCalledTimes(1)
+    await waitFor(() =>
+      expect(expenseClaimsApi.addExpenseItemsBulk).toHaveBeenCalledWith('claim-1', expect.any(Array), [[file1], []]),
+    )
+    expect(uploadAttachment).not.toHaveBeenCalled()
   })
 
   it('skips the category selection step when a ?category= shortcut param matches an active category', async () => {
@@ -1323,12 +1337,11 @@ describe('ExpenseClaimNewPage', () => {
     })
 
     it('shows the receipt file error under the receipt field of the single-item form', async () => {
-      const errors = { file: ['ファイルのエラー'], unknown_key: ['未知のキーのエラー'] }
+      const errors = { 'files.0': ['ファイルのエラー'], unknown_key: ['未知のキーのエラー'] }
       vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
       vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
       vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
-      vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockResolvedValue({ ...savedItem, category_id: 2 })
-      vi.spyOn(attachmentsApi, 'uploadAttachment').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
+      vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockRejectedValue(new ApiError(422, '最初のエラーの文', errors))
 
       renderPage()
       await selectIndividualEntryMode()

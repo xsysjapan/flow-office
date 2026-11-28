@@ -7,7 +7,7 @@ import { useAuth } from '../../auth/useAuth'
 import type { FetchMyWorkflowRequestsOptions } from '../../api/workflowRequests'
 import { Badge } from '../../components/Badge/Badge'
 import { BulkActionBar } from '../../components/BulkActionBar/BulkActionBar'
-import { BulkActionDialog, type BulkActionFailure, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
+import { BulkActionDialog, type BulkActionResult } from '../../components/BulkActionDialog/BulkActionDialog'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
@@ -25,7 +25,7 @@ import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useForwardState, useSearchParamsKeepingBackState } from '../../navigation/backState'
-import { useCancelWorkflowRequest, useMyWorkflowRequests } from '../../hooks/useWorkflowRequests'
+import { useBulkCancelWorkflowRequests, useMyWorkflowRequests } from '../../hooks/useWorkflowRequests'
 import {
   attendanceMonthStatusLabel,
   expenseClaimStatusLabel,
@@ -202,7 +202,7 @@ export function WorkflowRequestListPage() {
   const page = isValidPageParam(pageParam) ? Number(pageParam) : 1
 
   const { data, error } = useMyWorkflowRequests({ status, subjectType, page })
-  const cancelRequest = useCancelWorkflowRequest()
+  const bulkCancel = useBulkCancelWorkflowRequests()
 
   useEffect(() => {
     if (pageParam === null || isValidPageParam(pageParam)) return
@@ -291,25 +291,12 @@ export function WorkflowRequestListPage() {
   }
 
   /** 取消は元に戻せない操作(SKILL.md §2.12)のため、BulkActionDialogの確認を経由させる。
-   *  1件ずつの取消をPromise.allSettledで実行し、失敗した申請は内訳に出して選択に残す。 */
+   *  選んだ申請のIDを一括取消のAPIへ1回送る(全部か無しか)。1件でも取り消せないと422で何も取り消されず、
+   *  ダイアログが失敗の一覧を出して選択を残す。 */
   async function executeBulkCancel(): Promise<BulkActionResult> {
-    const reason = bulkReason.trim()
-    const results = await Promise.allSettled(bulkTargets.map((target) => cancelRequest.mutateAsync({ id: target.id, reason })))
-    const succeededIds: string[] = []
-    const failures: BulkActionFailure[] = []
-    results.forEach((result, index) => {
-      const target = bulkTargets[index]
-      if (result.status === 'fulfilled') {
-        succeededIds.push(target.id)
-      } else {
-        failures.push({
-          id: target.id,
-          label: target.title,
-          message: result.reason instanceof ApiError ? result.reason.message : '取り消せませんでした。',
-        })
-      }
-    })
-    return { succeededIds, failures }
+    const ids = bulkTargets.map((target) => target.id)
+    await bulkCancel.mutateAsync({ ids, reason: bulkReason.trim() })
+    return { succeededIds: ids, failures: [] }
   }
 
   return (
@@ -448,6 +435,8 @@ export function WorkflowRequestListPage() {
         confirmLabel={`${bulkTargets.length}件を取り消す`}
         confirmDisabled={bulkReason.trim() === ''}
         resultTitle="取消の結果"
+        resultMode="allOrNothing"
+        itemLabels={Object.fromEntries(bulkTargets.map((target) => [target.id, target.title]))}
         onExecute={executeBulkCancel}
         onSucceeded={removeFromSelection}
         successMessage={(count) => `${count}件の申請を取り消しました`}

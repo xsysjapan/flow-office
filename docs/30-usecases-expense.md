@@ -231,6 +231,12 @@ stored_eventsへ記録し、対象データID(`expense_claims.id`)+連携先+出
 
 ## 実装上のポイント
 
+- **明細と添付は1回のAPIで記録する(原則17)。** 明細の追加API(`POST /expense-claims/{id}/items`・`.../items/bulk`)は
+  multipartで添付のファイルを一緒に受け取る(1件: `files[]`、まとめて: `items`をJSONの文字列・`files[{行の番号}][]`)。
+  入口が明細のID・添付のIDを決め、大きさ・拡張子の規則(`AttachmentFileRules`)を保存前に確かめ、ファイルを
+  `attachments/expense_items/{明細のID}`へ保存して、`AddExpenseItem`・`AddExpenseItems`に添付の参照を渡す。
+  添付の記録は`expense_claim.item_added`を受ける添付の文脈のReactorが行う。Commandが拒否されたら入口が保存したファイルを消す。
+  添付の単独のAPI(`POST /attachments`)は、後から足す・消す用に残す。
 - 通勤費・業務交通費・その他経費は `expense_categories` の値が違うだけで、
   データモデル・Command/Event・承認フロー・バックオフィス処理はすべて共通。
 - **申請の入り口は「対象期間の指定」ではなく「経費区分の選択」。** `expense_claims`は

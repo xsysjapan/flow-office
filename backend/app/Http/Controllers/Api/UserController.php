@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\UserManagement\Commands\AddMembership;
 use App\Domain\UserManagement\Commands\CreateUser;
 use App\Domain\UserManagement\Commands\SetPaidLeaveAutoGrantEnabled;
 use App\Domain\UserManagement\Commands\SetSpecialLeaveAutoGrantEnabled;
@@ -55,10 +54,7 @@ class UserController extends Controller
             ...$attributes,
             'employment_status' => $attributes['employment_status'] ?? 'active',
             'account_status' => $attributes['account_status'] ?? 'active',
-        ], $request->user()->id));
-        if ($groupId) {
-            $commandBus->dispatch(new AddMembership($id, $groupId, 'member', false, $request->user()->id));
-        }
+        ], $request->user()->id, $groupId));
 
         return (new UserResource($user->load(['externalIdentities', 'memberships.group.type'])))
             ->response()->setStatusCode(201);

@@ -6,6 +6,7 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
+use App\Domain\SpecialLeaveAccount\Aggregates\SpecialLeaveAccountAggregate;
 use App\Domain\SpecialLeaveAccount\Commands\RegisterSpecialLeaveGrant;
 use App\Jobs\SendNotificationJob;
 use App\Models\SpecialLeaveGrant;
@@ -28,7 +29,12 @@ class GrantSpecialLeaveHandler implements CommandHandler
     {
         assert($command instanceof GrantSpecialLeave);
 
-        $grantId = (string) Str::uuid();
+        $grantId = $command->grantId ?? (string) Str::uuid();
+
+        if ($command->idempotent
+            && SpecialLeaveAccountAggregate::retrieve(SpecialLeaveAccountAggregate::streamIdFor($command->userId))->hasGrant($grantId)) {
+            return SpecialLeaveGrant::query()->findOrFail($grantId);
+        }
 
         $this->commandBus->dispatch(new RegisterSpecialLeaveGrant(
             userId: $command->userId,

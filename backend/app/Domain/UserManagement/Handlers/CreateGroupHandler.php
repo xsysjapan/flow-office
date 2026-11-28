@@ -21,7 +21,7 @@ class CreateGroupHandler implements CommandHandler
             throw new DomainRuleException('有効なGroupTypeを指定してください。');
         } if ($command->parentGroupId && ! DB::table('groups')->where('id', $command->parentGroupId)->where('group_type_id', $command->groupTypeId)->where('status', 'active')->exists()) {
             throw new DomainRuleException('同じGroupTypeの有効な親グループを指定してください。');
-        } GroupAggregate::retrieve($command->groupId)->create($command->groupTypeId, $command->name, $command->code, $command->description, $command->parentGroupId, $command->actorUserId)->persist();
+        } GroupAggregate::retrieve($command->groupId)->create($command->groupTypeId, $command->name, $command->code, $command->description, $command->parentGroupId, $command->actorUserId, $command->initialRoleId)->persist();
 
         return $command->groupId;
     }
