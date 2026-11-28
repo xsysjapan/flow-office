@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Commands\AddMembership;
 use App\Domain\UserManagement\Commands\CreateUser;
 use App\Domain\UserManagement\Commands\SetPaidLeaveAutoGrantEnabled;
@@ -12,6 +11,7 @@ use App\Domain\UserManagement\Commands\SetSpecialLeaveAutoGrantEnabled;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Domain\UserManagement\Commands\SetUserTerminationDate;
 use App\Domain\UserManagement\Commands\SetUserUsageStartDate;
+use App\Domain\UserManagement\Commands\UpdateUserDetails;
 use App\Domain\UserManagement\Commands\UpdateUserProfile;
 use App\Domain\UserManagement\Services\FieldAuthorityService;
 use App\Http\Controllers\Controller;
@@ -22,9 +22,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 /**
@@ -83,9 +81,9 @@ class UserController extends Controller
     }
 
     /**
-     * 利用者詳細のまとめて保存。変更した項目だけを受け取り、既存のコマンドを1トランザクションで
-     * dispatchする(すべて成功するか、すべて戻す)。拒否は項目のキーを付けた422で返す
-     * (docs/changesets/20261125-save-all-user-and-role/spec.md 論点2)。
+     * 利用者詳細のまとめて保存。変更した項目だけを受け取り、UpdateUserDetails を1つdispatchする
+     * (外部人事の権限・最終状態の検査は Handler。拒否は項目のキーを付けた422)
+     * (docs/changesets/20261128-single-command-entrypoints/spec.md 論点1)。
      */
     #[OA\Put(
         path: '/users/{user}/details',
@@ -136,85 +134,13 @@ class UserController extends Controller
             'paid_leave_auto_grant_enabled' => ['sometimes', 'boolean'],
             'special_leave_auto_grant_enabled' => ['sometimes', 'boolean'],
         ]);
-        $profile = $data['profile'] ?? [];
-        $dateKeys = array_values(array_filter(['hire_date', 'termination_date', 'usage_start_date'], fn (string $key) => array_key_exists($key, $data)));
-
-        // 外部人事が管理する項目は、項目ごとに確かめて、その項目のキーで拒否する。
-        $authority = app(FieldAuthorityService::class);
-        $errors = [];
-        foreach (array_keys($profile) as $key) {
-            try {
-                $authority->assertLocallyEditable([$key]);
-            } catch (DomainRuleException $e) {
-                $errors["profile.{$key}"] = [$e->getMessage()];
-            }
-        }
-        foreach ($dateKeys as $key) {
-            try {
-                $authority->assertLocallyEditable([$key]);
-            } catch (DomainRuleException $e) {
-                $errors[$key] = [$e->getMessage()];
-            }
-        }
-
-        // 最後の状態で入社日 ≤ 退社日になっているか。
-        $normalize = fn (mixed $value): ?string => $value === null ? null : Carbon::parse($value)->toDateString();
-        $hire = array_key_exists('hire_date', $data) ? $normalize($data['hire_date']) : $user->hire_date?->toDateString();
-        $termination = array_key_exists('termination_date', $data) ? $normalize($data['termination_date']) : $user->termination_date?->toDateString();
-        if ($hire !== null && $termination !== null && $hire > $termination && ! isset($errors['hire_date']) && ! isset($errors['termination_date'])) {
-            if (array_key_exists('termination_date', $data)) {
-                $errors['termination_date'] = ['退社日は入社日以降の日付を指定してください。'];
-            } else {
-                $errors['hire_date'] = ['入社日は退社日以前の日付を指定してください。'];
-            }
-        }
-        if ($errors !== []) {
-            throw ValidationException::withMessages($errors);
-        }
-
-        $actorId = $request->user()->id;
-        $dispatch = function (object $command, string $key) use ($commandBus): void {
-            try {
-                $commandBus->dispatch($command);
-            } catch (DomainRuleException $e) {
-                throw ValidationException::withMessages([$key => [$e->getMessage()]]);
-            }
-        };
-
-        DB::transaction(function () use ($data, $profile, $user, $actorId, $dispatch, $normalize) {
-            if ($profile !== []) {
-                $dispatch(
-                    new UpdateUserProfile($user->id, $profile, $actorId),
-                    array_key_exists('account_status', $profile) ? 'profile.account_status' : 'profile',
-                );
-            }
-
-            // 途中の状態が成り立つ順にする。新しい入社日が今の退社日より後なら、退社日を先に変える。
-            $dateOrder = ['hire_date', 'termination_date'];
-            if (array_key_exists('hire_date', $data) && array_key_exists('termination_date', $data)
-                && $data['hire_date'] !== null && $user->termination_date !== null
-                && $normalize($data['hire_date']) > $user->termination_date->toDateString()) {
-                $dateOrder = ['termination_date', 'hire_date'];
-            }
-            foreach ($dateOrder as $key) {
-                if (! array_key_exists($key, $data)) {
-                    continue;
-                }
-                $dispatch($key === 'hire_date'
-                    ? new SetUserHireDate($user->id, $data['hire_date'], $actorId)
-                    : new SetUserTerminationDate($user->id, $data['termination_date'], $actorId), $key);
-            }
-
-            if (array_key_exists('usage_start_date', $data)) {
-                $dispatch(new SetUserUsageStartDate($user->id, $data['usage_start_date'], $actorId), 'usage_start_date');
-            }
-            if (array_key_exists('paid_leave_auto_grant_enabled', $data)) {
-                $dispatch(new SetPaidLeaveAutoGrantEnabled($user->id, $data['paid_leave_auto_grant_enabled'], $actorId), 'paid_leave_auto_grant_enabled');
-            }
-            if (array_key_exists('special_leave_auto_grant_enabled', $data)) {
-                $dispatch(new SetSpecialLeaveAutoGrantEnabled($user->id, $data['special_leave_auto_grant_enabled'], $actorId), 'special_leave_auto_grant_enabled');
-            }
-        });
+        $fieldKeys = ['hire_date', 'termination_date', 'usage_start_date', 'paid_leave_auto_grant_enabled', 'special_leave_auto_grant_enabled'];
+        $commandBus->dispatch(new UpdateUserDetails(
+            $user->id,
+            $data['profile'] ?? [],
+            array_intersect_key($data, array_flip($fieldKeys)),
+            $request->user()->id,
+        ));
 
         return $this->show($user->refresh(), $resolver);
     }
@@ -390,7 +316,6 @@ class UserController extends Controller
     )]
     public function updateHireDate(Request $request, User $user, CommandBus $commandBus): UserResource
     {
-        app(FieldAuthorityService::class)->assertLocallyEditable(['hire_date']);
         $data = $request->validate(['hire_date' => ['required', 'date']]);
 
         $commandBus->dispatch(new SetUserHireDate(
@@ -413,7 +338,6 @@ class UserController extends Controller
     )]
     public function updateTerminationDate(Request $request, User $user, CommandBus $commandBus): UserResource
     {
-        app(FieldAuthorityService::class)->assertLocallyEditable(['termination_date']);
         $data = $request->validate(['termination_date' => ['nullable', 'date']]);
 
         $commandBus->dispatch(new SetUserTerminationDate(
@@ -449,7 +373,6 @@ class UserController extends Controller
     )]
     public function updateUsageStartDate(Request $request, User $user, CommandBus $commandBus): UserResource
     {
-        app(FieldAuthorityService::class)->assertLocallyEditable(['usage_start_date']);
         $data = $request->validate(['usage_start_date' => ['required', 'date']]);
 
         $commandBus->dispatch(new SetUserUsageStartDate(

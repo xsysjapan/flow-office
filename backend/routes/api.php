@@ -428,6 +428,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/paid-leave/requests/to-approve', [PaidLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::get('/paid-leave/history/mine', [PaidLeaveController::class, 'myHistory'])->middleware('ability:leave:self:read');
     Route::post('/paid-leave/requests', [PaidLeaveController::class, 'storeRequest'])->middleware('ability:leave:self:create');
+    Route::post('/paid-leave/requests/workflow', [PaidLeaveController::class, 'storeWorkflowRequest'])->middleware('ability:leave:self:create');
     Route::post('/paid-leave/requests/{paidLeaveRequest}/approve', [PaidLeaveController::class, 'approveRequest'])->middleware('permission:approval.execute');
     Route::post('/paid-leave/requests/{paidLeaveRequest}/return', [PaidLeaveController::class, 'returnRequest'])->middleware('permission:approval.execute');
     Route::post('/paid-leave/requests/{paidLeaveRequest}/cancel', [PaidLeaveController::class, 'cancelRequest']);
@@ -465,6 +466,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/special-leave/requests/to-approve', [SpecialLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::get('/special-leave/history/mine', [SpecialLeaveController::class, 'myHistory']);
     Route::post('/special-leave/requests', [SpecialLeaveController::class, 'storeRequest']);
+    Route::post('/special-leave/requests/workflow', [SpecialLeaveController::class, 'storeWorkflowRequest']);
     Route::post('/special-leave/requests/{specialLeaveRequest}/approve', [SpecialLeaveController::class, 'approveRequest'])->middleware('permission:approval.execute');
     Route::post('/special-leave/requests/{specialLeaveRequest}/return', [SpecialLeaveController::class, 'returnRequest'])->middleware('permission:approval.execute');
     Route::post('/special-leave/requests/{specialLeaveRequest}/cancel', [SpecialLeaveController::class, 'cancelRequest']);
@@ -488,6 +490,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/compensatory-leave/requests/mine', [CompensatoryLeaveController::class, 'myRequests']);
     Route::get('/compensatory-leave/requests/to-approve', [CompensatoryLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::post('/compensatory-leave/requests', [CompensatoryLeaveController::class, 'storeRequest']);
+    Route::post('/compensatory-leave/requests/workflow', [CompensatoryLeaveController::class, 'storeWorkflowRequest']);
     Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/approve', [CompensatoryLeaveController::class, 'approveRequest'])->middleware('permission:approval.execute');
     Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/return', [CompensatoryLeaveController::class, 'returnRequest'])->middleware('permission:approval.execute');
     Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/cancel', [CompensatoryLeaveController::class, 'cancelRequest']);
@@ -507,6 +510,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/shift-swap/requests/mine', [ShiftSwapRequestController::class, 'myRequests']);
     Route::get('/shift-swap/requests/to-approve', [ShiftSwapRequestController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::post('/shift-swap/requests', [ShiftSwapRequestController::class, 'storeRequest']);
+    Route::post('/shift-swap/requests/workflow', [ShiftSwapRequestController::class, 'storeWorkflowRequest']);
     Route::get('/shift-swap/requests/{shiftSwapRequest}', [ShiftSwapRequestController::class, 'show']);
     Route::post('/shift-swap/requests/{shiftSwapRequest}/approve', [ShiftSwapRequestController::class, 'approveRequest'])->middleware('permission:approval.execute');
     Route::post('/shift-swap/requests/{shiftSwapRequest}/return', [ShiftSwapRequestController::class, 'returnRequest'])->middleware('permission:approval.execute');

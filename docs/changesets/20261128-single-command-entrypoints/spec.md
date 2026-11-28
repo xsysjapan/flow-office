@@ -153,4 +153,16 @@
   - 低: 項目のキー付きの拒否の前例、週の振分の順序と重複、再判定の planner、入口1回の検証の方法。
 
 ## 実装結果
-未着手
+- 利用者詳細・ロール(担当: UserManagement/AccessControl/付与予定の Reactor):
+  - `UpdateUserDetails`(Handler が外部人事の権限・最後のシステム管理者・入社日 ≤ 退社日の最終状態を検査し、集約に1回の persist で記録。共通の検査は `UserProfileGuard`)。外部人事の確認を `SetUserHireDate`/`SetUserTerminationDate`/`SetUserUsageStartDate` の Handler にも入れ、Controller の確認は外した。
+  - `RecalculateScheduleOnUserConditionChangedReactor`: 同じ利用者のストリームに購読する種類で版の大きいイベントが既にあれば何もしない(3項目を同時に変えると付与予定は「取消」だけ)。
+  - `UpdateRoleDefinition`(前か後のどちらかで有効なら Permission・Feature 可。有効にする変更を最初、無効にする変更を最後に記録。Feature の同期は `GroupFeatureSyncService` を Handler から呼ぶ)・`CloneRole`(作成と権限を1回の persist)。
+  - 仕様に無かった判断: 利用者詳細で `hire_date`/`usage_start_date` を null で送ったときは、今は集約の型エラー(500)になるので、項目のキー付きの 422 にした。
+
+- 経費の明細・週の残業・付与予定の再判定(担当: 実装エージェント): `AddExpenseItems`・`AllocateWeeklyOvertime`・`ReassessScheduleEntry`(Command・Handler・`config/domain.php`)。Controllerは形式の検証・認可・Command1つのdispatch・応答だけ。経費の明細の422は`items.{i}.{項目}`(形式は`items.*.{項目}`、業務の拒否はHandlerの`ValidationException::withMessages`)。frontendは`ExpenseItemsTable`に`rowErrors`を足し、送信の添字を画面の行(rowId)へ戻して行の下に出す。
+- 週の残業の振分: 同じ日の重複は422(`allocations.*.attendance_day_id`をdistinct)。応答はGETと同じ組み立て(`weekOvertimePayload`)で`prescribed_work_days`・`scheduled_prescribed_work_minutes`を含む。日ごとのCommand`AllocateAttendanceWeeklyOvertime`は他に使う入口が無かったので削除。
+- テスト: 3入口で`assertSingleTopLevelCommand`、経費の422キー・1件の拒否で何も残らない、週の重複・上限超過で何も残らない、再判定で組の2行に判定が1件ずつ。frontendは行の下の422(Vitest)。
+
+- 休暇・振替休日の申請の入口(担当: 実装エージェント): 汎用の `POST /workflow-requests` は `request_type_code` 必須で休暇の subject を作れないため、休暇ごとに承認が必要な入口 `POST /{paid-leave,special-leave,compensatory-leave,shift-swap}/requests/workflow`(`DraftWorkflowRequest` 1つ。`approver_user_id` 必須)を新設。`POST /{kind}/requests` は `Request{X}` 1つだけ(approver 任意)で、Controller は承認の要否を読まない。
+- `LeaveApprovalRequirement`(`Leave/Support`)を新設。`Request{X}` の Handler は利用者の操作(`viaReactor=false`、振替休日は `workflowRequestId===null`)で承認が必要なら 422、不要なら申請 persist の後に承認の処理(新設の `PaidLeaveRequestApprover` 等の Service を `Approve{X}` Handler と共有。承認者は入力が無ければ申請者本人)で承認を persist。`DraftWorkflowRequestHandler` は休暇・振替休日で承認不要なら 422。Command の `approverUserId` は有給・特別休暇・代休で nullable に。
+- テスト: `tests/Feature/Leave/LeaveRequestEntrypointsTest.php`(4種のデータ駆動。申請→承認のイベントの並びは変更前のコードで実測した並びと一致、承認必要で直接=422で何も残らない、承認不要でワークフロー入口=422、`assertSingleTopLevelCommand`)・`tests/Unit/Leave/LeaveApprovalRequirementTest.php`。既存の休暇のテストは承認必要な設定の申請を `/requests/workflow` に書き直し、`HalfDayLeavePrescribedMinutesTest` は設定を承認不要に。frontend は各申請の画面が公開設定で入口を選ぶ(hook に `approvalRequired` を渡す)、e2e の `requestPaidLeave` を `/workflow` に。docs は09・10章。

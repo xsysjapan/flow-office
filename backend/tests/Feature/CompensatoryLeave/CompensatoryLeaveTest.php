@@ -307,7 +307,7 @@ class CompensatoryLeaveTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestResponse = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestResponse = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -348,7 +348,7 @@ class CompensatoryLeaveTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $response = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -402,7 +402,7 @@ class CompensatoryLeaveTest extends TestCase
         $this->makeWorkingDayShift($employee, $workStyle, '2026-08-20');
 
         // unit=dailyの設定ではhourlyは使用できない。
-        $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-08-20',
             'leave_type' => 'hourly',
             'hours' => 2,
@@ -493,7 +493,7 @@ class CompensatoryLeaveTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -519,7 +519,7 @@ class CompensatoryLeaveTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -552,7 +552,7 @@ class CompensatoryLeaveTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -594,7 +594,7 @@ class CompensatoryLeaveTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'am_half',
             'approver_user_id' => $approver->id,
@@ -622,7 +622,7 @@ class CompensatoryLeaveTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -649,7 +649,7 @@ class CompensatoryLeaveTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -692,7 +692,7 @@ class CompensatoryLeaveTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

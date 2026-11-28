@@ -61,6 +61,13 @@ describe('ExpenseItemsTable', () => {
     expect(screen.getByText('合計金額: 1,420円')).toBeInTheDocument()
   })
 
+  it('shows a row error under its row only', () => {
+    render(<ExpenseItemsTable {...baseProps()} rowErrors={{ 2: '金額は0以上で入力してください。' }} />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('2行目: 金額は0以上で入力してください。')
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+  })
+
   it('calls onUpdateRow with the correct patch when editing a cell', async () => {
     const user = userEvent.setup()
     const props = baseProps()

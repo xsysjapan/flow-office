@@ -287,7 +287,7 @@ class PaidLeaveWarningBatchTest extends TestCase
     {
         $this->createWorkingDayShift($employee, $date);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $date,
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

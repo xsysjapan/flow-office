@@ -70,7 +70,7 @@ class SpecialLeaveAdminCancelRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -104,7 +104,7 @@ class SpecialLeaveAdminCancelRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -128,7 +128,7 @@ class SpecialLeaveAdminCancelRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-11',
             'leave_type' => 'full',
@@ -158,7 +158,7 @@ class SpecialLeaveAdminCancelRequestTest extends TestCase
         ]);
 
         foreach (['2026-08-10', '2026-08-12'] as $date) {
-            $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
                 'special_leave_type_id' => $type->id,
                 'target_date' => $date,
                 'leave_type' => 'full',

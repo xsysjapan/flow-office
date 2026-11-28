@@ -54,7 +54,7 @@ class PaidLeaveHistoryTest extends TestCase
             'grant_reason' => '初回付与',
         ])->assertCreated();
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

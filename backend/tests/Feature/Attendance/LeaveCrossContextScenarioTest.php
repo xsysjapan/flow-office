@@ -93,7 +93,10 @@ class LeaveCrossContextScenarioTest extends TestCase
         }
     }
 
-    /** 休暇を申請して申請IDを返す(勤務予定は日ごとに作る)。承認者がnullなら承認不要設定の申請。 */
+    /**
+     * 休暇を申請して申請IDを返す(勤務予定は日ごとに作る)。承認者がnullなら承認不要設定の直接の申請、
+     * 承認者を指定するなら承認が必要な設定のワークフローの入口(設定と違う入口は422になる)。
+     */
     private function requestLeaveOf(string $kind, User $employee, ?User $approver, string $date, string $unit = 'full'): string
     {
         $this->workDay($employee, $date);
@@ -106,7 +109,7 @@ class LeaveCrossContextScenarioTest extends TestCase
             $payload['special_leave_type_id'] = $this->specialType->id;
         }
 
-        return $this->actingAs($employee)->postJson('/api/'.self::KINDS[$kind]['path'].'/requests', $payload)
+        return $this->actingAs($employee)->postJson('/api/'.self::KINDS[$kind]['path'].($approver === null ? '/requests' : '/requests/workflow'), $payload)
             ->assertCreated()->json('id');
     }
 
@@ -264,7 +267,7 @@ class LeaveCrossContextScenarioTest extends TestCase
         $before = $this->state();
 
         // 申請
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-13', 'leave_type' => 'full', 'approver_user_id' => $approver->id,
         ])->assertStatus(422);
         $this->assertSame($before, $this->state(), '締め済みの日への申請');

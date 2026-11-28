@@ -253,7 +253,7 @@ class LeaveAttendanceRateScenarioTest extends TestCase
     /** 全休・半休・時間休の有給を申請し、申請IDを返す(承認者は$this->approver)。 */
     private function submitRequest(array $overrides): string
     {
-        return $this->actingAs($this->employee)->postJson('/api/paid-leave/requests', array_merge([
+        return $this->actingAs($this->employee)->postJson('/api/paid-leave/requests/workflow', array_merge([
             'approver_user_id' => $this->approver->id,
             'reason' => '私用のため',
         ], $overrides))->assertCreated()->json('id');

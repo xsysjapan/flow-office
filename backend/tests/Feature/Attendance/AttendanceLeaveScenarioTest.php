@@ -83,7 +83,7 @@ class AttendanceLeaveScenarioTest extends TestCase
             $payload['hours'] = $hours;
         }
 
-        return $this->actingAs($employee)->postJson('/api/paid-leave/requests', $payload)
+        return $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', $payload)
             ->assertCreated()->json('id');
     }
 
@@ -260,7 +260,7 @@ class AttendanceLeaveScenarioTest extends TestCase
         $this->requestLeave($employee, $approver, '2026-08-10', 'full');
         $before = $this->snapshotState();
 
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10', 'leave_type' => 'am_half', 'approver_user_id' => $approver->id,
         ])->assertStatus(422);
 
@@ -293,7 +293,7 @@ class AttendanceLeaveScenarioTest extends TestCase
         $before = $this->snapshotState();
 
         // 5時間+4時間=9時間 > 所定8時間 は拒否。
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10', 'leave_type' => 'hourly', 'hours' => 4, 'approver_user_id' => $approver->id,
         ])->assertStatus(422);
         $this->assertSame($before, $this->snapshotState());
@@ -318,7 +318,7 @@ class AttendanceLeaveScenarioTest extends TestCase
         ])->assertSuccessful();
         $before = $this->snapshotState();
 
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-11', 'leave_type' => 'full', 'approver_user_id' => $approver->id,
         ])->assertStatus(422);
         $this->assertNull($this->dayOn($employee, '2026-08-11'));

@@ -10,6 +10,7 @@ use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
 use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
 use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
+use App\Domain\PaidLeaveSchedule\Commands\ReassessScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
 use App\Domain\PaidLeaveSchedule\Handlers\ApplyScheduledGrantsHandler;
 use App\Models\PaidLeaveGrant;
@@ -20,6 +21,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Support\AssertsSingleTopLevelCommand;
 use Tests\TestCase;
 
 /**
@@ -27,6 +29,7 @@ use Tests\TestCase;
  */
 class PaidLeaveScheduleControllerTest extends TestCase
 {
+    use AssertsSingleTopLevelCommand;
     use RefreshDatabase;
 
     private function bus(): CommandBus
@@ -149,9 +152,11 @@ class PaidLeaveScheduleControllerTest extends TestCase
         $entryId = (string) Str::uuid();
         $this->createEntry($user->id, $entryId, '2026-10-01');
 
+        $bus = $this->recordCommands();
         $response = $this->actingAs($admin)->postJson("/api/paid-leave/schedule-entries/{$entryId}/reassess");
 
         $response->assertOk();
+        $this->assertSingleTopLevelCommand($bus, ReassessScheduleEntry::class);
         // 出勤実績データが無い(分母日数0件)ため、要確認へ倒れる想定。
         $this->assertSame(PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW, $response->json('data.status'));
 

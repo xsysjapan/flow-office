@@ -67,7 +67,7 @@ class SpecialLeaveScenarioTest extends TestCase
     /** 特別休暇を申請し、申請ID(workflow経由のため申請の作成はReactorが行う)を返す。 */
     private function requestSpecialLeave(User $employee, User $approver, SpecialLeaveType $type, string $date, string $leaveType = 'full', ?string $groupId = null): string
     {
-        $response = $this->actingAs($employee)->postJson('/api/special-leave/requests', array_filter([
+        $response = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', array_filter([
             'special_leave_type_id' => $type->id,
             'target_date' => $date,
             'leave_type' => $leaveType,
@@ -320,13 +320,13 @@ class SpecialLeaveScenarioTest extends TestCase
             'granted_on' => '2026-07-01', 'expires_on' => null, 'granted_days' => 3,
         ]);
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => self::DATE,
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
         ])->assertCreated();
 
-        $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => self::DATE,
             'leave_type' => 'full',
@@ -359,7 +359,7 @@ class SpecialLeaveScenarioTest extends TestCase
             'approver_user_id' => $monthApprover->id,
         ])->assertSuccessful();
 
-        $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-12',
             'leave_type' => 'full',

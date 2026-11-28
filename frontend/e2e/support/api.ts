@@ -146,7 +146,7 @@ export async function fetchUserIdByEmail(page: Page, email: string): Promise<str
 }
 
 /**
- * UC-P003: 有給を申請する(APIを直接叩く版)。scenario-03のUI経由の申請と異なり、
+ * UC-P003: 有給を申請する(承認が必要な設定のワークフローの入口を直接叩く版)。scenario-03のUI経由の申請と異なり、
  * 実在しない未来年月(通年運用シミュレーション等)を対象にする場合、画面上の日付入力より
  * 直接APIを叩く方が確実なため用意する。
  */
@@ -154,7 +154,7 @@ export async function requestPaidLeave(
   page: Page,
   input: { targetDate: string; leaveType: 'full' | 'am_half' | 'pm_half' | 'hourly'; hours?: number; approverUserId: string; reason?: string },
 ): Promise<{ id: string }> {
-  return apiFetch(page, '/paid-leave/requests', {
+  return apiFetch(page, '/paid-leave/requests/workflow', {
     method: 'POST',
     body: {
       target_date: input.targetDate,

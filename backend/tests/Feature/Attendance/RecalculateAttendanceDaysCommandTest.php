@@ -57,7 +57,7 @@ class RecalculateAttendanceDaysCommandTest extends TestCase
         $this->workingDay($employee, $date);
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $date,
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

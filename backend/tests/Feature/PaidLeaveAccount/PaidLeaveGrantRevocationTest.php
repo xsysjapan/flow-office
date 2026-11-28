@@ -87,7 +87,7 @@ class PaidLeaveGrantRevocationTest extends TestCase
 
         // Allocation(=Grantの消化)を実際に発生させる(有給申請→承認)ことで、
         // PaidLeaveAccountAggregateの不変条件4(Allocation済みGrantの取消不可)を検証する。
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -137,7 +137,7 @@ class PaidLeaveGrantRevocationTest extends TestCase
     /** 終日有給を申請して承認する(充当は承認時に付与へ割り当てられる)。 */
     private function approveFullDayLeave(User $employee, User $approver, string $date): void
     {
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $date,
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

@@ -6,8 +6,10 @@ use App\Domain\Attendance\Services\ScheduledWorkingDayResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Leave\Support\LeaveApprovalRequirement;
 use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
+use App\Domain\SpecialLeave\Services\SpecialLeaveRequestApprover;
 use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveType;
@@ -23,6 +25,8 @@ use Illuminate\Support\Str;
  *   `special_leave.requested`/`.shared`をそれぞれの文脈のReactorが受けて行う。
  * - 同日の休暇の衝突・締め判定は勤怠文脈が休暇の反映時に行う(違反なら連鎖全体が取り消される)。
  * - viaReactor=true(workflow_request.drafted からのReactor発行)で、同じ申請IDが既に申請済みなら何もしない(冪等)。
+ * - 利用者の操作(viaReactor=false)の直接の申請は、承認が必要な設定なら拒否する(承認が必要な申請はワークフローの下書きから行う)。
+ *   承認不要の設定なら、申請を記録した後に承認(approvedByUserId=null。SpecialLeaveRequestApproverと共通)まで記録する。
  *
  * @implements CommandHandler<RequestSpecialLeave>
  */
@@ -30,6 +34,8 @@ class RequestSpecialLeaveHandler implements CommandHandler
 {
     public function __construct(
         private readonly ScheduledWorkingDayResolver $scheduledWorkingDayResolver,
+        private readonly LeaveApprovalRequirement $approvalRequirement,
+        private readonly SpecialLeaveRequestApprover $approver,
     ) {}
 
     public function handle(Command $command): SpecialLeaveRequest
@@ -41,6 +47,10 @@ class RequestSpecialLeaveHandler implements CommandHandler
 
         if ($command->viaReactor && $aggregate->status() !== 'none') {
             return SpecialLeaveRequest::query()->findOrFail($requestId);
+        }
+
+        if (! $command->viaReactor) {
+            $this->assertDirectRequestAllowed();
         }
 
         $specialLeaveType = SpecialLeaveType::query()->findOrFail($command->specialLeaveTypeId);
@@ -57,7 +67,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
             leaveType: $command->leaveType,
             hours: $command->hours,
             requestedDays: $requestedDays,
-            approverUserId: $command->approverUserId,
+            approverUserId: $command->approverUserId ?? $command->userId,
             reason: $command->reason,
             requestGroupId: $command->requestGroupId,
         );
@@ -69,7 +79,21 @@ class RequestSpecialLeaveHandler implements CommandHandler
 
         $aggregate->persist();
 
+        // 承認不要の設定での直接の申請: 集約を取り出し直して承認を記録する(申請と承認の2回のpersist。1つのトランザクション)。
+        if (! $command->viaReactor) {
+            return $this->approver->approve($requestId, null, false);
+        }
+
         return SpecialLeaveRequest::query()->findOrFail($requestId);
+    }
+
+    private function assertDirectRequestAllowed(): void
+    {
+        $rejection = $this->approvalRequirement->directRequestRejection(LeaveApprovalRequirement::SPECIAL_LEAVE);
+
+        if ($rejection !== null) {
+            throw new DomainRuleException($rejection);
+        }
     }
 
     private function resolveRequestedDays(RequestSpecialLeave $command): float

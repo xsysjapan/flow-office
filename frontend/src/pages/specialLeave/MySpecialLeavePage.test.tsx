@@ -186,7 +186,7 @@ describe('MySpecialLeavePage', () => {
 
   it('submits a full-day special leave request with the selected type', async () => {
     vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
-    vi.spyOn(specialLeaveApi, 'createSpecialLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(specialLeaveApi, 'createSpecialLeaveWorkflowRequest').mockResolvedValue(submittedRequest)
 
     renderPage()
     await screen.findByText('特別休暇申請はまだありません。')
@@ -199,7 +199,7 @@ describe('MySpecialLeavePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '申請する' }))
 
     await waitFor(() =>
-      expect(specialLeaveApi.createSpecialLeaveRequest).toHaveBeenCalledWith({
+      expect(specialLeaveApi.createSpecialLeaveWorkflowRequest).toHaveBeenCalledWith({
         special_leave_type_id: birthdayType.id,
         target_date: '2026-08-10',
         leave_type: 'full',
@@ -212,7 +212,7 @@ describe('MySpecialLeavePage', () => {
 
   it('shows each 422 message once under its field and the heading above the button (hourly leave)', async () => {
     vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
-    vi.spyOn(specialLeaveApi, 'createSpecialLeaveRequest').mockRejectedValue(
+    vi.spyOn(specialLeaveApi, 'createSpecialLeaveWorkflowRequest').mockRejectedValue(
       new ApiError(422, '最初のエラーの文です。', {
         special_leave_type_id: ['種類のエラー'],
         target_date: ['対象日のエラー'],
@@ -254,6 +254,7 @@ describe('MySpecialLeavePage', () => {
   it('allows submitting without an approver when approval is not required', async () => {
     vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
     vi.spyOn(specialLeaveApi, 'createSpecialLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(specialLeaveApi, 'createSpecialLeaveWorkflowRequest')
 
     renderPage([], [birthdayType], false)
     await screen.findByText('特別休暇申請はまだありません。')
@@ -275,11 +276,13 @@ describe('MySpecialLeavePage', () => {
         reason: undefined,
       }),
     )
+    // 承認不要の設定では直接の申請の入口を呼び、ワークフローの入口は呼ばない。
+    expect(specialLeaveApi.createSpecialLeaveWorkflowRequest).not.toHaveBeenCalled()
   })
 
   it('creates one request per day when submitting a date range', async () => {
     vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
-    vi.spyOn(specialLeaveApi, 'createSpecialLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(specialLeaveApi, 'createSpecialLeaveWorkflowRequest').mockResolvedValue(submittedRequest)
 
     renderPage()
     await screen.findByText('特別休暇申請はまだありません。')
@@ -293,8 +296,8 @@ describe('MySpecialLeavePage', () => {
     await user.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
     await user.click(screen.getByRole('button', { name: '申請する' }))
 
-    await waitFor(() => expect(specialLeaveApi.createSpecialLeaveRequest).toHaveBeenCalledTimes(3))
-    expect(specialLeaveApi.createSpecialLeaveRequest).toHaveBeenNthCalledWith(1, {
+    await waitFor(() => expect(specialLeaveApi.createSpecialLeaveWorkflowRequest).toHaveBeenCalledTimes(3))
+    expect(specialLeaveApi.createSpecialLeaveWorkflowRequest).toHaveBeenNthCalledWith(1, {
       special_leave_type_id: birthdayType.id,
       target_date: '2026-08-10',
       leave_type: 'full',
@@ -303,7 +306,7 @@ describe('MySpecialLeavePage', () => {
       reason: undefined,
       request_group_id: expect.any(String),
     })
-    expect(specialLeaveApi.createSpecialLeaveRequest).toHaveBeenNthCalledWith(3, {
+    expect(specialLeaveApi.createSpecialLeaveWorkflowRequest).toHaveBeenNthCalledWith(3, {
       special_leave_type_id: birthdayType.id,
       target_date: '2026-08-12',
       leave_type: 'full',
@@ -315,7 +318,7 @@ describe('MySpecialLeavePage', () => {
 
     // 3日分すべて同じrequest_group_idで束ねられていることを確認する
     // (承認者が1回の操作でまとめて承認できるようにするため)。
-    const calls = vi.mocked(specialLeaveApi.createSpecialLeaveRequest).mock.calls
+    const calls = vi.mocked(specialLeaveApi.createSpecialLeaveWorkflowRequest).mock.calls
     const groupIds = calls.map(([input]) => input.request_group_id)
     expect(new Set(groupIds).size).toBe(1)
 

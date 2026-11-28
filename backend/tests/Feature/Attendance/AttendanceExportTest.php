@@ -1401,7 +1401,7 @@ class AttendanceExportTest extends TestCase
     {
         $this->createWorkingDayShift($employee, $date);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $date,
             'leave_type' => $leaveType,
             'approver_user_id' => $approver->id,

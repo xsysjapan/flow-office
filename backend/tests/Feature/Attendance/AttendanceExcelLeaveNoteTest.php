@@ -85,7 +85,7 @@ class AttendanceExcelLeaveNoteTest extends TestCase
     {
         $this->ensureWorkingDay($employee, $date);
 
-        return $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        return $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => $date,
             'leave_type' => 'full',
@@ -97,7 +97,7 @@ class AttendanceExcelLeaveNoteTest extends TestCase
     {
         $this->ensureWorkingDay($employee, $date);
 
-        return $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        return $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $date,
             'leave_type' => $leaveType,
             'approver_user_id' => $approver->id,

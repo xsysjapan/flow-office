@@ -102,7 +102,7 @@ class CompensatoryLeaveAdminCancelRequestTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -131,7 +131,7 @@ class CompensatoryLeaveAdminCancelRequestTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -152,7 +152,7 @@ class CompensatoryLeaveAdminCancelRequestTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-11');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-11',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -178,7 +178,7 @@ class CompensatoryLeaveAdminCancelRequestTest extends TestCase
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-12');
 
         foreach (['2026-09-10', '2026-09-12'] as $date) {
-            $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
                 'target_date' => $date,
                 'leave_type' => 'full',
                 'approver_user_id' => $approver->id,

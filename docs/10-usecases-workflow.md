@@ -138,7 +138,10 @@ Command/Event自体は全申請種別で汎用的に使えるが、却下ボタ�
   申請時に検証する。ただし両方とも休日、または両方とも労働日の組み合わせは拒否する)。
   承認時に対象日・振替先日の `employee_calendar_entries` を丸ごと入れ替える。
   `system_settings.shift_swap_requires_approval` が false の場合は承認ワークフローを経由せず
-  即時確定する(`special_leave_requires_approval` と同じ考え方)。
+  即時確定する(`special_leave_requires_approval` と同じ考え方)。申請の入口は設定で分かれ、承認が必要なら
+  `POST /shift-swap/requests/workflow`(`DraftWorkflowRequest`)、不要なら`POST /shift-swap/requests`(`RequestShiftSwap`が
+  申請と承認を記録)を呼び、設定と違う入口は422で拒否される(有給・特別休暇・代休も同じ。
+  [9章](./09-usecases-paid-leave.md)の「申請の入口は承認の要否の設定で分かれる」)。
 - 有給休暇・特別休暇・振替休日申請と同様、代休申請 (`App\Domain\CompensatoryLeave`) も承認と
   バックオフィス処理を別ステータス系列で管理する専用申請ドメインとして実装し、
   `subject_type: 'compensatory_leave_request'` で `workflow_requests` と連携する。代休の付与

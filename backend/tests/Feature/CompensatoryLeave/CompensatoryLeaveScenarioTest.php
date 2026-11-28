@@ -225,7 +225,7 @@ class CompensatoryLeaveScenarioTest extends TestCase
         $approver = User::factory()->create();
         $this->requestCompensatoryLeave($employee, $approver, '2026-09-10');
 
-        $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -337,7 +337,7 @@ class CompensatoryLeaveScenarioTest extends TestCase
         $this->makeCompensatoryWorkingDayShift($employee, WorkStyle::query()->firstOrFail(), '2026-09-12');
         $before = $this->compensatoryStateOf($employee, $grant->id);
 
-        $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-12',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

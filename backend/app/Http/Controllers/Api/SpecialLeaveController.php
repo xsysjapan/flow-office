@@ -6,7 +6,6 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
-use App\Domain\SpecialLeave\Commands\ApproveSpecialLeaveRequest as ApproveSpecialLeaveRequestCommand;
 use App\Domain\SpecialLeave\Commands\CancelSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
@@ -34,13 +33,11 @@ use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
 use App\Models\SpecialLeaveUsage;
-use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
@@ -322,99 +319,107 @@ class SpecialLeaveController extends Controller
         return new SpecialLeaveGrantResource($grant->load('specialLeaveType'));
     }
 
+    /**
+     * 特別休暇を申請する(承認不要の申請)。`RequestSpecialLeave`を1つdispatchするだけで、承認の要否は読まない。
+     * 承認が必要な設定ではHandlerが422で拒否する(承認が必要な申請は POST /special-leave/requests/workflow)。
+     */
     #[OA\Post(
         path: '/special-leave/requests',
         operationId: 'specialLeave.requests.store',
-        summary: '特別休暇を申請する',
+        summary: '特別休暇を申請する(承認不要の設定)',
+        description: '承認不要の設定(公開設定のspecial_leave_requires_approval=false)のときに使う。承認が必要な設定では422(承認が必要です)になるため、POST /special-leave/requests/workflow を使う。',
         tags: ['特別休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true), new OA\Property(property: 'request_group_id', type: 'string', format: 'uuid', nullable: true, description: '期間指定でまとめて申請した複数日分を束ねるID(単日申請では省略)')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'target_date', 'leave_type'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'reason', type: 'string', nullable: true), new OA\Property(property: 'request_group_id', type: 'string', format: 'uuid', nullable: true, description: '期間指定でまとめて申請した複数日分を束ねるID(単日申請では省略)')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeRequest(Request $request, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): JsonResponse
     {
-        // system_settings.special_leave_requires_approval=falseの場合、承認ワークフローを
-        // 経由せずその場で申請→承認不要のまま(消化)まで完結させる(PaidLeaveController::storeRequest
-        // と同じ考え方。有給側とはビジネスロジックを分けて実装するため、判定・分岐も独立させる)。
-        $requiresApproval = SystemSetting::current()->special_leave_requires_approval;
+        $data = $this->validateStoreRequest($request, approverRequired: false);
 
-        $data = $request->validate([
+        $specialLeaveRequest = $commandBus->dispatch(new RequestSpecialLeave(
+            userId: $request->user()->id,
+            specialLeaveTypeId: $data['special_leave_type_id'],
+            targetDate: $data['target_date'],
+            leaveType: $data['leave_type'],
+            hours: $data['hours'] ?? null,
+            approverUserId: $data['approver_user_id'] ?? null,
+            reason: $data['reason'] ?? null,
+            workflowRequestId: null,
+            requestId: (string) Str::uuid(),
+            requestGroupId: $data['request_group_id'] ?? null,
+        ));
+
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
+
+        return (new SpecialLeaveRequestResource($specialLeaveRequest->load('user', 'approver', 'specialLeaveType')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 特別休暇を申請する(承認が必要な申請)。`DraftWorkflowRequest`を1つdispatchするだけで、承認の要否は読まない。
+     * 承認不要の設定ではワークフローの下書きのHandlerが422で拒否する(POST /special-leave/requests を使う)。
+     */
+    #[OA\Post(
+        path: '/special-leave/requests/workflow',
+        operationId: 'specialLeave.requests.storeWorkflow',
+        summary: '特別休暇を申請する(承認が必要な設定。承認者を指定してワークフローを作る)',
+        description: '承認が必要な設定(公開設定のspecial_leave_requires_approval=true)のときに使う。承認不要の設定では422(承認が不要です)になるため、POST /special-leave/requests を使う。',
+        tags: ['特別休暇'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true), new OA\Property(property: 'request_group_id', type: 'string', format: 'uuid', nullable: true, description: '期間指定でまとめて申請した複数日分を束ねるID(単日申請では省略)')])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function storeWorkflowRequest(Request $request, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): JsonResponse
+    {
+        $data = $this->validateStoreRequest($request, approverRequired: true);
+
+        // UC-P003: 特別休暇申請はworkflow_requestの下書き作成を起点にする。SpecialLeaveRequest集約への
+        // RequestSpecialLeaveはSpecialLeaveRequestOnWorkflowRequestReactorが発行する
+        // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
+        // SpecialLeaveRequestのIDはここで採番してsubjectIdとして渡す。Handler側から
+        // workflow_requests.subject_idを直接書き換えるとProjectionの再生成で失われるため
+        // (ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
+        $requestId = (string) Str::uuid();
+
+        $commandBus->dispatch(new DraftWorkflowRequest(
+            requestTypeCode: null,
+            applicantUserId: $request->user()->id,
+            title: $data['target_date'].' の特別休暇申請',
+            formData: [
+                'special_leave_type_id' => $data['special_leave_type_id'],
+                'target_date' => $data['target_date'],
+                'leave_type' => $data['leave_type'],
+                'hours' => $data['hours'] ?? null,
+                'reason' => $data['reason'] ?? null,
+                'request_group_id' => $data['request_group_id'] ?? null,
+            ],
+            approverUserId: $data['approver_user_id'],
+            subjectType: WorkflowRequestNotificationContent::SPECIAL_LEAVE_REQUEST,
+            subjectId: $requestId,
+        ));
+
+        $specialLeaveRequest = SpecialLeaveRequest::query()->findOrFail($requestId);
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
+
+        return (new SpecialLeaveRequestResource($specialLeaveRequest->load('user', 'approver', 'specialLeaveType')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 特別休暇申請の入力の検証(形式のみ)。承認者の指定は、承認が必要な入口でだけ必須にする(承認の要否は読まない)。
+     *
+     * @return array<string, mixed>
+     */
+    private function validateStoreRequest(Request $request, bool $approverRequired): array
+    {
+        return $request->validate([
             'special_leave_type_id' => ['required', 'integer', 'exists:special_leave_types,id'],
             'target_date' => ['required', 'date'],
             'leave_type' => ['required', Rule::in(PaidLeaveType::values())],
             'hours' => ['nullable', 'numeric', 'min:0.5'],
-            'approver_user_id' => [$requiresApproval ? 'required' : 'nullable', 'string', 'exists:users,id'],
+            'approver_user_id' => [$approverRequired ? 'required' : 'nullable', 'string', 'exists:users,id'],
             'reason' => ['nullable', 'string'],
             // 期間指定でまとめて申請した複数日分(1日1リクエスト)を束ねるID。frontend側が
             // 同一の申請操作内で生成した同じ値を全日分に渡す(単日申請では省略)。
             'request_group_id' => ['nullable', 'string', 'uuid'],
         ]);
-
-        if ($requiresApproval) {
-            // UC-P003: 特別休暇申請はworkflow_requestの下書き作成を起点にする。SpecialLeaveRequest集約への
-            // RequestSpecialLeaveはSpecialLeaveRequestOnWorkflowRequestReactorが発行する
-            // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
-            // SpecialLeaveRequestのIDはここで採番してsubjectIdとして渡す。Handler側から
-            // workflow_requests.subject_idを直接書き換えるとProjectionの再生成で失われるため
-            // (ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
-            $requestId = (string) Str::uuid();
-
-            $commandBus->dispatch(new DraftWorkflowRequest(
-                requestTypeCode: null,
-                applicantUserId: $request->user()->id,
-                title: $data['target_date'].' の特別休暇申請',
-                formData: [
-                    'special_leave_type_id' => $data['special_leave_type_id'],
-                    'target_date' => $data['target_date'],
-                    'leave_type' => $data['leave_type'],
-                    'hours' => $data['hours'] ?? null,
-                    'reason' => $data['reason'] ?? null,
-                    'request_group_id' => $data['request_group_id'] ?? null,
-                ],
-                approverUserId: $data['approver_user_id'],
-                subjectType: WorkflowRequestNotificationContent::SPECIAL_LEAVE_REQUEST,
-                subjectId: $requestId,
-            ));
-
-            $specialLeaveRequest = SpecialLeaveRequest::query()->findOrFail($requestId);
-            $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
-
-            return (new SpecialLeaveRequestResource($specialLeaveRequest->load('user', 'approver', 'specialLeaveType')))->response()->setStatusCode(201);
-        }
-
-        // 承認不要設定: workflow_requestを作らず、RequestSpecialLeave→ApproveSpecialLeaveRequest
-        // (approvedByUserId: null)を同一トランザクションで発行し、その場で消化まで確定させる。
-        // approverUserIdが未指定の場合は申請者自身のIDをプレースホルダとして使う
-        // (PaidLeaveController::storeRequestと同じ判断。即座にapprovedになるため
-        // requests/to-approve一覧には現れず、実質的な承認者としては使われない)。
-        $requestId = (string) Str::uuid();
-        $approverUserId = $data['approver_user_id'] ?? $request->user()->id;
-
-        // 2つのコマンド発行を外側のトランザクションでまとめ、後段の残数不足等で
-        // ApproveSpecialLeaveRequestが例外を投げた場合でも、先に作成したSpecialLeaveRequest行
-        // (submitted状態)が残らないようにする(PaidLeaveController::storeRequestと同様)。
-        $specialLeaveRequest = DB::transaction(function () use ($commandBus, $data, $requestId, $approverUserId, $request) {
-            $commandBus->dispatch(new RequestSpecialLeave(
-                userId: $request->user()->id,
-                specialLeaveTypeId: $data['special_leave_type_id'],
-                targetDate: $data['target_date'],
-                leaveType: $data['leave_type'],
-                hours: $data['hours'] ?? null,
-                approverUserId: $approverUserId,
-                reason: $data['reason'] ?? null,
-                workflowRequestId: null,
-                requestId: $requestId,
-                requestGroupId: $data['request_group_id'] ?? null,
-            ));
-
-            return $commandBus->dispatch(new ApproveSpecialLeaveRequestCommand(
-                specialLeaveRequestId: $requestId,
-                approvedByUserId: null,
-            ));
-        });
-
-        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
-
-        return (new SpecialLeaveRequestResource($specialLeaveRequest->load('user', 'approver', 'specialLeaveType')))->response()->setStatusCode(201);
     }
 
     #[OA\Get(

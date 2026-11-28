@@ -3,13 +3,16 @@
 namespace Tests\Feature\AccessControl;
 
 use App\Domain\AccessControl\Commands\ChangeRoleFeatures;
+use App\Domain\AccessControl\Commands\CloneRole;
 use App\Domain\AccessControl\Commands\CreateRoleAssignment;
+use App\Domain\AccessControl\Commands\UpdateRoleDefinition;
 use App\Domain\EventSourcing\CommandBus;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Support\AssertsSingleTopLevelCommand;
 use Tests\TestCase;
 
 /**
@@ -18,6 +21,7 @@ use Tests\TestCase;
  */
 class RoleDefinitionBulkUpdateTest extends TestCase
 {
+    use AssertsSingleTopLevelCommand;
     use RefreshDatabase;
 
     private User $admin;
@@ -180,5 +184,109 @@ class RoleDefinitionBulkUpdateTest extends TestCase
         $this->actingAs($employee)->putJson($this->url(), ['name' => '改名'])->assertForbidden();
 
         $this->assertSame('カスタム', $this->role->refresh()->name);
+    }
+
+    private function roleEventClasses(Role $role): array
+    {
+        return DB::table('stored_events')
+            ->where('aggregate_uuid', \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_URL, 'role:'.$role->code)->toString())
+            ->orderBy('id')->pluck('event_class')->all();
+    }
+
+    public function test_the_entry_point_dispatches_a_single_command(): void
+    {
+        $bus = $this->recordCommands();
+
+        $this->actingAs($this->admin)->putJson($this->url(), [
+            'name' => '改名',
+            'status' => 'inactive',
+            'permission_ids' => [$this->permissionAId],
+            'feature_ids' => [$this->featureAId],
+        ])->assertOk();
+
+        $this->assertSingleTopLevelCommand($bus, UpdateRoleDefinition::class);
+    }
+
+    public function test_deactivating_and_changing_permissions_together_is_accepted_and_the_deactivation_is_recorded_last(): void
+    {
+        $this->actingAs($this->admin)->putJson($this->url(), [
+            'status' => 'inactive',
+            'permission_ids' => [$this->permissionAId],
+            'feature_ids' => [$this->featureAId],
+        ])->assertOk()->assertJsonPath('status', 'inactive');
+
+        $this->assertSame(['role.permissions_changed', 'role.features_changed', 'role.updated'], $this->roleEventClasses($this->role));
+        $this->assertSame([$this->permissionAId], DB::table('permission_role')->where('role_id', $this->role->id)->pluck('permission_id')->map(fn ($id) => (int) $id)->all());
+        $this->assertSame('inactive', $this->role->refresh()->status);
+    }
+
+    public function test_reactivating_and_changing_permissions_together_is_accepted_and_the_activation_is_recorded_first(): void
+    {
+        DB::table('roles')->where('id', $this->role->id)->update(['status' => 'inactive']);
+
+        $this->actingAs($this->admin)->putJson($this->url(), [
+            'status' => 'active',
+            'permission_ids' => [$this->permissionBId],
+        ])->assertOk()->assertJsonPath('status', 'active');
+
+        $this->assertSame(['role.updated', 'role.permissions_changed'], $this->roleEventClasses($this->role));
+        $this->assertSame([$this->permissionBId], DB::table('permission_role')->where('role_id', $this->role->id)->pluck('permission_id')->map(fn ($id) => (int) $id)->all());
+    }
+
+    public function test_changing_permissions_of_an_inactive_role_without_reactivating_is_rejected(): void
+    {
+        DB::table('roles')->where('id', $this->role->id)->update(['status' => 'inactive']);
+
+        $this->actingAs($this->admin)->putJson($this->url(), ['permission_ids' => [$this->permissionAId], 'feature_ids' => [$this->featureAId]])
+            ->assertStatus(422)->assertJsonValidationErrors(['permission_ids', 'feature_ids']);
+
+        $this->assertSame([], $this->roleEventClasses($this->role));
+    }
+
+    public function test_cloning_a_role_creates_it_with_the_permissions_in_a_single_command(): void
+    {
+        DB::table('permission_role')->insert([
+            ['role_id' => $this->role->id, 'permission_id' => $this->permissionAId],
+            ['role_id' => $this->role->id, 'permission_id' => $this->permissionBId],
+        ]);
+        $bus = $this->recordCommands();
+
+        $response = $this->actingAs($this->admin)->postJson('/api/admin/access-control/roles/'.$this->role->id.'/clone', ['code' => 'cloned_role', 'name' => '複製']);
+
+        $response->assertCreated();
+        $this->assertSingleTopLevelCommand($bus, CloneRole::class);
+        $cloned = Role::query()->where('code', 'cloned_role')->firstOrFail();
+        $response->assertJsonPath('id', $cloned->id);
+        $this->assertSame('複製', $cloned->name);
+        $this->assertSame('説明', $cloned->description);
+        $this->assertEqualsCanonicalizing(
+            [$this->permissionAId, $this->permissionBId],
+            DB::table('permission_role')->where('role_id', $cloned->id)->pluck('permission_id')->map(fn ($id) => (int) $id)->all(),
+        );
+        $this->assertSame(['role.created', 'role.permissions_changed'], $this->roleEventClasses($cloned));
+    }
+
+    public function test_a_failure_while_cloning_leaves_nothing_behind(): void
+    {
+        DB::table('permission_role')->insert(['role_id' => $this->role->id, 'permission_id' => $this->permissionAId]);
+        $before = $this->roleEventTotal();
+        DB::unprepared("CREATE TRIGGER fail_clone BEFORE INSERT ON permission_role WHEN NEW.role_id <> {$this->role->id} BEGIN SELECT RAISE(ABORT, 'forced failure'); END");
+
+        try {
+            $this->actingAs($this->admin)->postJson('/api/admin/access-control/roles/'.$this->role->id.'/clone', ['code' => 'cloned_role', 'name' => '複製']);
+            $this->fail('権限の反映で失敗するはず');
+        } catch (\Illuminate\Database\QueryException) {
+            // 作成のイベントも含めて全部戻る。
+        } finally {
+            DB::unprepared('DROP TRIGGER fail_clone');
+        }
+        $this->assertNull(Role::query()->where('code', 'cloned_role')->first());
+        $this->assertSame($before, $this->roleEventTotal());
+    }
+
+    public function test_cloning_with_a_used_code_is_rejected(): void
+    {
+        $this->actingAs($this->admin)->postJson('/api/admin/access-control/roles/'.$this->role->id.'/clone', ['code' => 'custom_role', 'name' => '複製'])
+            ->assertStatus(422);
     }
 }

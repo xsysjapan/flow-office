@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Domain\ShiftSwap\Commands\ApproveShiftSwapRequest as ApproveShiftSwapRequestCommand;
 use App\Domain\ShiftSwap\Commands\CancelShiftSwapRequest;
 use App\Domain\ShiftSwap\Commands\RequestShiftSwap;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
@@ -15,13 +14,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ShiftSwapRequestResource;
 use App\Models\ShiftSwapRequest;
 use App\Models\ShiftSwapRequestStatus;
-use App\Models\SystemSetting;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
 
@@ -32,84 +29,93 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: '振替休日', description: '振替休日申請・承認')]
 class ShiftSwapRequestController extends Controller
 {
+    /**
+     * 振替休日を申請する(承認不要の申請)。`RequestShiftSwap`を1つdispatchするだけで、承認の要否は読まない。
+     * 承認が必要な設定ではHandlerが422で拒否する(承認が必要な申請は POST /shift-swap/requests/workflow)。
+     */
     #[OA\Post(
         path: '/shift-swap/requests',
         operationId: 'shiftSwap.requests.store',
-        summary: '振替休日を申請する',
+        summary: '振替休日を申請する(承認不要の設定)',
+        description: '承認不要の設定(公開設定のshift_swap_requires_approval=false)のときに使う。承認が必要な設定では422(承認が必要です)になるため、POST /shift-swap/requests/workflow を使う。',
         tags: ['振替休日'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'substitute_date'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'substitute_date', type: 'string', format: 'date'), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'substitute_date'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'substitute_date', type: 'string', format: 'date'), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
     {
-        // system_settings.shift_swap_requires_approval=falseの場合、承認ワークフローを
-        // 経由せずその場で申請→承認不要のままシフト入れ替えまで完結させる
-        // (SpecialLeaveController::storeRequestと同じ考え方)。
-        $requiresApproval = SystemSetting::current()->shift_swap_requires_approval;
+        $data = $this->validateStoreRequest($request, approverRequired: false);
 
-        $data = $request->validate([
-            'target_date' => ['required', 'date'],
-            'substitute_date' => ['required', 'date'],
-            'approver_user_id' => [$requiresApproval ? 'required' : 'nullable', 'string', 'exists:users,id'],
-            'reason' => ['nullable', 'string'],
-        ]);
-
-        if ($requiresApproval) {
-            // 振替休日申請はworkflow_requestの下書き作成を起点にする。ShiftSwapRequest集約への
-            // RequestShiftSwapはShiftSwapRequestOnWorkflowRequestDraftedReactorが発行する
-            // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
-            // ShiftSwapRequestのIDはここで採番してsubjectIdとして渡す。Handler側から
-            // workflow_requests.subject_idを直接書き換えるとProjectionの再生成で失われるため
-            // (ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
-            $requestId = (string) Str::uuid();
-
-            $commandBus->dispatch(new DraftWorkflowRequest(
-                requestTypeCode: null,
-                applicantUserId: $request->user()->id,
-                title: $data['target_date'].' の振替休日申請',
-                formData: [
-                    'target_date' => $data['target_date'],
-                    'substitute_date' => $data['substitute_date'],
-                    'reason' => $data['reason'] ?? null,
-                ],
-                approverUserId: $data['approver_user_id'],
-                subjectType: WorkflowRequestNotificationContent::SHIFT_SWAP_REQUEST,
-                subjectId: $requestId,
-            ));
-
-            $shiftSwapRequest = ShiftSwapRequest::query()->findOrFail($requestId);
-
-            return (new ShiftSwapRequestResource($shiftSwapRequest->load('user', 'approver')))->response()->setStatusCode(201);
-        }
-
-        // 承認不要設定: workflow_requestを作らず、RequestShiftSwap→ApproveShiftSwapRequest
-        // (approvedByUserId: null)を同一トランザクションで発行し、その場でシフト入れ替えまで確定させる。
-        // approverUserIdが未指定の場合は申請者自身のIDをプレースホルダとして使う
-        // (SpecialLeaveController::storeRequestと同じ判断)。
-        $requestId = (string) Str::uuid();
-        $approverUserId = $data['approver_user_id'] ?? $request->user()->id;
-
-        // 2つのコマンド発行を外側のトランザクションでまとめ、後段の検証で
-        // ApproveShiftSwapRequestが例外を投げた場合でも、先に作成したShiftSwapRequest行
-        // (submitted状態)が残らないようにする(SpecialLeaveController::storeRequestと同様)。
-        $shiftSwapRequest = DB::transaction(function () use ($commandBus, $data, $requestId, $approverUserId, $request) {
-            $commandBus->dispatch(new RequestShiftSwap(
-                userId: $request->user()->id,
-                targetDate: $data['target_date'],
-                substituteDate: $data['substitute_date'],
-                approverUserId: $approverUserId,
-                reason: $data['reason'] ?? null,
-                workflowRequestId: null,
-                requestId: $requestId,
-            ));
-
-            return $commandBus->dispatch(new ApproveShiftSwapRequestCommand(
-                shiftSwapRequestId: $requestId,
-                approvedByUserId: null,
-            ));
-        });
+        $shiftSwapRequest = $commandBus->dispatch(new RequestShiftSwap(
+            userId: $request->user()->id,
+            targetDate: $data['target_date'],
+            substituteDate: $data['substitute_date'],
+            approverUserId: $data['approver_user_id'] ?? null,
+            reason: $data['reason'] ?? null,
+            workflowRequestId: null,
+            requestId: (string) Str::uuid(),
+        ));
 
         return (new ShiftSwapRequestResource($shiftSwapRequest->load('user', 'approver')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 振替休日を申請する(承認が必要な申請)。`DraftWorkflowRequest`を1つdispatchするだけで、承認の要否は読まない。
+     * 承認不要の設定ではワークフローの下書きのHandlerが422で拒否する(POST /shift-swap/requests を使う)。
+     */
+    #[OA\Post(
+        path: '/shift-swap/requests/workflow',
+        operationId: 'shiftSwap.requests.storeWorkflow',
+        summary: '振替休日を申請する(承認が必要な設定。承認者を指定してワークフローを作る)',
+        description: '承認が必要な設定(公開設定のshift_swap_requires_approval=true)のときに使う。承認不要の設定では422(承認が不要です)になるため、POST /shift-swap/requests を使う。',
+        tags: ['振替休日'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'substitute_date', 'approver_user_id'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'substitute_date', type: 'string', format: 'date'), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function storeWorkflowRequest(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $this->validateStoreRequest($request, approverRequired: true);
+
+        // 振替休日申請はworkflow_requestの下書き作成を起点にする。ShiftSwapRequest集約への
+        // RequestShiftSwapはShiftSwapRequestOnWorkflowRequestDraftedReactorが発行する
+        // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
+        // ShiftSwapRequestのIDはここで採番してsubjectIdとして渡す。Handler側から
+        // workflow_requests.subject_idを直接書き換えるとProjectionの再生成で失われるため
+        // (ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
+        $requestId = (string) Str::uuid();
+
+        $commandBus->dispatch(new DraftWorkflowRequest(
+            requestTypeCode: null,
+            applicantUserId: $request->user()->id,
+            title: $data['target_date'].' の振替休日申請',
+            formData: [
+                'target_date' => $data['target_date'],
+                'substitute_date' => $data['substitute_date'],
+                'reason' => $data['reason'] ?? null,
+            ],
+            approverUserId: $data['approver_user_id'],
+            subjectType: WorkflowRequestNotificationContent::SHIFT_SWAP_REQUEST,
+            subjectId: $requestId,
+        ));
+
+        $shiftSwapRequest = ShiftSwapRequest::query()->findOrFail($requestId);
+
+        return (new ShiftSwapRequestResource($shiftSwapRequest->load('user', 'approver')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 振替休日申請の入力の検証(形式のみ)。承認者の指定は、承認が必要な入口でだけ必須にする(承認の要否は読まない)。
+     *
+     * @return array<string, mixed>
+     */
+    private function validateStoreRequest(Request $request, bool $approverRequired): array
+    {
+        return $request->validate([
+            'target_date' => ['required', 'date'],
+            'substitute_date' => ['required', 'date'],
+            'approver_user_id' => [$approverRequired ? 'required' : 'nullable', 'string', 'exists:users,id'],
+            'reason' => ['nullable', 'string'],
+        ]);
     }
 
     #[OA\Get(

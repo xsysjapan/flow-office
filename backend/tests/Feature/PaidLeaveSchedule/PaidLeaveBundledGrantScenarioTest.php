@@ -7,6 +7,7 @@ use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
 use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
+use App\Domain\PaidLeaveSchedule\Commands\ReassessScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
 use App\Domain\PaidLeaveSchedule\Handlers\ApplyScheduledGrantsHandler;
 use App\Models\LeaveAttendanceRateDay;
@@ -19,6 +20,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Tests\Support\AssertsSingleTopLevelCommand;
 use Tests\TestCase;
 
 /**
@@ -28,6 +30,7 @@ use Tests\TestCase;
  */
 class PaidLeaveBundledGrantScenarioTest extends TestCase
 {
+    use AssertsSingleTopLevelCommand;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -208,7 +211,12 @@ class PaidLeaveBundledGrantScenarioTest extends TestCase
             ]);
         }
 
+        $bus = $this->recordCommands();
         $this->actingAs($admin)->postJson("/api/paid-leave/schedule-entries/{$id18}/reassess")->assertOk();
+        $this->assertSingleTopLevelCommand($bus, ReassessScheduleEntry::class);
+        // 組の2行それぞれに判定が1件ずつ記録される。
+        $this->assertSame(1, PaidLeaveScheduleAssessment::query()->where('schedule_entry_id', $id6)->count());
+        $this->assertSame(1, PaidLeaveScheduleAssessment::query()->where('schedule_entry_id', $id18)->count());
 
         // 初回(6か月)は対象外、まとめた2件目(18か月)は判定を共有せず付与対象。
         $this->assertSame(PaidLeaveScheduleEntry::STATUS_NOT_ELIGIBLE, $this->statusOf($id6));

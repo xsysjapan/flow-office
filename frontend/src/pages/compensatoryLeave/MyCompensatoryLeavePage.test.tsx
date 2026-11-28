@@ -208,7 +208,7 @@ describe('MyCompensatoryLeavePage', () => {
 
   it('submits a full-day leave request with the entered values', async () => {
     vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
-    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveWorkflowRequest').mockResolvedValue(submittedRequest)
 
     renderPage()
     await screen.findByText('代休申請はまだありません。')
@@ -220,7 +220,7 @@ describe('MyCompensatoryLeavePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '申請する' }))
 
     await waitFor(() =>
-      expect(compensatoryLeaveApi.createCompensatoryLeaveRequest).toHaveBeenCalledWith({
+      expect(compensatoryLeaveApi.createCompensatoryLeaveWorkflowRequest).toHaveBeenCalledWith({
         target_date: '2026-08-10',
         leave_type: 'full',
         hours: undefined,
@@ -232,7 +232,7 @@ describe('MyCompensatoryLeavePage', () => {
 
   it('shows each 422 message once under its field and the heading above the button (hourly leave)', async () => {
     vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
-    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveRequest').mockRejectedValue(
+    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveWorkflowRequest').mockRejectedValue(
       new ApiError(422, '最初のエラーの文です。', {
         target_date: ['対象日のエラー'],
         leave_type: ['取得単位のエラー'],
@@ -271,6 +271,7 @@ describe('MyCompensatoryLeavePage', () => {
   it('allows submitting without an approver when approval is not required', async () => {
     vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
     vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveWorkflowRequest')
 
     renderPage([], false)
     await screen.findByText('代休申請はまだありません。')
@@ -290,11 +291,13 @@ describe('MyCompensatoryLeavePage', () => {
         reason: undefined,
       }),
     )
+    // 承認不要の設定では直接の申請の入口を呼び、ワークフローの入口は呼ばない。
+    expect(compensatoryLeaveApi.createCompensatoryLeaveWorkflowRequest).not.toHaveBeenCalled()
   })
 
   it('creates one request per day when submitting a date range', async () => {
     vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
-    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveWorkflowRequest').mockResolvedValue(submittedRequest)
 
     renderPage()
     await screen.findByText('代休申請はまだありません。')
@@ -307,8 +310,8 @@ describe('MyCompensatoryLeavePage', () => {
     await user.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
     await user.click(screen.getByRole('button', { name: '申請する' }))
 
-    await waitFor(() => expect(compensatoryLeaveApi.createCompensatoryLeaveRequest).toHaveBeenCalledTimes(3))
-    expect(compensatoryLeaveApi.createCompensatoryLeaveRequest).toHaveBeenNthCalledWith(1, {
+    await waitFor(() => expect(compensatoryLeaveApi.createCompensatoryLeaveWorkflowRequest).toHaveBeenCalledTimes(3))
+    expect(compensatoryLeaveApi.createCompensatoryLeaveWorkflowRequest).toHaveBeenNthCalledWith(1, {
       target_date: '2026-08-10',
       leave_type: 'full',
       hours: undefined,
@@ -316,7 +319,7 @@ describe('MyCompensatoryLeavePage', () => {
       reason: undefined,
       request_group_id: expect.any(String),
     })
-    expect(compensatoryLeaveApi.createCompensatoryLeaveRequest).toHaveBeenNthCalledWith(3, {
+    expect(compensatoryLeaveApi.createCompensatoryLeaveWorkflowRequest).toHaveBeenNthCalledWith(3, {
       target_date: '2026-08-12',
       leave_type: 'full',
       hours: undefined,
@@ -327,7 +330,7 @@ describe('MyCompensatoryLeavePage', () => {
 
     // 3日分すべて同じrequest_group_idで束ねられていることを確認する
     // (承認者が1回の操作でまとめて承認できるようにするため)。
-    const calls = vi.mocked(compensatoryLeaveApi.createCompensatoryLeaveRequest).mock.calls
+    const calls = vi.mocked(compensatoryLeaveApi.createCompensatoryLeaveWorkflowRequest).mock.calls
     const groupIds = calls.map(([input]) => input.request_group_id)
     expect(new Set(groupIds).size).toBe(1)
 

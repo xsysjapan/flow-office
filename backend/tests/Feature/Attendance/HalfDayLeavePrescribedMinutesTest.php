@@ -9,6 +9,7 @@ use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\SpecialLeaveType;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -44,7 +45,7 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         if ($kind === 'paid') {
             app(CommandBus::class)->dispatch(new GrantPaidLeave($user->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-            $this->actingAs($user)->postJson('/api/paid-leave/requests', [
+            $this->actingAs($user)->postJson('/api/paid-leave/requests/workflow', [
                 'target_date' => $workDate,
                 'leave_type' => $unit,
                 'hours' => $hours,
@@ -56,6 +57,8 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
 
         $type = SpecialLeaveType::query()->create(['name' => 'テスト休暇'.uniqid(), 'is_active' => true]);
         // 申請のCommand経由で申請する(休暇ビューは申請のイベントから作られ、勤怠日は勤怠のReactorが作る)。
+        // 利用者の操作の直接の申請は承認不要の設定でだけ受け付けられる(承認が必要な設定では拒否される)。
+        SystemSetting::current()->update(['special_leave_requires_approval' => false]);
         app(CommandBus::class)->dispatch(new RequestSpecialLeave(
             userId: $user->id,
             specialLeaveTypeId: $type->id,

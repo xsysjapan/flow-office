@@ -10,6 +10,7 @@ use App\Domain\UserManagement\Events\UserHireDateSet;
 use App\Domain\UserManagement\Events\UserUsageStartDateSet;
 use App\Models\User;
 use App\Support\BusinessDate;
+use Illuminate\Support\Facades\DB;
 use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
 
 /**
@@ -30,6 +31,13 @@ use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
  */
 class RecalculateScheduleOnUserConditionChangedReactor extends Reactor
 {
+    /** このReactorが購読するイベントの短い種別名(config/event-sourcing.phpのevent_class_map) */
+    private const SUBSCRIBED_EVENT_CLASSES = [
+        'user.hire_date_set',
+        'user.usage_start_date_set',
+        'user.paid_leave_auto_grant_enabled_set',
+    ];
+
     public function __construct(
         private readonly CommandBus $commandBus,
         private readonly ScheduleCandidateGenerator $generator,
@@ -37,21 +45,32 @@ class RecalculateScheduleOnUserConditionChangedReactor extends Reactor
 
     public function onUserHireDateSet(UserHireDateSet $event): void
     {
-        $this->recalculate($event->aggregateRootUuid(), 'hire_dateの変更');
+        $this->recalculate($event, 'hire_dateの変更');
     }
 
     public function onUserUsageStartDateSet(UserUsageStartDateSet $event): void
     {
-        $this->recalculate($event->aggregateRootUuid(), 'usage_start_dateの変更');
+        $this->recalculate($event, 'usage_start_dateの変更');
     }
 
     public function onPaidLeaveAutoGrantEnabledSet(PaidLeaveAutoGrantEnabledSet $event): void
     {
-        $this->recalculate($event->aggregateRootUuid(), 'paid_leave_auto_grant_enabledの変更');
+        $this->recalculate($event, 'paid_leave_auto_grant_enabledの変更');
     }
 
-    private function recalculate(string $userId, string $reason): void
+    /**
+     * 同じ利用者のストリームに、この Reactor が購読する種類のイベントで、処理中のイベントより版の大きいものが
+     * 既に保存されていれば何もしない(1回の persist で複数の条件を変えたとき、最後の1件のときだけ再計算する。
+     * そのときは同じ persist の Projector の更新がすべて反映された状態を読める)。
+     */
+    private function recalculate(UserHireDateSet|UserUsageStartDateSet|PaidLeaveAutoGrantEnabledSet $event, string $reason): void
     {
+        $userId = $event->aggregateRootUuid();
+        $version = $event->aggregateRootVersion();
+        if ($version !== null && $this->hasLaterSubscribedEvent($userId, $version)) {
+            return;
+        }
+
         $user = User::find($userId);
 
         if ($user === null) {
@@ -67,5 +86,14 @@ class RecalculateScheduleOnUserConditionChangedReactor extends Reactor
             reason: $reason,
             fromDate: $from->toDateString(),
         ));
+    }
+
+    private function hasLaterSubscribedEvent(string $userId, int $version): bool
+    {
+        return DB::table('stored_events')
+            ->where('aggregate_uuid', $userId)
+            ->whereIn('event_class', self::SUBSCRIBED_EVENT_CLASSES)
+            ->where('aggregate_version', '>', $version)
+            ->exists();
     }
 }

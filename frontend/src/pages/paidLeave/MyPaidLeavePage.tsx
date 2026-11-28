@@ -83,7 +83,7 @@ function PaidLeaveRequestForm() {
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
 
-  const createRequest = useCreatePaidLeaveRequest()
+  const createRequest = useCreatePaidLeaveRequest(approvalRequired)
 
   const targetDates = targetMode === 'range' ? enumerateRange(range) : selectedDates
   const isMultiDay = targetDates.length > 1

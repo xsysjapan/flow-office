@@ -7,8 +7,10 @@ use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Leave\Support\LeaveApprovalRequirement;
 use App\Domain\ShiftSwap\Aggregates\ShiftSwapRequestAggregate;
 use App\Domain\ShiftSwap\Commands\RequestShiftSwap;
+use App\Domain\ShiftSwap\Services\ShiftSwapRequestApprover;
 use App\Models\AttendanceDay;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\ShiftSwapRequest;
@@ -26,6 +28,10 @@ use Illuminate\Support\Str;
  * 実行する(ルートCLAUDE.md「打刻と勤怠編集を区別する」と同様、申請と実行のタイミングを
  * 分離する)。
  *
+ * 利用者の操作(workflowRequestId === null)の直接の申請は、承認が必要な設定なら拒否する(承認が必要な申請は
+ * ワークフローの下書きから行う)。承認不要の設定なら、申請を記録した後に承認(approvedByUserId=null。
+ * ShiftSwapRequestApproverと共通)まで記録する。
+ *
  * @implements CommandHandler<RequestShiftSwap>
  */
 class RequestShiftSwapHandler implements CommandHandler
@@ -35,11 +41,23 @@ class RequestShiftSwapHandler implements CommandHandler
     public function __construct(
         private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
         private readonly AttendanceEditGuard $guard,
+        private readonly LeaveApprovalRequirement $approvalRequirement,
+        private readonly ShiftSwapRequestApprover $approver,
     ) {}
 
     public function handle(Command $command): ShiftSwapRequest
     {
         assert($command instanceof RequestShiftSwap);
+
+        $isDirectRequest = $command->workflowRequestId === null;
+
+        if ($isDirectRequest) {
+            $rejection = $this->approvalRequirement->directRequestRejection(LeaveApprovalRequirement::SHIFT_SWAP);
+
+            if ($rejection !== null) {
+                throw new DomainRuleException($rejection);
+            }
+        }
 
         $targetDate = Carbon::parse($command->targetDate)->startOfDay();
         $substituteDate = Carbon::parse($command->substituteDate)->startOfDay();
@@ -115,7 +133,7 @@ class RequestShiftSwapHandler implements CommandHandler
                 userId: $command->userId,
                 targetDate: $command->targetDate,
                 substituteDate: $command->substituteDate,
-                approverUserId: $command->approverUserId,
+                approverUserId: $command->approverUserId ?? $command->userId,
                 reason: $command->reason,
             );
 
@@ -126,6 +144,11 @@ class RequestShiftSwapHandler implements CommandHandler
         }
 
         $aggregate->persist();
+
+        // 承認不要の設定での直接の申請: 承認を記録する(申請と承認の2回のpersist。1つのトランザクション)。
+        if ($isDirectRequest) {
+            return $this->approver->approve($requestId, null);
+        }
 
         // 通知はSubmitWorkflowRequestHandlerが一括して送るため、ここでは送らない
         // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)

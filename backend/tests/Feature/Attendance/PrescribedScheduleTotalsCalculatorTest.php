@@ -71,7 +71,7 @@ class PrescribedScheduleTotalsCalculatorTest extends TestCase
     private function requestLeave(User $user, string $date, string $unit): void
     {
         $approver = User::factory()->create();
-        $this->actingAs($user)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($user)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $date, 'leave_type' => $unit, 'hours' => null, 'approver_user_id' => $approver->id,
         ])->assertCreated();
     }

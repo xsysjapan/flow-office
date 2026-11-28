@@ -88,7 +88,7 @@ function SpecialLeaveRequestForm() {
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
 
-  const createRequest = useCreateSpecialLeaveRequest()
+  const createRequest = useCreateSpecialLeaveRequest(approvalRequired)
 
   const targetDates = targetMode === 'range' ? enumerateRange(range) : selectedDates
   const isMultiDay = targetDates.length > 1

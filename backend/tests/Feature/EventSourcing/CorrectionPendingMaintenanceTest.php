@@ -243,7 +243,11 @@ class CorrectionPendingMaintenanceTest extends TestCase
         DB::flushQueryLog();
         DB::enableQueryLog();
         $this->assertTrue(app(CorrectionPendingService::class)->isPending());
-        $this->assertSame([], DB::getQueryLog(), '2回目はキャッシュを使い、stored_events を読まない');
+        $storedEventQueries = array_filter(
+            DB::getQueryLog(),
+            fn (array $log): bool => str_contains($log['query'], 'stored_events'),
+        );
+        $this->assertSame([], array_values($storedEventQueries), '2回目はキャッシュを使い、stored_events を読まない');
         DB::disableQueryLog();
     }
 

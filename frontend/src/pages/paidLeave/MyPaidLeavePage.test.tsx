@@ -207,7 +207,7 @@ describe('MyPaidLeavePage', () => {
 
   it('submits a full-day leave request with the entered values', async () => {
     vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
-    vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveWorkflowRequest').mockResolvedValue(submittedRequest)
 
     renderPage()
     await screen.findByText('有給申請はまだありません。')
@@ -219,7 +219,7 @@ describe('MyPaidLeavePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '申請する' }))
 
     await waitFor(() =>
-      expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenCalledWith({
+      expect(paidLeaveApi.createPaidLeaveWorkflowRequest).toHaveBeenCalledWith({
         target_date: '2026-08-10',
         leave_type: 'full',
         hours: undefined,
@@ -246,7 +246,7 @@ describe('MyPaidLeavePage', () => {
 
   it('shows each 422 message once under its field and the heading above the button (hourly leave)', async () => {
     vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
-    vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockRejectedValue(
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveWorkflowRequest').mockRejectedValue(
       new ApiError(422, '最初のエラーの文です。', {
         target_date: ['対象日のエラー'],
         leave_type: ['取得単位のエラー'],
@@ -285,6 +285,7 @@ describe('MyPaidLeavePage', () => {
   it('allows submitting without an approver when approval is not required', async () => {
     vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
     vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveWorkflowRequest')
 
     renderPage([], false)
     await screen.findByText('有給申請はまだありません。')
@@ -304,11 +305,13 @@ describe('MyPaidLeavePage', () => {
         reason: undefined,
       }),
     )
+    // 承認不要の設定では直接の申請の入口を呼び、ワークフローの入口は呼ばない。
+    expect(paidLeaveApi.createPaidLeaveWorkflowRequest).not.toHaveBeenCalled()
   })
 
   it('creates one request per day when submitting a date range', async () => {
     vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
-    vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveWorkflowRequest').mockResolvedValue(submittedRequest)
 
     renderPage()
     await screen.findByText('有給申請はまだありません。')
@@ -321,8 +324,8 @@ describe('MyPaidLeavePage', () => {
     await user.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
     await user.click(screen.getByRole('button', { name: '申請する' }))
 
-    await waitFor(() => expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenCalledTimes(3))
-    expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenNthCalledWith(1, {
+    await waitFor(() => expect(paidLeaveApi.createPaidLeaveWorkflowRequest).toHaveBeenCalledTimes(3))
+    expect(paidLeaveApi.createPaidLeaveWorkflowRequest).toHaveBeenNthCalledWith(1, {
       target_date: '2026-08-10',
       leave_type: 'full',
       hours: undefined,
@@ -330,7 +333,7 @@ describe('MyPaidLeavePage', () => {
       reason: undefined,
       request_group_id: expect.any(String),
     })
-    expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenNthCalledWith(2, {
+    expect(paidLeaveApi.createPaidLeaveWorkflowRequest).toHaveBeenNthCalledWith(2, {
       target_date: '2026-08-11',
       leave_type: 'full',
       hours: undefined,
@@ -338,7 +341,7 @@ describe('MyPaidLeavePage', () => {
       reason: undefined,
       request_group_id: expect.any(String),
     })
-    expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenNthCalledWith(3, {
+    expect(paidLeaveApi.createPaidLeaveWorkflowRequest).toHaveBeenNthCalledWith(3, {
       target_date: '2026-08-12',
       leave_type: 'full',
       hours: undefined,
@@ -349,7 +352,7 @@ describe('MyPaidLeavePage', () => {
 
     // 3日分すべて同じrequest_group_idで束ねられていることを確認する
     // (承認者が1回の操作でまとめて承認できるようにするため)。
-    const calls = vi.mocked(paidLeaveApi.createPaidLeaveRequest).mock.calls
+    const calls = vi.mocked(paidLeaveApi.createPaidLeaveWorkflowRequest).mock.calls
     const groupIds = calls.map(([input]) => input.request_group_id)
     expect(new Set(groupIds).size).toBe(1)
 

@@ -11,7 +11,7 @@ use App\Domain\Asset\Commands\RemoveAssetFromInstallation;
 use App\Domain\Asset\Commands\ReturnAsset;
 use App\Domain\Asset\Commands\SetAssetDefaultLocation;
 use App\Domain\Asset\Commands\DeleteAsset;
-use App\Domain\Attendance\Commands\AllocateAttendanceWeeklyOvertime;
+use App\Domain\Attendance\Commands\AllocateWeeklyOvertime;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Rebuild\ReadModelRebuilder;
 use App\Models\Asset;
@@ -103,7 +103,7 @@ class ReadModelRebuildAfterDeletionScenarioTest extends TestCase
             ],
             'reason' => '遅刻を欠勤扱いにする',
         ])->assertOk();
-        $this->bus()->dispatch(new AllocateAttendanceWeeklyOvertime($dayId, '2026-08-10', 0, 0, 0, 0, $employee->id));
+        $this->bus()->dispatch(new AllocateWeeklyOvertime('2026-08-10', [['attendance_day_id' => $dayId, 'prescribed_minutes' => 0, 'non_prescribed_minutes' => 0, 'late_night_prescribed_minutes' => 0, 'late_night_non_prescribed_minutes' => 0]], $employee->id));
 
         $this->assertSame(1, DB::table('attendance_breaks')->where('attendance_day_id', $dayId)->count());
         $this->assertSame(1, DB::table('attendance_leave_segments')->where('attendance_day_id', $dayId)->count());

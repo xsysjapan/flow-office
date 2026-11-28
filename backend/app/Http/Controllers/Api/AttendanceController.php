@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
-use App\Domain\Attendance\Commands\AllocateAttendanceWeeklyOvertime;
+use App\Domain\Attendance\Commands\AllocateWeeklyOvertime;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
@@ -29,7 +29,6 @@ use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
 use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Export\Services\AttendanceExportScope;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
@@ -53,7 +52,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
@@ -232,9 +230,12 @@ class AttendanceController extends Controller
             '他の社員の週次勤怠を閲覧する権限がありません。',
         );
 
-        return response()->json(array_merge(
-            $calculator->calculateWeek($targetUserId, $start->toDateString(), $end->toDateString()),
-            $prescribedScheduleTotalsCalculator->calculate($targetUserId, $start->toDateString(), $end->toDateString()),
+        return response()->json($this->weekOvertimePayload(
+            $calculator,
+            $prescribedScheduleTotalsCalculator,
+            $targetUserId,
+            $start->toDateString(),
+            $end->toDateString(),
         ));
     }
 
@@ -243,10 +244,11 @@ class AttendanceController extends Controller
         string $weekStartDate,
         CommandBus $commandBus,
         WeeklyOvertimeCalculator $calculator,
+        PrescribedScheduleTotalsCalculator $prescribedScheduleTotalsCalculator,
     ): JsonResponse {
         $data = $request->validate([
             'allocations' => ['required', 'array'],
-            'allocations.*.attendance_day_id' => ['required', 'uuid', 'exists:attendance_days,id'],
+            'allocations.*.attendance_day_id' => ['required', 'uuid', 'exists:attendance_days,id', 'distinct'],
             'allocations.*.prescribed_minutes' => ['required', 'integer', 'min:0'],
             'allocations.*.non_prescribed_minutes' => ['required', 'integer', 'min:0'],
             'allocations.*.late_night_prescribed_minutes' => ['required', 'integer', 'min:0'],
@@ -255,26 +257,37 @@ class AttendanceController extends Controller
         $start = Carbon::parse($weekStartDate)->startOfDay();
         $end = $start->copy()->addDays(6);
 
-        DB::transaction(function () use ($data, $commandBus, $weekStartDate, $request, $calculator, $start, $end): void {
-            foreach ($data['allocations'] as $allocation) {
-                $commandBus->dispatch(new AllocateAttendanceWeeklyOvertime(
-                    attendanceDayId: $allocation['attendance_day_id'],
-                    weekStartDate: $weekStartDate,
-                    prescribedMinutes: $allocation['prescribed_minutes'],
-                    nonPrescribedMinutes: $allocation['non_prescribed_minutes'],
-                    lateNightPrescribedMinutes: $allocation['late_night_prescribed_minutes'],
-                    lateNightNonPrescribedMinutes: $allocation['late_night_non_prescribed_minutes'],
-                    allocatedByUserId: $request->user()->id,
-                ));
-            }
+        $commandBus->dispatch(new AllocateWeeklyOvertime(
+            weekStartDate: $weekStartDate,
+            allocations: array_values($data['allocations']),
+            allocatedByUserId: $request->user()->id,
+        ));
 
-            $week = $calculator->calculateWeek($request->user()->id, $start->toDateString(), $end->toDateString());
-            if ($week['allocated_weekly_statutory_excess_overtime_minutes'] > $week['weekly_statutory_excess_overtime_minutes']) {
-                throw new DomainRuleException('振分時間の合計が週40時間超の時間を超えています。');
-            }
-        });
+        return response()->json($this->weekOvertimePayload(
+            $calculator,
+            $prescribedScheduleTotalsCalculator,
+            $request->user()->id,
+            $start->toDateString(),
+            $end->toDateString(),
+        ));
+    }
 
-        return response()->json($calculator->calculateWeek($request->user()->id, $start->toDateString(), $end->toDateString()));
+    /**
+     * 週の残業(GETと振分の応答で共通)。週の集計に、所定労働日数・所定労働時間を加える。
+     *
+     * @return array<string, mixed>
+     */
+    private function weekOvertimePayload(
+        WeeklyOvertimeCalculator $calculator,
+        PrescribedScheduleTotalsCalculator $prescribedScheduleTotalsCalculator,
+        string $userId,
+        string $startDate,
+        string $endDate,
+    ): array {
+        return array_merge(
+            $calculator->calculateWeek($userId, $startDate, $endDate),
+            $prescribedScheduleTotalsCalculator->calculate($userId, $startDate, $endDate),
+        );
     }
 
     /**

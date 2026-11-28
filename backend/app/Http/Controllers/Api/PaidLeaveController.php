@@ -6,7 +6,6 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
-use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest as ApprovePaidLeaveRequestCommand;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
@@ -37,7 +36,6 @@ use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
 use App\Models\PaidLeaveUsage;
-use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -551,99 +549,104 @@ class PaidLeaveController extends Controller
     }
 
     /**
-     * UC-P003: 有給を申請する。
+     * UC-P003: 有給を申請する(承認不要の申請)。`Request{X}`を1つdispatchするだけで、承認の要否は読まない。
+     * 承認が必要な設定ではHandlerが422で拒否する(承認が必要な申請は POST /paid-leave/requests/workflow)。
+     * 承認不要の設定では、Handlerが申請と承認(承認者なし)を記録して消化まで確定させる。
      */
     #[OA\Post(
         path: '/paid-leave/requests',
         operationId: 'paidLeave.requests.store',
-        summary: '有給を申請する',
+        summary: '有給を申請する(承認不要の設定)',
+        description: '承認不要の設定(公開設定のpaid_leave_requires_approval=false)のときに使う。承認が必要な設定では422(承認が必要です)になるため、POST /paid-leave/requests/workflow を使う。',
         tags: ['有給休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true), new OA\Property(property: 'request_group_id', type: 'string', format: 'uuid', nullable: true, description: '期間指定でまとめて申請した複数日分を束ねるID(単日申請では省略)')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'leave_type'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'reason', type: 'string', nullable: true), new OA\Property(property: 'request_group_id', type: 'string', format: 'uuid', nullable: true, description: '期間指定でまとめて申請した複数日分を束ねるID(単日申請では省略)')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeRequest(Request $request, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): JsonResponse
     {
-        // system_settings.paid_leave_requires_approval=falseの場合、承認ワークフローを
-        // 経由せずその場で申請→承認不要のまま(消化)まで完結させる(ルートCLAUDE.md
-        // 「AIは勤怠ルールを決定しない」とは無関係の、承認要否そのものをマスタ化した設定)。
-        $requiresApproval = SystemSetting::current()->paid_leave_requires_approval;
+        $data = $this->validateStoreRequest($request, approverRequired: false);
 
-        $data = $request->validate([
+        $paidLeaveRequest = $commandBus->dispatch(new RequestPaidLeave(
+            userId: $request->user()->id,
+            targetDate: $data['target_date'],
+            leaveType: $data['leave_type'],
+            hours: $data['hours'] ?? null,
+            approverUserId: $data['approver_user_id'] ?? null,
+            reason: $data['reason'] ?? null,
+            workflowRequestId: null,
+            requestId: (string) Str::uuid(),
+            requestGroupId: $data['request_group_id'] ?? null,
+        ));
+
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
+
+        return (new PaidLeaveRequestResource($paidLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * UC-P003: 有給を申請する(承認が必要な申請)。`DraftWorkflowRequest`を1つdispatchするだけで、承認の要否は読まない。
+     * 承認不要の設定ではワークフローの下書きのHandlerが422で拒否する(POST /paid-leave/requests を使う)。
+     */
+    #[OA\Post(
+        path: '/paid-leave/requests/workflow',
+        operationId: 'paidLeave.requests.storeWorkflow',
+        summary: '有給を申請する(承認が必要な設定。承認者を指定してワークフローを作る)',
+        description: '承認が必要な設定(公開設定のpaid_leave_requires_approval=true)のときに使う。承認不要の設定では422(承認が不要です)になるため、POST /paid-leave/requests を使う。',
+        tags: ['有給休暇'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true), new OA\Property(property: 'request_group_id', type: 'string', format: 'uuid', nullable: true, description: '期間指定でまとめて申請した複数日分を束ねるID(単日申請では省略)')])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function storeWorkflowRequest(Request $request, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): JsonResponse
+    {
+        $data = $this->validateStoreRequest($request, approverRequired: true);
+
+        // UC-P003: 有給申請はworkflow_requestの下書き作成を起点にする。PaidLeaveRequest集約への
+        // RequestPaidLeaveはPaidLeaveRequestOnWorkflowRequestReactorが発行する
+        // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
+        // PaidLeaveRequestのIDはここで採番してsubjectIdとして渡す。Handler側から
+        // workflow_requests.subject_idを直接書き換えるとProjectionの再生成で失われるため
+        // (ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
+        $requestId = (string) Str::uuid();
+
+        $commandBus->dispatch(new DraftWorkflowRequest(
+            requestTypeCode: null,
+            applicantUserId: $request->user()->id,
+            title: $data['target_date'].' の有給申請',
+            formData: [
+                'target_date' => $data['target_date'],
+                'leave_type' => $data['leave_type'],
+                'hours' => $data['hours'] ?? null,
+                'reason' => $data['reason'] ?? null,
+                'request_group_id' => $data['request_group_id'] ?? null,
+            ],
+            approverUserId: $data['approver_user_id'],
+            subjectType: WorkflowRequestNotificationContent::PAID_LEAVE_REQUEST,
+            subjectId: $requestId,
+        ));
+
+        $paidLeaveRequest = PaidLeaveRequest::query()->findOrFail($requestId);
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
+
+        return (new PaidLeaveRequestResource($paidLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 有給申請の入力の検証(形式のみ)。承認者の指定は、承認が必要な入口でだけ必須にする(承認の要否は読まない)。
+     *
+     * @return array<string, mixed>
+     */
+    private function validateStoreRequest(Request $request, bool $approverRequired): array
+    {
+        return $request->validate([
             'target_date' => ['required', 'date'],
             'leave_type' => ['required', Rule::in(PaidLeaveType::values())],
             'hours' => ['nullable', 'numeric', 'min:0.5'],
-            'approver_user_id' => [$requiresApproval ? 'required' : 'nullable', 'string', 'exists:users,id'],
+            'approver_user_id' => [$approverRequired ? 'required' : 'nullable', 'string', 'exists:users,id'],
             'reason' => ['nullable', 'string'],
             // 期間指定でまとめて申請した複数日分(1日1リクエスト)を束ねるID。frontend側が
             // 同一の申請操作内で生成した同じ値を全日分に渡す(単日申請では省略)。
             'request_group_id' => ['nullable', 'string', 'uuid'],
         ]);
-
-        if ($requiresApproval) {
-            // UC-P003: 有給申請はworkflow_requestの下書き作成を起点にする。PaidLeaveRequest集約への
-            // RequestPaidLeaveはPaidLeaveRequestOnWorkflowRequestReactorが発行する
-            // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
-            // PaidLeaveRequestのIDはここで採番してsubjectIdとして渡す。Handler側から
-            // workflow_requests.subject_idを直接書き換えるとProjectionの再生成で失われるため
-            // (ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
-            $requestId = (string) Str::uuid();
-
-            $commandBus->dispatch(new DraftWorkflowRequest(
-                requestTypeCode: null,
-                applicantUserId: $request->user()->id,
-                title: $data['target_date'].' の有給申請',
-                formData: [
-                    'target_date' => $data['target_date'],
-                    'leave_type' => $data['leave_type'],
-                    'hours' => $data['hours'] ?? null,
-                    'reason' => $data['reason'] ?? null,
-                    'request_group_id' => $data['request_group_id'] ?? null,
-                ],
-                approverUserId: $data['approver_user_id'],
-                subjectType: WorkflowRequestNotificationContent::PAID_LEAVE_REQUEST,
-                subjectId: $requestId,
-            ));
-
-            $paidLeaveRequest = PaidLeaveRequest::query()->findOrFail($requestId);
-            $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
-
-            return (new PaidLeaveRequestResource($paidLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
-        }
-
-        // 承認不要設定: workflow_requestを作らず、RequestPaidLeave→ApprovePaidLeaveRequest
-        // (approvedByUserId: null)を同一トランザクションで発行し、その場で消化まで確定させる。
-        // RequestPaidLeaveAggregate::request()のapproverUserIdは非null必須のため、
-        // 指定が無い場合は申請者自身のIDをプレースホルダとして使う(このパスの申請は
-        // 即座にapprovedになるため、requests/to-approve一覧(status=submittedのみ表示)には
-        // そもそも現れず、実質的な承認者としては使われない)。
-        $requestId = (string) Str::uuid();
-        $approverUserId = $data['approver_user_id'] ?? $request->user()->id;
-
-        // 2つのコマンド発行(CommandBus::dispatchはそれぞれ独自のDBトランザクションで包む)を
-        // 外側のトランザクションでまとめ、後段の残数不足等でApprovePaidLeaveRequestが例外を
-        // 投げた場合でも、先に作成したPaidLeaveRequest行(submitted状態)が残らないようにする。
-        $paidLeaveRequest = DB::transaction(function () use ($commandBus, $data, $requestId, $approverUserId, $request) {
-            $commandBus->dispatch(new RequestPaidLeave(
-                userId: $request->user()->id,
-                targetDate: $data['target_date'],
-                leaveType: $data['leave_type'],
-                hours: $data['hours'] ?? null,
-                approverUserId: $approverUserId,
-                reason: $data['reason'] ?? null,
-                workflowRequestId: null,
-                requestId: $requestId,
-                requestGroupId: $data['request_group_id'] ?? null,
-            ));
-
-            return $commandBus->dispatch(new ApprovePaidLeaveRequestCommand(
-                paidLeaveRequestId: $requestId,
-                approvedByUserId: null,
-            ));
-        });
-
-        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
-
-        return (new PaidLeaveRequestResource($paidLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
     }
 
     #[OA\Get(

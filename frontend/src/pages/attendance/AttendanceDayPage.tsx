@@ -1176,7 +1176,7 @@ function ShiftSwapRequestDialog({
   const [substituteDate, setSubstituteDate] = useState<string | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
-  const createRequest = useCreateShiftSwapRequest()
+  const createRequest = useCreateShiftSwapRequest(approvalRequired)
   const swapErrors = fieldErrors(
     createRequest.error,
     approvalRequired

@@ -305,7 +305,7 @@ class WorkflowRequestSubjectTest extends TestCase
             app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
         }
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $targetDate,
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -344,7 +344,7 @@ class WorkflowRequestSubjectTest extends TestCase
             ));
         }
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => $targetDate,
             'leave_type' => 'full',

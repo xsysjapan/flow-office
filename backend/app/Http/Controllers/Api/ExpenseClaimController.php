@@ -6,6 +6,7 @@ use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\ExpenseClaim\Commands\AddExpenseItem;
+use App\Domain\ExpenseClaim\Commands\AddExpenseItems;
 use App\Domain\ExpenseClaim\Commands\CancelExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\DeleteExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\DraftExpenseClaim;
@@ -30,7 +31,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use OpenApi\Attributes as OA;
 
 /**
@@ -169,21 +169,17 @@ class ExpenseClaimController extends Controller
 
         $payload = $request->validate([
             'items' => ['required', 'array', 'min:1'],
+            'items.*' => ['array'],
+            ...$this->itemRules('items.*.'),
         ]);
 
-        $items = DB::transaction(function () use ($payload, $expenseClaim, $request, $commandBus) {
-            $created = [];
-            foreach ($payload['items'] as $itemInput) {
-                $data = $this->validatedItemArray($itemInput);
-                $created[] = $commandBus->dispatch(
-                    $this->makeAddCommand($expenseClaim->id, $request->user()->id, $data)
-                );
-            }
+        $items = $commandBus->dispatch(new AddExpenseItems(
+            claimId: $expenseClaim->id,
+            addedByUserId: $request->user()->id,
+            items: array_values($payload['items']),
+        ));
 
-            return $created;
-        });
-
-        return ExpenseItemResource::collection(collect($items))->response()->setStatusCode(Response::HTTP_CREATED);
+        return ExpenseItemResource::collection($items)->response()->setStatusCode(Response::HTTP_CREATED);
     }
 
     #[OA\Put(
@@ -448,7 +444,15 @@ class ExpenseClaimController extends Controller
      */
     private function validatedItemArray(array $input): array
     {
-        return validator($input, [
+        return validator($input, $this->itemRules())->validate();
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function itemRules(string $prefix = ''): array
+    {
+        $rules = [
             'category_id' => ['required', 'exists:expense_categories,id'],
             'usage_date' => ['nullable', 'date'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -460,7 +464,14 @@ class ExpenseClaimController extends Controller
             'commuting_deduction_amount' => ['nullable', 'integer', 'min:0'],
             'payment_bearer' => ['nullable', 'string', 'in:employee,company,corporate_card,customer,other'],
             'attributes' => ['nullable', 'array'],
-        ])->validate();
+        ];
+
+        $prefixed = [];
+        foreach ($rules as $key => $rule) {
+            $prefixed[$prefix.$key] = $rule;
+        }
+
+        return $prefixed;
     }
 
     /**

@@ -266,6 +266,31 @@ Handlerは勤怠の勤務予定を読んで拒否せず、休暇の申請・再�
 本人向けの付与一覧(`GET /paid-leave/grants/mine`)は、使える残りがある付与だけを返す(取り消した付与(status=revoked)と残日数0の付与は表示しない)。
 管理者向けの一覧(`GET /paid-leave/grants/user/{userId}`)は取消済みを含む。
 
+### 申請の入口は承認の要否の設定で分かれる(変更セット`20261128-single-command-entrypoints`論点5)
+
+有給・特別休暇・代休・振替休日の申請の入口は、全体の設定(`system_settings.paid_leave_requires_approval`・
+`special_leave_requires_approval`・`compensatory_leave_requires_approval`・`shift_swap_requires_approval`。公開設定
+`GET /system-settings`の同名の項目)で分かれる。**どちらを呼ぶかは呼び出し側(画面・APIの利用者)が設定を見て決め**、
+設定と違う入口はHandlerが422で拒否する(API Controllerは承認の要否で分岐せず、1回の呼び出しで1つのCommandだけを
+dispatchする。原則17)。判定は`App\Domain\Leave\Support\LeaveApprovalRequirement`が行う。
+
+| 設定 | 呼ぶ入口 | dispatchするCommand | 設定と違う入口 |
+|---|---|---|---|
+| 承認が不要 | `POST /{paid-leave,special-leave,compensatory-leave,shift-swap}/requests` | `RequestPaidLeave`等(`Request{X}`) | 承認が必要な設定でこの入口を呼ぶと422「{休暇}は承認が必要です。申請から承認者を指定して申請してください。」 |
+| 承認が必要 | `POST /{paid-leave,special-leave,compensatory-leave,shift-swap}/requests/workflow` | `DraftWorkflowRequest` | 承認が不要な設定でこの入口を呼ぶと422「{休暇}は承認が不要です。直接申請してください。」 |
+
+- 承認不要の入口(`/requests`): `Request{X}`のHandlerが申請を記録した後、集約を取り出し直して承認(承認者なし。
+  `Approve{X}`と共通の承認の処理)を記録する(1つのHandler・1トランザクションで2回のpersist)。記録するイベントの並び・
+  口座の消化・勤怠の休暇の反映の連鎖は、変更前の「`Request{X}`と`Approve{X}`を順にdispatch」と同じ。承認者は入力が無ければ申請者本人。
+  `approver_user_id`は任意。
+- 承認が必要な入口(`/requests/workflow`): `approver_user_id`が必須(この入口でだけ必須。入口が設定を読んで必須を切り替えない)。
+  ワークフローの下書きから、各文脈のReactorが`Request{X}`(有給・特別休暇・代休は`viaReactor=true`、振替休日は
+  `workflowRequestId`あり)を発行する。この経路は承認の要否を見ない(今どおり)。ワークフローの下書きのHandler
+  (`DraftWorkflowRequestHandler`)が、休暇・振替休日の種類で承認不要の設定なら拒否する。
+- 汎用のワークフロー(`POST /workflow-requests`)は申請種別マスタの申請(`request_type_code`)用で、休暇の種類の下書きは
+  作れないため、休暇ごとに`/requests/workflow`を設けた。
+- 画面(有給・特別休暇・代休の申請画面、勤怠の日の振替休日のダイアログ)は、公開設定を見て呼ぶ入口を選ぶ。
+
 自分の申請一覧(`GET /paid-leave/requests/mine`)は、対象日の降順(同じ日はidの降順)に20件ずつのページングで返す(応答は`{ data, links, meta }`。`page`・`target_date`(`Y-m-d`。指定するとその日の申請だけ)を受ける)。画面のページ番号はURLの`requestPage`に載る。
 
 申請そのものの進行状況(`paid_leave_requests.status`: submitted → approved / returned /

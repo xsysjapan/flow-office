@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\Attendance\Commands\AllocateWeeklyOvertime;
 use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
@@ -12,6 +13,7 @@ use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\AssertsSingleTopLevelCommand;
 use Tests\TestCase;
 
 /**
@@ -24,6 +26,7 @@ use Tests\TestCase;
  */
 class WeeklyOvertimeCalculationTest extends TestCase
 {
+    use AssertsSingleTopLevelCommand;
     use RefreshDatabase;
 
     private function makeCalendar(): CompanyCalendar
@@ -344,7 +347,11 @@ class WeeklyOvertimeCalculationTest extends TestCase
             'late_night_prescribed_minutes' => 0,
             'late_night_non_prescribed_minutes' => 0,
         ]]];
-        $this->actingAs($user)->putJson('/api/attendance/weeks/2026-06-01/overtime-allocations', $payload(120))->assertOk();
+        $bus = $this->recordCommands();
+        $response = $this->actingAs($user)->putJson('/api/attendance/weeks/2026-06-01/overtime-allocations', $payload(120))->assertOk();
+        $this->assertSingleTopLevelCommand($bus, AllocateWeeklyOvertime::class);
+        // 応答は週の残業のGETと同じ項目(所定労働日数・所定労働時間を含む)。
+        $response->assertJsonStructure(['week_start_date', 'weekly_statutory_excess_overtime_minutes', 'prescribed_work_days', 'scheduled_prescribed_work_minutes']);
         $target->calculation->refresh();
         $this->assertSame(300, $target->calculation->prescribed_statutory_within_work_minutes);
         $this->assertSame(120, $target->calculation->prescribed_statutory_excess_work_minutes);
@@ -360,5 +367,53 @@ class WeeklyOvertimeCalculationTest extends TestCase
         $week = app(WeeklyOvertimeCalculator::class)->calculateWeek($user->id, '2026-06-01', '2026-06-07');
         $this->assertSame(120, $week['weekly_statutory_excess_overtime_minutes'], '互換列更新後も週超過の元値は変えない');
         $this->assertSame(60, $week['unallocated_weekly_statutory_excess_overtime_minutes']);
+    }
+
+    public function test_duplicate_day_in_allocations_is_rejected(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeWorkStyle($calendar);
+        $user = User::factory()->create();
+        foreach (['06-01', '06-02', '06-03', '06-04', '06-05', '06-06'] as $day) {
+            $this->recordDay($user, $workStyle, "2026-{$day}", '09:00', '17:00');
+        }
+        $target = AttendanceDay::query()->where('user_id', $user->id)->whereDate('work_date', '2026-06-06')->firstOrFail();
+        $row = fn (int $minutes) => [
+            'attendance_day_id' => $target->id,
+            'prescribed_minutes' => $minutes,
+            'non_prescribed_minutes' => 0,
+            'late_night_prescribed_minutes' => 0,
+            'late_night_non_prescribed_minutes' => 0,
+        ];
+
+        $this->actingAs($user)->putJson('/api/attendance/weeks/2026-06-01/overtime-allocations', ['allocations' => [$row(60), $row(60)]])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['allocations.0.attendance_day_id', 'allocations.1.attendance_day_id']);
+
+        $this->assertSame(0, AttendanceWeeklyOvertimeAllocation::query()->count());
+    }
+
+    public function test_allocation_over_the_weekly_excess_records_nothing(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeWorkStyle($calendar);
+        $user = User::factory()->create();
+        foreach (['06-01', '06-02', '06-03', '06-04', '06-05', '06-06'] as $day) {
+            $this->recordDay($user, $workStyle, "2026-{$day}", '09:00', '17:00');
+        }
+        // 月〜土の48時間のうち週40時間超は480分ではなく、日ごとの法定内の範囲で振分けられる最大を超える合計にする。
+        $week = app(WeeklyOvertimeCalculator::class)->calculateWeek($user->id, '2026-06-01', '2026-06-07');
+        $excess = $week['weekly_statutory_excess_overtime_minutes'];
+        $this->assertGreaterThan(0, $excess);
+
+        $days = AttendanceDay::query()->where('user_id', $user->id)->orderBy('work_date')->get();
+        $half = intdiv($excess, 2) + 1;
+        $this->actingAs($user)->putJson('/api/attendance/weeks/2026-06-01/overtime-allocations', ['allocations' => [
+            ['attendance_day_id' => $days[4]->id, 'prescribed_minutes' => $half, 'non_prescribed_minutes' => 0, 'late_night_prescribed_minutes' => 0, 'late_night_non_prescribed_minutes' => 0],
+            ['attendance_day_id' => $days[5]->id, 'prescribed_minutes' => $half, 'non_prescribed_minutes' => 0, 'late_night_prescribed_minutes' => 0, 'late_night_non_prescribed_minutes' => 0],
+        ]])->assertUnprocessable()
+            ->assertJsonPath('message', '振分時間の合計が週40時間超の時間を超えています。');
+
+        $this->assertSame(0, AttendanceWeeklyOvertimeAllocation::query()->count(), '週の上限を超えたら何も残らない');
     }
 }

@@ -87,7 +87,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-12',
             'approver_user_id' => $approver->id,
@@ -105,7 +105,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-10',
             'substitute_date' => '2026-08-17',
             'approver_user_id' => $approver->id,
@@ -123,7 +123,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
         $this->createCompanyHolidayAssignment($employee, $workStyle, '2026-08-17');
 
-        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-17',
             'approver_user_id' => $approver->id,
@@ -144,7 +144,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-12',
             'substitute_date' => '2026-08-16',
             'approver_user_id' => $approver->id,
@@ -170,7 +170,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-24', // 翌週の月曜日
             'approver_user_id' => $approver->id,
@@ -188,7 +188,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-12', // 同一週の水曜日
             'approver_user_id' => $approver->id,
@@ -206,7 +206,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-24', // 翌週の月曜日
             'approver_user_id' => $approver->id,
@@ -224,7 +224,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle, 480);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-11', // 同一週の火曜日
             'approver_user_id' => $approver->id,
@@ -242,7 +242,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
         // 振替先(2026-08-24)はまだ勤務予定行が展開されていない。
 
-        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-24',
             'approver_user_id' => $approver->id,
@@ -278,7 +278,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-12',
             'approver_user_id' => $approver->id,
@@ -295,7 +295,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-12',
             'approver_user_id' => $approver->id,
@@ -318,7 +318,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-12',
             'approver_user_id' => $approver->id,
@@ -375,7 +375,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createCompanyHolidayAssignment($employee, $workStyle, '2026-08-15');
 
-        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-15',
             'substitute_date' => '2026-08-24', // 翌週の月曜日
             'approver_user_id' => $approver->id,
@@ -392,7 +392,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->createWeekdays($employee, $workStyle);
         $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
 
-        $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+        $this->actingAs($employee)->postJson('/api/shift-swap/requests/workflow', [
             'target_date' => '2026-08-16',
             'substitute_date' => '2026-08-12',
             'approver_user_id' => $approver->id,

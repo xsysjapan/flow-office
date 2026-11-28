@@ -139,7 +139,7 @@ class SpecialLeaveAttendanceRateScenarioTest extends TestCase
     /** 特別休暇の全休を申請し、申請IDを返す。 */
     private function submitSpecialLeave(string $date): string
     {
-        return (string) $this->actingAs($this->employee)->postJson('/api/special-leave/requests', [
+        return (string) $this->actingAs($this->employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $this->type->id,
             'target_date' => $date,
             'leave_type' => 'full',

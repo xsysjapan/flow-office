@@ -65,7 +65,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestResponse = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestResponse = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -113,7 +113,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = SpecialLeaveType::query()->create(['name' => '代休', 'is_active' => true, 'requires_grant' => false]);
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        $requestResponse = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestResponse = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -146,7 +146,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'hourly',
@@ -180,7 +180,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 0.5, 'used_days' => 0, 'remaining_days' => 0.5,
         ]);
 
-        $response = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -215,7 +215,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 0.3, 'used_days' => 0, 'remaining_days' => 0.3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -239,7 +239,7 @@ class SpecialLeaveRequestTest extends TestCase
             'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
             'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
         ]);
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -251,7 +251,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -271,7 +271,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
-        $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -283,7 +283,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
         ]);
 
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -310,7 +310,7 @@ class SpecialLeaveRequestTest extends TestCase
         ]);
         // リフレッシュ休暇の残高は無い(0件)。
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $refresh->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -352,7 +352,7 @@ class SpecialLeaveRequestTest extends TestCase
         ]);
 
         // 2026-08-10は月曜日(平日)。employee_calendar_entriesの行は無い。
-        $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -379,7 +379,7 @@ class SpecialLeaveRequestTest extends TestCase
         ]);
 
         // 2026-08-15は土曜日。
-        $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-15',
             'leave_type' => 'full',
@@ -400,7 +400,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -422,7 +422,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -521,7 +521,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -562,7 +562,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -595,7 +595,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -634,7 +634,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'am_half',
@@ -665,7 +665,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -695,7 +695,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -718,7 +718,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -753,7 +753,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -785,7 +785,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -814,7 +814,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -841,7 +841,7 @@ class SpecialLeaveRequestTest extends TestCase
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',

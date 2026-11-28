@@ -53,7 +53,7 @@ class PaidLeaveRequestTest extends TestCase
 
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestResponse = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestResponse = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -94,7 +94,7 @@ class PaidLeaveRequestTest extends TestCase
 
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'am_half',
             'approver_user_id' => $approver->id,
@@ -117,7 +117,7 @@ class PaidLeaveRequestTest extends TestCase
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         // 2時間休 / 8時間(480分)勤務 = 0.25日
-        $response = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'hourly',
             'hours' => 2,
@@ -132,7 +132,7 @@ class PaidLeaveRequestTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
 
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -158,7 +158,7 @@ class PaidLeaveRequestTest extends TestCase
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         // 2026-08-10は月曜日(平日)。employee_calendar_entriesの行は無い。
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -179,7 +179,7 @@ class PaidLeaveRequestTest extends TestCase
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         // 2026-08-15は土曜日。
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-15',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -200,7 +200,7 @@ class PaidLeaveRequestTest extends TestCase
         $grantId = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 0.5, null));
         $grant = PaidLeaveGrant::query()->findOrFail($grantId);
 
-        $response = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -224,7 +224,7 @@ class PaidLeaveRequestTest extends TestCase
         $laterExpiringId = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
         $laterExpiring = PaidLeaveGrant::query()->findOrFail($laterExpiringId);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -250,7 +250,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -266,7 +266,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -290,7 +290,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -326,7 +326,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -354,7 +354,7 @@ class PaidLeaveRequestTest extends TestCase
         $grantId = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
         $grant = PaidLeaveGrant::query()->findOrFail($grantId);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -380,7 +380,7 @@ class PaidLeaveRequestTest extends TestCase
         $grantId = app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
         $grant = PaidLeaveGrant::query()->findOrFail($grantId);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'am_half',
             'approver_user_id' => $approver->id,
@@ -400,7 +400,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -424,7 +424,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -441,7 +441,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -485,7 +485,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -510,7 +510,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $response = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -533,7 +533,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -609,7 +609,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -632,13 +632,13 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
         ])->assertCreated();
 
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'am_half',
             'approver_user_id' => $approver->id,
@@ -660,7 +660,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

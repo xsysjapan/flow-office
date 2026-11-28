@@ -4,7 +4,7 @@ namespace Tests\Feature\Support;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\UserManagement\Commands\SetUserHireDate;
+use App\Domain\UserManagement\Commands\UpdateUserDetails;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,9 +31,10 @@ class RecordingCommandBusTest extends TestCase
             'usage_start_date' => '2024-05-01',
         ])->assertOk();
 
-        $this->assertCount(3, $bus->topLevelCommands());
-        $this->assertGreaterThanOrEqual(3, count($bus->allCommands()));
-        $this->assertContains(SetUserHireDate::class, array_map(fn ($c) => $c::class, $bus->topLevelCommands()));
+        // 入口が直接dispatchするのは UpdateUserDetails の1件。全体は同期Reactorの連鎖の分を含めて1件より多い。
+        $this->assertSingleTopLevelCommand($bus, UpdateUserDetails::class);
+        $this->assertGreaterThan(1, count($bus->allCommands()));
+        $this->assertContains(UpdateUserDetails::class, array_map(fn ($c) => $c::class, $bus->allCommands()));
     }
 
     public function test_depth_is_restored_after_a_handler_throws(): void

@@ -2,13 +2,17 @@
 
 namespace Tests\Feature\ExpenseClaim;
 
+use App\Domain\ExpenseClaim\Commands\AddExpenseItems;
 use App\Models\BackOfficeTask;
 use App\Models\ExpenseCategory;
+use App\Models\ExpenseItem;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkflowRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
+use Tests\Support\AssertsSingleTopLevelCommand;
 use Tests\TestCase;
 
 /**
@@ -16,6 +20,7 @@ use Tests\TestCase;
  */
 class ExpenseClaimFlowTest extends TestCase
 {
+    use AssertsSingleTopLevelCommand;
     use RefreshDatabase;
 
     private function makeCategory(?int $approvalSkipThreshold = null): ExpenseCategory
@@ -107,6 +112,7 @@ class ExpenseClaimFlowTest extends TestCase
 
         $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
 
+        $bus = $this->recordCommands();
         $response = $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items/bulk", [
             'items' => [
                 ['category_id' => $category->id, 'amount' => 300, 'description' => '自宅 → 会社(電車)'],
@@ -114,10 +120,49 @@ class ExpenseClaimFlowTest extends TestCase
             ],
         ]);
         $response->assertCreated();
+        $this->assertSingleTopLevelCommand($bus, AddExpenseItems::class);
         $this->assertCount(2, $response->json());
+        $this->assertSame([300, 700], array_column($response->json(), 'amount'), '入力の順の明細の配列');
 
         $show = $this->actingAs($employee)->getJson("/api/expense-claims/{$claimId}");
         $show->assertOk()->assertJsonPath('total_amount', 1000);
+    }
+
+    public function test_bulk_add_items_format_error_key_has_the_row_index(): void
+    {
+        $employee = User::factory()->create();
+        $category = $this->makeCategory();
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
+
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items/bulk", [
+            'items' => [
+                ['category_id' => $category->id, 'amount' => 300],
+                ['category_id' => $category->id, 'amount' => -5],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors(['items.1.amount'])->assertJsonMissingValidationErrors(['items.0.amount']);
+
+        $this->assertSame(0, ExpenseItem::query()->where('claim_id', $claimId)->count());
+    }
+
+    public function test_bulk_add_items_business_rejection_key_has_the_row_index_and_nothing_is_recorded(): void
+    {
+        $employee = User::factory()->create();
+        $category = $this->makeCategory();
+        $inactive = ExpenseCategory::query()->create([
+            'code' => 'inactive', 'name' => '無効区分', 'is_active' => false,
+            'evidence_type_default' => ExpenseCategory::EVIDENCE_FACT_REFERENCE_AVAILABLE,
+        ]);
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
+
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items/bulk", [
+            'items' => [
+                ['category_id' => $category->id, 'amount' => 300],
+                ['category_id' => $inactive->id, 'amount' => 700],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors(['items.1.category_id']);
+
+        $this->assertSame(0, ExpenseItem::query()->where('claim_id', $claimId)->count(), '1件の拒否で何も残らない');
+        $this->assertSame(0, EloquentStoredEvent::query()->where('event_class', 'expense_claim.item_added')->count());
     }
 
     public function test_period_from_and_period_to_are_derived_from_item_usage_dates(): void

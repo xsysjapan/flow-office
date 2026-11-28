@@ -2,11 +2,10 @@
 
 namespace App\Domain\CompensatoryLeave\Handlers;
 
-use App\Domain\CompensatoryLeave\Aggregates\CompensatoryLeaveRequestAggregate;
 use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Services\CompensatoryLeaveRequestApprover;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 
 /**
  * 代休申請を承認する。申請の集約へ承認を記録するだけで、消化記録の確定(残数)は
@@ -21,24 +20,13 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
  */
 class ApproveCompensatoryLeaveRequestHandler implements CommandHandler
 {
+    public function __construct(private readonly CompensatoryLeaveRequestApprover $approver) {}
+
     public function handle(Command $command): mixed
     {
         assert($command instanceof ApproveCompensatoryLeaveRequest);
 
-        $aggregate = CompensatoryLeaveRequestAggregate::retrieve($command->compensatoryLeaveRequestId);
-
-        if ($command->viaReactor && $aggregate->isApproved()) {
-            return null;
-        }
-
-        if (! $command->viaReactor
-            && $command->approvedByUserId !== null
-            && $aggregate->approverUserId() !== $command->approvedByUserId
-        ) {
-            throw new DomainRuleException('指定された承認者のみ承認できます。');
-        }
-
-        $aggregate->approve($command->approvedByUserId)->persist();
+        $this->approver->approve($command->compensatoryLeaveRequestId, $command->approvedByUserId, $command->viaReactor);
 
         return null;
     }

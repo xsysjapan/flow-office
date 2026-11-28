@@ -259,17 +259,15 @@ AIやMCPサーバー側に重複実装しない。
   連鎖で整合させる(全体が1トランザクションになり、途中の拒否で全体が戻る)。複数の変更を1回で受ける操作(まとめて
   保存等)は、その単位を1つのCommand(とイベント)として設計する。承認の要否などの業務の判定は入口に置かず、
   ドメイン(Handler・Aggregate・判定クラス)に置く。根拠: ユーザーの指示(2026-11-27)。
-  - 既存の例外(入口で複数のCommandを1つの`DB::transaction`で束ねている。順に是正する。2026-11-27時点):
-    - 休暇・シフト交換の承認不要の申請(申請→承認): `PaidLeaveController`・`SpecialLeaveController`・
-      `CompensatoryLeaveController`・`ShiftSwapRequestController`
-    - まとめて保存: `UserController::updateDetails`・`AccessControlController::updateRoleDefinition`
-    - 一括操作(同じCommandを複数件): `ExpenseClaimController::bulkAddItems`・`BackOfficeTaskController::bulkComplete`・
-      `PaidLeaveScheduleController`(出勤率の判定の一括実行)・`AttendanceController`(週の残業の振分)。
-      一括操作を1つのCommandにするか、例外として残すかは是正の変更セットで決める。
-    - このほか、`PaidLeaveScheduleController`の一括付与(`bulkGrant`、利用者ごとに1件)・再判定(`reassess`、組で2件)、
-      備品の一括操作(`AssetBulkOperationController`、資産ごとに1件)も入口で複数のCommandを発行している。
-    - 画面が1件ずつAPIを呼んで一括にしているもの(申請の一括取消・承認の一括・バックオフィスの担当の一括変更・
-      休暇の手動付与・期間の休暇の申請)も、専用のAPIに置き換える。
+  - 既存の例外(入口で複数のCommandを発行している。順に是正する。2026-11-28時点):
+    - 是正済み(変更セット`20261128-single-command-entrypoints`): 利用者詳細・ロール詳細のまとめて保存、ロールの複製、
+      経費の明細のまとめて登録、週の残業の振分、休暇・振替休日の申請(承認の要否で入口を分け、設定と違う入口は拒否)、
+      付与予定の再判定。
+    - 一括操作(変更セットの段階②で是正する): `BackOfficeTaskController::bulkComplete`、`PaidLeaveScheduleController::bulkGrant`、
+      備品の一括操作(`AssetBulkOperationController`)。画面が1件ずつAPIを呼んで一括にしているもの(申請の一括取消・承認の一括・
+      バックオフィスの担当の一括変更・休暇の手動付与)も専用のAPIに置き換える。期間の休暇の申請は段階③。
+    - そのほか(未着手): `UserController::store`(利用者の作成と所属の追加)、`CompanyCalendarController::store`・`regenerateYear`、
+      `DeviceAdminController::bootstrapRegisterKey`、`AttendanceController::approveMonth`・`returnMonth`(ワークフローの有無で入口を選ぶ)。
   - **一括操作の同期・非同期**(ユーザーの指示 2026-11-28): 一括操作は、対象を画面で選んで(IDを指定して)行うのを基本とし、
     同期で処理する。非同期(DBキュー・cron)にするのは、IDを指定せず条件で数千件を処理するような一括処理を作るときだけ
     (現状は該当なし)。期間の休暇の申請は1つの申請として扱い、どれか1日でも拒否されたら全部申請しない。

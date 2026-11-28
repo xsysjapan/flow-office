@@ -62,7 +62,7 @@ class PaidLeaveGrantAmountChangeTest extends TestCase
 
     private function approveFullDayLeave(User $employee, User $approver, string $date): void
     {
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $date,
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

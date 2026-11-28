@@ -7,15 +7,19 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\SetUserTerminationDate;
+use App\Domain\UserManagement\Services\FieldAuthorityService;
 use App\Models\User;
 
 /** @implements CommandHandler<SetUserTerminationDate> */
 class SetUserTerminationDateHandler implements CommandHandler
 {
+    public function __construct(private FieldAuthorityService $authorities) {}
+
     public function handle(Command $command): User
     {
         assert($command instanceof SetUserTerminationDate);
 
+        $this->authorities->assertLocallyEditable(['termination_date']);
         $user = User::query()->findOrFail($command->userId);
         if ($command->terminationDate !== null && $user->hire_date?->toDateString() > $command->terminationDate) {
             throw new DomainRuleException('退社日は入社日以降の日付を指定してください。');

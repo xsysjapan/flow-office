@@ -67,7 +67,7 @@ class PaidLeaveUsageCancellationRecalculationTest extends TestCase
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         // 1回目: 時間単位有給2時間を申請・承認 -> paid_leave_minutesは120
-        $firstRequestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $firstRequestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $date,
             'leave_type' => 'hourly',
             'hours' => 2,
@@ -87,7 +87,7 @@ class PaidLeaveUsageCancellationRecalculationTest extends TestCase
 
         // 同日に再度時間単位有給1時間を申請・承認 -> 取消済みの旧行(120分)が
         // 二重計上されず、新規申請分(60分)のみが反映される
-        $secondRequestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $secondRequestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => $date,
             'leave_type' => 'hourly',
             'hours' => 1,

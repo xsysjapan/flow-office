@@ -236,7 +236,7 @@ class AttendanceLeaveSegmentTest extends TestCase
 
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $hourlyRequestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $hourlyRequestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'hourly',
             'hours' => 2,
@@ -244,7 +244,7 @@ class AttendanceLeaveSegmentTest extends TestCase
         ])->assertCreated()->json('id');
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$hourlyRequestId}/approve")->assertOk();
 
-        $fullRequestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $fullRequestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-11',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -279,7 +279,7 @@ class AttendanceLeaveSegmentTest extends TestCase
 
         // 8/11: 全休の有給。
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-11',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

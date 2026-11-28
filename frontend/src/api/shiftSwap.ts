@@ -11,8 +11,14 @@ export interface CreateShiftSwapRequestInput {
   reason?: string
 }
 
+/** 承認不要の設定(shift_swap_requires_approval=false)の直接の申請。承認が必要な設定では422になる。 */
 export function createShiftSwapRequest(input: CreateShiftSwapRequestInput): Promise<ShiftSwapRequest> {
   return apiFetch('/shift-swap/requests', { method: 'POST', body: input })
+}
+
+/** 承認が必要な設定(shift_swap_requires_approval=true)の申請(承認者を指定してワークフローを作る)。承認不要の設定では422になる。 */
+export function createShiftSwapWorkflowRequest(input: CreateShiftSwapRequestInput): Promise<ShiftSwapRequest> {
+  return apiFetch('/shift-swap/requests/workflow', { method: 'POST', body: input })
 }
 
 export function approveShiftSwapRequest(id: string): Promise<ShiftSwapRequest> {

@@ -87,7 +87,7 @@ function CompensatoryLeaveRequestForm() {
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
 
-  const createRequest = useCreateCompensatoryLeaveRequest()
+  const createRequest = useCreateCompensatoryLeaveRequest(approvalRequired)
 
   const targetDates = targetMode === 'range' ? enumerateRange(range) : selectedDates
   const isMultiDay = targetDates.length > 1

@@ -8,6 +8,7 @@ import {
   createPaidLeaveGrantRule,
   createPaidLeaveProportionalGrantPolicyVersion,
   createPaidLeaveRequest,
+  createPaidLeaveWorkflowRequest,
   deletePaidLeaveGrantRule,
   editPaidLeaveScheduleEntry,
   fetchMyPaidLeaveGrants,
@@ -195,11 +196,13 @@ export function useMyPaidLeaveRequests(params: FetchMyPaidLeaveRequestsParams = 
   return useQuery({ queryKey: [...MY_REQUESTS_KEY, params], queryFn: () => fetchMyPaidLeaveRequests(params) })
 }
 
-export function useCreatePaidLeaveRequest() {
+/** 申請の入口は設定で分かれる: 承認が必要ならワークフローの入口、不要なら直接の申請(設定と違う入口は422)。 */
+export function useCreatePaidLeaveRequest(approvalRequired: boolean) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: CreatePaidLeaveRequestInput) => createPaidLeaveRequest(input),
+    mutationFn: (input: CreatePaidLeaveRequestInput) =>
+      approvalRequired ? createPaidLeaveWorkflowRequest(input) : createPaidLeaveRequest(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: MY_REQUESTS_KEY })
     },

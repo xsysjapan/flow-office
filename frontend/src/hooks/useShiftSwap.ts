@@ -3,6 +3,7 @@ import {
   approveShiftSwapRequest,
   cancelShiftSwapRequest,
   createShiftSwapRequest,
+  createShiftSwapWorkflowRequest,
   fetchMyShiftSwapRequests,
   fetchShiftSwapRequestsToApprove,
   returnShiftSwapRequest,
@@ -29,11 +30,13 @@ function useInvalidateShiftSwapRequests() {
   }
 }
 
-export function useCreateShiftSwapRequest() {
+/** 申請の入口は設定で分かれる: 承認が必要ならワークフローの入口、不要なら直接の申請(設定と違う入口は422)。 */
+export function useCreateShiftSwapRequest(approvalRequired: boolean) {
   const invalidate = useInvalidateShiftSwapRequests()
 
   return useMutation({
-    mutationFn: (input: CreateShiftSwapRequestInput) => createShiftSwapRequest(input),
+    mutationFn: (input: CreateShiftSwapRequestInput) =>
+      approvalRequired ? createShiftSwapWorkflowRequest(input) : createShiftSwapRequest(input),
     onSuccess: () => invalidate(),
   })
 }

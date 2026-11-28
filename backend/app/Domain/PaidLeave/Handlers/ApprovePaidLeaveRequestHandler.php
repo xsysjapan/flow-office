@@ -4,9 +4,8 @@ namespace App\Domain\PaidLeave\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
-use App\Domain\PaidLeaveRequest\Aggregates\PaidLeaveRequestAggregate;
+use App\Domain\PaidLeave\Services\PaidLeaveRequestApprover;
 use App\Models\PaidLeaveRequest;
 
 /**
@@ -22,25 +21,12 @@ use App\Models\PaidLeaveRequest;
  */
 class ApprovePaidLeaveRequestHandler implements CommandHandler
 {
+    public function __construct(private readonly PaidLeaveRequestApprover $approver) {}
+
     public function handle(Command $command): PaidLeaveRequest
     {
         assert($command instanceof ApprovePaidLeaveRequest);
 
-        $aggregate = PaidLeaveRequestAggregate::retrieve($command->paidLeaveRequestId);
-
-        if ($command->viaReactor && $aggregate->isApproved()) {
-            return PaidLeaveRequest::query()->findOrFail($command->paidLeaveRequestId);
-        }
-
-        if (! $command->viaReactor
-            && $command->approvedByUserId !== null
-            && $aggregate->approverUserId() !== $command->approvedByUserId
-        ) {
-            throw new DomainRuleException('指定された承認者のみ承認できます。');
-        }
-
-        $aggregate->approve($command->approvedByUserId)->persist();
-
-        return PaidLeaveRequest::query()->findOrFail($command->paidLeaveRequestId);
+        return $this->approver->approve($command->paidLeaveRequestId, $command->approvedByUserId, $command->viaReactor);
     }
 }

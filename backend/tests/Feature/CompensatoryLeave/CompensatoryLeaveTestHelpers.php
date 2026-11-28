@@ -103,7 +103,7 @@ trait CompensatoryLeaveTestHelpers
         $workStyle = WorkStyle::query()->firstOrFail();
         $this->makeCompensatoryWorkingDayShift($employee, $workStyle, $targetDate);
 
-        return $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', array_merge([
+        return $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', array_merge([
             'target_date' => $targetDate,
             'leave_type' => $leaveType,
             'approver_user_id' => $approver->id,

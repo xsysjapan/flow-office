@@ -6,7 +6,9 @@ use App\Domain\Attendance\Services\ScheduledWorkingDayResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Leave\Support\LeaveApprovalRequirement;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
+use App\Domain\PaidLeave\Services\PaidLeaveRequestApprover;
 use App\Domain\PaidLeaveRequest\Aggregates\PaidLeaveRequestAggregate;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveType;
@@ -20,6 +22,8 @@ use Illuminate\Support\Carbon;
  * - 残数の消化記録(有給口座)・勤怠の休暇・ワークフローの提出は、記録された
  *   `paid_leave_request.requested`/`.shared`をそれぞれの文脈のReactorが受けて行う(原則15)。
  * - viaReactor=true(workflow_request.drafted からのReactor発行)で、同じ申請IDが既に申請済みなら何もしない(冪等)。
+ * - 利用者の操作(viaReactor=false)の直接の申請は、承認が必要な設定なら拒否する(承認が必要な申請はワークフローの下書きから行う)。
+ *   承認不要の設定なら、申請を記録した後に承認(approvedByUserId=null。PaidLeaveRequestApproverと共通)まで記録する。
  *
  * @implements CommandHandler<RequestPaidLeave>
  */
@@ -27,6 +31,8 @@ class RequestPaidLeaveHandler implements CommandHandler
 {
     public function __construct(
         private readonly ScheduledWorkingDayResolver $scheduledWorkingDayResolver,
+        private readonly LeaveApprovalRequirement $approvalRequirement,
+        private readonly PaidLeaveRequestApprover $approver,
     ) {}
 
     public function handle(Command $command): PaidLeaveRequest
@@ -39,6 +45,10 @@ class RequestPaidLeaveHandler implements CommandHandler
             return PaidLeaveRequest::query()->findOrFail($command->requestId);
         }
 
+        if (! $command->viaReactor) {
+            $this->assertDirectRequestAllowed();
+        }
+
         $requestedDays = $this->resolveRequestedDays($command);
 
         $aggregate->request(
@@ -47,7 +57,7 @@ class RequestPaidLeaveHandler implements CommandHandler
             leaveType: $command->leaveType,
             hours: $command->hours,
             requestedDays: $requestedDays,
-            approverUserId: $command->approverUserId,
+            approverUserId: $command->approverUserId ?? $command->userId,
             reason: $command->reason,
             requestGroupId: $command->requestGroupId,
             workflowRequestId: $command->workflowRequestId,
@@ -60,7 +70,21 @@ class RequestPaidLeaveHandler implements CommandHandler
 
         $aggregate->persist();
 
+        // 承認不要の設定での直接の申請: 集約を取り出し直して承認を記録する(申請と承認の2回のpersist。1つのトランザクション)。
+        if (! $command->viaReactor) {
+            return $this->approver->approve($command->requestId, null, false);
+        }
+
         return PaidLeaveRequest::query()->findOrFail($command->requestId);
+    }
+
+    private function assertDirectRequestAllowed(): void
+    {
+        $rejection = $this->approvalRequirement->directRequestRejection(LeaveApprovalRequirement::PAID_LEAVE);
+
+        if ($rejection !== null) {
+            throw new DomainRuleException($rejection);
+        }
     }
 
     private function resolveRequestedDays(RequestPaidLeave $command): float

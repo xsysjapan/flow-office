@@ -91,7 +91,7 @@ class CompensatoryLeaveHistoryTest extends TestCase
         ])->assertCreated();
 
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
-        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests/workflow', [
             'target_date' => '2026-09-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,

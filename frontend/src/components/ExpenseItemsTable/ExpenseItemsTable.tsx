@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { ArrowDown, ArrowUp, Copy, Trash2 } from 'lucide-react'
 import type { EditableRow } from '../../hooks/useEditableRows'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
@@ -25,6 +25,8 @@ export interface ExpenseItemsTableProps {
    *  作成された明細のIDが確定してからアップロードする。 */
   rowFiles?: Record<number, File | null>
   onRowFileChange?: (rowId: number, file: File | null) => void
+  /** 行ごとの保存エラー(まとめて登録の422)。行の下に出す。キーは`rowId`。 */
+  rowErrors?: Record<number, string | undefined>
 }
 
 /** 経費明細の添付ファイルとして許可される拡張子(AttachmentController::EXPENSE_ITEM_ALLOWED_EXTENSIONS)。 */
@@ -73,6 +75,7 @@ export function ExpenseItemsTable({
   onPasteRows,
   rowFiles = {},
   onRowFileChange,
+  rowErrors = {},
 }: ExpenseItemsTableProps) {
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([])
   const [showPasteArea, setShowPasteArea] = useState(false)
@@ -192,126 +195,137 @@ export function ExpenseItemsTable({
         </TableHeader>
         <TableBody>
           {rows.map((row, index) => (
-            <TableRow key={row.rowId}>
-              <TableCell>
-                <Checkbox
-                  aria-label={`${index + 1}行目を選択`}
-                  checked={selectedRowIds.includes(row.rowId)}
-                  onCheckedChange={(checked) => toggleRowSelected(row.rowId, checked === true)}
-                />
-              </TableCell>
-              <TableCell>
-                <DatePicker
-                  aria-label={`${index + 1}行目の日付`}
-                  value={row.usage_date || undefined}
-                  onChange={(date) => onUpdateRow(row.rowId, { usage_date: date ?? '' })}
-                />
-              </TableCell>
-              <TableCell>
-                <NativeSelect
-                  aria-label={`${index + 1}行目の経費区分`}
-                  value={row.category_id}
-                  onChange={(e) => onUpdateRow(row.rowId, { category_id: Number(e.target.value) })}
-                >
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </TableCell>
-              <TableCell>
-                <Input
-                  type="number"
-                  aria-label={`${index + 1}行目の金額`}
-                  value={row.amount}
-                  onChange={(e) => onUpdateRow(row.rowId, { amount: Number(e.target.value) })}
-                />
-              </TableCell>
-              <TableCell className="whitespace-normal min-w-48">
-                {isBatchCategory(categories, row.category_id) && (
-                  <div className="mb-1 flex items-center gap-1">
-                    <Input
-                      aria-label={`${index + 1}行目の出発地`}
-                      placeholder="出発地"
-                      className="w-24"
-                      value={routeParts[row.rowId]?.departure ?? ''}
-                      onChange={(e) => updateRoutePart(row.rowId, 'departure', e.target.value)}
-                    />
-                    <span aria-hidden="true" className="text-muted-foreground">
-                      →
-                    </span>
-                    <Input
-                      aria-label={`${index + 1}行目の到着地`}
-                      placeholder="到着地"
-                      className="w-24"
-                      value={routeParts[row.rowId]?.destination ?? ''}
-                      onChange={(e) => updateRoutePart(row.rowId, 'destination', e.target.value)}
-                    />
+            <Fragment key={row.rowId}>
+              <TableRow>
+                <TableCell>
+                  <Checkbox
+                    aria-label={`${index + 1}行目を選択`}
+                    checked={selectedRowIds.includes(row.rowId)}
+                    onCheckedChange={(checked) => toggleRowSelected(row.rowId, checked === true)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <DatePicker
+                    aria-label={`${index + 1}行目の日付`}
+                    value={row.usage_date || undefined}
+                    onChange={(date) => onUpdateRow(row.rowId, { usage_date: date ?? '' })}
+                  />
+                </TableCell>
+                <TableCell>
+                  <NativeSelect
+                    aria-label={`${index + 1}行目の経費区分`}
+                    value={row.category_id}
+                    onChange={(e) => onUpdateRow(row.rowId, { category_id: Number(e.target.value) })}
+                  >
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    aria-label={`${index + 1}行目の金額`}
+                    value={row.amount}
+                    onChange={(e) => onUpdateRow(row.rowId, { amount: Number(e.target.value) })}
+                  />
+                </TableCell>
+                <TableCell className="whitespace-normal min-w-48">
+                  {isBatchCategory(categories, row.category_id) && (
+                    <div className="mb-1 flex items-center gap-1">
+                      <Input
+                        aria-label={`${index + 1}行目の出発地`}
+                        placeholder="出発地"
+                        className="w-24"
+                        value={routeParts[row.rowId]?.departure ?? ''}
+                        onChange={(e) => updateRoutePart(row.rowId, 'departure', e.target.value)}
+                      />
+                      <span aria-hidden="true" className="text-muted-foreground">
+                        →
+                      </span>
+                      <Input
+                        aria-label={`${index + 1}行目の到着地`}
+                        placeholder="到着地"
+                        className="w-24"
+                        value={routeParts[row.rowId]?.destination ?? ''}
+                        onChange={(e) => updateRoutePart(row.rowId, 'destination', e.target.value)}
+                      />
+                    </div>
+                  )}
+                  <Input
+                    aria-label={`${index + 1}行目の内容`}
+                    placeholder={isBatchCategory(categories, row.category_id) ? '例: (電車)、交通手段の補足など' : undefined}
+                    value={row.description ?? ''}
+                    onChange={(e) => onUpdateRow(row.rowId, { description: e.target.value })}
+                  />
+                </TableCell>
+                <TableCell>
+                  <input
+                    aria-label={`${index + 1}行目の領収書`}
+                    type="file"
+                    accept={RECEIPT_ACCEPT}
+                    className="w-32 text-xs text-muted-foreground file:mr-2 file:rounded-md file:border file:border-input file:bg-background file:px-2 file:py-0.5 file:text-xs file:font-medium file:text-foreground"
+                    onChange={(e) => onRowFileChange?.(row.rowId, e.target.files?.[0] ?? null)}
+                  />
+                  {rowFiles[row.rowId] && (
+                    <p className="mt-1 text-xs text-muted-foreground">{rowFiles[row.rowId]?.name}</p>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      aria-label={`${index + 1}行目を複製`}
+                      onClick={() => onDuplicateRow(row.rowId)}
+                    >
+                      <Copy />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      aria-label={`${index + 1}行目を上に移動`}
+                      disabled={index === 0}
+                      onClick={() => onMoveRow(row.rowId, 'up')}
+                    >
+                      <ArrowUp />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      aria-label={`${index + 1}行目を下に移動`}
+                      disabled={index === rows.length - 1}
+                      onClick={() => onMoveRow(row.rowId, 'down')}
+                    >
+                      <ArrowDown />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="icon"
+                      aria-label={`${index + 1}行目を削除`}
+                      onClick={() => onRemoveRow(row.rowId)}
+                    >
+                      <Trash2 />
+                    </Button>
                   </div>
-                )}
-                <Input
-                  aria-label={`${index + 1}行目の内容`}
-                  placeholder={isBatchCategory(categories, row.category_id) ? '例: (電車)、交通手段の補足など' : undefined}
-                  value={row.description ?? ''}
-                  onChange={(e) => onUpdateRow(row.rowId, { description: e.target.value })}
-                />
-              </TableCell>
-              <TableCell>
-                <input
-                  aria-label={`${index + 1}行目の領収書`}
-                  type="file"
-                  accept={RECEIPT_ACCEPT}
-                  className="w-32 text-xs text-muted-foreground file:mr-2 file:rounded-md file:border file:border-input file:bg-background file:px-2 file:py-0.5 file:text-xs file:font-medium file:text-foreground"
-                  onChange={(e) => onRowFileChange?.(row.rowId, e.target.files?.[0] ?? null)}
-                />
-                {rowFiles[row.rowId] && (
-                  <p className="mt-1 text-xs text-muted-foreground">{rowFiles[row.rowId]?.name}</p>
-                )}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    aria-label={`${index + 1}行目を複製`}
-                    onClick={() => onDuplicateRow(row.rowId)}
-                  >
-                    <Copy />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    aria-label={`${index + 1}行目を上に移動`}
-                    disabled={index === 0}
-                    onClick={() => onMoveRow(row.rowId, 'up')}
-                  >
-                    <ArrowUp />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    aria-label={`${index + 1}行目を下に移動`}
-                    disabled={index === rows.length - 1}
-                    onClick={() => onMoveRow(row.rowId, 'down')}
-                  >
-                    <ArrowDown />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="icon"
-                    aria-label={`${index + 1}行目を削除`}
-                    onClick={() => onRemoveRow(row.rowId)}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
+                </TableCell>
+              </TableRow>
+              {rowErrors[row.rowId] && (
+                <TableRow>
+                  <TableCell colSpan={7} className="whitespace-normal">
+                    <p role="alert" className="text-sm text-destructive">
+                      {index + 1}行目: {rowErrors[row.rowId]}
+                    </p>
+                  </TableCell>
+                </TableRow>
+              )}
+            </Fragment>
           ))}
         </TableBody>
       </Table>

@@ -60,7 +60,7 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
 
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -88,7 +88,7 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
 
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -106,7 +106,7 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
 
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
-        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
             'target_date' => '2026-08-11',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
@@ -130,7 +130,7 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
         app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         foreach (['2026-08-10', '2026-08-12'] as $date) {
-            $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
                 'target_date' => $date,
                 'leave_type' => 'full',
                 'approver_user_id' => $approver->id,
@@ -162,7 +162,7 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
 
         $requestIds = [];
         foreach (['2026-08-10', '2026-08-11', '2026-08-12'] as $date) {
-            $requestIds[$date] = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            $requestIds[$date] = $this->actingAs($employee)->postJson('/api/paid-leave/requests/workflow', [
                 'target_date' => $date,
                 'leave_type' => 'full',
                 'approver_user_id' => $approver->id,

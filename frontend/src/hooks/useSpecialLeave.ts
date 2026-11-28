@@ -5,6 +5,7 @@ import {
   cancelSpecialLeaveRequest,
   createSpecialLeaveGrantRule,
   createSpecialLeaveRequest,
+  createSpecialLeaveWorkflowRequest,
   createSpecialLeaveType,
   fetchMySpecialLeaveGrants,
   fetchMySpecialLeaveHistory,
@@ -140,11 +141,13 @@ export function useMySpecialLeaveRequests(params: FetchMySpecialLeaveRequestsPar
   return useQuery({ queryKey: [...MY_REQUESTS_KEY, params], queryFn: () => fetchMySpecialLeaveRequests(params) })
 }
 
-export function useCreateSpecialLeaveRequest() {
+/** 申請の入口は設定で分かれる: 承認が必要ならワークフローの入口、不要なら直接の申請(設定と違う入口は422)。 */
+export function useCreateSpecialLeaveRequest(approvalRequired: boolean) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: CreateSpecialLeaveRequestInput) => createSpecialLeaveRequest(input),
+    mutationFn: (input: CreateSpecialLeaveRequestInput) =>
+      approvalRequired ? createSpecialLeaveWorkflowRequest(input) : createSpecialLeaveRequest(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: MY_REQUESTS_KEY })
     },

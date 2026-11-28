@@ -303,7 +303,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
             'planned_start_at' => '2026-06-03 09:00:00', 'planned_end_at' => '2026-06-03 18:00:00',
             'planned_break_minutes' => 60,
         ]);
-        $birthdayRequestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $birthdayRequestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $birthdayType->id,
             'target_date' => '2026-06-03',
             'leave_type' => 'full',
@@ -319,7 +319,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
             'planned_start_at' => '2026-06-04 09:00:00', 'planned_end_at' => '2026-06-04 18:00:00',
             'planned_break_minutes' => 60,
         ]);
-        $refreshRequestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $refreshRequestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $refreshType->id,
             'target_date' => '2026-06-04',
             'leave_type' => 'hourly',
@@ -366,7 +366,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
             'planned_break_minutes' => 60,
         ]);
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $summerType->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',

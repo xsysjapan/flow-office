@@ -54,7 +54,7 @@ class SpecialLeaveHistoryTest extends TestCase
             'grant_reason' => '誕生月付与',
         ])->assertCreated();
 
-        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests/workflow', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',

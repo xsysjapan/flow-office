@@ -6,18 +6,22 @@ use App\Domain\AccessControl\Commands\AssignFeatureToGroup;
 use App\Domain\AccessControl\Commands\ChangeRoleFeatures;
 use App\Domain\AccessControl\Commands\ChangeRolePermissions;
 use App\Domain\AccessControl\Commands\CreateRole;
+use App\Domain\AccessControl\Commands\CloneRole;
 use App\Domain\AccessControl\Commands\CreateRoleAssignment;
 use App\Domain\AccessControl\Commands\RemoveFeatureFromGroup;
 use App\Domain\AccessControl\Commands\RemoveRoleAssignment;
 use App\Domain\AccessControl\Commands\RemoveUserFeatureSuspension;
 use App\Domain\AccessControl\Commands\SuspendUserFeature;
 use App\Domain\AccessControl\Commands\UpdateRole;
+use App\Domain\AccessControl\Commands\UpdateRoleDefinition;
 use App\Domain\AccessControl\Commands\UpdateRoleAssignment;
 use App\Domain\AccessControl\Handlers\AssignFeatureToGroupHandler;
 use App\Domain\AccessControl\Handlers\ChangeRoleFeaturesHandler;
 use App\Domain\AccessControl\Handlers\ChangeRolePermissionsHandler;
 use App\Domain\AccessControl\Handlers\CreateRoleAssignmentHandler;
+use App\Domain\AccessControl\Handlers\CloneRoleHandler;
 use App\Domain\AccessControl\Handlers\CreateRoleHandler;
+use App\Domain\AccessControl\Handlers\UpdateRoleDefinitionHandler;
 use App\Domain\AccessControl\Handlers\RemoveFeatureFromGroupHandler;
 use App\Domain\AccessControl\Handlers\RemoveRoleAssignmentHandler;
 use App\Domain\AccessControl\Handlers\RemoveUserFeatureSuspensionHandler;
@@ -65,7 +69,7 @@ use App\Domain\AssetNumbering\Handlers\IssueAssetNumberHandler;
 use App\Domain\Attachment\Commands\UploadAttachment;
 use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
-use App\Domain\Attendance\Commands\AllocateAttendanceWeeklyOvertime;
+use App\Domain\Attendance\Commands\AllocateWeeklyOvertime;
 use App\Domain\Attendance\Commands\ApplyCalendarBulkOperation;
 use App\Domain\Attendance\Commands\ApplyLeaveToAttendanceDay;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
@@ -132,7 +136,7 @@ use App\Domain\Attendance\Commands\UpdateWorkStyle;
 use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\Attendance\Handlers\AdjustAttendanceDailyCalculationHandler;
-use App\Domain\Attendance\Handlers\AllocateAttendanceWeeklyOvertimeHandler;
+use App\Domain\Attendance\Handlers\AllocateWeeklyOvertimeHandler;
 use App\Domain\Attendance\Handlers\ApplyCalendarBulkOperationHandler;
 use App\Domain\Attendance\Handlers\ApplyLeaveToAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
@@ -269,6 +273,7 @@ use App\Domain\DeviceAdminSession\Handlers\EndDeviceAdminSessionHandler;
 use App\Domain\DeviceAdminSession\Handlers\StartDeviceAdminSessionBootstrapHandler;
 use App\Domain\DeviceAdminSession\Handlers\StartDeviceAdminSessionHandler;
 use App\Domain\ExpenseClaim\Commands\AddExpenseItem;
+use App\Domain\ExpenseClaim\Commands\AddExpenseItems;
 use App\Domain\ExpenseClaim\Commands\ApproveExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\CancelExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\DeleteExpenseClaim;
@@ -279,6 +284,7 @@ use App\Domain\ExpenseClaim\Commands\SubmitExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\UpdateExpenseClaimTitle;
 use App\Domain\ExpenseClaim\Commands\UpdateExpenseItem;
 use App\Domain\ExpenseClaim\Handlers\AddExpenseItemHandler;
+use App\Domain\ExpenseClaim\Handlers\AddExpenseItemsHandler;
 use App\Domain\ExpenseClaim\Handlers\ApproveExpenseClaimHandler;
 use App\Domain\ExpenseClaim\Handlers\CancelExpenseClaimHandler;
 use App\Domain\ExpenseClaim\Handlers\DeleteExpenseClaimHandler;
@@ -337,12 +343,14 @@ use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
 use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\OverrideScheduleAssessment;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
+use App\Domain\PaidLeaveSchedule\Commands\ReassessScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
 use App\Domain\PaidLeaveSchedule\Handlers\ApplyScheduledGrantsHandler;
 use App\Domain\PaidLeaveSchedule\Handlers\EnsureFutureScheduleGeneratedHandler;
 use App\Domain\PaidLeaveSchedule\Handlers\ManuallyEditScheduleEntryHandler;
 use App\Domain\PaidLeaveSchedule\Handlers\OverrideScheduleAssessmentHandler;
 use App\Domain\PaidLeaveSchedule\Handlers\RecalculateFutureScheduleHandler;
+use App\Domain\PaidLeaveSchedule\Handlers\ReassessScheduleEntryHandler;
 use App\Domain\PaidLeaveSchedule\Handlers\RunAttendanceRateAssessmentHandler;
 use App\Domain\ShiftSwap\Commands\ApproveShiftSwapRequest;
 use App\Domain\ShiftSwap\Commands\CancelShiftSwapRequest;
@@ -410,6 +418,7 @@ use App\Domain\UserManagement\Commands\UnlinkExternalIdentity;
 use App\Domain\UserManagement\Commands\UpdateGroup;
 use App\Domain\UserManagement\Commands\UpdateGroupType;
 use App\Domain\UserManagement\Commands\UpdateMembershipChange;
+use App\Domain\UserManagement\Commands\UpdateUserDetails;
 use App\Domain\UserManagement\Commands\UpdateUserProfile;
 use App\Domain\UserManagement\Handlers\AddMembershipHandler;
 use App\Domain\UserManagement\Handlers\ApplyMembershipChangeHandler;
@@ -439,6 +448,7 @@ use App\Domain\UserManagement\Handlers\UnlinkExternalIdentityHandler;
 use App\Domain\UserManagement\Handlers\UpdateGroupHandler;
 use App\Domain\UserManagement\Handlers\UpdateGroupTypeHandler;
 use App\Domain\UserManagement\Handlers\UpdateMembershipChangeHandler;
+use App\Domain\UserManagement\Handlers\UpdateUserDetailsHandler;
 use App\Domain\UserManagement\Handlers\UpdateUserProfileHandler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
@@ -486,6 +496,9 @@ return [
         UpdateGroup::class => UpdateGroupHandler::class,
         CreateGroupType::class => CreateGroupTypeHandler::class,
         CreateRole::class => CreateRoleHandler::class,
+        CloneRole::class => CloneRoleHandler::class,
+        UpdateRoleDefinition::class => UpdateRoleDefinitionHandler::class,
+        UpdateUserDetails::class => UpdateUserDetailsHandler::class,
         FailMembershipChange::class => FailMembershipChangeHandler::class,
         UpdateUserProfile::class => UpdateUserProfileHandler::class,
         CreateUser::class => CreateUserHandler::class,
@@ -570,6 +583,7 @@ return [
 
         DraftExpenseClaim::class => DraftExpenseClaimHandler::class,
         AddExpenseItem::class => AddExpenseItemHandler::class,
+        AddExpenseItems::class => AddExpenseItemsHandler::class,
         UpdateExpenseItem::class => UpdateExpenseItemHandler::class,
         RemoveExpenseItem::class => RemoveExpenseItemHandler::class,
         SubmitExpenseClaim::class => SubmitExpenseClaimHandler::class,
@@ -586,7 +600,7 @@ return [
         CreateAttendanceDay::class => CreateAttendanceDayHandler::class,
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
         AdjustAttendanceDailyCalculation::class => AdjustAttendanceDailyCalculationHandler::class,
-        AllocateAttendanceWeeklyOvertime::class => AllocateAttendanceWeeklyOvertimeHandler::class,
+        AllocateWeeklyOvertime::class => AllocateWeeklyOvertimeHandler::class,
         EditEmployeeCalendarEntry::class => EditEmployeeCalendarEntryHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
         ApplyLeaveToAttendanceDay::class => ApplyLeaveToAttendanceDayHandler::class,
@@ -678,6 +692,7 @@ return [
         EnsureFutureScheduleGenerated::class => EnsureFutureScheduleGeneratedHandler::class,
         RecalculateFutureSchedule::class => RecalculateFutureScheduleHandler::class,
         RunAttendanceRateAssessment::class => RunAttendanceRateAssessmentHandler::class,
+        ReassessScheduleEntry::class => ReassessScheduleEntryHandler::class,
         OverrideScheduleAssessment::class => OverrideScheduleAssessmentHandler::class,
         ManuallyEditScheduleEntry::class => ManuallyEditScheduleEntryHandler::class,
         ApplyScheduledGrants::class => ApplyScheduledGrantsHandler::class,

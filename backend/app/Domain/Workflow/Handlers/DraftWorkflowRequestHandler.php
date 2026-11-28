@@ -6,6 +6,7 @@ use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Leave\Support\LeaveApprovalRequirement;
 use App\Domain\Workflow\Aggregates\WorkflowRequestAggregate;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Models\RequestType;
@@ -19,11 +20,21 @@ use InvalidArgumentException;
  */
 class DraftWorkflowRequestHandler implements CommandHandler
 {
-    public function __construct(private EffectiveAccessResolver $access) {}
+    public function __construct(
+        private EffectiveAccessResolver $access,
+        private LeaveApprovalRequirement $leaveApprovalRequirement,
+    ) {}
 
     public function handle(Command $command): WorkflowRequest
     {
         assert($command instanceof DraftWorkflowRequest);
+
+        // 休暇・振替休日の申請で承認が不要な設定なら、ワークフローの下書きは拒否する(直接の申請の入口から行う)。
+        $rejection = $this->leaveApprovalRequirement->workflowDraftRejection($command->subjectType);
+
+        if ($rejection !== null) {
+            throw new DomainRuleException($rejection);
+        }
 
         // subject指定(月次勤怠・経費精算)の場合は申請種別マスタを持たないため、
         // RequestTypeの検索も申請権限チェックも行わない。title・applicantUserId・

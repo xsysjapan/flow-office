@@ -292,6 +292,22 @@ function CategorySelectionStep({
 
 type ExpenseClaimEntryMode = 'individual' | 'bulk'
 
+/** まとめて登録の明細の項目のうち、行の下に出す422のキー(`items.{i}.{項目}`)。 */
+const BULK_ROW_ERROR_KEYS = [
+  'category_id',
+  'usage_date',
+  'description',
+  'amount',
+  'project_id',
+  'evidence_type',
+  'fact_reference_type',
+  'fact_reference_id',
+  'commuting_deduction_amount',
+  'payment_bearer',
+  'attributes',
+] as const
+const BULK_ROW_ERROR_FIELDS = BULK_ROW_ERROR_KEYS.map((key) => `items.*.${key}`)
+
 /** 経費精算を開始する最初の分岐。1件をすぐ登録したいのか(タイトルは登録内容から
  *  自動的に提案する)、複数件をまとめて1つの申請にしたいのか(先にタイトルを決める)を
  *  最初に選ばせる。 */
@@ -768,6 +784,17 @@ function ExpenseClaimNewContent() {
 
   // 1件入力フォーム(batchの表形式ではない側)の項目エラー。フォームが描く項目と同じ条件で振り分ける。
   const addItemErrors = fieldErrors(addItem.error, ['usage_date', 'amount', 'payment_bearer'])
+  // まとめて登録の422は`items.{i}.{項目}`。送信の本文は`handleSaveItems`が絞り込んだ行(日付と金額がある行)なので、
+  // 添字を画面の行(rowId)へ戻して、その行の下に出す。
+  const bulkErrors = fieldErrors(addItemsBulk.error, BULK_ROW_ERROR_FIELDS)
+  const bulkRowErrors: Record<number, string | undefined> = {}
+  rows
+    .filter((row) => row.usage_date && row.amount)
+    .forEach((row, index) => {
+      bulkRowErrors[row.rowId] = BULK_ROW_ERROR_KEYS.map((key) => bulkErrors.ofRow('items', index, key)).find(
+        (message) => message !== undefined,
+      )
+    })
   const receiptErrors = fieldErrors(uploadAttachment.error, ['file'])
 
   return (
@@ -804,13 +831,14 @@ function ExpenseClaimNewContent() {
                 onPasteRows={appendRows}
                 rowFiles={rowFiles}
                 onRowFileChange={(rowId, file) => setRowFiles((prev) => ({ ...prev, [rowId]: file }))}
+                rowErrors={bulkRowErrors}
               />
             </div>
 
             {rows.length > 0 && (
               <div className="mt-4">
                 <FormLayout>
-                  {addItemsBulk.error && <ErrorMessage error={addItemsBulk.error} />}
+                  {bulkErrors.rest != null && <ErrorMessage error={bulkErrors.rest} />}
                   {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
                   <FormActions>
                     <Button

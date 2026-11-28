@@ -555,6 +555,32 @@ describe('ExpenseClaimNewPage', () => {
     expect(createClaim).toHaveBeenCalledTimes(1)
   })
 
+  it('shows the bulk save 422 (items.1.amount) under that row, not in the summary message', async () => {
+    vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockRejectedValue(
+      new ApiError(422, '入力内容を確認してください。', { 'items.1.amount': ['金額のエラー'] }),
+    )
+
+    renderPage()
+    await selectBulkEntryMode()
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+
+    await userEvent.click(await screen.findByRole('button', { name: '行を追加' }))
+    await userEvent.click(screen.getByRole('button', { name: '行を追加' }))
+    await pickDate(userEvent.setup(), '1行目の日付', '2026-07-04')
+    await pickDate(userEvent.setup(), '2行目の日付', '2026-07-05')
+    await userEvent.type(screen.getByLabelText('1行目の金額'), '420')
+    await userEvent.type(screen.getByLabelText('2行目の金額'), '300')
+
+    await userEvent.click(screen.getByRole('button', { name: /^明細を保存\(\d+件\)/ }))
+
+    expect(await screen.findByText('2行目: 金額のエラー')).toBeInTheDocument()
+    expect(screen.queryByText('金額のエラー')).not.toBeInTheDocument()
+    expect(screen.queryByRole('listitem')).not.toBeInTheDocument()
+  })
+
   it('shows the single-item form for a single-entry category without creating a draft claim yet', async () => {
     const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
 
@@ -1125,7 +1151,7 @@ describe('ExpenseClaimNewPage', () => {
     it('keeps the route inputs of the batch table when the first save fails and the draft is being loaded', async () => {
       vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
       vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockReturnValue(new Promise(() => undefined))
-      vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockRejectedValue(unprocessable)
+      vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockRejectedValue(new ApiError(500, '最初のエラーの文'))
 
       // 表形式はまとめて登録(下書きはタイトルの手順で作られる)から入る。下書きの読み込みは終わらない。
       vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())

@@ -7,16 +7,12 @@ use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
 use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\OverrideScheduleAssessment;
-use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
-use App\Domain\PaidLeaveSchedule\Support\AttendanceRateAssessor;
-use App\Domain\PaidLeaveSchedule\Support\PaidLeaveScheduleAssessmentPlanner;
+use App\Domain\PaidLeaveSchedule\Commands\ReassessScheduleEntry;
 use App\Http\Controllers\Controller;
 use App\Models\PaidLeaveScheduleEntry;
 use App\Support\BusinessDate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
@@ -176,7 +172,7 @@ class PaidLeaveScheduleController extends Controller
     /**
      * 再判定(依頼書§40「再判定」導線)。判定の内容(期間・みなし出勤・閾値)は
      * `PaidLeaveScheduleAssessmentPlanner`が決め(docs/changesets/20261021-paid-leave-fiscal-mass-grant-and-auto-assessment/spec.md
-     * 論点5・10)、`RunAttendanceRateAssessment`を発行する。まとめて付与する2件(組)は、2行をそれぞれ判定して両方記録する
+     * 論点5・10)、`ReassessScheduleEntry`(1つのCommand)がHandlerで判定する。まとめて付与する2件(組)は、2行をそれぞれ判定して両方記録する
      * (1つのトランザクション。片方が失敗したら両方記録しない)。
      */
     #[OA\Post(
@@ -187,43 +183,9 @@ class PaidLeaveScheduleController extends Controller
         parameters: [new OA\Parameter(name: 'scheduleEntry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function reassess(PaidLeaveScheduleEntry $scheduleEntry, CommandBus $commandBus, PaidLeaveScheduleAssessmentPlanner $planner): JsonResponse
+    public function reassess(PaidLeaveScheduleEntry $scheduleEntry, CommandBus $commandBus): JsonResponse
     {
-        $scheduleEntry->loadMissing('user');
-        $user = $scheduleEntry->user;
-
-        $partnerId = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::streamIdFor($user->id))
-            ->forUser($user->id)
-            ->pairedEntryId($scheduleEntry->id);
-
-        $targets = collect([$scheduleEntry]);
-        if ($partnerId !== null) {
-            $partner = PaidLeaveScheduleEntry::query()->find($partnerId);
-            if ($partner !== null) {
-                $targets->push($partner);
-            }
-        }
-
-        DB::transaction(function () use ($targets, $user, $planner, $commandBus): void {
-            foreach ($targets as $target) {
-                $plan = $planner->plan($target, $user);
-
-                $commandBus->dispatch(new RunAttendanceRateAssessment(
-                    userId: $user->id,
-                    scheduleEntryId: $target->id,
-                    assessmentId: (string) Str::uuid(),
-                    periodStart: $plan->periodStart,
-                    periodEnd: $plan->periodEnd,
-                    denominatorDays: $plan->denominatorDays,
-                    attendanceDays: $plan->attendanceDays,
-                    excludedDays: $plan->excludedDays,
-                    attendanceRate: $plan->attendanceRate,
-                    policyVersion: AttendanceRateAssessor::POLICY_VERSION,
-                    automaticResult: $plan->automaticResult,
-                    deemedAttendanceDays: $plan->deemedAttendanceDays,
-                ));
-            }
-        });
+        $commandBus->dispatch(new ReassessScheduleEntry(scheduleEntryId: $scheduleEntry->id));
 
         return response()->json(['data' => $this->summarize($scheduleEntry->refresh()->load('user', 'assessments'))]);
     }

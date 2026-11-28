@@ -30,8 +30,14 @@ export interface CreateCompensatoryLeaveRequestInput {
   request_group_id?: string
 }
 
+/** 承認不要の設定(compensatory_leave_requires_approval=false)の直接の申請。承認が必要な設定では422になる。 */
 export function createCompensatoryLeaveRequest(input: CreateCompensatoryLeaveRequestInput): Promise<CompensatoryLeaveRequest> {
   return apiFetch('/compensatory-leave/requests', { method: 'POST', body: input })
+}
+
+/** 承認が必要な設定(compensatory_leave_requires_approval=true)の申請(承認者を指定してワークフローを作る)。承認不要の設定では422になる。 */
+export function createCompensatoryLeaveWorkflowRequest(input: CreateCompensatoryLeaveRequestInput): Promise<CompensatoryLeaveRequest> {
+  return apiFetch('/compensatory-leave/requests/workflow', { method: 'POST', body: input })
 }
 
 export function cancelCompensatoryLeaveRequest(id: string): Promise<CompensatoryLeaveRequest> {

@@ -135,8 +135,14 @@ export interface CreatePaidLeaveRequestInput {
   request_group_id?: string
 }
 
+/** 承認不要の設定(paid_leave_requires_approval=false)の直接の申請。承認が必要な設定では422になる。 */
 export function createPaidLeaveRequest(input: CreatePaidLeaveRequestInput): Promise<PaidLeaveRequest> {
   return apiFetch('/paid-leave/requests', { method: 'POST', body: input })
+}
+
+/** 承認が必要な設定(paid_leave_requires_approval=true)の申請(承認者を指定してワークフローを作る)。承認不要の設定では422になる。 */
+export function createPaidLeaveWorkflowRequest(input: CreatePaidLeaveRequestInput): Promise<PaidLeaveRequest> {
+  return apiFetch('/paid-leave/requests/workflow', { method: 'POST', body: input })
 }
 
 export function cancelPaidLeaveRequest(id: string): Promise<PaidLeaveRequest> {

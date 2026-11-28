@@ -741,10 +741,10 @@ describe('AttendanceDayPage', () => {
       expect(await screen.findByRole('menuitem', { name: '振替休日を申請する' })).toBeInTheDocument()
     })
 
-    it('submits a shift swap request with a substitute date and approver', async () => {
+    it('submits a shift swap request through the workflow entry with a substitute date and approver', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
-      vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockResolvedValue(createdRequest)
+      vi.spyOn(shiftSwapApi, 'createShiftSwapWorkflowRequest').mockResolvedValue(createdRequest)
       renderPage([holidayDay])
 
       await screen.findByText('7月6日の勤怠')
@@ -757,7 +757,7 @@ describe('AttendanceDayPage', () => {
       await userEvent.click(screen.getByRole('button', { name: '申請する' }))
 
       await waitFor(() =>
-        expect(shiftSwapApi.createShiftSwapRequest).toHaveBeenCalledWith({
+        expect(shiftSwapApi.createShiftSwapWorkflowRequest).toHaveBeenCalledWith({
           target_date: date,
           substitute_date: '2026-07-13',
           approver_user_id: approver.id,
@@ -770,6 +770,7 @@ describe('AttendanceDayPage', () => {
     it('allows submitting without an approver when approval is not required', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockResolvedValue(createdRequest)
+      vi.spyOn(shiftSwapApi, 'createShiftSwapWorkflowRequest')
       renderPage([holidayDay], date, false)
 
       await screen.findByText('7月6日の勤怠')
@@ -789,6 +790,8 @@ describe('AttendanceDayPage', () => {
           reason: undefined,
         }),
       )
+      // 承認不要の設定では直接の申請の入口を呼び、ワークフローの入口は呼ばない。
+      expect(shiftSwapApi.createShiftSwapWorkflowRequest).not.toHaveBeenCalled()
     })
   })
 
@@ -955,6 +958,9 @@ describe('AttendanceDayPage', () => {
       paidCreate: vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest'),
       specialCreate: vi.spyOn(specialLeaveApi, 'createSpecialLeaveRequest'),
       compensatoryCreate: vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveRequest'),
+      paidCreateWorkflow: vi.spyOn(paidLeaveApi, 'createPaidLeaveWorkflowRequest'),
+      specialCreateWorkflow: vi.spyOn(specialLeaveApi, 'createSpecialLeaveWorkflowRequest'),
+      compensatoryCreateWorkflow: vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveWorkflowRequest'),
     })
     const specialLeaveDay: AttendanceDay = {
       ...recordedDay,
@@ -1233,7 +1239,7 @@ describe('AttendanceDayPage', () => {
 
       it('shows each field error once when approval is required', async () => {
         const keys = ['substitute_date', 'approver_user_id', 'reason']
-        vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockRejectedValue(unprocessable(keys))
+        vi.spyOn(shiftSwapApi, 'createShiftSwapWorkflowRequest').mockRejectedValue(unprocessable(keys))
         renderPage([holidayDay], date, true)
 
         await openAndSubmit(true)

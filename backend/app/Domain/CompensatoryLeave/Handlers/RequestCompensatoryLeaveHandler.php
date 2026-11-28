@@ -4,9 +4,11 @@ namespace App\Domain\CompensatoryLeave\Handlers;
 
 use App\Domain\CompensatoryLeave\Aggregates\CompensatoryLeaveRequestAggregate;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
+use App\Domain\CompensatoryLeave\Services\CompensatoryLeaveRequestApprover;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Leave\Support\LeaveApprovalRequirement;
 use App\Models\PaidLeaveType;
 use App\Models\SystemSetting;
 use Illuminate\Support\Str;
@@ -20,11 +22,18 @@ use Illuminate\Support\Str;
  *   `compensatory_leave.requested`/`.shared`をそれぞれの文脈のReactorが受けて行う。
  * - 同日の休暇の衝突・締め判定は勤怠文脈が休暇の反映時に行う(違反なら連鎖全体が取り消される)。
  * - viaReactor=true(workflow_request.drafted からのReactor発行)で、同じ申請IDが既に申請済みなら何もしない(冪等)。
+ * - 利用者の操作(viaReactor=false)の直接の申請は、承認が必要な設定なら拒否する(承認が必要な申請はワークフローの下書きから行う)。
+ *   承認不要の設定なら、申請を記録した後に承認(approvedByUserId=null。CompensatoryLeaveRequestApproverと共通)まで記録する。
  *
  * @implements CommandHandler<RequestCompensatoryLeave>
  */
 class RequestCompensatoryLeaveHandler implements CommandHandler
 {
+    public function __construct(
+        private readonly LeaveApprovalRequirement $approvalRequirement,
+        private readonly CompensatoryLeaveRequestApprover $approver,
+    ) {}
+
     public function handle(Command $command): mixed
     {
         assert($command instanceof RequestCompensatoryLeave);
@@ -34,6 +43,10 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
 
         if ($command->viaReactor && $aggregate->status() !== 'none') {
             return null;
+        }
+
+        if (! $command->viaReactor) {
+            $this->assertDirectRequestAllowed();
         }
 
         $unit = SystemSetting::current()->compensatory_leave_unit;
@@ -48,7 +61,7 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
             hours: $command->hours,
             requestedDays: $requestedDays,
             requestedMinutes: $requestedMinutes,
-            approverUserId: $command->approverUserId,
+            approverUserId: $command->approverUserId ?? $command->userId,
             reason: $command->reason,
             requestGroupId: $command->requestGroupId,
         );
@@ -60,7 +73,21 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
 
         $aggregate->persist();
 
+        // 承認不要の設定での直接の申請: 集約を取り出し直して承認を記録する(申請と承認の2回のpersist。1つのトランザクション)。
+        if (! $command->viaReactor) {
+            $this->approver->approve($requestId, null, false);
+        }
+
         return null;
+    }
+
+    private function assertDirectRequestAllowed(): void
+    {
+        $rejection = $this->approvalRequirement->directRequestRejection(LeaveApprovalRequirement::COMPENSATORY_LEAVE);
+
+        if ($rejection !== null) {
+            throw new DomainRuleException($rejection);
+        }
     }
 
     private function assertLeaveTypeAllowed(string $unit, string $leaveType): void

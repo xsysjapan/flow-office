@@ -4,12 +4,8 @@ namespace Tests\Feature\UserManagement;
 
 use App\Domain\Attendance\Commands\AssignUserWorkStyleForMonth;
 use App\Domain\Attendance\Commands\CreateWorkStyle;
-use App\Domain\EventSourcing\Contracts\Command;
-use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Domain\UserManagement\Commands\SetSpecialLeaveAutoGrantEnabled;
+use App\Domain\UserManagement\Commands\UpdateUserDetails;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
-use App\Domain\UserManagement\Commands\SetUserTerminationDate;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveScheduleEntry;
 use App\Models\Role;
@@ -18,6 +14,7 @@ use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\AssertsSingleTopLevelCommand;
 use Tests\TestCase;
 
 /**
@@ -26,6 +23,7 @@ use Tests\TestCase;
  */
 class UserDetailsBulkUpdateTest extends TestCase
 {
+    use AssertsSingleTopLevelCommand;
     use RefreshDatabase;
 
     private User $hr;
@@ -114,23 +112,48 @@ class UserDetailsBulkUpdateTest extends TestCase
         $this->assertSame(1, $this->eventCount($target, 'user.termination_date_set'));
     }
 
-    public function test_a_command_rejection_rolls_back_everything_and_maps_to_the_item_key(): void
+    public function test_a_failure_inside_the_handler_rolls_back_everything(): void
     {
         $target = User::factory()->create(['name' => '変更前', 'hire_date' => '2024-04-01', 'termination_date' => null]);
         $before = $this->totalEventCount($target);
-        // 退社日のコマンドが業務の規則で拒否する状況を作る。
-        config(['domain.command_handlers.'.SetUserTerminationDate::class => RejectingCommandHandler::class]);
+        // プロフィールの記録の後、退社日の反映(Projector)で失敗させる。1つのHandlerの1回の記録が全部戻る。
+        DB::unprepared("CREATE TRIGGER fail_termination BEFORE UPDATE OF termination_date ON users BEGIN SELECT RAISE(ABORT, 'forced failure'); END");
 
-        $response = $this->putDetails($target, [
+        $this->putDetails($target, [
             'profile' => ['name' => '変更後'],
             'termination_date' => '2026-03-31',
-        ]);
+        ])->assertStatus(500);
 
-        $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['termination_date']);
+        DB::unprepared('DROP TRIGGER fail_termination');
         $this->assertSame('変更前', $target->refresh()->name);
         $this->assertNull($target->termination_date);
         $this->assertSame($before, $this->totalEventCount($target));
+    }
+
+    public function test_the_entry_point_dispatches_a_single_command(): void
+    {
+        $target = User::factory()->create(['name' => '変更前', 'hire_date' => '2024-04-01']);
+        $bus = $this->recordCommands();
+
+        $this->putDetails($target, [
+            'profile' => ['name' => '変更後'],
+            'hire_date' => '2024-04-02',
+            'termination_date' => '2030-03-31',
+            'usage_start_date' => '2024-05-01',
+            'paid_leave_auto_grant_enabled' => true,
+            'special_leave_auto_grant_enabled' => false,
+        ])->assertOk();
+
+        $this->assertSingleTopLevelCommand($bus, UpdateUserDetails::class);
+    }
+
+    public function test_null_hire_date_and_usage_start_date_are_rejected_with_their_keys(): void
+    {
+        $target = User::factory()->create(['hire_date' => '2024-04-01']);
+
+        $this->putDetails($target, ['hire_date' => null, 'usage_start_date' => null])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['hire_date', 'usage_start_date']);
     }
 
     public function test_a_profile_rejection_by_the_command_maps_to_the_profile_key(): void
@@ -149,36 +172,32 @@ class UserDetailsBulkUpdateTest extends TestCase
         $this->assertSame('active', $target->refresh()->account_status);
     }
 
-    public function test_both_dates_moved_forward_past_the_current_termination_date_change_termination_first(): void
+    public function test_both_dates_moved_forward_past_the_current_termination_date_are_judged_by_the_final_state(): void
     {
         $target = User::factory()->create(['hire_date' => '2024-04-01', 'termination_date' => '2026-03-31']);
 
-        // 新しい入社日(2026-06-01)が今の退社日(2026-03-31)より後。入社日を先にすると途中の状態が不正になる。
+        // 新しい入社日(2026-06-01)が今の退社日(2026-03-31)より後でも、最終状態(入社日 ≤ 退社日)で判定して通る。
         $this->putDetails($target, ['hire_date' => '2026-06-01', 'termination_date' => '2027-03-31'])
             ->assertOk()
             ->assertJsonPath('hire_date', '2026-06-01')
             ->assertJsonPath('termination_date', '2027-03-31');
 
-        $events = DB::table('stored_events')->where('aggregate_uuid', $target->id)
-            ->whereIn('event_class', ['user.hire_date_set', 'user.termination_date_set'])
-            ->orderBy('id')->pluck('event_class')->all();
-        $this->assertSame(['user.termination_date_set', 'user.hire_date_set'], $events);
+        $this->assertSame(1, $this->eventCount($target, 'user.hire_date_set'));
+        $this->assertSame(1, $this->eventCount($target, 'user.termination_date_set'));
     }
 
-    public function test_both_dates_moved_backward_change_hire_first(): void
+    public function test_both_dates_moved_backward_are_judged_by_the_final_state(): void
     {
         $target = User::factory()->create(['hire_date' => '2024-04-01', 'termination_date' => '2026-03-31']);
 
-        // 新しい退社日(2021-03-31)が今の入社日(2024-04-01)より前。退社日を先にすると途中の状態が不正になる。
+        // 新しい退社日(2021-03-31)が今の入社日(2024-04-01)より前でも、最終状態で判定して通る。
         $this->putDetails($target, ['hire_date' => '2020-04-01', 'termination_date' => '2021-03-31'])
             ->assertOk()
             ->assertJsonPath('hire_date', '2020-04-01')
             ->assertJsonPath('termination_date', '2021-03-31');
 
-        $events = DB::table('stored_events')->where('aggregate_uuid', $target->id)
-            ->whereIn('event_class', ['user.hire_date_set', 'user.termination_date_set'])
-            ->orderBy('id')->pluck('event_class')->all();
-        $this->assertSame(['user.hire_date_set', 'user.termination_date_set'], $events);
+        $this->assertSame(1, $this->eventCount($target, 'user.hire_date_set'));
+        $this->assertSame(1, $this->eventCount($target, 'user.termination_date_set'));
     }
 
     public function test_an_invalid_final_state_is_rejected_and_nothing_is_saved(): void
@@ -248,7 +267,12 @@ class UserDetailsBulkUpdateTest extends TestCase
         $this->assertSame('変更前', $other->refresh()->name);
     }
 
-    public function test_schedule_recalculation_reactor_runs_in_the_same_transaction(): void
+    /**
+     * 付与予定の再計算の前提(今日=2026-10-21、勤務形態FIVEの付与ルール、入社日2024-01-01 → 付与予定は2027-07-01の1行)。
+     *
+     * @return array{0: User, 1: \Closure, 2: \Closure}
+     */
+    private function scheduleFixture(): array
     {
         Carbon::setTestNow('2026-10-21');
         $admin = User::factory()->create();
@@ -281,32 +305,61 @@ class UserDetailsBulkUpdateTest extends TestCase
         $scheduleEvents = fn () => DB::table('stored_events')->where('event_class', 'like', 'paid_leave_schedule.%')->count();
         $this->assertSame('2027-07-01', $activeEntries()->sole()->scheduled_on->toDateString());
 
-        // 後続の項目が拒否されると、入社日の変更も付与予定の再計算も戻る。
+        return [$target, $activeEntries, $scheduleEvents];
+    }
+
+    public function test_schedule_recalculation_reactor_runs_in_the_same_transaction(): void
+    {
+        [$target, $activeEntries, $scheduleEvents] = $this->scheduleFixture();
+
+        // 後続の項目の反映で失敗すると、入社日の変更も付与予定の再計算も戻る。
         $baseline = $scheduleEvents();
-        config(['domain.command_handlers.'.SetSpecialLeaveAutoGrantEnabled::class => RejectingCommandHandler::class]);
+        DB::unprepared("CREATE TRIGGER fail_special BEFORE UPDATE OF special_leave_auto_grant_enabled ON users BEGIN SELECT RAISE(ABORT, 'forced failure'); END");
         $this->putDetails($target, ['hire_date' => '2025-02-01', 'special_leave_auto_grant_enabled' => false])
-            ->assertStatus(422)->assertJsonValidationErrors(['special_leave_auto_grant_enabled']);
+            ->assertStatus(500);
+        DB::unprepared('DROP TRIGGER fail_special');
         $this->assertSame('2024-01-01', $target->refresh()->hire_date->toDateString());
         $this->assertSame($baseline, $scheduleEvents());
         $this->assertSame('2027-07-01', $activeEntries()->sole()->scheduled_on->toDateString());
 
         // 成功すると、同じリクエストの中で付与予定が再計算される。
-        config(['domain.command_handlers.'.SetSpecialLeaveAutoGrantEnabled::class => \App\Domain\UserManagement\Handlers\SetSpecialLeaveAutoGrantEnabledHandler::class]);
         $this->putDetails($target, ['hire_date' => '2025-02-01'])->assertOk();
         $this->assertGreaterThan($baseline, $scheduleEvents());
         $this->assertSame('2027-08-01', $activeEntries()->sole()->scheduled_on->toDateString());
     }
-}
 
-/**
- * 業務の規則で拒否するコマンドを再現するテスト用のハンドラ。
- *
- * @implements CommandHandler<Command>
- */
-class RejectingCommandHandler implements CommandHandler
-{
-    public function handle(Command $command): mixed
+    public function test_changing_hire_date_usage_start_date_and_auto_grant_together_recalculates_the_schedule_only_once(): void
     {
-        throw new DomainRuleException('テスト用の業務ルール違反です。');
+        [$target, $activeEntries] = $this->scheduleFixture();
+        $lastScheduleEventId = (int) DB::table('stored_events')->where('event_class', 'like', 'paid_leave_schedule.%')->max('id');
+
+        $this->putDetails($target, [
+            'hire_date' => '2025-02-01',
+            'usage_start_date' => '2027-09-01',
+            'paid_leave_auto_grant_enabled' => true,
+        ])->assertOk();
+
+        // 再計算は最後の1件(自動付与)のときだけ動くので、「取消→作成→取消」ではなく「取消」だけが残る。
+        $events = DB::table('stored_events')->where('event_class', 'like', 'paid_leave_schedule.%')
+            ->where('id', '>', $lastScheduleEventId)->orderBy('id')->pluck('event_class')->all();
+        $this->assertSame(['paid_leave_schedule.entry_cancelled'], $events);
+        $this->assertCount(0, $activeEntries());
+    }
+
+    public function test_per_item_date_apis_also_reject_external_hr_items(): void
+    {
+        $target = User::factory()->create(['hire_date' => '2024-04-01']);
+        foreach (['hire_date', 'termination_date', 'usage_start_date'] as $field) {
+            DB::table('field_authorities')->insert(['field_key' => $field, 'authority_type' => 'EXTERNAL_HR', 'created_at' => now(), 'updated_at' => now()]);
+        }
+        $before = $this->totalEventCount($target);
+
+        $this->actingAs($this->hr)->putJson("/api/users/{$target->id}/hire-date", ['hire_date' => '2024-05-01'])->assertStatus(422);
+        $this->actingAs($this->hr)->putJson("/api/users/{$target->id}/termination-date", ['termination_date' => '2026-03-31'])->assertStatus(422);
+        $this->actingAs($this->hr)->putJson("/api/users/{$target->id}/usage-start-date", ['usage_start_date' => '2024-06-01'])->assertStatus(422);
+
+        $this->assertSame($before, $this->totalEventCount($target));
+        $this->assertSame('2024-04-01', $target->refresh()->hire_date->toDateString());
     }
 }
+
