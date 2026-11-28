@@ -1,6 +1,6 @@
 # single-command-entrypoints(段階①: まとめて保存・承認不要の申請などを、入口1回=1つのCommandにする)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > まとめて保存系の一括操作についてもAPIを用意して処理してください。時間がかかるものは非同期で動くようにしてください。
@@ -166,3 +166,4 @@
 - 休暇・振替休日の申請の入口(担当: 実装エージェント): 汎用の `POST /workflow-requests` は `request_type_code` 必須で休暇の subject を作れないため、休暇ごとに承認が必要な入口 `POST /{paid-leave,special-leave,compensatory-leave,shift-swap}/requests/workflow`(`DraftWorkflowRequest` 1つ。`approver_user_id` 必須)を新設。`POST /{kind}/requests` は `Request{X}` 1つだけ(approver 任意)で、Controller は承認の要否を読まない。
 - `LeaveApprovalRequirement`(`Leave/Support`)を新設。`Request{X}` の Handler は利用者の操作(`viaReactor=false`、振替休日は `workflowRequestId===null`)で承認が必要なら 422、不要なら申請 persist の後に承認の処理(新設の `PaidLeaveRequestApprover` 等の Service を `Approve{X}` Handler と共有。承認者は入力が無ければ申請者本人)で承認を persist。`DraftWorkflowRequestHandler` は休暇・振替休日で承認不要なら 422。Command の `approverUserId` は有給・特別休暇・代休で nullable に。
 - テスト: `tests/Feature/Leave/LeaveRequestEntrypointsTest.php`(4種のデータ駆動。申請→承認のイベントの並びは変更前のコードで実測した並びと一致、承認必要で直接=422で何も残らない、承認不要でワークフロー入口=422、`assertSingleTopLevelCommand`)・`tests/Unit/Leave/LeaveApprovalRequirementTest.php`。既存の休暇のテストは承認必要な設定の申請を `/requests/workflow` に書き直し、`HalfDayLeavePrescribedMinutesTest` は設定を承認不要に。frontend は各申請の画面が公開設定で入口を選ぶ(hook に `approvalRequired` を渡す)、e2e の `requestPaidLeave` を `/workflow` に。docs は09・10章。
+- 委譲元の検証: backend 全件(CI と同じ条件)2274件のうち1件失敗→既存のテストの不備(DB キャッシュでクエリログが空にならない)を直して再実行で成功。frontend 単体 1857件成功、tsc 成功。E2E 9本(scenario-02・03・04・08・09・10・15・16・99)45件すべて成功、spec の修正は無し。コミット: `df16124b`。
