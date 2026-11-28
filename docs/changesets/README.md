@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261128-returned-is-final](./20261128-returned-is-final/spec.md) | 段階③a: 差戻しを申請の最終の結果にし、再申請は新しいワークフローにする | レビュー中 |
+| [20261128-returned-is-final](./20261128-returned-is-final/spec.md) | 段階③a: 差戻しを申請の最終の結果にし、再申請は新しいワークフローにする | 実装中 |
 | [20261128-leave-cancellation-request](./20261128-leave-cancellation-request/spec.md) | 段階③c: 承認済みの休暇の取消を、承認の設定に従って取消の申請にする | レビュー中 |
 | [20261128-period-leave-request](./20261128-period-leave-request/spec.md) | 段階③b: 期間・複数日の休暇を1つの申請にする | レビュー中 |
 | [20261128-grant-rules-events](./20261128-grant-rules-events/spec.md) | 有給・特別休暇の付与ルール・付与表をイベント化し、既存の行を移行する | レビュー中 |
