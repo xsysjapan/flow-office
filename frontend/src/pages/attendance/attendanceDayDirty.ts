@@ -15,16 +15,6 @@ export interface DayLeaveSegmentRowValue {
   note: string
 }
 
-/** 休暇欄の入力(休暇の指定。保存時に取消・申請として別に送られる)。 */
-export interface DayLeaveValues {
-  kind: string
-  unit: string
-  hours: string
-  specialLeaveTypeId: number | undefined
-  approverUserId: string | undefined
-  leaveReason: string
-}
-
 export interface DayFormValues {
   actualStartAt: string
   actualEndAt: string
@@ -35,7 +25,6 @@ export interface DayFormValues {
   reason: string
   breaks: DayBreakRowValue[]
   leaveSegments: DayLeaveSegmentRowValue[]
-  leave: DayLeaveValues
 }
 
 function sameRows<T extends object>(a: T[], b: T[], keys: Array<keyof T>): boolean {
@@ -53,13 +42,7 @@ export function isDayFormDirty(base: DayFormValues, current: DayFormValues): boo
     base.note !== current.note ||
     base.reason !== current.reason ||
     !sameRows(base.breaks, current.breaks, ['start', 'end']) ||
-    !sameRows(base.leaveSegments, current.leaveSegments, ['start', 'end', 'note']) ||
-    base.leave.kind !== current.leave.kind ||
-    base.leave.unit !== current.leave.unit ||
-    base.leave.hours !== current.leave.hours ||
-    base.leave.specialLeaveTypeId !== current.leave.specialLeaveTypeId ||
-    base.leave.approverUserId !== current.leave.approverUserId ||
-    base.leave.leaveReason !== current.leave.leaveReason
+    !sameRows(base.leaveSegments, current.leaveSegments, ['start', 'end', 'note'])
   )
 }
 

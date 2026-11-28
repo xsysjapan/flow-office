@@ -11,14 +11,12 @@ const base: DayFormValues = {
   reason: '',
   breaks: [{ start: '2026-07-06T12:00', end: '2026-07-06T12:45' }],
   leaveSegments: [],
-  leave: { kind: 'none', unit: 'full', hours: '', specialLeaveTypeId: undefined, approverUserId: undefined, leaveReason: '' },
 }
 
 const copy = (): DayFormValues => ({
   ...base,
   breaks: base.breaks.map((row) => ({ ...row })),
   leaveSegments: [],
-  leave: { ...base.leave },
 })
 
 describe('isDayFormDirty', () => {
@@ -32,12 +30,11 @@ describe('isDayFormDirty', () => {
     expect(isDayFormDirty(base, { ...changed, note: '' })).toBe(false)
   })
 
-  it('detects a changed break row, an added leave segment and a leave designation change', () => {
+  it('detects a changed break row, and an added leave segment', () => {
     const rows = copy()
     rows.breaks[0].end = '2026-07-06T13:00'
     expect(isDayFormDirty(base, rows)).toBe(true)
     expect(isDayFormDirty(base, { ...copy(), leaveSegments: [{ start: '', end: '', note: '' }] })).toBe(true)
-    expect(isDayFormDirty(base, { ...copy(), leave: { ...base.leave, kind: 'paid' } })).toBe(true)
   })
 })
 

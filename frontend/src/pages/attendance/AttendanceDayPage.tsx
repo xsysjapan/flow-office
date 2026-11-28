@@ -9,10 +9,6 @@ import { AttendanceCalculationSummary } from '../../components/AttendanceCalcula
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
-import {
-  CancelApprovedLeaveDialog,
-  type ApprovedLeaveTarget,
-} from '../../components/CancelApprovedLeaveDialog/CancelApprovedLeaveDialog'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { Duration } from '../../components/Duration/Duration'
@@ -47,23 +43,15 @@ import type {
   AttendanceDayDefaults,
   AttendancePunch,
   AttendanceDayLeave,
-  CompensatoryLeaveRequest,
-  PaidLeaveRequest,
-  PaidLeaveType,
   PunchType,
-  SpecialLeaveRequest,
   WorkLocationType,
 } from '../../api/types'
 import type { AttendanceDayPunchLogAction } from '../../api/attendance'
 import { useAppSettings } from '../../contexts/useAppSettings'
-import {
-  useCancelCompensatoryLeaveRequest,
-  useCreateCompensatoryLeaveRequest,
-  useMyCompensatoryLeaveRequests,
-} from '../../hooks/useCompensatoryLeave'
+import { useCancelCompensatoryLeaveRequest } from '../../hooks/useCompensatoryLeave'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
-import { isCalculationAdjustDirty, isDayFormDirty, type DayLeaveValues } from './attendanceDayDirty'
+import { isCalculationAdjustDirty, isDayFormDirty } from './attendanceDayDirty'
 import {
   useAdjustAttendanceDailyCalculation,
   useAttendanceDayDefaults,
@@ -78,13 +66,12 @@ import {
   useWeek,
 } from '../../hooks/useAttendance'
 import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
-import { useCancelPaidLeaveRequest, useCreatePaidLeaveRequest, useMyPaidLeaveRequests } from '../../hooks/usePaidLeave'
+import { useCancelPaidLeaveRequest } from '../../hooks/usePaidLeave'
 import { useCreateShiftSwapRequest } from '../../hooks/useShiftSwap'
 import {
   useCancelSpecialLeaveRequest,
-  useCreateSpecialLeaveRequest,
-  useMySpecialLeaveRequests,
   useSpecialLeaveTypeNames,
+  useSpecialLeaveTypes,
 } from '../../hooks/useSpecialLeave'
 import { notify } from '../../lib/notify'
 import { fieldErrors, type FieldErrors } from '../../utils/fieldErrors'
@@ -100,6 +87,7 @@ import {
 } from '../../utils/offsetDateTime'
 import {
   attendanceDayDisplayLabel,
+  attendanceDayLeaveLabels,
   punchStatusLabel,
   punchTypeLabel,
   WORK_LOCATION_TYPE_OPTIONS,
@@ -643,141 +631,6 @@ function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: (p
   )
 }
 
-type LeaveKind = 'none' | 'paid' | 'special' | 'compensatory'
-
-/**
- * 勤怠日の休暇ビュー(`leaves`)から、休暇欄の初期値(現在の休暇の種類と取得単位)を判定する。
- * 休暇は作業内容(work_type)では表さない。複数ある場合は先頭の休暇を初期値にする。
- */
-function detectLeaveDesignation(leaves: AttendanceDayLeave[] | undefined): { kind: LeaveKind; unit: PaidLeaveType | null } {
-  const leave = leaves?.[0]
-  if (!leave) return { kind: 'none', unit: null }
-  return { kind: leave.leave_kind, unit: leave.unit }
-}
-
-function findLeaveRequestForDate<T extends { target_date: string; status: string }>(
-  requests: T[] | undefined,
-  date: string,
-): T | undefined {
-  return requests?.find((r) => r.target_date === date && (r.status === 'submitted' || r.status === 'approved'))
-}
-
-interface LeaveDesignationLists {
-  paidLeaveRequests: PaidLeaveRequest[] | undefined
-  specialLeaveRequests: SpecialLeaveRequest[] | undefined
-  compensatoryLeaveRequests: CompensatoryLeaveRequest[] | undefined
-}
-
-/**
- * 日次勤怠編集画面での「休暇」欄の状態と保存処理をまとめたフック。
- *
- * 実績本体(EditAttendanceDay/CreateAttendanceDay)の保存とは別に、休暇の種類が
- * 選択されている場合はRequest{Paid,Special,Compensatory}Leaveを、休暇なしへ変更した
- * 場合(元々休暇が設定されていた日に限る)はCancel{...}LeaveRequestを呼ぶ
- * (勤怠編集の一部として休暇の申請・取消を行うという設計方針。root CLAUDE.md
- * 「休暇の考え方」参照)。
- */
-function useLeaveDesignationController(date: string, initialLeaves: AttendanceDayLeave[] | undefined, lists: LeaveDesignationLists) {
-  const initial = detectLeaveDesignation(initialLeaves)
-  const existingPaid = findLeaveRequestForDate(lists.paidLeaveRequests, date)
-  const existingSpecial = findLeaveRequestForDate(lists.specialLeaveRequests, date)
-  const existingCompensatory = findLeaveRequestForDate(lists.compensatoryLeaveRequests, date)
-  const existingHours = existingPaid?.hours ?? existingSpecial?.hours ?? existingCompensatory?.hours ?? null
-
-  const [kind, setKind] = useState<LeaveKind>(initial.kind)
-  const [unit, setUnit] = useState<PaidLeaveType>(initial.unit ?? 'full')
-  const [hours, setHours] = useState(existingHours !== null ? String(existingHours) : '')
-  const [specialLeaveTypeId, setSpecialLeaveTypeId] = useState<number | undefined>(existingSpecial?.special_leave_type_id)
-  const [approverUserId, setApproverUserId] = useState<string | undefined>(
-    existingPaid?.approver?.id ?? existingSpecial?.approver?.id ?? existingCompensatory?.approver?.id,
-  )
-  const [leaveReason, setLeaveReason] = useState('')
-  // 離脱警告の比べる元。state の初期値と同じ値をマウント時に1度だけ控える(申請一覧の再取得で動かさない)。
-  const [baseValues] = useState<DayLeaveValues>(() => ({
-    kind: initial.kind,
-    unit: initial.unit ?? 'full',
-    hours: existingHours !== null ? String(existingHours) : '',
-    specialLeaveTypeId: existingSpecial?.special_leave_type_id,
-    approverUserId: existingPaid?.approver?.id ?? existingSpecial?.approver?.id ?? existingCompensatory?.approver?.id,
-    leaveReason: '',
-  }))
-  const values: DayLeaveValues = { kind, unit, hours, specialLeaveTypeId, approverUserId, leaveReason }
-
-  const createPaidLeave = useCreatePaidLeaveRequest()
-  const cancelPaidLeave = useCancelPaidLeaveRequest()
-  const createSpecialLeave = useCreateSpecialLeaveRequest()
-  const cancelSpecialLeave = useCancelSpecialLeaveRequest()
-  const createCompensatoryLeave = useCreateCompensatoryLeaveRequest()
-  const cancelCompensatoryLeave = useCancelCompensatoryLeaveRequest()
-
-  const isPending =
-    createPaidLeave.isPending ||
-    cancelPaidLeave.isPending ||
-    createSpecialLeave.isPending ||
-    cancelSpecialLeave.isPending ||
-    createCompensatoryLeave.isPending ||
-    cancelCompensatoryLeave.isPending
-
-  const hasChanged =
-    kind !== initial.kind ||
-    (kind !== 'none' &&
-      (unit !== (initial.unit ?? 'full') ||
-        (kind === 'special' && specialLeaveTypeId !== existingSpecial?.special_leave_type_id) ||
-        (unit === 'hourly' && Number(hours) !== existingHours)))
-
-  /** 休暇なしへ変更する場合、元の休暇種別に対応するCancel{...}LeaveRequestを呼ぶ。 */
-  async function cancelExisting() {
-    if (initial.kind === 'paid' && existingPaid) await cancelPaidLeave.mutateAsync(existingPaid.id)
-    if (initial.kind === 'special' && existingSpecial) await cancelSpecialLeave.mutateAsync(existingSpecial.id)
-    if (initial.kind === 'compensatory' && existingCompensatory) await cancelCompensatoryLeave.mutateAsync(existingCompensatory.id)
-  }
-
-  /** 変更があれば取消・申請を行う。変更が無ければ何もしない(既存の申請に触れない)。 */
-  async function apply() {
-    if (!hasChanged) return
-
-    if (initial.kind !== 'none') {
-      await cancelExisting()
-    }
-
-    if (kind === 'none') return
-
-    const common = {
-      target_date: date,
-      leave_type: unit,
-      hours: unit === 'hourly' ? Number(hours) : undefined,
-      approver_user_id: approverUserId || undefined,
-      reason: leaveReason || undefined,
-    }
-
-    if (kind === 'paid') await createPaidLeave.mutateAsync(common)
-    if (kind === 'special') {
-      if (!specialLeaveTypeId) throw new Error('特別休暇の種別を選択してください。')
-      await createSpecialLeave.mutateAsync({ ...common, special_leave_type_id: specialLeaveTypeId })
-    }
-    if (kind === 'compensatory') await createCompensatoryLeave.mutateAsync(common)
-  }
-
-  return {
-    kind,
-    setKind,
-    unit,
-    setUnit,
-    hours,
-    setHours,
-    specialLeaveTypeId,
-    setSpecialLeaveTypeId,
-    approverUserId,
-    setApproverUserId,
-    leaveReason,
-    setLeaveReason,
-    baseValues,
-    values,
-    apply,
-    isPending,
-  }
-}
-
 const DAY_FORM_FIELDS = [
   'actual_start_at',
   'actual_end_at',
@@ -792,7 +645,7 @@ const DAY_FORM_FIELDS = [
   'leave_segments.*.note',
 ] as const
 
-function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: () => void; leaveLists: LeaveDesignationLists }) {
+function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }) {
   const initialValues = {
     actualStartAt: toDatetimeLocal(day.actual_start_at),
     actualEndAt: toDatetimeLocal(day.actual_end_at),
@@ -835,11 +688,9 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
   const updateDay = useUpdateAttendanceDay()
   const dayErrors = fieldErrors(updateDay.error, DAY_FORM_FIELDS)
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
-  const leaveController = useLeaveDesignationController(day.work_date, day.leaves, leaveLists)
-  const [leaveError, setLeaveError] = useState<Error | null>(null)
   const { confirmDiscard } = useUnsavedChangesGuard(
     isDayFormDirty(
-      { ...baseInitial, reason: '', leave: leaveController.baseValues },
+      { ...baseInitial, reason: '' },
       {
         actualStartAt,
         actualEndAt,
@@ -850,7 +701,6 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
         reason,
         breaks: rows,
         leaveSegments: leaveSegmentRows,
-        leave: leaveController.values,
       },
     ),
   )
@@ -860,7 +710,6 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
   }
 
   const handleSave = () => {
-    setLeaveError(null)
     updateDay.mutate(
       {
         id: day.id,
@@ -876,14 +725,9 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
         },
       },
       {
-        onSuccess: async () => {
-          try {
-            await leaveController.apply()
-            notify.success(`${monthDayLabel(day.work_date)}の勤怠を保存しました`)
-            onDone()
-          } catch (error) {
-            setLeaveError(error as Error)
-          }
+        onSuccess: () => {
+          notify.success(`${monthDayLabel(day.work_date)}の勤怠を保存しました`)
+          onDone()
         },
       },
     )
@@ -959,12 +803,11 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
 
         {breakWarning && <p className="mb-2 text-sm text-warning">{breakWarning}</p>}
         {updateDay.error && <ErrorMessage error={dayErrors.rest} />}
-        {leaveError && <ErrorMessage error={leaveError} />}
         <FormActions>
           <Button variant="secondary" onClick={handleCancel}>
             キャンセル
           </Button>
-          <Button isLoading={updateDay.isPending || leaveController.isPending} disabled={!reason} onClick={handleSave}>
+          <Button isLoading={updateDay.isPending} disabled={!reason} onClick={handleSave}>
             保存
           </Button>
         </FormActions>
@@ -974,7 +817,7 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
 }
 
 /** UC-A016: 出勤日を新規作成する。打刻の有無にかかわらず、月が締められるまではいつでも作成できる。 */
-function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDesignationLists }) {
+function DayCreateForm({ date }: { date: string }) {
   const { user } = useAuth()
   const [actualStartAt, setActualStartAt] = useState('')
   const [actualEndAt, setActualEndAt] = useState('')
@@ -1039,8 +882,6 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
   }, [date, defaults, resetRows])
 
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
-  const leaveController = useLeaveDesignationController(date, undefined, leaveLists)
-  const [leaveError, setLeaveError] = useState<Error | null>(null)
   const isDirty = isDayFormDirty(
     {
       actualStartAt: baseInput.actualStartAt,
@@ -1052,7 +893,6 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
       reason: '',
       breaks: baseInput.breaks,
       leaveSegments: [],
-      leave: leaveController.baseValues,
     },
     {
       actualStartAt,
@@ -1064,14 +904,12 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
       reason,
       breaks: rows,
       leaveSegments: leaveSegmentRows,
-      leave: leaveController.values,
     },
   )
   useUnsavedChangesGuard(isDirty)
 
   const handleCreate = () => {
     if (!user) return
-    setLeaveError(null)
     createDay.mutate(
       {
         user_id: user.id,
@@ -1086,13 +924,8 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
         reason,
       },
       {
-        onSuccess: async () => {
+        onSuccess: () => {
           notify.success(`${monthDayLabel(date)}の実績を作成しました`)
-          try {
-            await leaveController.apply()
-          } catch (error) {
-            setLeaveError(error as Error)
-          }
         },
       },
     )
@@ -1172,13 +1005,8 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
         )}
         {breakWarning && <p className="mb-2 text-sm text-warning">{breakWarning}</p>}
         {createDay.error && <ErrorMessage error={dayErrors.rest} />}
-        {leaveError && <ErrorMessage error={leaveError} />}
         <FormActions>
-          <Button
-            isLoading={createDay.isPending || leaveController.isPending}
-            disabled={!reason}
-            onClick={handleCreate}
-          >
+          <Button isLoading={createDay.isPending} disabled={!reason} onClick={handleCreate}>
             作成
           </Button>
         </FormActions>
@@ -1450,6 +1278,65 @@ function ShiftSwapRequestDialog({
   )
 }
 
+/** 取消の項目・確認に出す休暇の名前(種類と単位。特別休暇は種類の名前を含める)。 */
+function leaveCancelName(leave: AttendanceDayLeave, specialLeaveTypeNames: ReadonlyMap<number, string>): string {
+  const label = attendanceDayLeaveLabels([leave])[0]
+  const typeName = leave.special_leave_type_id !== null ? specialLeaveTypeNames.get(leave.special_leave_type_id) : undefined
+  return leave.leave_kind === 'special' && typeName ? label.replace('特別休暇(', `特別休暇(${typeName}・`) : label
+}
+
+/** 「この日の操作」のメニューから、その日の休暇(申請中・承認済み)を1件取り消す確認(1回の操作=1つのCommand)。 */
+function CancelLeaveDialog({
+  target,
+  name,
+  onOpenChange,
+  onCancelled,
+}: {
+  target: AttendanceDayLeave | null
+  name: string
+  onOpenChange: (open: boolean) => void
+  onCancelled: () => void
+}) {
+  const cancelPaidLeave = useCancelPaidLeaveRequest()
+  const cancelSpecialLeave = useCancelSpecialLeaveRequest()
+  const cancelCompensatoryLeave = useCancelCompensatoryLeaveRequest()
+  const mutation =
+    target?.leave_kind === 'special' ? cancelSpecialLeave : target?.leave_kind === 'compensatory' ? cancelCompensatoryLeave : cancelPaidLeave
+
+  return (
+    <ConfirmActionDialog
+      open={target !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          cancelPaidLeave.reset()
+          cancelSpecialLeave.reset()
+          cancelCompensatoryLeave.reset()
+        }
+        onOpenChange(open)
+      }}
+      title={`${name}を取り消しますか?`}
+      description={
+        target?.request_status === 'approved'
+          ? '取り消すと、消化した残数が戻ります。'
+          : '取り消すと、承認の依頼も取り消されます。'
+      }
+      confirmLabel="取り消す"
+      confirmVariant="danger"
+      isPending={mutation.isPending}
+      error={mutation.error ?? undefined}
+      onConfirm={() => {
+        if (!target) return
+        mutation.mutate(target.request_id, {
+          onSuccess: () => {
+            notify.success(`${name}を取り消しました`)
+            onCancelled()
+          },
+        })
+      }}
+    />
+  )
+}
+
 /**
  * 日次勤怠画面。週次・月次画面から対象の日を選んで遷移する(オブジェクト指向UI)。
  * 実績の作成(UC-A016)・編集(UC-A005)・削除(UC-A015)と、当日の打刻履歴(UC-A012〜A014)を
@@ -1471,7 +1358,7 @@ function AttendanceDayContent() {
   const [isEditing, setIsEditing] = useState(false)
   const [isAdjustingCalculation, setIsAdjustingCalculation] = useState(false)
   const [isShiftSwapOpen, setIsShiftSwapOpen] = useState(false)
-  const [cancelTarget, setCancelTarget] = useState<ApprovedLeaveTarget | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<AttendanceDayLeave | null>(null)
   const specialLeaveTypeNames = useSpecialLeaveTypeNames()
 
   const monday = date ? formatDate(mondayOf(new Date(`${date}T00:00:00`))) : ''
@@ -1479,12 +1366,10 @@ function AttendanceDayContent() {
   const { user } = useAuth()
   const { data: scheduleDays } = useShiftAssignments(user?.id ?? '', monday, addDays(monday, 6))
   const monthLocked = useMonthLocked(date ?? '')
-  const { data: paidLeaveRequestsPage } = useMyPaidLeaveRequests({ targetDate: date })
-  const paidLeaveRequests = paidLeaveRequestsPage?.data
-  const { data: specialLeaveRequestsPage } = useMySpecialLeaveRequests({ targetDate: date })
-  const specialLeaveRequests = specialLeaveRequestsPage?.data
-  const { data: compensatoryLeaveRequestsPage } = useMyCompensatoryLeaveRequests({ targetDate: date })
-  const compensatoryLeaveRequests = compensatoryLeaveRequestsPage?.data
+  const { data: specialLeaveTypes } = useSpecialLeaveTypes(
+    user?.effective_features === undefined || user.effective_features.includes('paid_leave.requests'),
+  )
+  const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
 
   if (!date) return null
   if (isLoading) return <LoadingState />
@@ -1506,11 +1391,14 @@ function AttendanceDayContent() {
   const absenceDays = day?.calculation && day.calculation.prescribed_work_minutes > 0 && (day.calculation.absence_minutes ?? 0) >= day.calculation.prescribed_work_minutes
     ? 1
     : 0
-  const approvedPaidLeave = paidLeaveRequests?.find((r) => r.target_date === date && r.status === 'approved')
-  const approvedSpecialLeave = specialLeaveRequests?.find((r) => r.target_date === date && r.status === 'approved')
-  const approvedCompensatoryLeave = compensatoryLeaveRequests?.find((r) => r.target_date === date && r.status === 'approved')
-  const hasApprovedLeaveToCancel = !!approvedPaidLeave || !!approvedSpecialLeave || !!approvedCompensatoryLeave
-  const leaveLists: LeaveDesignationLists = { paidLeaveRequests, specialLeaveRequests, compensatoryLeaveRequests }
+  const cancellableLeaves = (day?.leaves ?? []).filter(
+    (leave) => leave.request_status === 'submitted' || leave.request_status === 'approved',
+  )
+  const cancelDisabledReason = isEditing
+    ? '編集を保存するか、キャンセルしてから取り消してください。'
+    : locked
+      ? '月次勤怠が提出済みのため、この日は取り消せません。'
+      : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -1565,35 +1453,26 @@ function AttendanceDayContent() {
                 <DropdownMenuItem asChild>
                   <Link to={`/paid-leave?date=${date}`} state={forwardState}>有給休暇を申請する</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to={`/special-leave?date=${date}`} state={forwardState}>特別休暇を申請する</Link>
-                </DropdownMenuItem>
+                {hasSpecialLeaveTypes && (
+                  <DropdownMenuItem asChild>
+                    <Link to={`/special-leave?date=${date}`} state={forwardState}>特別休暇を申請する</Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem asChild>
                   <Link to={`/compensatory-leave?date=${date}`} state={forwardState}>代休を申請する</Link>
                 </DropdownMenuItem>
-                {hasApprovedLeaveToCancel && <DropdownMenuSeparator />}
-                {approvedPaidLeave && (
+                {cancellableLeaves.length > 0 && <DropdownMenuSeparator />}
+                {cancellableLeaves.map((leave) => (
                   <DropdownMenuItem
-                    onSelect={() => setCancelTarget({ kind: 'paid', id: approvedPaidLeave.id, label: '有給休暇' })}
+                    key={leave.request_id}
+                    disabled={cancelDisabledReason !== null}
+                    onSelect={() => setCancelTarget(leave)}
                   >
-                    有給休暇の承認を取り消す
+                    {leaveCancelName(leave, specialLeaveTypeNames)}を取り消す
                   </DropdownMenuItem>
-                )}
-                {approvedSpecialLeave && (
-                  <DropdownMenuItem
-                    onSelect={() => setCancelTarget({ kind: 'special', id: approvedSpecialLeave.id, label: '特別休暇' })}
-                  >
-                    特別休暇の承認を取り消す
-                  </DropdownMenuItem>
-                )}
-                {approvedCompensatoryLeave && (
-                  <DropdownMenuItem
-                    onSelect={() =>
-                      setCancelTarget({ kind: 'compensatory', id: approvedCompensatoryLeave.id, label: '代休' })
-                    }
-                  >
-                    代休の承認を取り消す
-                  </DropdownMenuItem>
+                ))}
+                {cancellableLeaves.length > 0 && cancelDisabledReason && (
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground">{cancelDisabledReason}</p>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1609,8 +1488,9 @@ function AttendanceDayContent() {
           onOpenChange={setIsShiftSwapOpen}
         />
 
-        <CancelApprovedLeaveDialog
+        <CancelLeaveDialog
           target={cancelTarget}
+          name={cancelTarget ? leaveCancelName(cancelTarget, specialLeaveTypeNames) : ''}
           onOpenChange={(open) => !open && setCancelTarget(null)}
           onCancelled={() => {
             setCancelTarget(null)
@@ -1744,7 +1624,7 @@ function AttendanceDayContent() {
           </div>
         )}
 
-        {day && isEditing && <DayEditForm day={day} onDone={() => setIsEditing(false)} leaveLists={leaveLists} />}
+        {day && isEditing && <DayEditForm day={day} onDone={() => setIsEditing(false)} />}
 
         {!day && locked && (
           <div className="flex flex-col gap-2">
@@ -1752,7 +1632,7 @@ function AttendanceDayContent() {
           </div>
         )}
 
-        {!day && !locked && <DayCreateForm date={date} leaveLists={leaveLists} />}
+        {!day && !locked && <DayCreateForm date={date} />}
       </Card>
 
       <PunchLogCard date={date} locked={locked} />

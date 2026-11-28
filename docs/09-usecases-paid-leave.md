@@ -591,7 +591,7 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 `CancelPaidLeaveRequest` Command/`CancelPaidLeaveRequestHandler`を使うが、
 `isAdminAction: true`を渡すことで本人一致チェックをバイパスする(`cancelledByUserId`には
 取消操作を行った管理者自身のIDを渡し、監査上「誰が取り消したか」を正しく記録する)。
-承認済み申請のみ取消可能・締め済み月は取消不可等、既存の業務ルールはすべてそのまま適用される。
+申請中・承認済みの申請を取り消せる・締め済み月は取消不可等、既存の業務ルールはすべてそのまま適用される。
 同じ構造を特別休暇(`POST /special-leave/requests/{id}/admin-cancel`、
 `GET /special-leave/usages/user/{userId}`)・代休(`POST /compensatory-leave/requests/{id}/admin-cancel`、
 `GET /compensatory-leave/usages/user/{userId}`)にも実装する。

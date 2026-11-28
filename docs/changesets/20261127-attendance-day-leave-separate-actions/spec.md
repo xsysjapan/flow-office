@@ -123,4 +123,7 @@
 - 2026-11-27 実装前の独立設計レビュー(general-purpose)で「休暇の欄は 2026-08-14 に表示が消え、保存の処理だけが残っている」と分かり、前提が覆ったため作り直した。あわせて、残った処理が利用者の操作なしに休暇を取り消す経路、メニューの取消が1件だけ・承認済みだけであること、確認の部品の文言、編集中の取消で入力が失われること、締め済み・特別休暇の種類の出し分け、テストと docs の食い違いを反映した。
 
 ## 実装結果
-未着手
+- `AttendanceDayPage.tsx`: 休暇の処理(コントローラ・`apply()`・`leaveError`)と `useMy*LeaveRequests` の3つを削除し、`attendanceDayDirty.ts`(+テスト)から休暇の項目を外した。
+- 「この日の操作」のメニュー: `day.leaves`(申請中・承認済み)ごとに「{名前}を取り消す」(特別休暇は「特別休暇(慶弔・全休)」の形で種類の名前と単位を含める)。確認は `ConfirmActionDialog`(`CancelLeaveDialog`)。編集中・締め済みは disabled + 理由を項目の下に表示。有効な特別休暇の種類が無いと特別休暇の申請を出さない。
+- `components/CancelApprovedLeaveDialog/` を削除。docs/07・docs/09 を更新。
+- テスト: `AttendanceDayPage.test.tsx` の休暇の2つの describe を書き直し(取消のメニュー・保存で休暇の API を呼ばない)。tsc・`vitest --project unit src/pages/attendance` 全件・oxlint は通過。E2E・全件は委譲元が流す。
