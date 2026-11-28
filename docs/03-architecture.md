@@ -266,6 +266,13 @@ AIやMCPサーバー側に重複実装しない。
     - 一括操作(同じCommandを複数件): `ExpenseClaimController::bulkAddItems`・`BackOfficeTaskController::bulkComplete`・
       `PaidLeaveScheduleController`(出勤率の判定の一括実行)・`AttendanceController`(週の残業の振分)。
       一括操作を1つのCommandにするか、例外として残すかは是正の変更セットで決める。
+    - このほか、`PaidLeaveScheduleController`の一括付与(`bulkGrant`、利用者ごとに1件)・再判定(`reassess`、組で2件)、
+      備品の一括操作(`AssetBulkOperationController`、資産ごとに1件)も入口で複数のCommandを発行している。
+    - 画面が1件ずつAPIを呼んで一括にしているもの(申請の一括取消・承認の一括・バックオフィスの担当の一括変更・
+      休暇の手動付与・期間の休暇の申請)も、専用のAPIに置き換える。
+  - **一括操作の同期・非同期**(ユーザーの指示 2026-11-28): 一括操作は、対象を画面で選んで(IDを指定して)行うのを基本とし、
+    同期で処理する。非同期(DBキュー・cron)にするのは、IDを指定せず条件で数千件を処理するような一括処理を作るときだけ
+    (現状は該当なし)。期間の休暇の申請は1つの申請として扱い、どれか1日でも拒否されたら全部申請しない。
 
 - **同期実行と1トランザクション**: Reactorは同期実行する。1回の利用者操作から始まる連鎖全体を
   1トランザクションとし、途中のReactor/Handlerで例外が出れば全体を取り消して利用者にエラーを返す。
