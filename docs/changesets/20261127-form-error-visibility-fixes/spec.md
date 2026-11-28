@@ -1,6 +1,6 @@
 # form-error-visibility-fixes(入力が消える・エラーが見えない不具合3件)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 引き続き対応をお願いします。判断が必要な箇所があれば聞いてください
@@ -158,3 +158,5 @@
   - 1(作成の後に state で id を付けて同じ画面に留まり読み込み中で入力を外す作り): 無し(`set*Id(` で id を付ける作成画面は `ExpenseClaimNewPage` だけ。他の `isLoading` の全体置き換えは `ExpenseEntryPresetEditPage` の `!isCreate && isLoading` のみで作成時は外さない)。
   - 3(成功の中で別の mutation を呼び表示を閉じる作り): `WorkStylesPage` のみ(他は `TodayAttendancePanel` の onSuccess が通知のみ)。形は違うが候補として `pages/admin/GroupDetailPage.tsx:258-275`: グループ作成の onSuccess の中で `await createAssignment.mutateAsync(...)`(初期ロール)が失敗すると、グループは作成済みのまま遷移もエラー表示もされない(`createAssignment.error` を作成フォームで描いていない)。本変更では直していない(別の候補)。
   - `void startClaimTitle.mutateAsync` は2か所とも対応。他の `void xxx.mutateAsync(` は無し。
+- 委譲元の検証: tsc 成功、単体テスト全件 1855 件成功。E2E(scenario-00・02・04・06・09・12・14)23件すべて成功、spec の修正は無し。
+- 別の候補(横展開の grep で発見): グループの作成の後の初期ロールの割当(`GroupDetailPage.tsx:258-275`)が失敗しても画面に何も出ず移動もしない。

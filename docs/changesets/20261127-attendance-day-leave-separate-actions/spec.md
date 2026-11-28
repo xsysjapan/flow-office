@@ -1,6 +1,6 @@
 # attendance-day-leave-separate-actions(勤怠の日の保存に残る休暇の処理を消し、休暇の申請と取消を「この日の操作」のメニューの別々の操作にそろえる)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 今後のためにルールとしてAPI呼び出しは基本的に一コマンドのみ処理することと、改めてコレオグラフィーの整合性で実装できないか試すことをお願いします
@@ -127,3 +127,4 @@
 - 「この日の操作」のメニュー: `day.leaves`(申請中・承認済み)ごとに「{名前}を取り消す」(特別休暇は「特別休暇(慶弔・全休)」の形で種類の名前と単位を含める)。確認は `ConfirmActionDialog`(`CancelLeaveDialog`)。編集中・締め済みは disabled + 理由を項目の下に表示。有効な特別休暇の種類が無いと特別休暇の申請を出さない。
 - `components/CancelApprovedLeaveDialog/` を削除。docs/07・docs/09 を更新。
 - テスト: `AttendanceDayPage.test.tsx` の休暇の2つの describe を書き直し(取消のメニュー・保存で休暇の API を呼ばない)。tsc・`vitest --project unit src/pages/attendance` 全件・oxlint は通過。E2E・全件は委譲元が流す。
+- 委譲元の検証: tsc 成功、単体テスト全件 1855 件成功。E2E(scenario-00・02・04・06・09・12・14)23件すべて成功、spec の修正は無し。
