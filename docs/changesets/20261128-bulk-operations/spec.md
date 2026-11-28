@@ -1,6 +1,6 @@
 # bulk-operations(段階②: 一括操作を、入口1回=1つのCommandで、全部か無しかで処理する)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > まとめて保存系の一括操作についてもAPIを用意して処理してください。時間がかかるものは非同期で動くようにしてください。
@@ -162,3 +162,4 @@
   - backend: `GrantPaidLeaveToUsers`・`GrantSpecialLeaveToUsers`・`GrantCompensatoryLeaveToUsers`(各 Handler は `BulkItemRunner` で1件の付与を dispatch)、`POST /{paid-leave,special-leave,compensatory-leave}/grants/bulk`(上限500・distinct、有給・特別休暇はグループを入口で `GroupMemberExpander`(UserManagement。直接の所属・退職者除外・`group.view`)により `user_ids` に展開、代休は個人のみ)。付与 ID は `ManualGrantId`(request_id+利用者 ID の UUIDv5)で、1件の付与(`idempotent`)も `request_id` を受け、同じ ID は何もせず成功。
   - `ApplyScheduledGrantsInBulk`(既存 bulk-grant を1 Command に。上限500。組の片方だけの選択は今どおり入口で422)。`ApplyScheduledGrantsHandler` の `Throwable` の捕捉・「付与は成功したが反映に失敗」の処理を削除(付与前の検査の失敗だけ `failed`)。`ApplyAssetBulkOperation`(既存 `/assets/bulk`。上限200・distinct。応答 `{operation, data:[{asset_id,result}]}`)。`ReturnAssetHandler` が借用者本人以外は全社 `asset.manage` を要する(単件・一括。`AuthorizationException`=403)。
   - frontend: 手動付与3画面を `BulkActionDialog`(allOrNothing)に(`lib/bulkGrant.ts` 削除、`GrantTargetPicker` は group_id を送り `allowGroup=false` で代休は個人のみ)、`PaidLeaveSchedulePage`、備品の一括5画面(新部品 `BulkOperationError`)。docs/09・34、E2E scenario-15(422)・scenario-00(確認ダイアログ)を更新。テストは各 Command(全件成功・失敗の全件返却・上限・distinct・入口1回=1 Command)、グループ展開・再送の冪等、返却の認可を追加。
+- 委譲元の検証: backend 全件(CI と同じ条件)2369件成功、frontend 単体 1880件成功・tsc 成功。E2E 10本(scenario-00・02・04・09・10・11・12・14・15・99)52/53件成功。残る1件(scenario-99 §5-1)は並行で実装中の `20261128-returned-is-final`(差戻しからの提出を拒否)による失敗で、本変更とは無関係(returned-is-final の側で spec を直す)。コミット: `528a78c7`。

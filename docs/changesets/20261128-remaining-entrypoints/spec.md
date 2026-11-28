@@ -1,6 +1,6 @@
 # remaining-entrypoints(原則17・15の残りの入口と、見つかった候補の是正)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 同様に修正をお願いします。問題があれば聞いてください
@@ -137,3 +137,4 @@
 - 論点5(backend): `SyncGroupFeatures`・`SyncGroupFeaturesHandler`(差分は`GroupFeatureSyncService::diffForGroup`、`GroupAccessAggregate`へ1回で記録、差分なしは何もしない)。Reactor(`SyncGroupFeaturesOnRoleChangeReactor`)が割当の作成・更新・削除(更新・削除は割当の行から付与先を引く)と`RoleFeaturesChanged`を受けて発行。5つのHandlerからサービス呼び出しを外した。`ResyncGroupFeaturesCommand`は`SyncGroupFeatures`を発行し`AdminExecutable`(`group_feature_assignments`の全削除はReadModelだけの書き換えになるため廃止し、差分だけ同期する。要確認: 仕様に無い変更)。テスト: `RoleFeatureAutoApplyTest`(追加)・`AdminCommandTest`。docs/15・17・31を更新(docs/03 3.10の例外の削除は未実施)。
 - 論点6(backend・frontend): 添付の大きさ・拡張子の規則を`AttachmentFileRules`(Attachment/Support)に出し、`AttachmentController`(結果は変えない)と明細の追加の入口の両方が保存前に使う。`POST /expense-claims/{id}/items`・`.../items/bulk`はmultipartで添付を受け(1件は`files[]`と`attributes`のJSON文字列、まとめては`items`のJSON文字列と`files[{行}][]`)、入口が明細・添付のIDを決めて`attachments/expense_items/{明細のID}`へ保存、`AddExpenseItem(s)`に添付の参照を渡す。`expense_claim.item_added`に任意の`attachments`(最後・既定は空)、添付の文脈のReactor(`UploadAttachmentsOnExpenseItemAddedReactor`)が`UploadAttachment`(`attachmentId`・`viaReactor`、既にあれば何もしない)で記録。入口は`Throwable`で保存したファイルを全て消して投げ直す。
 - 論点6のテスト: `ExpenseItemWithAttachmentTest`(入口1回=1 Command・1回で記録・検証の失敗で何も保存しない・Commandの拒否でファイルが消える・Reactorの冪等)、`AttachmentFileRulesTest`、`api/expenseClaims.test.ts`、`ExpenseClaimNewPage.test.tsx`(1回で送る・files.N.0のエラー)。docs/17・docs/30を更新。`ExpenseClaimNewPage`の「明細の後に添付をPromise.all」は廃止。`ExpensePagesGuard.test.tsx`の1件が高負荷時に不安定(単独・再実行では通る)。
+- 委譲元の検証: backend 全件(CI と同じ条件)2369件成功、frontend 単体 1880件成功・tsc 成功。E2E 10本(scenario-00・02・04・09・10・11・12・14・15・99)52/53件成功。残る1件(scenario-99 §5-1)は並行で実装中の `20261128-returned-is-final`(差戻しからの提出を拒否)による失敗で、本変更とは無関係(returned-is-final の側で spec を直す)。コミット: `528a78c7`。
