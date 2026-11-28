@@ -5,6 +5,8 @@
 ## 変更要望(原文)と決定
 > 同様に修正をお願いします。問題があれば聞いてください
 - 有給・特別休暇の付与ルールと付与表をイベント化する(ユーザーの回答 2026-11-28「今回あわせてイベント化する」)。既存の行はデータ移行(管理画面の運用コマンド)でイベントを作り直す。
+- 新しい DB で初期のルールを直接書く過去の2つのマイグレーションは、新しい DB ではデータを書かないようにし、初期の全社のルールはシーダーとオンボーディングが Command で作る(ユーザーの回答「提案どおり」。本番は既に実行済みで影響なし)。
+- 移行のイベントの記録の順は、data-correction の規則どおり振り直す(ユーザーの回答)。
 
 ## 背景・目的
 付与ルール・付与表は、イベントを使わずに Controller が直接 DB を書いている(原則1・2に反する)。作り直し(ReadModelRebuilder)の対象にもならず、変更の履歴も残らない。Command → イベント → Projector にし、既存の行をイベントで作り直す。
@@ -32,13 +34,14 @@
 
 ## 仕様検討
 
-### 論点1: 集約と主キー
-- 選択肢:
-  - A. 主キーを UUID に変える(集約の ID と同じ)。子(段)は親のイベントから全件を作り直す。
-  - B. 連番の主キーを残し、集約の ID を別の列に持つ。
-- 決定: A(有給のルール・特別休暇のルール)。付与表(版ごとの行の集まり)は「版」を1つの集約(ID は `uuid5('paid-leave-grant-policy:'.version)` 等、版の文字列から決まる)とし、行はその版のイベントから作る(行の主キーは連番のまま。行は子データ)。
-- 理由: B は作り直しで連番が変わり、画面の URL・API のルールの ID が変わる。docs/03 の規則(集約ルートを Projector 化するなら UUID)に合わせる。
-- 影響: ルールの ID の型が数値から文字列(UUID)になる。API・画面の型を直す。既存の行には、移行で UUID を割り当てる(既存の連番から決まる uuid5。移行の試し実行と本実行で同じ値になる)。
+### 論点1: 集約・主キー・文脈
+- 決定:
+  - 文脈: 付与ルール・付与表は、読み手(付与予定の計算)と同じ `PaidLeaveSchedule` の文脈に置く(別の文脈にすると原則15に反する)。特別休暇の付与ルールは `SpecialLeave` の文脈。
+  - 有給の付与ルール・特別休暇の付与ルール: 1ルール=1集約。主キーを UUID にする(docs/03 の規則。docs/29 で撤回した別列方式は採らない)。段(子)は親のイベントから全件を作り直す(段の主キーは連番のまま、`rule_id` は親の UUID を参照)。
+  - 有給の法定の付与表(通常・比例): 表ごとに1つの集約(ID は固定の uuid5)。集約の状態に公開済みの版を持ち、版の採番(最大+1)を集約の中で守る。行は版の公開のイベントから作る(行は子データ、主キーは連番)。
+  - uuid5 の名前空間は固定し、名前に種別を入れる(`paid-leave-grant-rule:{旧id}`・`special-leave-grant-rule:{旧id}`・`paid-leave-grant-policy`・`paid-leave-proportional-grant-policy`。前例 `ConfigureAssetNumberRuleHandler.php:46`)。
+- 影響: ルールの ID の型が文字列(UUID)になる。frontend の型(`types.ts` の `PaidLeaveGrantRule.id`・特別休暇のルールの `id`、`api/paidLeave.ts`・`api/specialLeave.ts`、stories・テストのモック)、`RebuildPaidLeaveScheduleCommand` の `--rule-id`(数値への変換をやめる)を直す。OpenAPI は既に `format: uuid`。
+- `PaidLeaveGrantRuleResolver` の同じ順位(作成時刻が同じ)の扱い: 同じ勤務形態に有効なルールを複数持てないことを Handler で検査する(並びに依存しない)。Projector はルールの `created_at` にイベントの発生時刻を入れる。
 - 未確定・要確認事項: なし
 
 ### 論点2: Command とイベント
@@ -47,22 +50,38 @@
 | 有給の付与ルール | `CreatePaidLeaveGrantRule`・`UpdatePaidLeaveGrantRule`・`DeletePaidLeaveGrantRule` | `paid_leave_grant_rule.created`・`.updated`・`.deleted`(段の一覧を含む) |
 | 有給の法定の付与表(通常・比例) | `PublishPaidLeaveGrantPolicyVersion`・`PublishProportionalGrantPolicyVersion` | `paid_leave_grant_policy.version_published`・`paid_leave_proportional_grant_policy.version_published`(行の一覧・効力の開始日を含む) |
 | 特別休暇の付与ルール | `CreateSpecialLeaveGrantRule` | `special_leave_grant_rule.created`(段の一覧を含む) |
-- 検査(法定の最低日数・区分×月の重複・有効なルールの削除の禁止・版の採番)は Handler に移す。版の採番は Handler でロックをかけて行う。
-- 付与予定の作り直し: 有給の付与ルール・付与表のイベントを受ける Reactor が `ReapplyPaidLeaveSchedulePolicyJob` を dispatch する(Controller からの dispatch をやめる)。非同期のままにする(全利用者を条件で処理する一括で、docs/03 3.10 の「非同期にするのは条件で数千件を処理する一括」に当たる)。ルールの削除でも dispatch する(今は dispatch しない。削除は無効のルールだけなので結果は変わらないが、そろえる)。
+- イベントは全項目と段の全件を明示的に持つ(差分にしない)。作成時に省いた項目の既定値(80・6・12 等)と、更新で送られなかった項目の補いは Handler で決める(DB の列の既定値に頼らない。後のマイグレーションで既定値を変えても作り直しの結果が変わらないように)。付与表の版の公開は `is_active`・`effective_from`(null を許す)を持つ。
+- 検査(法定の最低日数・区分×月の重複・有効なルールの削除の禁止・同じ勤務形態の有効なルールの重複)は Handler と集約に移す。削除の可否は集約の状態の `is_active` で判断する。
+- 付与予定の作り直し: 有給の付与ルール・付与表のイベントを受ける Reactor が `ReapplyPaidLeaveSchedulePolicyJob` を `->afterCommit()` 付きで dispatch する(Controller からの dispatch をやめる。前例 `ReapplyScheduleOnFiscalYearStartChangedReactor.php:58`)。非同期のままにする(全利用者を条件で処理する一括で、docs/03 3.10 の「非同期にするのは条件で数千件を処理する一括」に当たる)。ルールの削除でも dispatch する。作り直し(replay)では Reactor は走らないので Job は積まれない。Reactor のテストは `Queue::fake()` で「積んだこと」を確かめる。
 - 未確定・要確認事項: なし
 
-### 論点3: 既存の行の移行
+### 論点3: 新しい DB の初期のルール
+- 決定(ユーザーの回答「提案どおり」):
+  - 過去の2つのマイグレーション(`2026_09_14_000001_seed_global_mass_grant_paid_leave_rule`・`2026_10_21_000004_*`)を、新しい DB ではデータを書かないようにする(本番は実行済みで影響なし)。
+  - 初期の全社のルール(年度はじめの一斉付与・法定の日数の段)は、シーダー(開発・テスト・E2E)とオンボーディング(本番の新規導入)が `CreatePaidLeaveGrantRule` で作る。法定の付与表の初期の版は `PaidLeaveGrantPolicySeeder` が Command で公開する。期限の表は対象外なので直接書くまま。
+  - テストのデータは Command で作る補助(trait)を用意し、付与ルール・付与表を直接書く既存のテスト(21ファイル。例 `PaidLeaveScheduleAssessmentPlannerTest.php:38`、`ScheduleCandidateGeneratorTest.php:232`、`PaidLeaveGrantRuleAdminTest.php:388`)・シーダー(`ScenarioSeeder.php:211-220`)を書き直す。`DevSeedersEventSourcedTest`(シーダーの後の作り直しで差分0)が通ること。
+  - `PaidLeaveFiscalMassGrantMigrationsTest`(古いマイグレーションの `up()` を流し直す)は、データを書かなくなったマイグレーションに合わせて書き直す(古いマイグレーションが既存の DB では今どおりに動く部分だけを確かめる)。
+- 未確定・要確認事項: なし
+
+### 論点3b: 既存の行の移行(本番・既存の開発 DB)
 - 決定:
-  - 運用コマンド `events:backfill-grant-rules`(`AdminExecutable`、試し実行が既定、`MAINTENANCE_COMMANDS` に登録)を作る。既存の行(ルール・段・付与表の版)から、作成・版の公開のイベントを1件ずつ作り、`stored_events` に記録する(過去の事実の補完。移行イベントは作らない。原則2)。記録の時刻は行の `created_at`(更新の履歴は残っていないので、今の内容を作成のイベントとして記録する)。
-  - 移行の前に作り直しをすると表が消えるため、検出器(`LegacyGrantRuleDetector`: 表に行があるのにイベントが無い)を `CorrectionPendingService` と作り直しの拒否に加える(前例: `LegacyBooleanPropertyDetector`)。補正待ちの間は API が 503(変更セット`20261124-correction-pending-maintenance`)になり、管理者は管理画面から移行のコマンドを実行する。
-  - マイグレーションは列の追加と主キーの型の変更だけを行う(データは移行のコマンドで作る)。主キーの UUID 化は、移行のコマンドの中で、イベントの作成と同じトランザクションで既存の行の ID を uuid5 に置き換える…のではなく、マイグレーションで `uuid` 列を足して既存の連番から uuid5 を入れ(決定的な値)、主キーを入れ替える。段・付与予定の勤務形態の参照は ID を参照しないので影響は無い。※ マイグレーションの中で uuid5 を入れるのは「データの補正」ではなく、列の型の変更に伴う値の写し(元の値から機械的に決まる)として扱う。この扱いが data-correction の規則に照らして疑わしければ、設計レビューで指摘を受けて決め直す。
-  - 移行の後、作り直しで表がイベントから同じ内容になることを確かめる(`ReadModelFingerprinter` の比較。連番の主キーは比較から除外される)。
-- 未確定・要確認事項: 主キーの入れ替えをマイグレーションで行うことの是非(上の※。設計レビューで確かめる)
+  - マイグレーションは列の型の変更だけ: 有給・特別休暇のルールの主キーと子の `rule_id` を文字列の型に変える(値は '1','2' のまま。DB の型の変換で、PHP での計算は無い。外部キーの付け外しを含む)。MySQL での予行演習と SQLite のマイグレーションのテストを行う。
+  - 運用コマンド `events:backfill-grant-rules`(`AdminExecutable`、試し実行が既定、`MAINTENANCE_COMMANDS` に登録)を作る。1つのトランザクションで:
+    1. 既存の行(ルール・段・付与表の版。付与表は元の id の順)から、uuid5 を集約の ID にしたイベント(作成・版の公開)を作り、`stored_events` に記録する。記録の順は data-correction の規則どおり振り直す(過去への挿入: 行の `created_at` の位置に入るよう `stored_events` の id・版を振り直す。`EventStoreRebuildWriter` を使う。前例 `RebuildDeterminismMigrator`)。集約の persist は使わない(Projector・Reactor を走らせない)。
+    2. `ReadModelRebuilder::rebuild` で表を作り直す(行の ID が UUID になる)。
+    3. 移行前の行と比べて検証する(旧 ID→uuid5 の対応で比べる)。合わなければすべて戻す。
+    - 試し実行は同じ処理をしてからロールバックし、旧 ID→UUID の対応表と差分を出す。
+    - 「更新された後の今の内容を、作成の時点の内容として記録する」のは、更新の履歴が残っていない(過去の事実が決められない)部分として扱う(data-correction の判断手順4)。
+    - 2回目の実行は、イベントの無い行が0件なら何もしない(冪等)。子の行は親のイベントがあるかで判定する。
+  - 検出器 `LegacyGrantRuleDetector`(表に行があるのに親のイベントが無い)を `CorrectionPendingService::detect()` に加える。作り直しの拒否は `ReadModelRebuilder::rebuild` の側に置き、移行のコマンドだけが外せるようにする(既存の補正のコマンドが `rebuild(false)` を直接呼んで、付与ルールを消したまま確定するのを防ぐ)。補正待ちの間もログインと運用コマンドが動くことを `CorrectionPendingMaintenanceTest` に足す。
+  - `ReadModelTableListerTest` に、6つの表が作り直しの対象に入ることを足す。
+- 未確定・要確認事項: なし
 
 ### 論点4: そのほか
 - 期限の表(`paid_leave_grant_expiry_policy`): 書き手・読み手とも無いので、イベント化の対象にしない。削除するかは別の候補として記録する。
 - `ScheduleCandidateGenerator` と `PaidLeaveGrantPolicy` のコメントを実装に合わせて直す(法定の付与表は付与予定の計算に使わない)。
 - 特別休暇の付与ルールの更新・削除の API は今も無いので作らない。
+- 特別休暇の種別(`special_leave_types`)も直接書かれている(`SpecialLeaveController::storeType`・`updateType`)。本変更の対象外とし、別の候補として記録する。
 - 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
@@ -78,7 +97,7 @@
 - 上のテストと全件の単体テスト、変えた画面を通る E2E の spec が通る。
 
 ## 対象外
-- 期限の表の削除、特別休暇の付与ルールの更新・削除の API
+- 期限の表の削除、特別休暇の付与ルールの更新・削除の API、特別休暇の種別のイベント化
 
 ## ドキュメントへの影響
 - `docs/09-usecases-paid-leave.md`(付与ルール・付与表の保存がイベントであること)、`docs/16-database-schema.md`(主キーの型)、`docs/17-events.md`、`docs/27-release-runbook.md`(リリースの後に移行のコマンドを実行する手順)、`docs/03-architecture.md`(直接の書き込みの例外からの削除があれば)
@@ -96,7 +115,8 @@
 - E2E: 付与ルール・付与表の画面を通る spec(grep で特定)
 
 ## レビュー履歴
-初版
+- 2026-11-28 初版。
+- 2026-11-28 実装前の独立設計レビュー(general-purpose)を反映: 新しい DB で初期のルールが直接書かれる問題(高-1・2。ユーザーの回答で過去のマイグレーションを新しい DB では書かないようにし、シーダー・オンボーディングが Command で作る)、子の表の `rule_id`(高-3)、主キーの UUID 化はマイグレーションでは型の変更だけ・UUID は移行のコマンドの作り直しで(高-4 の案 b)、移行は `stored_events` への直接の書き込み・作り直し・検証を1つのトランザクションで(高-5)、記録の順は規則どおり振り直す(中-1。ユーザーの回答)、作り直しの拒否を `ReadModelRebuilder` に(中-2)、付与表は表ごとの集約(中-3)、全項目のイベントと Handler の既定値(中-4)、文脈は `PaidLeaveSchedule`(中-5)、数値の ID の前提・Resolver の同順位(中-6)、uuid5 の名前(中-7)、`afterCommit`(中-8)、特別休暇の種別は対象外(低-1)。
 
 ## 実装結果
 未着手

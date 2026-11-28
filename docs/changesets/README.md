@@ -14,7 +14,9 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261128-period-leave-request](./20261128-period-leave-request/spec.md) | 段階③: 期間の休暇を1つの申請に。差戻しは最終の結果(再申請は新しい申請)、承認済みの休暇の取消は承認の設定に従う | 検討中 |
+| [20261128-returned-is-final](./20261128-returned-is-final/spec.md) | 段階③a: 差戻しを申請の最終の結果にし、再申請は新しいワークフローにする | 検討中 |
+| [20261128-leave-cancellation-request](./20261128-leave-cancellation-request/spec.md) | 段階③c: 承認済みの休暇の取消を、承認の設定に従って取消の申請にする | 検討中 |
+| [20261128-period-leave-request](./20261128-period-leave-request/spec.md) | 段階③b: 期間・複数日の休暇を1つの申請にする | 検討中 |
 | [20261128-grant-rules-events](./20261128-grant-rules-events/spec.md) | 有給・特別休暇の付与ルール・付与表をイベント化し、既存の行を移行する | 検討中 |
 | [20261128-bulk-operations](./20261128-bulk-operations/spec.md) | 段階②: 一括操作を入口1回=1つのCommandで、全部か無しかで処理する(失敗した対象と理由を返す) | 検討中 |
 | [20261128-remaining-entrypoints](./20261128-remaining-entrypoints/spec.md) | 原則17・15の残りの入口(利用者・カレンダー・端末・グループと初期ロール・Feature の同期・経費の明細と添付)と休暇の取消の置き場所 | 検討中 |
