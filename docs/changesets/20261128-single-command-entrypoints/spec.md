@@ -1,6 +1,6 @@
 # single-command-entrypoints(段階①: まとめて保存・承認不要の申請などを、入口1回=1つのCommandにする)
 
-ステータス: 検討中
+ステータス: レビュー中
 
 ## 変更要望(原文)
 > まとめて保存系の一括操作についてもAPIを用意して処理してください。時間がかかるものは非同期で動くようにしてください。
@@ -34,40 +34,55 @@
 ## 仕様検討
 
 ### 論点1: 利用者詳細のまとめて保存
-- 決定: `UpdateUserDetails`(UserManagement)を新しく作る。Handler が、変更のあった項目について、外部人事の項目の権限(日付3項目を含む。今は Controller にしかない)・最後の有効なシステム管理者の無効化の禁止・入社日 ≤ 退社日(最終状態で判定)を検査し、利用者の集約に今と同じイベント(`UserProfileUpdated`・`UserHireDateSet`・`UserTerminationDateSet`・`UserUsageStartDateSet`・`PaidLeaveAutoGrantEnabledSet`・`SpecialLeaveAutoGrantEnabledSet`)を記録する。最終状態で検査するので、途中の状態のための dispatch の順序の調整は要らない(集約は最終状態だけを見る)。
-- 拒否は項目のキー付きの 422(今と同じキー)。業務の検査を Handler に置くため、Handler は項目のキーを持つ例外(既存の `ValidationException::withMessages` の作り)を投げる。
-- 付与予定の再計算の Reactor(`RecalculateScheduleOnUserConditionChangedReactor`。入社日・利用開始日・有給の自動付与を購読)は、1回の保存で最大3回動く。再計算は今の状態との差分なので最後には同じ結果になるが、途中の状態で付与予定を作って取り消すイベントが増えうる。
-  - 決定: 実装の最初に、3項目を同時に変えたときに付与予定のイベントが余分に増えるかをテストで確かめる。増える場合は、Handler がイベントを「入社日・利用開始日・自動付与」の順ではなく、まとめて記録した後に Reactor が1回だけ再計算するよう、Reactor の購読を「同じ集約の同じ persist の最後の利用者条件のイベント」に限る(イベントのメタデータに、1回の Command の中での位置を持たせる)。増えない場合は今の Reactor のまま。
+- 決定: `UpdateUserDetails`(UserManagement)を新しく作る。Handler が、変更のあった項目について、外部人事の項目の権限(日付3項目を含む)・最後の有効なシステム管理者の無効化の禁止・入社日 ≤ 退社日(最終状態で判定)を検査し、利用者の集約に今と同じイベント(`UserProfileUpdated`・`UserHireDateSet`・`UserTerminationDateSet`・`UserUsageStartDateSet`・`PaidLeaveAutoGrantEnabledSet`・`SpecialLeaveAutoGrantEnabledSet`)を記録する。最終状態で検査するので、途中の状態のための記録の順序の調整は要らない(集約は日付の前後を検査しない)。
+- 外部人事の項目の権限の確認を、項目ごとの Handler(`SetUserHireDate`・`SetUserTerminationDate`・`SetUserUsageStartDate`)にも入れ、新しい Handler と共通の処理にする(今は項目ごとの API でも Controller にしかない)。
+- 拒否は項目のキー付きの 422(今と同じキー)。Handler は項目のキーを持つ例外(`ValidationException::withMessages`。前例 `SubmitWorkflowRequestHandler.php:55`・`UpdateWorkStyleHandler.php:31`)を投げる。
+- 付与予定の再計算の重複(ユーザーの判断 2026-11-28: 今回あわせて直す):
+  - 事実(設計レビューで検証): 入社日・利用開始日・自動付与を1回で変えると、今の画面でも新しい1つの Command でも、付与予定の再計算の Reactor(`RecalculateScheduleOnUserConditionChangedReactor`)が3回動き、付与予定に「取消→作成→取消」のイベントが残る(1回だけ再計算すれば「取消」だけ)。spatie は同じ persist の全イベントを先に `stored_events` に保存してから、1件ずつ Projector → Reactor の順に処理するため、Reactor が ReadModel(`users`)を読むと途中の状態が見える。
+  - 決定: Reactor の側で、同じ利用者の集約のストリームに、この Reactor が購読する種類のイベントで、処理中のイベントより版(aggregate_version)の大きいものが既に保存されていれば何もしない。最後の1件のときだけ再計算する(そのときは同じ persist の Projector の更新がすべて反映された状態を読む)。利用者の文脈(UserManagement)は付与予定の文脈が何を購読するかを知らなくてよい(原則15)。
+  - Handler が再計算の Command を発行する案(文脈をまたぐ)、「利用者条件が変わった」イベントを足す案(事実の重複・データ移行)は採らない。
 - 既存の項目ごとの API(`PATCH /users/{id}`・`PUT …/hire-date` 等)は残す(各1つのCommand)。
 - 未確定・要確認事項: なし
 
 ### 論点2: ロール詳細のまとめて保存
 - 決定: `UpdateRoleDefinition`(AccessControl)を新しく作る。Handler が、名前・説明・状態・Permission・Feature のうち変わったものを検査し、ロールの集約に今と同じイベント(`RoleUpdated`・`RolePermissionsChanged`・`RoleFeaturesChanged`)を記録する。
-  - 検査: システムのロールの無効化の禁止、Permission・Feature の存在、システム管理者から `user.manage` を外すことの禁止。Permission・Feature の変更は「保存の前にロールが有効」なら可(無効化と同時でもよい)。イベントは Permission・Feature の変更を先に、状態の変更を最後に記録する(今の順序依存を無くす)。
-- グループへの Feature の同期: Handler から他の Handler を直接呼ぶのをやめ、`RoleFeaturesChanged` を購読する同期 Reactor(AccessControl の文脈の中)で、対象のグループごとに `AssignFeatureToGroup`・`RemoveFeatureFromGroup` の Command を発行する(冪等: 既に目的の状態なら何もしない)。既存の `ChangeRoleFeatures` の API からの変更も同じ Reactor で同期される。
+  - 検査: システムのロールの無効化の禁止、Permission・Feature の存在、システム管理者から `user.manage` を外すことの禁止。Permission・Feature の変更は「保存の前か後のどちらかでロールが有効」なら可(無効化と同時、無効から有効へ戻すのと同時のどちらも通る。今の画面で通る「無効のロールを有効に戻しつつ Permission を変える」を後退させない)。
+  - 記録の順序: 有効にする変更は最初に、無効にする変更は最後に記録する(イベントの並びが、どの時点でも「有効なロールの Permission の変更」になるように)。
+- グループへの Feature の同期は、今と同じ `GroupFeatureSyncService` を Handler から呼ぶ(変えない)。Handler から他の Handler を直接呼ぶ作りは、ロールの割当の3つの Handler と運用コマンドも使っており、仕組みを分けないよう本変更では触らない(別の候補)。
 - 既存の3つの API は残す。
 - 未確定・要確認事項: なし
 
 ### 論点3: 経費の明細のまとめて登録
 - 決定: `AddExpenseItems`(ExpenseClaim)を新しく作る。Handler が明細ごとに今の `AddExpenseItem` と同じ検査をし、経費精算の集約に `ExpenseItemAdded` を明細ごとに記録する(1つでも拒否なら全体を戻す。今と同じ)。
-- 検証のエラーのキーを `items.{i}.{項目}` にする(行の添字付き)。画面は `fieldErrors` の `ofRow` で行の下に出す(変更セット`20261126-field-errors-near-fields`で行に出せず残した件の解消)。
+- 検証のエラーのキーを `items.{i}.{項目}` にする(行の添字付き)。形式の検証は Controller で `items.*.{項目}` のルールにする(添字は自動で付く)。業務の拒否(区分の有効性・属性の検証など)は、Handler が `items.{i}.{項目}` のキーで投げる。画面は `fieldErrors` の `ofRow` で行の下に出す(変更セット`20261126-field-errors-near-fields`で行に出せず残した件の解消)。
 - 応答は今と同じ(入力の順の明細の配列)。添付は今のまま明細ごとに別の API(1つのCommand)。
 - 未確定・要確認事項: なし
 
 ### 論点4: 週の残業の振分
 - 決定: `AllocateWeeklyOvertime`(Attendance。週1つ)を新しく作る。Handler が日ごとの検査(今の `AllocateAttendanceWeeklyOvertimeHandler` と同じ)をして日の集約に `AttendanceWeeklyOvertimeAllocated` を記録し、最後に週40時間超の検査(`WeeklyOvertimeCalculator`)を行う。超えたら例外で全体を戻す(今と同じ全部か無しか)。
-- 日の集約への記録は Handler の中で直接行う(同じ文脈。`WeeklyOvertimeAutoAllocator` の前例)。日ごとの Command を Handler の中で dispatch しない。
+- 日の集約への記録は Handler の中で直接行う(同じ文脈。原則17の「まとめて保存は1つのCommand」、前例 `WeeklyOvertimeAutoAllocator`)。日ごとの Command を Handler の中で dispatch しない。日ごとの上限は前の振分の ReadModel を読むので、日ごとに順に persist し、週の検査はその後に行う。同じ日が入力に重複したら 422(`allocations.*.attendance_day_id` を distinct にする)。
 - 応答に、GET の週の残業と同じく `prescribed_work_days`・`scheduled_prescribed_work_minutes` を含める(今は欠けている。同じ形にそろえる)。
 - 既存の日ごとの Command `AllocateAttendanceWeeklyOvertime` は、他の入口が使っていなければ削除する(実装時に grep)。
 - 未確定・要確認事項: なし
 
-### 論点5: 休暇・振替休日の承認不要の申請
-- 決定: 承認の要否の判定を各 `Request{X}` の Handler に移す。
-  - 判定クラス `App\Domain\Leave\Support\LeaveApprovalRequirement`(仮。既存の名前と衝突しないことを確かめる): 休暇の種類(有給・特別休暇・代休・振替休日)を受け、全体の設定を読んで要否を返す。
-  - `Request{X}` の Handler: 利用者の操作(`viaReactor=false`)で承認が不要なら、申請のイベントに続けて承認のイベント(今の `Approve{X}` の Handler と同じ処理。`approvedByUserId=null`)を同じ集約に記録する。承認者は、入力が無ければ申請者本人(今の Controller と同じ)を Handler で決める。承認が必要なら、利用者の操作としては受け付けない(承認が必要なときの入口はワークフローの下書き `DraftWorkflowRequest` で、その連鎖から `viaReactor=true` で来る)。
-  - Controller は、承認の要否で入口の Command を選ぶだけ(要: `DraftWorkflowRequest`、不要: `Request{X}`)。どちらも1つ。※ この選択に設定を読むのは「入口の振り分け」であって業務の判定ではないが、二重の判定にならないよう、Controller は判定クラスを呼び、Handler も同じ判定クラスで確かめる。
-- `Approve{X}` の Handler の処理(承認者の確認・冪等・特別休暇の要付与の確認・振替休日の勤務予定の入れ替え)は、`Request{X}` の Handler から共通の処理として呼ぶ(重複させない)。
-- 記録するイベントと連鎖(残数の消化の確定・勤怠の休暇の反映)は今と同じ。
+### 論点5: 休暇・振替休日の申請の入口
+- ユーザーの判断(2026-11-28): 「呼び出し側で判断してください。実装は設定に応じてエラーにしてください。」
+- 決定:
+  - 入口を2つに分け、どちらを呼ぶかは呼び出し側(画面・API の利用者)が全体の設定(公開の設定 `PublicSystemSettingController` の `*_requires_approval`)を見て決める。Controller は承認の要否で分岐しない。
+    - 承認不要の申請: `POST /{paid-leave,special-leave,compensatory-leave,shift-swap}/requests`。`Request{X}` を1つ dispatch する。
+    - 承認が必要な申請(ワークフロー): ワークフローの下書きの作成(`DraftWorkflowRequest` を1つ)。既存の汎用のワークフローの API が休暇の種類を受けるならそれを使い、受けなければ休暇ごとに入口を新設する(実装時に確かめ、実装結果に記録)。
+  - 各 Handler が設定に応じて拒否する:
+    - `Request{X}`(利用者の操作): 承認が必要な設定なら 422「{休暇}は承認が必要です。申請から承認者を指定して申請してください。」。不要なら、申請を persist した後に、承認の処理(今の `Approve{X}` の Handler の処理を共通化したもの)で集約を取り出し直して承認を persist する(1つの Handler・1トランザクションで2回 persist。記録の順序と連鎖は今の「2つの Command を順に」と同じ)。承認者は入力が無ければ申請者本人。
+    - ワークフロー経由(`DraftWorkflowRequest` の連鎖から来る `Request{X}`): 有給・特別休暇・代休は `viaReactor=true`、振替休日は `workflowRequestId !== null` で見分け、承認の要否を見ない(今どおり)。
+    - ワークフローの下書き(休暇・振替休日の種類): 承認不要の設定なら 422「{休暇}は承認が不要です。直接申請してください。」。この判定はワークフローの Handler で行う(休暇の種類の設定を読む)。
+  - 判定クラス `App\Domain\Leave\Support\LeaveApprovalRequirement`: 休暇の種類(有給・特別休暇・代休・振替休日)を受け、全体の設定を読んで要否を返す。Handler 同士で同じ判定を使う。
+  - 承認者の必須の検証(`approver_user_id`)は、入口が分かれるので、承認が必要な入口でだけ必須にする(設定を読まない)。
+- frontend: 申請の画面(有給・特別休暇・代休・振替休日)が公開の設定を見て、承認不要なら直接の申請、必要ならワークフローの下書きの API を呼ぶ。
+- 未確定・要確認事項: なし
+
+### 論点7: ロールの複製
+- 事実(設計レビュー): `AccessControlController::cloneRole`(:175-185)は `CreateRole` と `ChangeRolePermissions` を `DB::transaction` 無しで並べ、途中で失敗すると権限の無いロールが残る。
+- 決定: `CloneRole`(AccessControl)を1つの Command にし、作成と権限の設定を1つの Handler で記録する。
 - 未確定・要確認事項: なし
 
 ### 論点6: 付与予定の再判定
@@ -77,34 +92,44 @@
 
 ## 仕様確定事項(まとめ)
 - backend:
-  - 新しい Command と Handler: `UpdateUserDetails`・`UpdateRoleDefinition`・`AddExpenseItems`・`AllocateWeeklyOvertime`・`ReassessScheduleEntry`(名前は実装時に衝突を確かめる)。登録は `config/domain.php` の command_handlers。
-  - 判定クラス `LeaveApprovalRequirement`。4つの `Request{X}` の Handler に承認不要の自動承認を入れ、`Approve{X}` の処理を共通化する。
-  - グループへの Feature の同期の Reactor(論点2)。
+  - 新しい Command と Handler: `UpdateUserDetails`・`UpdateRoleDefinition`・`CloneRole`・`AddExpenseItems`・`AllocateWeeklyOvertime`・`ReassessScheduleEntry`(名前は実装時に衝突を確かめる)。登録は `config/domain.php` の command_handlers。
+  - 判定クラス `LeaveApprovalRequirement`。4つの `Request{X}` の Handler に、設定に応じた拒否と承認不要の自動承認(2回の persist)を入れ、`Approve{X}` の処理を共通化する。ワークフローの下書きの Handler に、休暇・振替休日の種類で承認不要の設定なら拒否を入れる。
+  - 付与予定の再計算の Reactor の重複の抑止(論点1)。外部人事の権限の確認を項目ごとの日付の Handler にも入れる。
   - 6つの入口の Controller は、検証(形式)・認可・1つの Command の dispatch・応答だけにする。
-  - 新しいイベントは作らない(論点1の付与予定の再計算の確認の結果、メタデータを足す場合を除く)。
+  - 新しいイベントは作らない。
   - `docs/03-architecture.md` 3.10 の「既存の例外」から、本変更で是正したものを外す。
 - frontend:
   - 経費の明細のまとめて登録の 422 を `ofRow('items', i, key)` で行の下に出す(`ExpenseItemsTable` に行のエラーを渡す)。
+  - 休暇・振替休日の申請の画面: 公開の設定で入口を選ぶ(論点5)。
   - ほかは API の形が変わらないので変更なし(週の残業の応答に項目が増えるだけ)。
 - テスト(`domain-test`):
-  - 各 Command の Feature テスト: 今の Feature テスト(`UserDetailsBulkUpdateTest`・`RoleDefinitionBulkUpdateTest`・`ExpenseClaimFlowTest`・`WeeklyOvertimeCalculationTest`・休暇4種の申請のテスト・`PaidLeaveScheduleControllerTest`)が、入口を変えた後もそのまま通る(回帰)。
-  - 追加: 利用者詳細で3項目を同時に変えたときの付与予定のイベント(論点1)、ロールの無効化と Permission の変更を同時に送って通る、Feature の同期が Reactor で行われる(既存の `ChangeRoleFeatures` の API も)、経費の明細の 422 のキーが `items.{i}.{項目}`、週の残業の応答の項目、承認不要の申請で申請と承認のイベントが1つの Command で記録される・承認が必要な設定で `Request{X}` を利用者の操作として送ると拒否される・ワークフロー経由(`viaReactor`)は今どおり。
-  - Controller が1つの Command だけを dispatch することを、各入口のテストで CommandBus の dispatch の回数で確かめる。
+  - 各 Command の Feature テスト: 今の Feature テストを回帰として通す。ただし次は書き直す(入口の作りが変わるため):
+    - `UserDetailsBulkUpdateTest`: Command ごとに Handler を差し替えて途中の失敗を作るテスト(:117-134・:251-301)は、1つの Handler の中の失敗で作り直す。日付の記録の順序を確かめるテスト(:152-182)は、最終状態の検査のテストにする。
+    - `HalfDayLeavePrescribedMinutesTest.php:59`: 承認が必要な既定の設定で `RequestSpecialLeave` を利用者の操作として出しているので、設定を承認不要にするか、ワークフロー経由にする。
+    - `ReadModelRebuildAfterDeletionScenarioTest.php:106`: `AllocateAttendanceWeeklyOvertime` を削除するなら新しい Command に置き換える。
+    - 休暇4種の申請のテストで、承認が必要な設定で `POST /…/requests` を呼んでワークフローを作っているものは、ワークフローの入口に書き直す。
+  - 追加: 利用者詳細で3項目を同時に変えたとき付与予定のイベントが「取消」だけ(論点1)・項目ごとの日付の API でも外部人事の項目が拒否される、ロールの無効化と Permission の変更を同時に送って通る・無効から有効へ戻すのと同時も通る、ロールの複製が途中で失敗すると何も残らない、経費の明細の 422 のキーが `items.{i}.{項目}`、週の残業の応答の項目と同じ日の重複の拒否、承認不要の設定で直接の申請が申請と承認を記録する(記録の順序が今と同じ)・承認が必要な設定で直接の申請が 422・承認不要の設定でワークフローの下書きが 422・ワークフロー経由(`viaReactor`・振替休日は `workflowRequestId`)は今どおり。
+  - 入口1回=1つの Command: CommandBus の入れ子の深さを数えるテスト用の部品(`$this->app->instance()` で差し込む)を作り、深さ0の dispatch が1回であることを各入口のテストで確かめる。
   - 作り直し: 代表のシナリオの後に ReadModel を作り直して同じ状態。
 
 ## 受け入れ条件
-- 6つの入口が、1回の呼び出しで1つの Command だけを dispatch する。業務の判定が Controller に無い。
-- 画面の動き・API の応答は今と同じ(経費の明細の 422 のキーと週の残業の応答の項目の追加を除く)。
+- 対象の入口(利用者詳細・ロール詳細・ロールの複製・経費の明細のまとめて登録・週の残業の振分・休暇と振替休日の申請・付与予定の再判定)が、1回の呼び出しで1つの Command だけを dispatch する。業務の判定(承認の要否を含む)が Controller に無い。
+- 休暇・振替休日は、設定と違う入口を呼ぶと 422。画面は設定で入口を選ぶので、利用者から見た動きは今と同じ。
+- 利用者詳細で付与予定の条件を同時に変えても、付与予定に余分なイベントが残らない。
+- 画面の動き・API の応答は今と同じ(経費の明細の 422 のキー、週の残業の応答の項目、休暇の入口の分離を除く)。
 - 上のテストと backend・frontend の単体テスト全件が通る。変えた画面を通る E2E の spec が通る。
 
 ## 対象外
+- 原則17の他の入口(設計レビューで発見。`docs/03-architecture.md` 3.10 に追記する): `UserController::store`(利用者の作成と所属の追加)、`CompanyCalendarController::store`・`regenerateYear`、`DeviceAdminController::bootstrapRegisterKey`、`AttendanceController::approveMonth`・`returnMonth`(ワークフローの有無で入口を選ぶ。論点5と同じ形)
+- `GroupFeatureSyncService` が Handler から他の Handler を直接呼ぶ作り(ロールの割当の Handler・運用コマンドも使う)。別の候補
 - 段階②(共通の一括操作の仕組み: 申請の一括取消・承認の一括・バックオフィスの担当の一括変更・一括完了・有給の一括付与・休暇の手動付与・備品の一括操作)・段階③(期間の休暇の申請)
 - 付与ルール・付与表(有給・特別休暇)の直接の DB 書き込み(イベントが無い。原則1)。別の候補。
 - ワークフローの Reactor(`ApproveWorkflowRequestOnPaidLeaveRequestApprovedReactor` 等)が `workflow_requests` を直接読む件(原則15の観点)。別の候補。
 - 経費の明細と添付が別のトランザクションである件
 
 ## ドキュメントへの影響
-- `docs/03-architecture.md` 3.10(既存の例外の更新)
+- `docs/03-architecture.md` 3.10(既存の例外の更新・追記)
+- `docs/09-usecases-paid-leave.md` ほか休暇・振替休日のユースケース: 申請の入口が設定で分かれ、設定と違う入口は拒否されること
 - `docs/17-events.md`: 変更なし(新しいイベントを作らない。論点1でメタデータを足す場合はその旨)
 - 各ユースケースの docs: 振る舞いが変わらないので変更なし
 
@@ -121,7 +146,11 @@
 - E2E: 変えた画面を通る spec(利用者・ロール: scenario-10・99、経費: scenario-04・09、週の勤怠: scenario-02、休暇: scenario-03・15、振替休日・付与予定: grep で特定)
 
 ## レビュー履歴
-初版
+- 2026-11-28 初版。
+- 2026-11-28 実装前の独立設計レビュー(general-purpose。試験的なテストで検証)を反映:
+  - 高: 承認の要否で Controller が入口を選ぶ案は原則17の文言に反する → ユーザーの判断「呼び出し側で判断し、実装は設定に応じてエラー」で論点5を作り直した。振替休日は申請の前に承認の処理が動かない → 申請と承認を2回の persist にした(記録の順序も今と同じ)。無効から有効へ戻しつつ Permission を変えると後退 → 前後のどちらかで有効なら可に。
+  - 中: 付与予定の余分なイベントは今も出ている → ユーザーの判断で今回直す(Reactor の側で最後の1件だけ)。グループへの Feature の同期は仕組みを分けないため変えない。書き直すテストを列挙。見落とした入口(ロールの複製は本変更に含め、ほかは対象外に記録)。外部人事の確認を項目ごとの Handler にも。
+  - 低: 項目のキー付きの拒否の前例、週の振分の順序と重複、再判定の planner、入口1回の検証の方法。
 
 ## 実装結果
 未着手
